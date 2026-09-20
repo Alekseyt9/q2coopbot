@@ -280,6 +280,16 @@ def main() -> int:
         "--botlib-log",
         help="optional botlib.log path; counts CoopBot records emitted by botlib",
     )
+    parser.add_argument(
+        "--require-elevator-edge",
+        action="store_true",
+        help="fail unless the botlib map model contains a TRAVEL_ELEVATOR edge",
+    )
+    parser.add_argument(
+        "--require-elevator-regroup",
+        action="store_true",
+        help="fail unless botlib logged a regroup frame using TRAVEL_ELEVATOR",
+    )
     parser.add_argument("-o", "--output", help="write summary JSON to this path")
     args = parser.parse_args()
 
@@ -292,36 +302,52 @@ def main() -> int:
             records, invalid = read_records(stream)
         source = str(path)
 
-    result = json.dumps(
-        summarise(records, invalid, source),
-        ensure_ascii=False,
-        indent=2,
-        sort_keys=True,
-    ) + "\n"
+    result_object = summarise(records, invalid, source)
+    botlib_events: Counter[str] = Counter()
+    botlib_map_model: dict | None = None
+    validation_errors: list[str] = []
+
     if args.botlib_log:
         botlib_path = Path(args.botlib_log)
         with botlib_path.open("r", encoding="utf-8", errors="replace") as stream:
             botlib_events = read_botlib_events(stream)
         with botlib_path.open("r", encoding="utf-8", errors="replace") as stream:
             botlib_map_model = read_botlib_map_model(stream)
-        result_object = json.loads(result)
         result_object["botlib_log"] = {
             "source": str(botlib_path),
             "events": dict(sorted(botlib_events.items())),
         }
         if botlib_map_model is not None:
             result_object["botlib_log"]["map_model"] = botlib_map_model
-        result = json.dumps(
-            result_object,
-            ensure_ascii=False,
-            indent=2,
-            sort_keys=True,
-        ) + "\n"
+
+    if args.require_elevator_edge:
+        if botlib_map_model is None:
+            validation_errors.append("botlib map model is missing")
+        elif botlib_map_model.get("elevator_edge_records", 0) < 1:
+            validation_errors.append("no TRAVEL_ELEVATOR edge was recorded")
+
+    if args.require_elevator_regroup and botlib_events.get("elevator_regroup", 0) < 1:
+        validation_errors.append(
+            "no coopbot_regroup frame used TRAVEL_ELEVATOR"
+        )
+
+    if args.require_elevator_edge or args.require_elevator_regroup:
+        result_object["validation"] = {
+            "ok": not validation_errors,
+            "errors": validation_errors,
+        }
+
+    result = json.dumps(
+        result_object,
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    ) + "\n"
     if args.output:
         Path(args.output).write_text(result, encoding="utf-8")
     else:
         sys.stdout.write(result)
-    return 0 if invalid == 0 else 2
+    return 0 if invalid == 0 and not validation_errors else 2
 
 
 if __name__ == "__main__":

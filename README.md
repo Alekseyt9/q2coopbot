@@ -162,6 +162,17 @@ enabled. Useful records include `shot`, `damage_attempt`, `damage_applied`,
 The timing fields use process CPU time (`clock()`), so they are intended for
 relative comparisons between bot versions rather than wall-clock profiling.
 
+Scenario 11 has report gates for repeatable checks:
+
+~~~text
+python tools/coopbot_event_report.py coopbot_debug_events.jsonl \
+  --botlib-log botlib.log --require-elevator-edge
+~~~
+
+After a real two-client separation run, add
+`--require-elevator-regroup`; it requires a regroup frame whose selected
+travel type is `TRAVEL_ELEVATOR`.
+
 For a useful test sample, start one bot on a known map, play until it gets
 stuck or fails to fight, then save both logs together with the map name and
 the exact bot configuration. This makes it possible to correlate navigation,
