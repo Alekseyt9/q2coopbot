@@ -1,0 +1,390 @@
+# Tests Guide
+
+## Bridge wrapper validation roadmap
+
+Once the mocked `bot_import_t` callbacks are wired into automated suites they
+will exercise the bridge wrappers, translation shims, and the eventual libvar
+cache in three complementary passes:
+
+1. **Wrapper verification** &mdash; Recording doubles will assert that each wrapper
+   forwards arguments to the correct import slot, preserves constness, and
+   performs any marshalling required by the Quake II bridge before releasing the
+   call.  Mismatch alarms will flag regressions in `src/q2bridge/` helpers as new
+   wrapper implementations come online.
+2. **Translator synchronization** &mdash; Planned harness hooks will compare the
+   data passed to the import table against translator outputs (e.g.,
+   `bot_input_t` assembly, movement command translators).  Divergences will be
+   surfaced through focused assertions so translator upgrades can be validated
+   without running a full game loop.
+3. **Libvar caching checks** &mdash; Once the configuration cache lands, the mocks
+   will simulate cache invalidation and confirm that updates propagate back
+   through the bridge.  This allows us to pin down stale-cache edge cases before
+   the caching layer ships.
+
+The upcoming helpers will be shared by the **AAS navigation stack** and the
+broader **AI module orchestration** so that integration tests can cover
+cross-module behaviors (navigation planning, decision loops, and command
+issuance) from the outset.
+
+## AI weapon regression tests
+
+The AI weapon suite under `tests/ai/` loads the Gladiator weapon definitions
+and weight scripts directly from the repository. When running the tests outside
+of CTest, make sure the following libvars are seeded before calling into the
+botlib so that asset discovery mirrors the in-game configuration:
+
+- `weaponconfig` &mdash; absolute path to `dev_tools/assets/weapons.c`.
+- `max_weaponinfo` &mdash; increased to at least `64` to cover the full Quake II
+  arsenal captured in the regression data.
+- `max_projectileinfo` &mdash; likewise bumped to `64` so projectile definitions
+  are not clipped during parsing.
+
+The regression harness sets these values explicitly and skips the assertions if
+the assets are unavailable (for example, when the repository is cloned without
+`dev_tools/`).
+
+The weapon tests now also pin the Gladiator-specific layout: weapon numbers are
+generated from compact file order, the recovered retail row sizes are `0x158`
+for weapons and `0xd0` for projectiles, the important weapon offsets are kept
+stable even when a 64-bit native build widens the tail projectile pointer, each
+weapon carries a pointer to the matched projectile definition, model lookups
+return the same case-insensitive number/name helpers seen in the HLIL, missing fuzzy weights remain loadable but are skipped by selection,
+weapon weights can be read before the global weaponconfig and bound later, and
+stale state bindings are refreshed against the active weaponconfig before
+scoring. `BotLoadWeaponWeights` and borrowed character-weight attachment both
+retain their parsed weight config after the HLIL-style
+`BLERR_CANNOTLOADWEAPONCONFIG` return so a later weaponconfig can bind it. The
+combat selector consumes the live client, inventory, and current weapon
+model sync used by Gladiator's frame code, queues the same model-change
+`use <weapon name>` command path gated by `activate + 3.0` seconds, and preserves
+the cached current weapon when a later scoring pass finds no winner. The public
+`BotChooseBestFightWeapon` coverage pins the Q3-compatible side-effect-free
+scoring behavior, while `BotGetTopRankedWeapon` tracks only selector-recorded
+state. The reset coverage also verifies that the Gladiator reset helper preserves
+loaded weights while clearing the cached selection, frame sync, and activation
+delay.
+
+The interface parity suite also covers weapon lifecycle wiring by exhausting the
+exported weapon-state handle pool, calling `BotShutdownLibrary`, and verifying a
+fresh setup can allocate from a cleared table. It also sets up a real bot client,
+shuts the whole library down, and verifies the same client can restart with
+fresh character-owned weapon-weight wiring. Character setup coverage also checks
+that the character-owned weapon weight table is attached to the client's weapon
+state and can score the expected best fight weapon through the exported
+weapon chooser.
+
+## AI character regression tests
+
+The AI character tests rely on the Gladiator assets mirroring their original
+Quake III directory layout. The harness automatically points
+`GLADIATOR_ASSET_DIR` at `${PROJECT_SOURCE_DIR}/dev_tools/assets`, copies
+`syn.c`, `match.c`, and `rchat.c` into `dev_tools/assets/bots/` for the duration
+of the run, and restores the tree afterwards. The integration exercise that
+drives `BotSetupClient` also overrides `weaponconfig`, `max_weaponinfo`, and
+`max_projectileinfo` through the exported `BotLibVarSet` hook so the weapon
+library and weight tables resolve to the repository assets.
+
+## AI goal/move orchestration tests
+
+The goal and movement orchestration suite under `tests/ai/test_ai_goal_move.c`
+shares the same asset expectations as the character regression tests. The
+fixtures reuse the bot setup pipeline to allocate goal and move state, so make
+sure `${PROJECT_SOURCE_DIR}/dev_tools/assets` contains the Gladiator bot
+profiles (`bots/babe_c.c`) and chat scripts. The harness automatically bridges
+`syn.c`, `match.c`, and `rchat.c` into `dev_tools/assets/bots/`, seeds the
+`GLADIATOR_ASSET_DIR` environment variable, and initialises the botlib memory
+heap before running each scenario. When executing the tests manually, ensure the
+asset directory is writable so the temporary chat copies can be created and
+deleted.
+
+## AAS regression tests
+
+The navigation harness under `tests/aas/` boots the botlib memory system and
+loads a miniature BSP/AAS pair to exercise `AAS_LoadMap` and
+`AAS_UpdateEntity`. To keep the tests deterministic:
+
+The self-contained `aas_debug_line_tests` executable needs no map assets. It
+pins the retail 256-slot shared debug-line pool, zero and failed create
+results, the 257th-line cutoff, NULL/`LINECOLOR_NONE` hides, handle reuse, and
+the clear-before-visualized-prediction test wrapper.
+
+The self-contained `aas_pointlight_tests` executable generates its BSP/AAS
+loader fixture at runtime and commits no binary assets. It pins recursive
+static sampling, the shipped s-major/non-square texel address, multistyle
+`0x108` scaling, 4096-unit trace depth, no-data/no-light fallbacks, calculated
+surface extents and invalid light spans. It also covers the retail 0x34-byte
+dynamic-light heap, reversed caller-origin copy, capacity/free-list order,
+strict expiry, persistence across frame resets, static-hit-point attenuation,
+and the deterministic no-static-hit guard. Point-light setup is also exercised
+with sound metadata disabled, including the raw empty-heap warning and retail's
+truncate-before-range-check fractional `max_aaslights` boundaries.
+
+The fixture-free `botlib_parity_aas_debug` cases reconstruct retail entity
+visibility without map assets. They pin setup-time `maxentities` allocation and
+slot numbering, inclusive `1..maxclients` live-entity enumeration, result caps,
+`AAS_NextEntity`, quantized inclusive pitch/yaw FOV checks, center/bottom/top
+PVS sampling order, direct entity hits, wet-eye trace reversal, and translucent
+fluid continuation with the exact masks and endpoints.
+
+The map-loader executable also contains in-memory reachability geometry,
+area-classification, link-selection, duplicate-link, and jump/fall physics
+tests. Those cases do not require external assets and still exercise the
+generator prerequisite layer when the map fixtures below are unavailable.
+Synthetic shared-face and shared-edge worlds additionally validate temporary
+heap allocation, swim/equal-floor generation, crouch and small-area travel
+costs, one-based flattening with the retail index-zero sentinel, and derived
+reachability metadata rebuilding. Paired boundary-edge cases pin the combined
+step, barrier-jump, downhill-walk, water-jump, and walk-off-ledge branch order,
+endpoints, and default route costs. A separated-platform collision fixture also
+exercises closest-edge jump prediction, stored jump costs, and crouch rejection.
+Same-facing vertical ladder fixtures pin symmetric shared-edge ladder links,
+their 32-unit transition offsets, face/edge metadata, and 10-unit route costs.
+An in-memory Quake II BSP epair fixture also pins retail `misc_teleporter`
+destination matching, the destination floor trace, expanded crouch-hull source
+area discovery, and the stored 50-unit teleport route cost.
+A synthetic `func_plat` inline model pins the retail elevator perimeter probes,
+bottom-to-top area selection, outward-normalized source point, model/height
+metadata, travel type, and height/speed-derived route cost.
+A split two-area AAS tree and deterministic Quake II wall trace pin retail
+grapple source-floor placement, solid-face selection, safe landing, stored face
+metadata and endpoint, and the fixed-start plus distance-derived route cost.
+A parsed high-value item plus a split-height AAS tree pin retail weapon-jump
+area flag `0x20`, downward rocket knockback, predicted landing, type 12, and the
+fixed 500-unit route cost. Separate exposed-edge fixtures cover the secondary
+walk-off scan's safe 100-unit and damage-fall 3000-unit costs. A minimal
+two-area lifecycle world also verifies one-based incremental progress, final
+entity/ledge passes, sentinel storage, heap cleanup, and delayed initialization.
+A grounded two-plane choke fixture verifies retail portal recognition, the
+12-byte cluster record ABI, front/back cluster assignment, negative portal
+clusters, and cluster-local index lists. An in-memory generated-world fixture
+pins ladder-only face retention, signed geometry index remapping, ordinary
+reachability metadata remapping, and the elevator model-metadata exception in
+the retail optimizer. A three-area route fixture verifies one-based area bounds
+and the intermediate intra-area travel cost used by reverse route calculation.
+
+- Download `test_nav.bsp` and `test_nav.aas` separately (for example, from the
+  original Gladiator bot asset distribution) and place them under a directory
+  referenced by `GLADIATOR_AAS_TEST_ASSET_DIR`. When the environment variable is
+  unset the harness falls back to `${PROJECT_SOURCE_DIR}/dev_tools/assets`, so
+  copying the files into `dev_tools/assets/maps/` also satisfies the
+  requirement.
+- Set `GLADIATOR_ASSET_DIR` (or run from the harness root) so `AAS_LoadMap`
+  resolves paths relative to the asset directory. The tests automatically set
+  the variable to the chosen asset root when it is not already configured.
+- Provide a writable working directory: the fixture temporarily changes into
+  the asset root so the loader can open `maps/test_nav.*` using the same
+  relative paths as the game.
+
+With those prerequisites satisfied the harness will verify that `aasworld` is
+initialised correctly, that entity updates populate the expected area links, and
+that reachability records expose the travel times baked into the sample AAS
+file. If the files are missing the harness prints a skip reason so CI jobs that
+do not stage the optional assets continue to pass.
+
+### Parity asset checklist
+
+The cmocka parity suite depends on a small, reproducible asset pack staged
+under `GLADIATOR_ASSET_DIR` (defaults to
+`${PROJECT_SOURCE_DIR}/dev_tools/assets`). CTest now runs
+`dev_tools/scripts/verify_parity_assets.sh` before executing the parity
+fixtures. Missing assets cause the test run to fail with actionable
+instructions instead of silently skipping cases. Ensure the following paths are
+present:
+
+- `${GLADIATOR_ASSET_DIR}/maps/test_mover.bsp`
+- `${GLADIATOR_ASSET_DIR}/maps/test_mover.aas`
+- `${GLADIATOR_ASSET_DIR}/fw_items.c`
+- `${GLADIATOR_ASSET_DIR}/syn.c`
+- `${GLADIATOR_ASSET_DIR}/weapons.c`
+- `${GLADIATOR_ASSET_DIR}/default/defaul_w.c`
+- `${GLADIATOR_ASSET_DIR}/default/defaul_i.c`
+
+Set `GLADIATOR_ASSET_DIR` to point at your staged asset root when running the
+tests from a build directory that lives outside the repository checkout.
+`verify_parity_assets.sh` also reports any detected Quake II installation when
+`GLADIATOR_Q2_BASEDIR`/`GLADIATOR_Q2_DEDICATED_SERVER` are set so headless
+parity checks can be confirmed ahead of time.
+
+### Bot interface fixture-free combat parity
+
+Seven `BotFindEnemy` groups in `tests/parity/test_bot_interface.c` need no map
+assets. They pin the one-based live-player and self gates, ascending numeric
+selection with the 16-result cap, characteristic-45 900-unit range behavior,
+the exact 810- and 300-unit FOV/damage boundaries, private view angles, every
+team-mode precedence branch and entity-to-client lookup, shooting frame bounds,
+candidate-facing quantization, retreat fallback, and exact success/failure
+state writes. The direct Debug and Release executables therefore exercise this
+slice even when the optional mover fixtures below are absent.
+
+### Bot interface parity mover fixtures
+
+The parity suite (`tests/parity/test_bot_interface.c`) includes
+`test_bot_bridge_tracks_mover_entity_updates`, which exercises the mover
+catalogue against a miniature Quake III map. The test expects the following
+assets to be present under the active asset root:
+
+- `${PROJECT_SOURCE_DIR}/dev_tools/assets/maps/test_mover.bsp`
+- `${PROJECT_SOURCE_DIR}/dev_tools/assets/maps/test_mover.aas`
+
+`asset_env_initialise` (from `tests/support/asset_env.c`) stages
+`${PROJECT_SOURCE_DIR}/dev_tools/assets` as `GLADIATOR_ASSET_DIR`, switches the
+working directory to that location, and records the path so fixtures can probe
+`maps/test_mover.*`. When either file is missing `ensure_map_fixture` prints a
+diagnostic such as `bot interface parity skipped: missing
+${PROJECT_SOURCE_DIR}/dev_tools/assets/maps/test_mover.aas`, and the test calls
+`cmocka_skip()` to report a skipped case rather than a failure. CI operators
+should install the BSP/AAS pair in the listed directory so the mover parity
+checks remain active.
+
+### Precompiler lexer parity fixtures
+
+`tests/parity/test_precompiler_lexer.c` lexes `${PROJECT_SOURCE_DIR}/dev_tools/assets/fw_items.c`
+and `${PROJECT_SOURCE_DIR}/dev_tools/assets/syn.c` and compares the output token
+stream against the catalogue recorded from the Gladiator HLIL traces. With the
+lexer implementation in place the regression now asserts that
+`PC_LoadSourceFile`, `PC_ReadToken`, `PC_PeekToken`, and `PC_UnreadToken`
+reproduce the same sequence. The fixture only reports a skip when either asset
+file is missing; otherwise divergences surface as descriptive assertion
+failures so regressions are caught immediately.
+
+The same executable also carries a fixture-free in-memory regression proving
+that `PC_ReadToken` applies ordinary define lookup to chat-looking identifiers:
+`#define VICTIM 7` must yield the exact decimal-integer token `7`, matching the
+retail HLIL and Quake III path without reserving symbolic names globally.
+
+To streamline build-system integration, we anticipate driving these tests via
+`CTest` invoking a lightweight **GoogleTest** harness.  The harness will provide
+fixtures for seeding the mocked `bot_import_t` table, helpers for table diffing,
+and adapters so future Lua- or Python-based smoke tests can reuse the same
+recording doubles.
+
+## Mocking `bot_import_t`
+
+The Quake II bridge exposes `bot_import_t` as a table of callbacks that the game
+passes into the bot library.  When testing modules that consume this table you
+can swap each slot with a lightweight test double that records interactions or
+returns canned values.  The table defined in [`src/q2bridge/botlib.h`](../src/q2bridge/botlib.h)
+contains the following slots:
+
+| Slot | Signature | Typical responsibility |
+| --- | --- | --- |
+| `BotInput` | `void (*)(int client, bot_input_t *bi)` | Push controller commands collected by the bot into the engine. |
+| `BotClientCommand` | `void (*)(int client, char *str, ...)` | Issue console commands to the client. |
+| `Print` | `void (*)(int type, char *fmt, ...)` | Send formatted diagnostics to the engine log. |
+| `CvarGet` | `cvar_t *(*)(const char *name, const char *default_value, int flags)` | Query or create console variables within the engine. |
+| `Error` | `void (*)(const char *fmt, ...)` | Emit fatal diagnostics routed through the engine's error handler. |
+| `Trace` | `bsp_trace_t (*)(vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, int passent, int contentmask)` | Query collision geometry for visibility or movement checks. |
+| `PointContents` | `int (*)(vec3_t point)` | Determine the material or contents at a point in space. |
+| `GetMemory` | `void *(*)(int size)` | Allocate memory through the engine. |
+| `FreeMemory` | `void (*)(void *ptr)` | Release memory obtained from `GetMemory`. |
+| `DebugLineCreate` | `int (*)(void)` | Reserve an identifier for a debug line. |
+| `DebugLineDelete` | `void (*)(int line)` | Remove a previously created debug line. |
+| `DebugLineShow` | `void (*)(int line, vec3_t start, vec3_t end, int color)` | Draw or update a debug line segment. |
+
+### Replacing slots with recording doubles
+
+You can wrap each callback with a lambda or struct that increments counters and
+captures arguments for later assertions.  The following pseudocode shows one way
+to build a reusable harness:
+
+```c
+struct BotImportRecorder {
+    std::atomic<int> bot_input_calls{0};
+    std::vector<BotInputArgs> bot_input_invocations;
+    std::vector<std::string> client_commands;
+    std::vector<std::tuple<int, std::string>> print_events;
+    // ... additional collections for trace, point contents, etc.
+
+    bot_import_t make_table() {
+        bot_import_t table{};
+        table.BotInput = [this](int client, bot_input_t *bi) {
+            ++bot_input_calls;
+            bot_input_invocations.push_back({client, *bi});
+        };
+        table.BotClientCommand = [this](int client, char *str, ...) {
+            std::va_list args;
+            va_start(args, str);
+            client_commands.push_back(vformat(str, args));
+            va_end(args);
+        };
+        table.Print = [this](int type, char *fmt, ...) {
+            std::va_list args;
+            va_start(args, fmt);
+            print_events.emplace_back(type, vformat(fmt, args));
+            va_end(args);
+        };
+        // Replace the remaining slots with lambdas that push arguments
+        // into the recorder's vectors or update dedicated counters.
+        return table;
+    }
+};
+```
+
+When the system under test invokes a callback, the recorder increments the
+corresponding counter or appends the call data.  Assertions can then verify both
+how many times a slot was used and the parameters provided.
+
+For tests that require configurable responses (such as `Trace` or
+`PointContents`), provide a `std::queue` of precomputed return values:
+
+```c
+struct TracePlan {
+    bsp_trace_t result;
+    InvocationArgs args;
+};
+
+std::queue<TracePlan> planned_traces;
+
+bot_import_t import_table{};
+import_table.Trace = [&](vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end,
+                         int passent, int contentmask) {
+    auto plan = planned_traces.front();
+    planned_traces.pop();
+    recorded_traces.push_back({start, mins, maxs, end, passent, contentmask});
+    return plan.result;
+};
+```
+
+A simple structure diagram can also clarify the relationships:
+
+```
+BotImportRecorder
+├── counters (e.g., bot_input_calls, debug_line_show_calls)
+├── captured args
+│   ├── bot_input_invocations : list of (client, bot_input_t)
+│   ├── client_commands : list of strings
+│   └── traces : list of (start, mins, maxs, end, passent, contentmask)
+└── response queues (optional)
+    ├── planned_traces : queue<TracePlan>
+    └── point_contents_values : queue<int>
+```
+
+By pre-populating the response queues and verifying the recorded collections,
+implementers can quickly assemble deterministic mocks tailored to each unit test.
+# GetBotAPI Scenario Plan
+
+This document outlines planned test scenarios for `GetBotAPI`. Each section describes the expected behavior so future contributors can convert these plans into automated test cases.
+
+## Successful module loading
+- Provide a fully populated module implementing the required exported entry point.
+- Expect `GetBotAPI` to load the module, resolve the entry point, and return a valid interface pointer.
+- Verify that the interface exposes the expected function table without triggering any guards or error paths.
+
+## Initialization guard failures
+
+### Missing exported symbol
+- Supply a module that lacks the expected `CreateBotAPI` (or equivalent) export.
+- `GetBotAPI` should detect the absence, refuse to initialize the module, and return `nullptr` while reporting an appropriate error.
+
+### Setup routine failure
+- Use a module whose exported entry point simulates a setup failure (e.g., returns an error code or leaves the interface pointer unset).
+- `GetBotAPI` must treat the failure as fatal, unload the module if needed, and propagate a failure result to the caller.
+
+### Double unload protection
+- Trigger a scenario where module unloading is requested twice (e.g., by calling the unload path after a guard failure and again during teardown).
+- Ensure `GetBotAPI` protects against double-unload issues, avoiding crashes or double-free errors.
+
+## Placeholder-return expectations
+- For modules under `src/shared/`, `src/q2bridge/`, and `src/botlib/interface/`, confirm that unimplemented interfaces return safe placeholder objects when `GetBotAPI` is invoked.
+- Each placeholder should provide deterministic stub behavior (e.g., no-ops, default values) so downstream components can continue operating in tests.
+- Verify that placeholder returns are clearly distinguishable from fully initialized interfaces, allowing tests to assert the correct path was taken.

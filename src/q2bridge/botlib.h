@@ -1,0 +1,451 @@
+#ifndef Q2BRIDGE_BOTLIB_H
+#define Q2BRIDGE_BOTLIB_H
+
+#include <stddef.h>
+
+#include "shared/bot_types.h"
+#include "shared/platform_export.h"
+#include "shared/q_shared.h"
+
+struct cvar_s;
+typedef struct cvar_s cvar_t;
+
+struct bot_goal_s;
+typedef struct bot_goal_s bot_goal_t;
+
+struct bot_levelitem_setup_s;
+typedef struct bot_levelitem_setup_s bot_levelitem_setup_t;
+
+struct bot_chatstate_s;
+typedef struct bot_chatstate_s bot_chatstate_t;
+
+struct bot_weight_config_s;
+typedef struct bot_weight_config_s bot_weight_config_t;
+
+struct bot_initmove_s;
+typedef struct bot_initmove_s bot_initmove_t;
+
+struct bot_moveresult_s;
+typedef struct bot_moveresult_s bot_moveresult_t;
+
+struct bot_weapon_info_s;
+typedef struct bot_weapon_info_s bot_weapon_info_t;
+
+struct ai_character_profile_s;
+typedef struct ai_character_profile_s ai_character_profile_t;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define BOTLIB_API_VERSION 2
+
+// Debug line colors
+#define LINECOLOR_NONE     -1
+#define LINECOLOR_RED      0xf2f2f0f0L
+#define LINECOLOR_GREEN    0xd0d1d2d3L
+#define LINECOLOR_BLUE     0xf3f3f1f1L
+#define LINECOLOR_YELLOW   0xdcdddedfL
+#define LINECOLOR_ORANGE   0xe0e1e2e3L
+
+// Print types
+#define PRT_MESSAGE 1
+#define PRT_WARNING 2
+#define PRT_ERROR   3
+#define PRT_FATAL   4
+#define PRT_EXIT    5
+
+// Console message types
+#define CMS_NORMAL 0
+#define CMS_CHAT   1
+
+// Maximum lengths used by the bot library
+#define MAX_NETNAME        16
+#define MAX_CLIENTSKINNAME 128
+#define MAX_FILEPATH       144
+#define MAX_CHARACTERNAME  144
+
+// Action flags
+#define ACTION_ATTACK      1
+#define ACTION_USE         2
+#define ACTION_RESPAWN     4
+#define ACTION_JUMP        8
+#define ACTION_MOVEUP      8
+#define ACTION_CROUCH      16
+#define ACTION_MOVEDOWN    16
+#define ACTION_MOVEFORWARD 32
+#define ACTION_MOVEBACK    64
+#define ACTION_MOVELEFT    128
+/*
+ * Retail writes these two through byte 1 of the actionflags dword, not byte 0:
+ * sub_100374f0 (EA_MoveRight) does `flags:1.b |= 1` at 0x10037503 and
+ * sub_10037390 (EA_DelayedJump) does `flags:1.b |= 2` at 0x100373ae, i.e. bits
+ * 8 and 9. Only jump/moveup (0x08), crouch/movedown (0x10) and the jump latch
+ * riding on move-left (0x80, sub_100374c0) are genuinely aliased.
+ */
+#define ACTION_MOVERIGHT   256
+#define ACTION_DELAYEDJUMP 512
+
+// Botlib error codes
+#define BLERR_NOERROR                    0
+#define BLERR_LIBRARYNOTSETUP            1
+#define BLERR_LIBRARYALREADYSETUP        2
+#define BLERR_INVALIDCLIENTNUMBER        3
+#define BLERR_INVALIDENTITYNUMBER        4
+#define BLERR_NOAASFILE                  5
+#define BLERR_CANNOTOPENAASFILE          6
+#define BLERR_CANNOTSEEKTOAASFILE        7
+#define BLERR_CANNOTREADAASHEADER        8
+#define BLERR_WRONGAASFILEID             9
+#define BLERR_WRONGAASFILEVERSION        10
+#define BLERR_CANNOTREADAASLUMP          11
+#define BLERR_NOBSPFILE                  12
+#define BLERR_CANNOTOPENBSPFILE          13
+#define BLERR_CANNOTSEEKTOBSPFILE        14
+#define BLERR_CANNOTREADBSPHEADER        15
+#define BLERR_WRONGBSPFILEID             16
+#define BLERR_WRONGBSPFILEVERSION        17
+#define BLERR_CANNOTREADBSPLUMP          18
+#define BLERR_AICLIENTNOTSETUP           19
+#define BLERR_AICLIENTALREADYSETUP       20
+#define BLERR_AIMOVEINACTIVECLIENT       21
+#define BLERR_AIMOVETOACTIVECLIENT       22
+#define BLERR_AICLIENTALREADYSHUTDOWN    23
+#define BLERR_AIUPDATEINACTIVECLIENT     24
+#define BLERR_AICMFORINACTIVECLIENT      25
+#define BLERR_SETTINGSINACTIVECLIENT     26
+#define BLERR_CANNOTLOADICHAT            27
+#define BLERR_CANNOTLOADITEMWEIGHTS      28
+#define BLERR_CANNOTLOADITEMCONFIG       29
+#define BLERR_CANNOTLOADWEAPONWEIGHTS    30
+#define BLERR_CANNOTLOADWEAPONCONFIG     31
+#define BLERR_INVALIDIMPORT              100
+#define BLERR_INVALIDSOUNDINDEX          32
+
+#ifndef CHAT_GENDERLESS
+#define CHAT_GENDERLESS                  0
+#endif
+#ifndef CHAT_GENDERFEMALE
+#define CHAT_GENDERFEMALE                1
+#endif
+#ifndef CHAT_GENDERMALE
+#define CHAT_GENDERMALE                  2
+#endif
+
+// BSP surface description returned by traces
+typedef struct bsp_surface_s {
+    char name[16];
+    int  flags;
+    int  value;
+} bsp_surface_t;
+
+// Sweep-trace result structure
+typedef struct bsp_trace_s {
+    qboolean      allsolid;
+    qboolean      startsolid;
+    float         fraction;
+    vec3_t        endpos;
+    cplane_t      plane;
+    float         exp_dist;
+    int           sidenum;
+    bsp_surface_t surface;
+    int           contents;
+    int           ent;
+} bsp_trace_t;
+
+// Bot configuration
+typedef struct bot_settings_s {
+    char characterfile[MAX_FILEPATH];
+    char charactername[MAX_CHARACTERNAME];
+    char ailibrary[MAX_FILEPATH];
+} bot_settings_t;
+
+// Client presentation settings
+typedef struct bot_clientsettings_s {
+    char netname[MAX_NETNAME];
+    char skin[MAX_CLIENTSKINNAME];
+} bot_clientsettings_t;
+
+// Bot input (converted to a usercmd_t)
+typedef struct bot_input_s {
+    float thinktime;
+    vec3_t dir;
+    float speed;
+    vec3_t viewangles;
+    int   actionflags;
+    /* Quake III compatibility extension; outside the retail structure. */
+    int   weapon;
+} bot_input_t;
+
+// Client state update fed into the botlib
+typedef struct bot_updateclient_s {
+    pmtype_t pm_type;
+    vec3_t   origin;
+    vec3_t   velocity;
+    byte     pm_flags;
+    byte     pm_time;
+    float    gravity;
+    vec3_t   delta_angles;
+
+    vec3_t   viewangles;
+    vec3_t   viewoffset;
+    vec3_t   kick_angles;
+    vec3_t   gunangles;
+    vec3_t   gunoffset;
+    int      gunindex;
+    int      gunframe;
+
+    float    blend[4];
+    float    fov;
+    int      rdflags;
+    short    stats[MAX_STATS];
+
+    int      inventory[MAX_ITEMS];
+} bot_updateclient_t;
+
+// Entity snapshot provided to the botlib
+typedef struct bot_updateentity_s {
+    vec3_t origin;
+    vec3_t angles;
+    vec3_t old_origin;
+    vec3_t mins;
+    vec3_t maxs;
+    int    solid;
+    int    modelindex;
+    int    modelindex2;
+    int    modelindex3;
+    int    modelindex4;
+    int    frame;
+    int    skinnum;
+    int    effects;
+    int    renderfx;
+    int    sound;
+    int    event;
+} bot_updateentity_t;
+
+/*
+ * Bot library exported functions.
+ *
+ * This is the exact 20-pointer Gladiator 0.96 table returned by the retail
+ * GetBotAPI export.  It must terminate at Test: sub_10038480 writes precisely
+ * these 0x50 bytes in the x86 DLL before returning data_10063f80.
+ */
+typedef struct bot_export_s {
+    char *(*BotVersion)(void);
+    int (*BotSetupLibrary)(void);
+    int (*BotShutdownLibrary)(void);
+    int (*BotLibraryInitialized)(void);
+    int (*BotLibVarSet)(char *var_name, char *value);
+    int (*BotDefine)(char *string);
+    int (*BotLoadMap)(char *mapname, int modelindexes, char *modelindex[],
+                      int soundindexes, char *soundindex[],
+                      int imageindexes, char *imageindex[]);
+    /* Unlike adjacent exports, BotSetupClient is boolean: non-zero on success. */
+    int (*BotSetupClient)(int client, bot_settings_t *settings);
+    int (*BotShutdownClient)(int client);
+    int (*BotMoveClient)(int oldclnum, int newclnum);
+    int (*BotClientSettings)(int client, bot_clientsettings_t *settings);
+    int (*BotSettings)(int client, bot_settings_t *settings);
+    int (*BotStartFrame)(float time);
+    int (*BotUpdateClient)(int client, bot_updateclient_t *buc);
+    int (*BotUpdateEntity)(int ent, bot_updateentity_t *bue);
+    int (*BotAddSound)(vec3_t origin, int ent, int channel, int soundindex,
+                       float volume, float attenuation, float timeofs);
+    int (*BotAddPointLight)(vec3_t origin, int ent, float radius,
+                            float r, float g, float b, float time, float decay);
+    int (*BotAI)(int client, float thinktime);
+    int (*BotConsoleMessage)(int client, int type, char *message);
+    int (*Test)(int parm0, char *parm1, vec3_t parm2, vec3_t parm3);
+} bot_export_t;
+
+/*
+ * Reconstruction-only API for in-repo callers that exercise successor-era
+ * subsystems.  It is never returned by the exported GetBotAPI entry point.
+ * Keep the retail table duplicated as its prefix so callers of GetBotAPIEx
+ * retain the same field names without widening the retail ABI.
+ */
+typedef struct bot_export_extended_s {
+    char *(*BotVersion)(void);
+    int (*BotSetupLibrary)(void);
+    int (*BotShutdownLibrary)(void);
+    int (*BotLibraryInitialized)(void);
+    int (*BotLibVarSet)(char *var_name, char *value);
+    int (*BotDefine)(char *string);
+    int (*BotLoadMap)(char *mapname, int modelindexes, char *modelindex[],
+                      int soundindexes, char *soundindex[],
+                      int imageindexes, char *imageindex[]);
+    int (*BotSetupClient)(int client, bot_settings_t *settings);
+    int (*BotShutdownClient)(int client);
+    int (*BotMoveClient)(int oldclnum, int newclnum);
+    int (*BotClientSettings)(int client, bot_clientsettings_t *settings);
+    int (*BotSettings)(int client, bot_settings_t *settings);
+    int (*BotStartFrame)(float time);
+    int (*BotUpdateClient)(int client, bot_updateclient_t *buc);
+    int (*BotUpdateEntity)(int ent, bot_updateentity_t *bue);
+    int (*BotAddSound)(vec3_t origin, int ent, int channel, int soundindex,
+                       float volume, float attenuation, float timeofs);
+    int (*BotAddPointLight)(vec3_t origin, int ent, float radius,
+                            float r, float g, float b, float time, float decay);
+    int (*BotAI)(int client, float thinktime);
+    int (*BotConsoleMessage)(int client, int type, char *message);
+    int (*Test)(int parm0, char *parm1, vec3_t parm2, vec3_t parm3);
+    int (*BotAllocGoalState)(int client);
+    void (*BotFreeGoalState)(int handle);
+    void (*BotResetGoalState)(int handle);
+    int (*BotLoadItemWeights)(int handle, const char *filename);
+    void (*BotFreeItemWeights)(int handle);
+    int (*BotWeightIndex)(int handle, const char *classname);
+    int (*BotPushGoal)(int handle, const bot_goal_t *goal);
+    int (*BotPopGoal)(int handle);
+    int (*BotGetTopGoal)(int handle, bot_goal_t *goal);
+    int (*BotGetSecondGoal)(int handle, bot_goal_t *goal);
+    int (*BotChooseLTGItem)(int handle, vec3_t origin, int *inventory, int travelflags);
+    int (*BotChooseNBGItem)(int handle, vec3_t origin, int *inventory, int travelflags, bot_goal_t *ltg, float maxtime);
+    void (*BotResetAvoidGoals)(int handle);
+    void (*BotAddAvoidGoal)(int handle, int number, float avoidtime);
+    int (*BotUpdateGoalState)(int handle, vec3_t origin, int *inventory, int travelflags, float now, float nearby_time);
+	void (*BotUpdateEntityItems)(void);
+    int (*BotRegisterLevelItem)(const bot_levelitem_setup_t *setup);
+    void (*BotUnregisterLevelItem)(int number);
+    void (*BotMarkLevelItemTaken)(int number, float respawn_delay);
+	int (*BotItemGoalInVisButNotVisible)(int viewer, vec3_t eye, vec3_t viewangles, struct bot_goal_s *goal);
+    int (*BotTouchingGoal)(const vec3_t origin, const bot_goal_t *goal);
+    int (*BotAllocWeightConfig)(void);
+    void (*BotFreeWeightConfig)(int handle);
+    void (*BotFreeWeightConfig2)(bot_weight_config_t *config);
+    int (*BotLoadWeights)(int handle, const char *filename);
+    int (*BotWriteWeights)(int handle, const char *filename);
+    int (*BotSetWeight)(int handle, const char *name, float value);
+    int (*BotFindFuzzyWeight)(int handle, const char *name);
+    float (*BotFuzzyWeightHandle)(int handle, const int *inventory, int weight_index);
+    bot_weight_config_t *(*BotReadWeightsFile)(const char *filename);
+    int (*BotAllocMoveState)(void);
+    void (*BotFreeMoveState)(int handle);
+    void (*BotResetMoveState)(int handle);
+    void (*BotInitMoveState)(int handle, const bot_initmove_t *initmove);
+    void (*BotMoveToGoal)(bot_moveresult_t *result, int movestate, const bot_goal_t *goal, int travelflags);
+    int (*BotMoveInDirection)(int movestate, const vec3_t dir, float speed, int type);
+    void (*BotResetAvoidReach)(int movestate);
+	void (*BotResetLastAvoidReach)(int movestate);
+    int (*BotReachabilityArea)(vec3_t origin, int client);
+    int (*BotMovementViewTarget)(int movestate, const bot_goal_t *goal, int travelflags, float lookahead, vec3_t target);
+	int (*BotPredictVisiblePosition)(vec3_t origin, int areanum, const bot_goal_t *goal, int travelflags, vec3_t target);
+	void (*BotAddAvoidSpot)(int movestate, vec3_t origin, float radius, int type);
+    int (*BotLoadCharacter)(const char *character_file, float skill);
+    void (*BotFreeCharacter)(int handle);
+    int (*BotLoadCharacterSkill)(const char *character_file, float skill);
+    void (*BotFreeCharacterStrings)(ai_character_profile_t *profile);
+    float (*Characteristic_Float)(int handle, int index);
+    float (*Characteristic_BFloat)(int handle, int index, float minimum, float maximum);
+    int (*Characteristic_Integer)(int handle, int index);
+    int (*Characteristic_BInteger)(int handle, int index, int minimum, int maximum);
+    void (*Characteristic_String)(int handle, int index, char *buffer, int buffer_size);
+    int (*BotAllocWeaponState)(void);
+    void (*BotFreeWeaponState)(int handle);
+    void (*BotResetWeaponState)(int handle);
+    int (*BotLoadWeaponWeights)(int weaponstate, const char *filename);
+    void (*BotFreeWeaponWeights)(int weaponstate);
+    int (*BotChooseBestFightWeapon)(int weaponstate, const int *inventory);
+    int (*BotGetTopRankedWeapon)(int weaponstate);
+    void (*BotGetWeaponInfo)(int weaponstate, int weapon, bot_weapon_info_t *weaponinfo);
+    bot_chatstate_t *(*BotAllocChatState)(void);
+    void (*BotFreeChatState)(bot_chatstate_t *state);
+    int (*BotLoadChatFile)(bot_chatstate_t *state, const char *chatfile, const char *chatname);
+    void (*BotFreeChatFile)(bot_chatstate_t *state);
+    void (*BotQueueConsoleMessage)(bot_chatstate_t *state, int type, const char *message);
+    int (*BotRemoveConsoleMessage)(bot_chatstate_t *state, int type);
+    int (*BotNextConsoleMessage)(bot_chatstate_t *state, int *type, char *buffer, size_t buffer_size);
+    size_t (*BotNumConsoleMessages)(const bot_chatstate_t *state);
+    void (*BotEnterChat)(bot_chatstate_t *state, int client, int sendto);
+    int (*BotReplyChat)(bot_chatstate_t *state, const char *message, unsigned long context);
+	int (*BotReplyChatWithContexts)(bot_chatstate_t *state,
+		const char *message,
+		unsigned long mcontext,
+		unsigned long vcontext,
+		const char *var0,
+		const char *var1,
+		const char *var2,
+		const char *var3,
+		const char *var4,
+		const char *var5,
+		const char *var6,
+		const char *var7);
+    int (*BotChatLength)(const bot_chatstate_t *state);
+	int (*BotNumInitialChats)(const bot_chatstate_t *state, const char *type);
+	int (*BotInitialChat)(bot_chatstate_t *state, const char *type, unsigned long context, ...);
+    void (*BotGetChatMessage)(bot_chatstate_t *state, char *buffer, int buffer_size);
+    void (*BotSetChatGender)(bot_chatstate_t *state, int gender);
+    void (*BotSetChatName)(bot_chatstate_t *state, const char *name, int client);
+    int (*StringContains)(const char *str1, const char *str2, int casesensitive);
+    int (*BotFindMatch)(const char *str, bot_match_t *match, unsigned long context);
+    void (*BotMatchVariable)(const bot_match_t *match, int variable, char *buffer, int buffer_size);
+    void (*UnifyWhiteSpaces)(char *string);
+    void (*BotReplaceSynonyms)(char *string, unsigned long context);
+    void (*BotEmptyGoalStack)(int handle);
+    void (*BotRemoveFromAvoidGoals)(int handle, int number);
+    float (*BotAvoidGoalTime)(int handle, int number);
+    void (*BotSetAvoidGoalTime)(int handle, int number, float avoidtime);
+    void (*BotDumpAvoidGoals)(int handle);
+    void (*BotDumpGoalStack)(int handle);
+    void (*BotGoalName)(int number, char *name, int size);
+    int (*BotGetLevelItemGoal)(int index, char *classname, bot_goal_t *goal);
+    int (*BotGetNextCampSpotGoal)(int num, bot_goal_t *goal);
+    int (*BotGetMapLocationGoal)(char *name, bot_goal_t *goal);
+    void (*BotInterbreedGoalFuzzyLogic)(int parent1, int parent2, int child);
+    void (*BotSaveGoalFuzzyLogic)(int goalstate, char *filename);
+    void (*BotMutateGoalFuzzyLogic)(int goalstate, float range);
+} bot_export_extended_t;
+
+/* Exact ten-callback Gladiator 0.96 input table consumed by GetBotAPI. */
+typedef struct bot_import_s {
+    void (*BotInput)(int client, bot_input_t *bi);
+    void (*BotClientCommand)(int client, char *str, ...);
+    void (*Print)(int type, char *fmt, ...);
+    bsp_trace_t (*Trace)(vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end,
+                         int passent, int contentmask);
+    int  (*PointContents)(vec3_t point);
+    void *(*GetMemory)(int size);
+    void (*FreeMemory)(void *ptr);
+    int  (*DebugLineCreate)(void);
+    void (*DebugLineDelete)(int line);
+    void (*DebugLineShow)(int line, vec3_t start, vec3_t end, int color);
+} bot_import_t;
+
+/* In-repo bridge input; never read past the retail table by GetBotAPI. */
+typedef struct bot_import_extended_s {
+    void (*BotInput)(int client, bot_input_t *bi);
+    void (*BotClientCommand)(int client, char *str, ...);
+    void (*Print)(int type, char *fmt, ...);
+    bsp_trace_t (*Trace)(vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end,
+                         int passent, int contentmask);
+    int  (*PointContents)(vec3_t point);
+    void *(*GetMemory)(int size);
+    void (*FreeMemory)(void *ptr);
+    int  (*DebugLineCreate)(void);
+    void (*DebugLineDelete)(int line);
+    void (*DebugLineShow)(int line, vec3_t start, vec3_t end, int color);
+    cvar_t *(*CvarGet)(const char *name, const char *default_value, int flags);
+    void (*Error)(const char *fmt, ...);
+    void (*AddCommand)(const char *name, void (*function)(void));
+    void (*RemoveCommand)(const char *name);
+    int (*CmdArgc)(void);
+    const char *(*CmdArgv)(int index);
+} bot_import_extended_t;
+
+#define BOT_IMPORT_RETAIL_SIZE sizeof(bot_import_t)
+
+GLADIATOR_API bot_export_t *GetBotAPI(bot_import_t *import);
+
+/*
+ * In-repo compatibility helper.  The retail gladiator.dll export directory
+ * contains GetBotAPI only, so this intentionally has no GLADIATOR_API marker
+ * and returns the separately typed non-retail extension table.
+ */
+bot_export_extended_t *GetBotAPIEx(bot_import_extended_t *import,
+	size_t import_size);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* Q2BRIDGE_BOTLIB_H */

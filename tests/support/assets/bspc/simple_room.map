@@ -1,0 +1,13 @@
+// Minimal Quake II MAP placeholder used for bspc integration checks
+{
+"classname" "worldspawn"
+"message" "Simple BSPC test room"
+{
+( -128 -128 0 ) ( 128 -128 0 ) ( -128 128 0 ) textures/common/caulk 0 0 0 1 1
+( -128 -128 128 ) ( -128 128 128 ) ( 128 -128 128 ) textures/common/caulk 0 0 0 1 1
+( -128 -128 0 ) ( -128 -128 128 ) ( -128 128 0 ) textures/common/caulk 0 0 0 1 1
+( 128 -128 0 ) ( 128 128 0 ) ( 128 -128 128 ) textures/common/caulk 0 0 0 1 1
+( -128 128 0 ) ( -128 128 128 ) ( 128 128 0 ) textures/common/caulk 0 0 0 1 1
+( -128 -128 0 ) ( -128 -128 128 ) ( 128 -128 0 ) textures/common/caulk 0 0 0 1 1
+}
+}

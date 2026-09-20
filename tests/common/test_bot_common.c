@@ -1,0 +1,1233 @@
+#include <assert.h>
+#include <math.h>
+#include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+
+#include "botlib/common/l_assets.h"
+#include "botlib/common/l_crc.h"
+#include "botlib/common/l_libvar.h"
+#include "botlib/common/l_log.h"
+#include "botlib/common/l_memory.h"
+#include "botlib/common/l_struct.h"
+#include "botlib/common/l_utils.h"
+#include "botlib/precomp/l_precomp.h"
+#include "shared/q_platform.h"
+
+#include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
+#ifndef _WIN32
+#include <unistd.h>
+#else
+#include <windows.h>
+#include <direct.h>
+#include <io.h>
+#endif
+
+#ifdef _WIN32
+#define test_mkdir(path) _mkdir(path)
+#define test_rmdir(path) _rmdir(path)
+#define test_unlink(path) _unlink(path)
+#define test_unsetenv(name) _putenv_s(name, "")
+#else
+#define test_mkdir(path) mkdir(path, 0700)
+#define test_rmdir(path) rmdir(path)
+#define test_unlink(path) unlink(path)
+#define test_unsetenv(name) unsetenv(name)
+#endif
+
+#define TEST_MEMORY_LOG_CAPACITY 4
+#define TEST_MEMORY_LOG_MESSAGE_SIZE 128
+
+typedef struct test_memory_log_capture_s {
+	int count;
+	int levels[TEST_MEMORY_LOG_CAPACITY];
+	char messages[TEST_MEMORY_LOG_CAPACITY][TEST_MEMORY_LOG_MESSAGE_SIZE];
+} test_memory_log_capture_t;
+
+typedef struct test_memory_allocator_capture_s {
+	int allocation_count;
+	int free_count;
+	int last_request_size;
+	void *last_allocated_header;
+	void *last_freed_header;
+} test_memory_allocator_capture_t;
+
+static test_memory_log_capture_t g_test_memory_log;
+static test_memory_allocator_capture_t g_test_memory_allocator_a;
+static test_memory_allocator_capture_t g_test_memory_allocator_b;
+
+/*
+=============
+test_memory_log_callback
+
+Captures allocator diagnostics for parity assertions.
+=============
+*/
+static void test_memory_log_callback(int level, const char *fmt, va_list args)
+{
+	if (g_test_memory_log.count >= TEST_MEMORY_LOG_CAPACITY)
+	{
+		return;
+	}
+
+	int index = g_test_memory_log.count++;
+	g_test_memory_log.levels[index] = level;
+	vsnprintf(g_test_memory_log.messages[index],
+		sizeof(g_test_memory_log.messages[index]), fmt, args);
+}
+
+/*
+=============
+test_memory_allocate_a
+
+Captures allocations made through the first copied engine callback.
+=============
+*/
+static void *test_memory_allocate_a(int size)
+{
+	g_test_memory_allocator_a.allocation_count += 1;
+	g_test_memory_allocator_a.last_request_size = size;
+	g_test_memory_allocator_a.last_allocated_header = malloc((size_t)size);
+	if (g_test_memory_allocator_a.last_allocated_header != NULL)
+	{
+		memset(g_test_memory_allocator_a.last_allocated_header, 0xa5, (size_t)size);
+	}
+	return g_test_memory_allocator_a.last_allocated_header;
+}
+
+/*
+=============
+test_memory_free_a
+
+Captures header pointers released through the first engine callback.
+=============
+*/
+static void test_memory_free_a(void *ptr)
+{
+	g_test_memory_allocator_a.free_count += 1;
+	g_test_memory_allocator_a.last_freed_header = ptr;
+	free(ptr);
+}
+
+/*
+=============
+test_memory_allocate_b
+
+Captures allocations through the alternate callback used by the copy test.
+=============
+*/
+static void *test_memory_allocate_b(int size)
+{
+	g_test_memory_allocator_b.allocation_count += 1;
+	g_test_memory_allocator_b.last_request_size = size;
+	g_test_memory_allocator_b.last_allocated_header = malloc((size_t)size);
+	return g_test_memory_allocator_b.last_allocated_header;
+}
+
+/*
+=============
+test_memory_free_b
+
+Captures releases through the alternate callback used by the copy test.
+=============
+*/
+static void test_memory_free_b(void *ptr)
+{
+	g_test_memory_allocator_b.free_count += 1;
+	g_test_memory_allocator_b.last_freed_header = ptr;
+	free(ptr);
+}
+
+/*
+=============
+test_memory_retail_size_clear_and_logging_contract
+
+Checks the observable tracked-allocation behavior recovered from retail HLIL.
+=============
+*/
+static void test_memory_retail_size_clear_and_logging_contract(void)
+{
+	BotMemory_Shutdown();
+	BotMemory_SetAllocatorCallbacks(NULL, NULL);
+	memset(&g_test_memory_log, 0, sizeof(g_test_memory_log));
+	BotMemory_SetLogCallback(test_memory_log_callback);
+	assert(BotMemory_Init(4096));
+
+	const size_t payload_size = 1024;
+	unsigned char *payload = (unsigned char *)GetClearedMemory(payload_size);
+	assert(payload != NULL);
+	for (size_t i = 0; i < payload_size; ++i)
+	{
+		assert(payload[i] == 0);
+	}
+
+	const size_t tracked_size = BotMemory_TotalAllocated();
+	assert(tracked_size > payload_size);
+	assert(MemoryByteSize(payload) == tracked_size);
+
+	FreeMemory(NULL);
+	assert(MemoryByteSize(NULL) == 0);
+	assert(g_test_memory_log.count == 0);
+
+	const size_t header_size = tracked_size - payload_size;
+	uint32_t *magic = (uint32_t *)(payload - header_size);
+	const uint32_t saved_magic = *magic;
+	*magic = 0;
+	assert(MemoryByteSize(payload) == 0);
+	*magic = saved_magic;
+	assert(g_test_memory_log.count == 1);
+	assert(g_test_memory_log.levels[0] == BOT_MEMORY_LOG_FATAL);
+	assert(strcmp(g_test_memory_log.messages[0],
+		"MemoryByteSize: invalid memory block\n") == 0);
+	memset(&g_test_memory_log, 0, sizeof(g_test_memory_log));
+
+	BotMemory_LogSummary();
+	assert(g_test_memory_log.count == 2);
+	assert(g_test_memory_log.levels[0] == BOT_MEMORY_LOG_INFO);
+	assert(g_test_memory_log.levels[1] == BOT_MEMORY_LOG_INFO);
+
+	char expected_summary[TEST_MEMORY_LOG_MESSAGE_SIZE];
+	snprintf(expected_summary, sizeof(expected_summary),
+		"total botlib memory: %zu KB\n", tracked_size >> 10);
+	assert(strcmp(g_test_memory_log.messages[0], expected_summary) == 0);
+	assert(strcmp(g_test_memory_log.messages[1], "total memory blocks: 1\n") == 0);
+
+	BotMemory_Shutdown();
+	assert(BotMemory_TotalAllocated() == 0);
+	assert(g_test_memory_log.count == 2);
+	BotMemory_SetLogCallback(NULL);
+	BotMemory_SetAllocatorCallbacks(NULL, NULL);
+}
+
+/*
+=============
+test_memory_import_callback_contract
+
+Pins copied import callbacks, header ownership, zero allocations, and teardown.
+=============
+*/
+static void test_memory_import_callback_contract(void)
+{
+	BotMemory_Shutdown();
+	BotMemory_SetAllocatorCallbacks(NULL, NULL);
+	memset(&g_test_memory_allocator_a, 0, sizeof(g_test_memory_allocator_a));
+	memset(&g_test_memory_allocator_b, 0, sizeof(g_test_memory_allocator_b));
+
+	bot_memory_allocate_fn allocate_callback = test_memory_allocate_a;
+	bot_memory_free_fn free_callback = test_memory_free_a;
+	BotMemory_SetAllocatorCallbacks(allocate_callback, free_callback);
+	allocate_callback = test_memory_allocate_b;
+	free_callback = test_memory_free_b;
+
+	bool initialised = BotMemory_Init(1);
+	assert(initialised);
+	const int available_before = AvailableMemory();
+	assert(available_before == INT_MAX);
+	assert(BotMemory_HeapCapacity() == SIZE_MAX);
+
+	const size_t payload_size = 37;
+	unsigned char *payload = (unsigned char *)GetMemory(payload_size);
+	assert(payload != NULL);
+	for (size_t i = 0; i < payload_size; ++i)
+	{
+		assert(payload[i] == 0xa5);
+	}
+	assert(g_test_memory_allocator_a.allocation_count == 1);
+	assert(g_test_memory_allocator_b.allocation_count == 0);
+	const size_t total_size = MemoryByteSize(payload);
+	assert(total_size > payload_size);
+	assert(g_test_memory_allocator_a.last_request_size == (int)total_size);
+	const size_t header_size = total_size - payload_size;
+	void *header = (unsigned char *)payload - header_size;
+	assert(header == g_test_memory_allocator_a.last_allocated_header);
+	FreeMemory(payload);
+	assert(g_test_memory_allocator_a.free_count == 1);
+	assert(g_test_memory_allocator_a.last_freed_header == header);
+	assert(g_test_memory_allocator_b.free_count == 0);
+
+	unsigned char *cleared_payload =
+		(unsigned char *)GetClearedMemory(payload_size);
+	assert(cleared_payload != NULL);
+	for (size_t i = 0; i < payload_size; ++i)
+	{
+		assert(cleared_payload[i] == 0);
+	}
+	FreeMemory(cleared_payload);
+
+	void *zero_payload = GetMemory(0);
+	assert(zero_payload != NULL);
+	const size_t zero_total_size = MemoryByteSize(zero_payload);
+	assert(zero_total_size == (size_t)g_test_memory_allocator_a.last_request_size);
+	assert((unsigned char *)zero_payload - zero_total_size ==
+		g_test_memory_allocator_a.last_allocated_header);
+	FreeMemory(zero_payload);
+
+	const size_t large_payload_size = BOT_MEMORY_DEFAULT_HEAP_SIZE + 1u;
+	void *large_payload = GetMemory(large_payload_size);
+	assert(large_payload != NULL);
+	assert(MemoryByteSize(large_payload) > BOT_MEMORY_DEFAULT_HEAP_SIZE);
+	FreeMemory(large_payload);
+	assert(AvailableMemory() == available_before);
+
+	void *shutdown_payload_a = GetMemory(11);
+	void *shutdown_payload_b = GetMemory(29);
+	assert(shutdown_payload_a != NULL);
+	assert(shutdown_payload_b != NULL);
+	assert(BotMemory_TotalAllocated() > 0);
+	const int free_count_before_shutdown = g_test_memory_allocator_a.free_count;
+	BotMemory_Shutdown();
+	assert(g_test_memory_allocator_a.free_count == free_count_before_shutdown + 2);
+	assert(g_test_memory_allocator_b.free_count == 0);
+	assert(BotMemory_TotalAllocated() == 0);
+	assert(AvailableMemory() == available_before);
+
+	BotMemory_SetAllocatorCallbacks(NULL, NULL);
+}
+
+static void test_utils_initialisation_flags(void) {
+    L_Utils_Shutdown();
+    assert(!L_Utils_IsInitialised());
+    assert(L_Utils_Init());
+    assert(L_Utils_IsInitialised());
+    L_Utils_Shutdown();
+    assert(!L_Utils_IsInitialised());
+}
+
+static void test_struct_initialisation_flags(void) {
+    L_Struct_Shutdown();
+    assert(!L_Struct_IsInitialised());
+    assert(L_Struct_Init());
+    assert(L_Struct_IsInitialised());
+    L_Struct_Shutdown();
+    assert(!L_Struct_IsInitialised());
+}
+
+static void test_case_insensitive_compare_helpers(void) {
+    assert(Q_stricmp("Alpha", "alpha") == 0);
+    assert(Q_stricmp("Beta", "gamma") != 0);
+    assert(Q_strnicmp("PrefixValue", "prefix-other", 6) == 0);
+    assert(Q_strnicmp("PrefixValue", "prefix-other", 12) != 0);
+}
+
+/*
+=============
+test_crc_matches_reference
+
+Pins the retail checksum and signed-length iteration contracts.
+=============
+*/
+static void test_crc_matches_reference(void)
+{
+	char payload[] = "gladiator";
+	const int payload_length = (int)strlen(payload);
+	const uint16_t expected_crc = 0x40FEu;
+	uint16_t crc = CRC_ProcessString((uint8_t *)payload, payload_length);
+	assert(crc == expected_crc);
+	assert(CRC_ProcessString(NULL, 0) == CRC_INIT_VALUE);
+	assert(CRC_ProcessString(NULL, -7) == CRC_INIT_VALUE);
+
+	uint16_t running = CRC_INIT_VALUE;
+	for (int index = 0; index < payload_length; ++index)
+	{
+		CRC_ProcessByte(&running, (uint8_t)payload[index]);
+	}
+	assert(CRC_Value(running) == expected_crc);
+
+	running = CRC_INIT_VALUE;
+	CRC_ContinueProcessString(&running, payload, 4);
+	CRC_ContinueProcessString(&running, payload + 4, payload_length - 4);
+	assert(CRC_Value(running) == expected_crc);
+	crc = running;
+	CRC_ContinueProcessString(&running, NULL, -1);
+	assert(running == crc);
+}
+
+/*
+=============
+test_crc_source_checksum_registry
+
+Pins raw source-buffer CRC registration, duplicate retention, and name order.
+
+Retail sub_100377e0 (0x100377e4) walks the embedded 92-entry catalogue at
+0x1005e678 but throws the search result away: the insert at 0x100377fe runs on
+both the match and the exhaustion path.  Registration is therefore
+unconditional, and a checksum that appears in the catalogue (0xA991) or that is
+zero is retained like any other.  Only sub_100376b0's name scan rejects a
+record, and it compares through sub_10045cb0 (_stricmp), so both the duplicate
+test and the list ordering fold case.
+=============
+*/
+static void test_crc_source_checksum_registry(void)
+{
+	BotMemory_Shutdown();
+	CRC_ResetSourceChecksums();
+	assert(BotMemory_Init(4096));
+
+	CRC_RegisterSourceChecksum("zeta.c", 0x1234U);
+	CRC_RegisterSourceChecksum("alpha.c", 0xABCDU);
+	CRC_RegisterSourceChecksum("zeta.c", 0xBEEFU);
+	CRC_RegisterSourceChecksum("embedded.c", 0xA991U);
+	CRC_RegisterSourceChecksum("zero.c", 0x0000U);
+	CRC_RegisterSourceData("babe.c", "gladiator", 9);
+	/* Folded-case duplicate: rejected by the _stricmp scan at 0x100376c7. */
+	CRC_RegisterSourceChecksum("ZETA.C", 0xFACEU);
+
+	assert(CRC_SourceChecksumCount() == 5U);
+	char name[CRC_SOURCE_NAME_MAX];
+	uint16_t checksum = 0;
+	assert(CRC_SourceChecksumAt(0U, &checksum, name, sizeof(name)));
+	assert(checksum == 0xABCDU);
+	assert(strcmp(name, "alpha.c") == 0);
+	assert(CRC_SourceChecksumAt(1U, &checksum, name, sizeof(name)));
+	assert(checksum == 0x40FEU);
+	assert(strcmp(name, "babe.c") == 0);
+	/* Catalogue member 0xA991 is retained: the catalogue scan filters nothing. */
+	assert(CRC_SourceChecksumAt(2U, &checksum, name, sizeof(name)));
+	assert(checksum == 0xA991U);
+	assert(strcmp(name, "embedded.c") == 0);
+	/* A zero checksum is an ordinary record too. */
+	assert(CRC_SourceChecksumAt(3U, &checksum, name, sizeof(name)));
+	assert(checksum == 0x0000U);
+	assert(strcmp(name, "zero.c") == 0);
+	/* First registration wins for a repeated name, in either case. */
+	assert(CRC_SourceChecksumAt(4U, &checksum, name, sizeof(name)));
+	assert(checksum == 0x1234U);
+	assert(strcmp(name, "zeta.c") == 0);
+	assert(!CRC_SourceChecksumAt(5U, &checksum, name, sizeof(name)));
+
+	const char *dump_path = "bot_common_checksum_dump.log";
+	test_unlink(dump_path);
+	BotLib_LogShutdown();
+	LibVar_Shutdown();
+	LibVar_Init();
+	LibVarSet("log", "1");
+	BotLib_LogOpen(dump_path);
+	assert(BotLib_LogFile() != NULL);
+	CRC_DumpSourceChecksums();
+	BotLib_LogClose();
+
+	FILE *file = fopen(dump_path, "rb");
+	assert(file != NULL);
+	char dump[256];
+	size_t dump_length = fread(dump, 1, sizeof(dump) - 1U, file);
+	assert(fclose(file) == 0);
+	dump[dump_length] = '\0';
+	assert(strcmp(dump,
+		"\t{0xABCD, 1}, //alpha.c\r\n"
+		"\t{0x40FE, 1}, //babe.c\r\n"
+		"\t{0xA991, 1}, //embedded.c\r\n"
+		"\t{0x0000, 1}, //zero.c\r\n"
+		"\t{0x1234, 1}, //zeta.c\r\n") == 0);
+	BotLib_LogShutdown();
+	LibVar_Shutdown();
+	assert(test_unlink(dump_path) == 0);
+
+	CRC_ResetSourceChecksums();
+	BotMemory_Shutdown();
+}
+
+typedef struct test_sample_s {
+    int integer;
+    float real;
+    char name[MAX_STRINGFIELD];
+    unsigned char flags[3];
+} test_sample_t;
+
+static const fielddef_t g_test_sample_fields[] = {
+    {"integer", (int)offsetof(test_sample_t, integer), FT_INT, 0, 0.0f, 0.0f, NULL},
+    {"real", (int)offsetof(test_sample_t, real), FT_FLOAT | FT_BOUNDED, 0, -10.0f, 10.0f, NULL},
+    {"name", (int)offsetof(test_sample_t, name), FT_STRING, 0, 0.0f, 0.0f, NULL},
+    {"flags", (int)offsetof(test_sample_t, flags), FT_CHAR | FT_UNSIGNED | FT_ARRAY, 3, 0.0f, 0.0f, NULL},
+    {NULL, 0, 0, 0, 0.0f, 0.0f, NULL},
+};
+
+static const structdef_t g_test_sample_struct = {
+    (int)sizeof(test_sample_t),
+    g_test_sample_fields,
+};
+
+typedef struct test_nested_inner_s {
+	int value;
+} test_nested_inner_t;
+
+typedef struct test_nested_outer_s {
+	int prefix;
+	test_nested_inner_t nested;
+} test_nested_outer_t;
+
+static const fielddef_t g_test_nested_inner_fields[] = {
+	{"value", (int)offsetof(test_nested_inner_t, value), FT_INT,
+		0, 0.0f, 0.0f, NULL},
+	{NULL, 0, 0, 0, 0.0f, 0.0f, NULL},
+};
+
+static const structdef_t g_test_nested_inner_struct = {
+	(int)sizeof(test_nested_inner_t),
+	g_test_nested_inner_fields,
+};
+
+static const fielddef_t g_test_nested_outer_fields[] = {
+	{"prefix", (int)offsetof(test_nested_outer_t, prefix), FT_INT,
+		0, 0.0f, 0.0f, NULL},
+	{"nested", (int)offsetof(test_nested_outer_t, nested), FT_STRUCT,
+		0, 0.0f, 0.0f, &g_test_nested_inner_struct},
+	{NULL, 0, 0, 0, 0.0f, 0.0f, NULL},
+};
+
+static const structdef_t g_test_nested_outer_struct = {
+	(int)sizeof(test_nested_outer_t),
+	g_test_nested_outer_fields,
+};
+
+static void test_read_structure_parses_basic_types(void) {
+    const char script[] = "{ integer 1337 real 3.75 name \"Unit\" flags { 1, 2, 4 } }";
+
+    PC_InitLexer();
+    pc_source_t *source = PC_LoadSourceMemory("test_struct", script, strlen(script));
+    assert(source != NULL);
+
+    test_sample_t sample;
+    memset(&sample, 0, sizeof(sample));
+
+    assert(ReadStructure(source, &g_test_sample_struct, &sample));
+    assert(sample.integer == 1337);
+    assert(fabsf(sample.real - 3.75f) < 0.0001f);
+    assert(strcmp(sample.name, "Unit") == 0);
+    assert(sample.flags[0] == 1);
+    assert(sample.flags[1] == 2);
+    assert(sample.flags[2] == 4);
+
+    PC_FreeSource(source);
+	PC_ShutdownLexer();
+}
+
+/*
+=============
+test_struct_retail_numeric_cache
+
+Pins ReadNumber's signed x86 intermediate value rather than reparsing token
+text at the host integer width.
+=============
+*/
+static void test_struct_retail_numeric_cache(void)
+{
+	const char script[] = "0x80000000";
+	const fielddef_t field = {"value", 0, FT_FLOAT, 0, 0.0f, 0.0f, NULL};
+	float value = 0.0f;
+
+	PC_InitLexer();
+	pc_source_t *source = PC_LoadSourceMemory("retail_numeric_cache", script,
+		strlen(script));
+	assert(source != NULL);
+	assert(ReadNumber(source, &field, &value));
+	assert(value == -2147483648.0f);
+	PC_FreeSource(source);
+	PC_ShutdownLexer();
+}
+
+/*
+=============
+test_struct_retail_nested_and_array_quirks
+
+Pins the DLL's ignored nested-read result, array limit, and writer base quirk.
+=============
+*/
+static void test_struct_retail_nested_and_array_quirks(void)
+{
+	PC_InitLexer();
+
+	const char array_script[] = "{ flags { 1, 2, 3, }";
+	pc_source_t *source = PC_LoadSourceMemory("retail_array", array_script,
+		strlen(array_script));
+	assert(source != NULL);
+	test_sample_t sample;
+	memset(&sample, 0, sizeof(sample));
+	assert(ReadStructure(source, &g_test_sample_struct, &sample));
+	assert(sample.flags[0] == 1);
+	assert(sample.flags[1] == 2);
+	assert(sample.flags[2] == 3);
+	PC_FreeSource(source);
+
+	const char nested_script[] =
+		"{ prefix 7 nested { value not_a_number } }";
+	source = PC_LoadSourceMemory("retail_nested", nested_script,
+		strlen(nested_script));
+	assert(source != NULL);
+	test_nested_outer_t parsed;
+	memset(&parsed, 0, sizeof(parsed));
+	assert(ReadStructure(source, &g_test_nested_outer_struct, &parsed));
+	assert(parsed.prefix == 7);
+	assert(parsed.nested.value == 0);
+	assert(PC_ExpectTokenString(source, "}"));
+	PC_FreeSource(source);
+	PC_ShutdownLexer();
+
+	test_nested_outer_t written;
+	written.prefix = 7;
+	written.nested.value = 42;
+	FILE *file = tmpfile();
+	assert(file != NULL);
+	assert(WriteStructure(file, &g_test_nested_outer_struct, &written));
+	assert(fflush(file) == 0);
+	assert(fseek(file, 0, SEEK_SET) == 0);
+	char contents[256];
+	size_t length = fread(contents, 1, sizeof(contents) - 1, file);
+	assert(fclose(file) == 0);
+	contents[length] = '\0';
+	assert(strcmp(contents,
+		"{\r\n"
+		"\tprefix\t7\r\n"
+		"\tnested\t\t{\r\n"
+		"\t\tvalue\t7\r\n"
+		"\t}\r\n"
+		"\r\n"
+		"}\r\n") == 0);
+}
+
+static void test_vector2angles_and_angle_helpers(void) {
+    vec3_t forward = {0.0f, 1.0f, 0.0f};
+    vec3_t angles;
+    Vector2Angles(forward, angles);
+    assert(fabsf(angles[PITCH] - 0.0f) < 0.001f);
+    assert(fabsf(angles[YAW] - 90.0f) < 0.001f);
+
+    vec3_t up = {0.0f, 0.0f, 1.0f};
+    Vector2Angles(up, angles);
+    assert(fabsf(angles[PITCH] + 90.0f) < 0.001f);
+    assert(fabsf(angles[YAW] - 0.0f) < 0.001f);
+
+	vec3_t diagonal = {2.0f, 1.0f, 1.0f};
+	Vector2Angles(diagonal, angles);
+	assert(angles[PITCH] == -24.0f);
+	assert(angles[YAW] == 26.0f);
+	assert(angles[ROLL] == 0.0f);
+
+	assert(fabsf(AngleNormalize360(370.0f) - 9.99755859375f) < 0.000001f);
+	assert(fabsf(AngleNormalize180(200.0f) + 160.0048828125f) < 0.000001f);
+	assert(fabsf(AngleDelta(10.0f, 350.0f) - 20.0006103515625f) < 0.000001f);
+	assert(fabsf(AngleMod(-1.0f) - 359.000244140625f) < 0.000001f);
+}
+
+/*
+=============
+test_path_helpers
+
+Pins retail separator conversion and signed append-capacity behavior.
+=============
+*/
+static void test_path_helpers(void)
+{
+	char buffer[64];
+	strcpy(buffer, "base");
+	AppendPathSeperator(buffer, (int)sizeof(buffer));
+	size_t length = strlen(buffer);
+	assert(length > 0);
+	assert(buffer[length - 1] == BOTLIB_PATH_SEPARATOR_CHAR);
+
+	char negative_length[8] = "abc";
+	AppendPathSeperator(negative_length, -1);
+	assert(strcmp(negative_length, "abc") == 0);
+
+	strcpy(buffer, "base\\game");
+	ConvertPath(buffer);
+	for (size_t index = 0; index < strlen(buffer); ++index)
+	{
+		if (buffer[index] == BOTLIB_PATH_SEPARATOR_CHAR)
+		{
+			continue;
+		}
+		assert(buffer[index] != '/' && buffer[index] != '\\');
+	}
+
+	char stripped[64];
+	BotUtils_StripExtension("scripts/test.bot", stripped, sizeof(stripped));
+	assert(strcmp(stripped, "scripts/test") == 0);
+
+	assert(BotUtils_FileExists(__FILE__));
+}
+
+/*
+=============
+test_log_retail_write_and_timestamp_contract
+
+Pins CRLF writes, botlib-frame timestamps, and the persistent write count.
+=============
+*/
+static void test_log_retail_write_and_timestamp_contract(void)
+{
+	const char *first_path = "bot_common_retail_first.log";
+	const char *second_path = "bot_common_retail_second.log";
+	test_unlink(first_path);
+	test_unlink(second_path);
+	BotLib_LogShutdown();
+	LibVar_Shutdown();
+	LibVar_Init();
+	LibVarSet("log", "1");
+
+	BotLib_LogOpen(first_path);
+	assert(BotLib_LogFile() != NULL);
+	BotLib_Print(PRT_ERROR, "engine-only diagnostic\n");
+	BotLib_LogWrite("alpha");
+	BotLib_LogWrite("%s", "beta");
+	BotLib_LogSetTime(3661.25f);
+	BotLib_LogWriteTimeStamped("first");
+	BotLib_LogClose();
+	assert(BotLib_LogFile() == NULL);
+
+	FILE *file = fopen(first_path, "rb");
+	assert(file != NULL);
+	char contents[256];
+	size_t length = fread(contents, 1, sizeof(contents) - 1, file);
+	assert(fclose(file) == 0);
+	contents[length] = '\0';
+	assert(strcmp(contents,
+		"alpha\r\nbeta\r\n0   01:61:3661:25   first\r\n") == 0);
+
+	BotLib_LogOpen(second_path);
+	assert(BotLib_LogFile() != NULL);
+	BotLib_LogSetTime(5.5f);
+	BotLib_LogWriteTimeStamped("second");
+	BotLib_LogClose();
+
+	file = fopen(second_path, "rb");
+	assert(file != NULL);
+	length = fread(contents, 1, sizeof(contents) - 1, file);
+	assert(fclose(file) == 0);
+	contents[length] = '\0';
+	assert(strcmp(contents,
+		"1   00:00:05:50   second\r\n") == 0);
+
+	BotLib_LogShutdown();
+	LibVar_Shutdown();
+	assert(test_unlink(first_path) == 0);
+	assert(test_unlink(second_path) == 0);
+}
+
+static bool test_create_temp_directory(char *buffer, size_t size, const char *prefix)
+{
+#ifdef _WIN32
+    char temp_path[MAX_PATH];
+    DWORD path_length = GetTempPathA((DWORD)sizeof(temp_path), temp_path);
+    if (path_length == 0 || path_length >= sizeof(temp_path)) {
+        return false;
+    }
+
+    char temp_file[MAX_PATH];
+    if (GetTempFileNameA(temp_path, prefix != NULL ? prefix : "gla", 0, temp_file) == 0) {
+        return false;
+    }
+
+    DeleteFileA(temp_file);
+    if (_mkdir(temp_file) != 0) {
+        return false;
+    }
+
+    int written = snprintf(buffer, size, "%s", temp_file);
+    if (written < 0 || (size_t)written >= size) {
+        _rmdir(temp_file);
+        return false;
+    }
+
+    return true;
+#else
+    char template_path[PATH_MAX];
+    int written = snprintf(template_path,
+                           sizeof(template_path),
+                           "/tmp/%sXXXXXX",
+                           prefix != NULL ? prefix : "gla");
+    if (written < 0 || (size_t)written >= sizeof(template_path)) {
+        return false;
+    }
+
+    char *result = mkdtemp(template_path);
+    if (result == NULL) {
+        return false;
+    }
+
+    written = snprintf(buffer, size, "%s", result);
+    if (written < 0 || (size_t)written >= size) {
+        return false;
+    }
+
+    return true;
+#endif
+}
+
+static bool test_create_asset_files(const char *root, const char *extra_file)
+{
+    if (root == NULL) {
+        return false;
+    }
+
+    char path[PATH_MAX];
+    int written = snprintf(path, sizeof(path), "%s/chars.h", root);
+    if (written < 0 || (size_t)written >= sizeof(path)) {
+        return false;
+    }
+
+    FILE *file = fopen(path, "wb");
+    if (file == NULL) {
+        return false;
+    }
+    fputs("// test asset\n", file);
+    fclose(file);
+
+    if (extra_file != NULL && extra_file[0] != '\0') {
+        written = snprintf(path, sizeof(path), "%s/%s", root, extra_file);
+        if (written < 0 || (size_t)written >= sizeof(path)) {
+            return false;
+        }
+
+        FILE *extra = fopen(path, "wb");
+        if (extra == NULL) {
+            return false;
+        }
+        fputs("legacy asset\n", extra);
+        fclose(extra);
+    }
+
+    return true;
+}
+
+static void test_cleanup_asset_files(const char *root, const char *extra_file)
+{
+    if (root == NULL) {
+        return;
+    }
+
+    char path[PATH_MAX];
+    if (extra_file != NULL && extra_file[0] != '\0') {
+        int written = snprintf(path, sizeof(path), "%s/%s", root, extra_file);
+        if (written >= 0 && (size_t)written < sizeof(path)) {
+            test_unlink(path);
+        }
+    }
+
+    int written = snprintf(path, sizeof(path), "%s/chars.h", root);
+    if (written >= 0 && (size_t)written < sizeof(path)) {
+        test_unlink(path);
+    }
+}
+
+static bool test_write_pak(const char *pak_path, const char *entry_name, const char *contents)
+{
+    if (pak_path == NULL || entry_name == NULL || contents == NULL) {
+        return false;
+    }
+
+    size_t name_length = strlen(entry_name);
+    if (name_length == 0 || name_length >= 56) {
+        return false;
+    }
+
+    size_t content_length = strlen(contents);
+    if (content_length > (size_t)INT32_MAX) {
+        return false;
+    }
+
+    FILE *stream = fopen(pak_path, "wb");
+    if (stream == NULL) {
+        return false;
+    }
+
+    bool success = false;
+    const char magic[] = {'P', 'A', 'C', 'K'};
+    int32_t zero = 0;
+
+    if (fwrite(magic, 1, sizeof(magic), stream) != sizeof(magic)) {
+        goto cleanup;
+    }
+    if (fwrite(&zero, sizeof(zero), 1, stream) != 1 || fwrite(&zero, sizeof(zero), 1, stream) != 1) {
+        goto cleanup;
+    }
+
+    if (fwrite(contents, 1, content_length, stream) != content_length) {
+        goto cleanup;
+    }
+
+    int32_t directory_offset = (int32_t)ftell(stream);
+    int32_t directory_length = 64;
+    int32_t entry_offset = 12;
+    int32_t entry_length = (int32_t)content_length;
+
+    unsigned char name_field[56] = {0};
+    memcpy(name_field, entry_name, name_length);
+
+    if (fwrite(name_field, 1, sizeof(name_field), stream) != sizeof(name_field)) {
+        goto cleanup;
+    }
+
+    if (fwrite(&entry_offset, sizeof(entry_offset), 1, stream) != 1
+        || fwrite(&entry_length, sizeof(entry_length), 1, stream) != 1) {
+        goto cleanup;
+    }
+
+    if (fseek(stream, 4, SEEK_SET) != 0) {
+        goto cleanup;
+    }
+    if (fwrite(&directory_offset, sizeof(directory_offset), 1, stream) != 1
+        || fwrite(&directory_length, sizeof(directory_length), 1, stream) != 1) {
+        goto cleanup;
+    }
+
+    success = true;
+
+cleanup:
+    fclose(stream);
+    if (!success) {
+        test_unlink(pak_path);
+    }
+    return success;
+}
+
+static void test_locate_asset_root_prefers_basedir(void)
+{
+    char legacy_root[PATH_MAX];
+    char override_root[PATH_MAX];
+
+    assert(test_create_temp_directory(legacy_root, sizeof(legacy_root), "gla"));
+    assert(test_create_asset_files(legacy_root, NULL));
+
+    assert(test_create_temp_directory(override_root, sizeof(override_root), "gla"));
+    assert(test_create_asset_files(override_root, NULL));
+
+    LibVar_Init();
+    LibVarSet("basedir", legacy_root);
+    LibVarSet("gamedir", "");
+    LibVarSet("cddir", "");
+    LibVarSet("gladiator_asset_dir", override_root);
+    test_unsetenv("GLADIATOR_ASSET_DIR");
+
+    char buffer[BOTLIB_ASSET_MAX_PATH];
+    assert(BotLib_LocateAssetRoot(buffer, sizeof(buffer)));
+    assert(strcmp(buffer, legacy_root) == 0);
+
+    LibVar_Shutdown();
+
+    test_cleanup_asset_files(legacy_root, NULL);
+    test_cleanup_asset_files(override_root, NULL);
+    test_rmdir(legacy_root);
+    test_rmdir(override_root);
+}
+
+static void test_resolve_asset_path_prefers_cddir_over_new_knob(void)
+{
+    char basedir_override[PATH_MAX];
+    char cddir_base[PATH_MAX];
+    char cddir_game[PATH_MAX];
+    char alternate_root[PATH_MAX];
+
+    assert(test_create_temp_directory(basedir_override, sizeof(basedir_override), "gla"));
+    assert(test_create_asset_files(basedir_override, NULL));
+
+    assert(test_create_temp_directory(cddir_base, sizeof(cddir_base), "gla"));
+
+    int written = snprintf(cddir_game, sizeof(cddir_game), "%s/game", cddir_base);
+    assert(written >= 0 && (size_t)written < sizeof(cddir_game));
+    assert(test_mkdir(cddir_game) == 0);
+    assert(test_create_asset_files(cddir_game, "legacy_asset.dat"));
+
+    assert(test_create_temp_directory(alternate_root, sizeof(alternate_root), "gla"));
+    assert(test_create_asset_files(alternate_root, NULL));
+
+    LibVar_Init();
+    LibVarSet("basedir", basedir_override);
+    LibVarSet("cddir", cddir_base);
+    LibVarSet("gamedir", "game");
+    LibVarSet("gladiator_asset_dir", alternate_root);
+    test_unsetenv("GLADIATOR_ASSET_DIR");
+
+    char buffer[BOTLIB_ASSET_MAX_PATH];
+    bool resolved = BotLib_ResolveAssetPath("legacy_asset.dat", NULL, buffer, sizeof(buffer));
+    assert(resolved);
+
+    char expected[PATH_MAX];
+    written = snprintf(expected, sizeof(expected), "%s/legacy_asset.dat", cddir_game);
+    assert(written >= 0 && (size_t)written < sizeof(expected));
+    assert(strcmp(buffer, expected) == 0);
+
+    LibVar_Shutdown();
+
+    test_cleanup_asset_files(basedir_override, NULL);
+    test_cleanup_asset_files(cddir_game, "legacy_asset.dat");
+    test_cleanup_asset_files(alternate_root, NULL);
+    test_rmdir(cddir_game);
+    test_rmdir(cddir_base);
+    test_rmdir(basedir_override);
+    test_rmdir(alternate_root);
+}
+
+static void test_resolve_asset_path_reads_from_pak_when_available(void)
+{
+    char basedir[PATH_MAX];
+    char game_root[PATH_MAX];
+    char pak_path[PATH_MAX];
+    char cache_file[PATH_MAX];
+    char cache_bots[PATH_MAX];
+    char cache_pak[PATH_MAX];
+    char cache_root[PATH_MAX];
+
+    if (!test_create_temp_directory(basedir, sizeof(basedir), "gla")) {
+        fprintf(stderr, "failed to create base directory\n");
+        exit(EXIT_FAILURE);
+    }
+
+    int written = snprintf(game_root, sizeof(game_root), "%s/gladiator", basedir);
+    if (written < 0 || (size_t)written >= sizeof(game_root)) {
+        fprintf(stderr, "failed to compose game root path\n");
+        exit(EXIT_FAILURE);
+    }
+    if (test_mkdir(game_root) != 0) {
+        fprintf(stderr, "failed to create %s\n", game_root);
+        exit(EXIT_FAILURE);
+    }
+    if (!test_create_asset_files(game_root, NULL)) {
+        fprintf(stderr, "failed to create seed assets\n");
+        exit(EXIT_FAILURE);
+    }
+
+    written = snprintf(pak_path, sizeof(pak_path), "%s/pak7.pak", game_root);
+    if (written < 0 || (size_t)written >= sizeof(pak_path)) {
+        fprintf(stderr, "failed to compose pak path\n");
+        exit(EXIT_FAILURE);
+    }
+    if (!test_write_pak(pak_path, "bots/test.asset", "pak contents")) {
+        fprintf(stderr, "failed to write pak %s\n", pak_path);
+        exit(EXIT_FAILURE);
+    }
+
+    LibVar_Init();
+    LibVarSet("basedir", basedir);
+    LibVarSet("gamedir", "gladiator");
+    LibVarSet("cddir", "");
+    LibVarSet("gladiator_asset_dir", "");
+    test_unsetenv("GLADIATOR_ASSET_DIR");
+
+    char resolved[BOTLIB_ASSET_MAX_PATH];
+    bool ok = BotLib_ResolveAssetPath("test.asset", "bots", resolved, sizeof(resolved));
+    if (!ok) {
+        fprintf(stderr, "expected packaged asset to resolve\n");
+        LibVar_Shutdown();
+        exit(EXIT_FAILURE);
+    }
+
+    FILE *reader = fopen(resolved, "rb");
+    if (reader == NULL) {
+        fprintf(stderr, "unable to open packaged asset %s\n", resolved);
+        LibVar_Shutdown();
+        exit(EXIT_FAILURE);
+    }
+    char buffer[32];
+    size_t read = fread(buffer, 1, sizeof(buffer) - 1, reader);
+    fclose(reader);
+    buffer[read] = '\0';
+    assert(strstr(buffer, "pak contents") != NULL);
+
+    LibVar_Shutdown();
+
+    written = snprintf(cache_file, sizeof(cache_file), "%s/.pak_cache/pak7/bots/test.asset", game_root);
+    assert(written >= 0 && (size_t)written < sizeof(cache_file));
+    test_unlink(cache_file);
+
+    written = snprintf(cache_bots, sizeof(cache_bots), "%s/.pak_cache/pak7/bots", game_root);
+    assert(written >= 0 && (size_t)written < sizeof(cache_bots));
+    test_rmdir(cache_bots);
+
+    written = snprintf(cache_pak, sizeof(cache_pak), "%s/.pak_cache/pak7", game_root);
+    assert(written >= 0 && (size_t)written < sizeof(cache_pak));
+    test_rmdir(cache_pak);
+
+    written = snprintf(cache_root, sizeof(cache_root), "%s/.pak_cache", game_root);
+    assert(written >= 0 && (size_t)written < sizeof(cache_root));
+    test_rmdir(cache_root);
+
+    test_cleanup_asset_files(game_root, NULL);
+    test_unlink(pak_path);
+    test_rmdir(game_root);
+    test_rmdir(basedir);
+}
+
+static void test_resolve_asset_path_prefers_override_to_pak(void)
+{
+    char basedir[PATH_MAX];
+    char game_root[PATH_MAX];
+    char pak_path[PATH_MAX];
+    char override_root[PATH_MAX];
+    char override_bots[PATH_MAX];
+    char override_file[PATH_MAX];
+
+    if (!test_create_temp_directory(basedir, sizeof(basedir), "gla")) {
+        fprintf(stderr, "failed to create base directory\n");
+        exit(EXIT_FAILURE);
+    }
+    if (!test_create_temp_directory(override_root, sizeof(override_root), "gla")) {
+        fprintf(stderr, "failed to create override directory\n");
+        exit(EXIT_FAILURE);
+    }
+
+    int written = snprintf(game_root, sizeof(game_root), "%s/gladiator", basedir);
+    if (written < 0 || (size_t)written >= sizeof(game_root)) {
+        fprintf(stderr, "failed to compose game root path\n");
+        exit(EXIT_FAILURE);
+    }
+    if (test_mkdir(game_root) != 0) {
+        fprintf(stderr, "failed to create %s\n", game_root);
+        exit(EXIT_FAILURE);
+    }
+    if (!test_create_asset_files(game_root, NULL)) {
+        fprintf(stderr, "failed to create seed assets\n");
+        exit(EXIT_FAILURE);
+    }
+
+    written = snprintf(pak_path, sizeof(pak_path), "%s/pak7.pak", game_root);
+    if (written < 0 || (size_t)written >= sizeof(pak_path)) {
+        fprintf(stderr, "failed to compose pak path\n");
+        exit(EXIT_FAILURE);
+    }
+    if (!test_write_pak(pak_path, "bots/test.asset", "pak contents")) {
+        fprintf(stderr, "failed to write pak %s\n", pak_path);
+        exit(EXIT_FAILURE);
+    }
+
+    if (!test_create_asset_files(override_root, NULL)) {
+        fprintf(stderr, "failed to seed override assets\n");
+        exit(EXIT_FAILURE);
+    }
+    written = snprintf(override_bots, sizeof(override_bots), "%s/bots", override_root);
+    if (written < 0 || (size_t)written >= sizeof(override_bots)) {
+        fprintf(stderr, "failed to compose override bots path\n");
+        exit(EXIT_FAILURE);
+    }
+    if (test_mkdir(override_bots) != 0) {
+        fprintf(stderr, "failed to create override bots directory\n");
+        exit(EXIT_FAILURE);
+    }
+
+    written = snprintf(override_file, sizeof(override_file), "%s/test.asset", override_bots);
+    if (written < 0 || (size_t)written >= sizeof(override_file)) {
+        fprintf(stderr, "failed to compose override asset path\n");
+        exit(EXIT_FAILURE);
+    }
+    FILE *override_stream = fopen(override_file, "wb");
+    assert(override_stream != NULL);
+    fputs("override data", override_stream);
+    fclose(override_stream);
+
+    LibVar_Init();
+    LibVarSet("basedir", basedir);
+    LibVarSet("gamedir", "gladiator");
+    LibVarSet("cddir", "");
+    LibVarSet("gladiator_asset_dir", override_root);
+    test_unsetenv("GLADIATOR_ASSET_DIR");
+
+    char resolved[BOTLIB_ASSET_MAX_PATH];
+    bool ok = BotLib_ResolveAssetPath("test.asset", "bots", resolved, sizeof(resolved));
+    if (!ok) {
+        fprintf(stderr, "expected override asset to resolve\n");
+        LibVar_Shutdown();
+        exit(EXIT_FAILURE);
+    }
+    assert(strcmp(resolved, override_file) == 0);
+
+    FILE *reader = fopen(resolved, "rb");
+    if (reader == NULL) {
+        fprintf(stderr, "unable to open override asset %s\n", resolved);
+        LibVar_Shutdown();
+        exit(EXIT_FAILURE);
+    }
+    char buffer[32];
+    size_t read = fread(buffer, 1, sizeof(buffer) - 1, reader);
+    fclose(reader);
+    buffer[read] = '\0';
+    assert(strstr(buffer, "override data") != NULL);
+
+    LibVar_Shutdown();
+
+    test_cleanup_asset_files(game_root, NULL);
+    test_cleanup_asset_files(override_root, NULL);
+    test_unlink(override_file);
+    test_rmdir(override_bots);
+    test_unlink(pak_path);
+    test_rmdir(game_root);
+    test_rmdir(override_root);
+    test_rmdir(basedir);
+}
+
+/*
+=============
+main
+
+Runs the common subsystem checks or the isolated allocator parity regression.
+=============
+*/
+int main(int argc, char **argv)
+{
+	if (argc == 2 && strcmp(argv[1], "--memory-only") == 0)
+	{
+		test_memory_retail_size_clear_and_logging_contract();
+		test_memory_import_callback_contract();
+		printf("bot_common_tests: allocator checks passed\n");
+		return 0;
+	}
+	if (argc == 2 && strcmp(argv[1], "--crc-only") == 0)
+	{
+		test_crc_matches_reference();
+		test_crc_source_checksum_registry();
+		printf("bot_common_tests: CRC checks passed\n");
+		return 0;
+	}
+	if (argc == 2 && strcmp(argv[1], "--log-only") == 0)
+	{
+		test_log_retail_write_and_timestamp_contract();
+		printf("bot_common_tests: logging checks passed\n");
+		return 0;
+	}
+	if (argc == 2 && strcmp(argv[1], "--utils-only") == 0)
+	{
+		test_vector2angles_and_angle_helpers();
+		test_path_helpers();
+		printf("bot_common_tests: utility checks passed\n");
+		return 0;
+	}
+	if (argc == 2 && strcmp(argv[1], "--struct-only") == 0)
+	{
+		test_read_structure_parses_basic_types();
+		test_struct_retail_numeric_cache();
+		test_struct_retail_nested_and_array_quirks();
+		printf("bot_common_tests: structure checks passed\n");
+		return 0;
+	}
+
+	test_utils_initialisation_flags();
+	test_struct_initialisation_flags();
+	test_case_insensitive_compare_helpers();
+	test_crc_matches_reference();
+	test_crc_source_checksum_registry();
+	test_read_structure_parses_basic_types();
+	test_struct_retail_numeric_cache();
+	test_struct_retail_nested_and_array_quirks();
+	test_vector2angles_and_angle_helpers();
+	test_path_helpers();
+	test_log_retail_write_and_timestamp_contract();
+	test_locate_asset_root_prefers_basedir();
+	test_resolve_asset_path_prefers_cddir_over_new_knob();
+	test_resolve_asset_path_reads_from_pak_when_available();
+	test_resolve_asset_path_prefers_override_to_pak();
+	test_memory_retail_size_clear_and_logging_contract();
+	test_memory_import_callback_contract();
+
+	printf("bot_common_tests: all checks passed\n");
+	return 0;
+}

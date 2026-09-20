@@ -1,0 +1,38 @@
+add_library(botlib_aas STATIC
+    aas_debug.c
+    aas_debug_commands.c
+    aas_cluster.c
+    aas_main.c
+    aas_map.c
+    aas_move.c
+    aas_optimize.c
+    aas_sound.c
+    aas_reach.c
+    aas_route.c
+)
+
+register_botlib_sources(
+    TARGET botlib_aas
+    SOURCES
+        aas_debug.c
+        aas_debug_commands.c
+        aas_cluster.c
+        aas_main.c
+        aas_map.c
+        aas_move.c
+        aas_optimize.c
+        aas_sound.c
+        aas_reach.c
+        aas_route.c
+)
+
+target_include_directories(botlib_aas
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(botlib_aas
+    PUBLIC
+        botlib_precomp
+        gladiator_shared_headers
+)

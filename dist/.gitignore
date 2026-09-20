@@ -1,0 +1,7 @@
+# Generated distribution artifacts
+pak*.pak
+*.pak
+.pak_cache/
+
+# Local output of tools/package_release.py
+release/
