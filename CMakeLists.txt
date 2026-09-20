@@ -41,6 +41,15 @@ if(BUILD_GAME_MODULE)
     add_subdirectory(src/game)
 endif()
 
+# Experimental clean Yamagi-based game module. This is kept as a separate
+# target while the Gladiator hooks are ported, so the legacy module remains
+# available for comparison and rollback.
+option(BUILD_CLEAN_GAME_MODULE
+    "Build the clean Yamagi game module with the optional Gladiator bot layer" ON)
+if(BUILD_CLEAN_GAME_MODULE)
+    add_subdirectory(src/game_clean)
+endif()
+
 set(_botlib_source_directories
     ${PROJECT_SOURCE_DIR}/src/botlib/common
     ${PROJECT_SOURCE_DIR}/src/botlib/precomp
@@ -148,6 +157,11 @@ if(BUILD_GAME_MODULE)
     list(APPEND _gladiator_audit_targets game)
 else()
     list(APPEND _gladiator_audit_excludes "${PROJECT_SOURCE_DIR}/src/game")
+endif()
+if(BUILD_CLEAN_GAME_MODULE)
+    list(APPEND _gladiator_audit_targets game_clean)
+else()
+    list(APPEND _gladiator_audit_excludes "${PROJECT_SOURCE_DIR}/src/game_clean")
 endif()
 
 audit_gladiator_sources(
