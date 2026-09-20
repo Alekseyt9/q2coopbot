@@ -16,6 +16,7 @@ FIELD_RE = re.compile(
     r'(?P<key>[A-Za-z_][A-Za-z0-9_]*)='
     r'(?:(?:"(?P<quoted>[^"]*)")|(?P<bare>\([^)]*\)|[^\s]+))'
 )
+BOTLIB_EVENT_RE = re.compile(r"\bcoopbot_(?P<event>[a-z_]+)\b")
 
 
 def read_records(stream: TextIO) -> tuple[list[dict], int]:
@@ -59,6 +60,15 @@ def number(value: object) -> float | None:
         return None
 
 
+def read_botlib_events(stream: TextIO) -> Counter[str]:
+    """Count CoopBot records emitted by the legacy botlib text log."""
+    events: Counter[str] = Counter()
+    for line in stream:
+        for match in BOTLIB_EVENT_RE.finditer(line):
+            events[match.group("event")] += 1
+    return events
+
+
 def telemetry_summary(records: Iterable[dict]) -> dict:
     states: Counter[str] = Counter()
     shot_kinds: Counter[str] = Counter()
@@ -75,6 +85,7 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
     encounter_events = 0
     target_acquired = 0
     target_lost = 0
+    regroup_events = 0
 
     for record in records:
         fields = message_fields(record.get("message"))
@@ -124,6 +135,9 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
         if event == "target_lost":
             target_lost += 1
 
+        if event == "regroup":
+            regroup_events += 1
+
     return {
         "bot_snapshots": {
             "records": snapshot_count,
@@ -159,6 +173,7 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
             "encounter_observed": encounter_events,
             "target_acquired": target_acquired,
             "target_lost": target_lost,
+            "regroup": regroup_events,
         },
     }
 
@@ -216,6 +231,10 @@ def summarise(records: Iterable[dict], invalid_lines: int, source: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", help="JSONL path, or '-' for stdin")
+    parser.add_argument(
+        "--botlib-log",
+        help="optional botlib.log path; counts CoopBot records emitted by botlib",
+    )
     parser.add_argument("-o", "--output", help="write summary JSON to this path")
     args = parser.parse_args()
 
@@ -234,6 +253,21 @@ def main() -> int:
         indent=2,
         sort_keys=True,
     ) + "\n"
+    if args.botlib_log:
+        botlib_path = Path(args.botlib_log)
+        with botlib_path.open("r", encoding="utf-8", errors="replace") as stream:
+            botlib_events = read_botlib_events(stream)
+        result_object = json.loads(result)
+        result_object["botlib_log"] = {
+            "source": str(botlib_path),
+            "events": dict(sorted(botlib_events.items())),
+        }
+        result = json.dumps(
+            result_object,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ) + "\n"
     if args.output:
         Path(args.output).write_text(result, encoding="utf-8")
     else:

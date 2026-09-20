@@ -913,6 +913,14 @@ int BotInitLibrary(bot_library_t *lib)
 	lib->funcs.BotLibVarSet("coopbot_metrics", cvar->string);
 	cvar = gi.cvar("coopbot_seed", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_seed", cvar->string);
+	cvar = gi.cvar("coopbot_leash", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_leash", cvar->string);
+	cvar = gi.cvar("coopbot_soft_leash", "384", 0);
+	lib->funcs.BotLibVarSet("coopbot_soft_leash", cvar->string);
+	cvar = gi.cvar("coopbot_hard_leash", "768", 0);
+	lib->funcs.BotLibVarSet("coopbot_hard_leash", cvar->string);
+	cvar = gi.cvar("coopbot_new_group_guard", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_new_group_guard", cvar->string);
 #ifdef ZOID
 	lib->funcs.BotLibVarSet("ctf", ctf->string);
 	if (ctf->value)

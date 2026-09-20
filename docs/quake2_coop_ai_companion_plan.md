@@ -1540,6 +1540,21 @@ retreats
 does not pull more
 ```
 
+### Scenario 11 — Vertical separation / Elevator regroup
+
+Игрок уезжает на `func_plat` на другой уровень, пока бот остается снизу.
+Боту разрешено догонять игрока отдельно от игрока, включая ожидание платформы.
+
+Ожидание:
+
+```text
+bot detects separation and enters regroup
+route selects TRAVEL_ELEVATOR when the AAS path requires it
+bot reaches the platform, waits or boards it, and exits on the target level
+bot reacquires the player instead of settling on the lower level
+failed elevator traversal is logged as a stuck/path failure, not as idle follow
+```
+
 ---
 
 ## 45. Deterministic baseline
@@ -1663,6 +1678,8 @@ P3 считается успешным, если игрок может посл�
 - hard leash;
 - regroup;
 - ожидание игрока.
+- vertical regroup through reachable elevators;
+- retry/timeout when a platform is absent, busy, or the mover route fails.
 
 ### Movement
 - personal space;

@@ -39,6 +39,8 @@ typedef struct coopbot_diag_state_s
 	cvar_t *jsonl_enabled;
 	cvar_t *episode_id_override;
 	cvar_t *seed;
+	cvar_t *leash_enabled;
+	cvar_t *hard_leash;
 	FILE *log_file;
 	FILE *event_file;
 	char log_path[256];
@@ -413,6 +415,18 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 
 	client = CoopBotDiag_ClientNumber(bot);
 	visible_enemies = CoopBotDiag_VisibleMonsters(bot);
+	if (strcmp(state, "far_from_player") == 0 &&
+		coopbot_diag.leash_enabled != NULL &&
+		coopbot_diag.leash_enabled->value != 0.0f &&
+		coopbot_diag.hard_leash != NULL &&
+		coopbot_diag.hard_leash->value > 0.0f &&
+		distance_to_player > coopbot_diag.hard_leash->value &&
+		input->speed > 0.0f)
+	{
+		CoopBotDiag_Log(1,
+			"regroup client=%d distance=%.1f hard_leash=%.1f",
+			client, distance_to_player, coopbot_diag.hard_leash->value);
+	}
 	if (client >= 0 && client < COOPBOT_DIAG_MAX_CLIENTS)
 	{
 		if (coopbot_diag.clients[client].last_target_entity != target_entity)
@@ -575,6 +589,8 @@ void CoopBotDiag_Init(void)
 	coopbot_diag.jsonl_enabled = gi.cvar("coopbot_jsonl", "1", 0);
 	coopbot_diag.episode_id_override = gi.cvar("coopbot_episode_id", "", 0);
 	coopbot_diag.seed = gi.cvar("coopbot_seed", "0", 0);
+	coopbot_diag.leash_enabled = gi.cvar("coopbot_leash", "0", 0);
+	coopbot_diag.hard_leash = gi.cvar("coopbot_hard_leash", "768", 0);
 	if (coopbot_diag.seed != NULL && coopbot_diag.seed->string != NULL &&
 		coopbot_diag.seed->value > 0.0f)
 	{

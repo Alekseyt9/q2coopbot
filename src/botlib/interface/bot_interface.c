@@ -51,6 +51,11 @@ static bool BotAI_ConstructLifecycleChat(bot_client_state_t *state,
 	const char *type,
 	int characteristic,
 	bool require_valid_position);
+static int BotAI_CoopPlayerEntity(const bot_client_state_t *state,
+	vec3_t origin);
+static bool BotAI_CoopRejectNewGroup(const bot_client_state_t *state,
+	const aas_entityinfo_t *candidate,
+	int health_decrease);
 
 
 static bot_import_extended_t g_botImportStorage;
@@ -454,6 +459,63 @@ static int BotAI_CoopMode(void)
 
 /*
 =============
+BotAI_CoopRejectNewGroup
+
+The first coop new-group guard is deliberately conservative: when the bot
+has lost the human's soft leash, do not let a non-urgent distant monster start
+a fresh encounter. Damage and an observed attack animation remain immediate
+threat overrides. This is a distance-based P1 guard, not full encounter
+clustering; the latter still needs runtime event/group data.
+=============
+*/
+static bool BotAI_CoopRejectNewGroup(const bot_client_state_t *state,
+	const aas_entityinfo_t *candidate,
+	int health_decrease)
+{
+	vec3_t player_origin;
+	vec3_t direction;
+	float distance;
+	float soft_leash;
+
+	if (state == NULL || candidate == NULL || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_new_group_guard") == 0.0f ||
+		state->combat.current_enemy > 0)
+	{
+		return false;
+	}
+	if (health_decrease || BotAI_EntityIsShooting(candidate))
+	{
+		return false;
+	}
+	if (BotAI_CoopPlayerEntity(state, player_origin) < 0)
+	{
+		return false;
+	}
+
+	soft_leash = LibVarGetValue("coopbot_soft_leash");
+	if (soft_leash <= 0.0f)
+	{
+		return false;
+	}
+
+	VectorSubtract(state->last_client_update.origin, player_origin, direction);
+	distance = sqrtf(DotProduct(direction, direction));
+	if (distance <= soft_leash)
+	{
+		return false;
+	}
+
+	if (LibVarGetValue("coopbot_log") >= 2.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"coopbot_new_group_blocked client=%d entity=%d distance=%.1f soft_leash=%.1f",
+			state->client_number, candidate->number, distance, soft_leash);
+	}
+	return true;
+}
+
+/*
+=============
 BotAI_SameTeam
 
 Reconstructs retail sub_10023550's shell, CH, teamplay, CTF, skin-team, and
@@ -632,6 +694,10 @@ int BotAI_FindEnemy(bot_client_state_t *state, ai_dm_enemy_info_t *enemy)
 			field_of_view,
 			target_angles) ||
 			BotAI_SameTeam(state, entity_info.number))
+		{
+			continue;
+		}
+		if (BotAI_CoopRejectNewGroup(state, &entity_info, health_decrease))
 		{
 			continue;
 		}
@@ -9233,6 +9299,156 @@ static int BotAI_RunLifecycleFrame(bot_client_state_t *state,
 
 /*
 =============
+BotAI_CoopPlayerEntity
+
+Finds the first active non-bot client entity. Bot state slots are created only
+for bots, so the inactive slot is the game-side human companion we should
+follow in coop mode.
+=============
+*/
+static int BotAI_CoopPlayerEntity(const bot_client_state_t *state,
+	vec3_t origin)
+{
+	int max_clients;
+	int client;
+
+	if (state == NULL || origin == NULL || !BotAI_CoopMode())
+	{
+		return -1;
+	}
+
+	max_clients = aasworld.maxClients;
+	if (max_clients > MAX_CLIENTS)
+	{
+		max_clients = MAX_CLIENTS;
+	}
+	for (client = 0; client < max_clients; ++client)
+	{
+		int entity = client + 1;
+		bot_client_state_t *candidate_state;
+		aas_entityinfo_t entity_info;
+
+		if (client == state->client_number)
+		{
+			continue;
+		}
+		candidate_state = BotState_Get(client);
+		if (candidate_state != NULL && candidate_state->active)
+		{
+			continue;
+		}
+		memset(&entity_info, 0, sizeof(entity_info));
+		AAS_EntityInfo(entity, &entity_info);
+		if (!entity_info.valid || entity_info.number != entity)
+		{
+			continue;
+		}
+
+		VectorCopy(entity_info.origin, origin);
+		return entity;
+	}
+
+	return -1;
+}
+
+/*
+=============
+BotAI_ApplyCoopHardLeash
+
+The companion leash is an opt-in coop overlay. When the bot exceeds the hard
+leash, it stops the current attack command and uses the same AAS movement path
+as ordinary goal navigation to return to the human player. The retail/DM path
+is untouched unless coopbot_leash is enabled.
+=============
+*/
+static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input)
+{
+	vec3_t player_origin;
+	vec3_t direction;
+	float hard_leash;
+	float distance;
+	int player_entity;
+	int player_area;
+	bot_goal_t goal;
+	bot_moveresult_t result;
+	int status;
+
+	if (state == NULL || input == NULL || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_leash") == 0.0f)
+	{
+		return false;
+	}
+
+	player_entity = BotAI_CoopPlayerEntity(state, player_origin);
+	if (player_entity < 0)
+	{
+		return false;
+	}
+
+	VectorSubtract(player_origin, state->last_client_update.origin, direction);
+	distance = sqrtf(DotProduct(direction, direction));
+	hard_leash = LibVarGetValue("coopbot_hard_leash");
+	if (hard_leash <= 0.0f || distance <= hard_leash)
+	{
+		return false;
+	}
+
+	player_area = AAS_PointAreaNum(player_origin);
+	if (player_area <= 0 || AAS_AreaReachability(player_area) == 0)
+	{
+		return false;
+	}
+
+	memset(&goal, 0, sizeof(goal));
+	goal.entitynum = player_entity;
+	goal.areanum = player_area;
+	VectorCopy(player_origin, goal.origin);
+	VectorSet(goal.mins, -16.0f, -16.0f, -24.0f);
+	VectorSet(goal.maxs, 16.0f, 16.0f, 32.0f);
+
+	status = BotInterface_PrepareMoveState(state, thinktime);
+	if (status != BLERR_NOERROR)
+	{
+		return false;
+	}
+
+	BotClearMoveResult(&result);
+	BotMoveToGoalHandle(&result,
+		state->move_handle,
+		&goal,
+		BotAI_LongTermGoalTravelFlags(state));
+	status = EA_GetInput(state->client_number, thinktime, input);
+	if (status != BLERR_NOERROR)
+	{
+		return false;
+	}
+	BotInterface_ApplyMoveResult(&result, input);
+	input->actionflags = 0;
+	input->thinktime = thinktime;
+	status = EA_SubmitInput(state->client_number, input);
+	if (status != BLERR_NOERROR)
+	{
+		return false;
+	}
+
+	state->last_move_result = result;
+	state->has_move_result = true;
+	if (LibVarGetValue("coopbot_log") >= 2.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"coopbot_regroup client=%d player=%d distance=%.1f hard_leash=%.1f "
+			"failure=%d traveltype=%d mover_type=%d flags=0x%x blocked=%d blockentity=%d",
+			state->client_number, player_entity, distance, hard_leash,
+			result.failure, result.traveltype, result.type, result.flags,
+			result.blocked, result.blockentity);
+	}
+	return true;
+}
+
+/*
+=============
 BotAI_Think
 
 Runs one reconstructed per-client AI frame, including retail console-message
@@ -9479,6 +9695,8 @@ static int BotAI_Think(bot_client_state_t *state, float thinktime)
 			return status;
 		}
 	}
+
+	(void)BotAI_ApplyCoopHardLeash(state, thinktime, &input);
 
 	BotState_EmitPendingClientCommands(state);
 
