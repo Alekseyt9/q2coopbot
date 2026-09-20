@@ -25,6 +25,7 @@
  */
 
 #include "header/local.h"
+#include "coopbot_local.h"
 
 #define MAX_IPFILTERS 1024
 
@@ -343,6 +344,9 @@ ServerCommand(void)
 	else if (Q_stricmp(cmd, "writeip") == 0)
 	{
 		SVCmd_WriteIP_f();
+	}
+	else if (BotCmd(cmd, NULL, true))
+	{
 	}
 	else
 	{

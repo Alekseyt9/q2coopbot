@@ -66,6 +66,7 @@
 
 #include "../../common/header/common.h" // YQ2ARCH
 #include "../header/local.h"
+#include "../coopbot_local.h"
 #include "savegame.h"
 
 /*
@@ -394,6 +395,8 @@ InitGame(void)
 
 	/* initialize entities and clients arrays */
 	InitAllocations();
+
+	BotSetup();
 }
 
 /* ========================================================= */

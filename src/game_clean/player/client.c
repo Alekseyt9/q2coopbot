@@ -25,6 +25,7 @@
  */
 
 #include "../header/local.h"
+#include "../coopbot_local.h"
 #include "../monster/misc/player.h"
 
 void ClientUserinfoChanged(edict_t *ent, char *userinfo);
@@ -1899,6 +1900,7 @@ ClientUserinfoChanged(edict_t *ent, char *userinfo)
 
 	/* save off the userinfo in case we want to check something later */
 	Q_strlcpy(ent->client->pers.userinfo, userinfo, sizeof(ent->client->pers.userinfo));
+	BotLib_BotClientSettings(ent);
 }
 
 /*
@@ -1916,6 +1918,14 @@ ClientConnect(edict_t *ent, char *userinfo)
 	if (!ent || !userinfo)
 	{
 		return false;
+	}
+
+	if (ent->flags & FL_BOT)
+	{
+		if (!BotMoveToFreeClientEdict(ent))
+		{
+			return false;
+		}
 	}
 
 	/* check to see if they are on the banned IP list */
@@ -2037,6 +2047,13 @@ ClientDisconnect(edict_t *ent)
 
 	playernum = ent - g_edicts - 1;
 	gi.configstring(CS_PLAYERSKINS + playernum, "");
+
+	if (ent->flags & FL_BOT)
+	{
+		ent->client->pers.netname[0] = '\0';
+		Info_SetValueForKey(ent->client->pers.userinfo, "skin", "");
+		BotLib_BotClientSettings(ent);
+	}
 }
 
 /* ============================================================== */
@@ -2107,6 +2124,18 @@ ClientThink(edict_t *ent, usercmd_t *ucmd)
 	int i, j;
 
 	if (!ent || !ucmd)
+	{
+		return;
+	}
+
+	if (paused)
+	{
+		gi.centerprintf(ent, "GAME PAUSED\n\n(type \"botpause\" to resume)");
+		ent->client->ps.pmove.pm_flags |= PMF_NO_PREDICTION;
+		return;
+	}
+
+	if ((ent->flags & FL_BOT) && !(ent->flags & FL_BOTINPUT))
 	{
 		return;
 	}

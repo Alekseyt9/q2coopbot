@@ -17,7 +17,6 @@ target_include_directories(game_clean PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/common")
 
 target_compile_definitions(game_clean PRIVATE
-    C_ONLY BOT BOT_IMPORT
     YQ2OSTYPE="Windows"
     YQ2ARCH="x86")
 

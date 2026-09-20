@@ -25,6 +25,7 @@
  */
 
 #include "header/local.h"
+#include "coopbot_local.h"
 #include "monster/misc/player.h"
 
 static char *
@@ -2045,6 +2046,9 @@ ClientCommand(edict_t *ent)
 	else if (Q_stricmp(cmd, "listentities") == 0)
 	{
 		Cmd_ListEntities_f(ent);
+	}
+	else if (BotCmd((char *)cmd, ent, false))
+	{
 	}
 	else if (Q_stricmp(cmd, "cycleweap") == 0)
 	{

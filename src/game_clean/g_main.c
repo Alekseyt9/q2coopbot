@@ -25,6 +25,7 @@
  */
 
 #include "header/local.h"
+#include "coopbot_local.h"
 
 game_locals_t game;
 level_locals_t level;
@@ -100,6 +101,8 @@ static void G_RunFrame(void);
 static void
 ShutdownGame(void)
 {
+	CoopBotDiag_Shutdown();
+	BotUnloadAllLibraries();
 	gi.dprintf("==== ShutdownGame ====\n");
 
 	gi.FreeTags(TAG_LEVEL);
@@ -115,6 +118,8 @@ Q2_DLL_EXPORTED game_export_t *
 GetGameAPI(const game_import_t *import)
 {
 	gi = *import;
+	BotRedirectGameImport();
+	Swap_Init();
 
 	globals.apiversion = GAME_API_VERSION;
 	globals.Init = InitGame;
@@ -422,8 +427,14 @@ G_RunFrame(void)
 	int i;
 	edict_t *ent;
 
+	if (paused)
+	{
+		return;
+	}
+
 	level.framenum++;
 	level.time = level.framenum * FRAMETIME;
+	CoopBotDiag_FrameBegin();
 
 	gibsthisframe = 0;
 	debristhisframe = 0;
@@ -437,6 +448,9 @@ G_RunFrame(void)
 		ExitLevel();
 		return;
 	}
+
+	AddQueuedBots();
+	BotLib_BotStartFrame(level.time);
 
 	/* treat each object in turn
 	   even the world gets a chance
@@ -452,7 +466,10 @@ G_RunFrame(void)
 
 		level.current_entity = ent;
 
-		VectorCopy(ent->s.origin, ent->s.old_origin);
+		if (!(ent->flags & FL_OLDORGNOTSET))
+		{
+			VectorCopy(ent->s.origin, ent->s.old_origin);
+		}
 
 		/* if the ground entity moved, make sure we are still on it */
 		if ((ent->groundentity) &&
@@ -475,6 +492,28 @@ G_RunFrame(void)
 
 		G_RunEntity(ent);
 	}
+
+	for (i = 0, ent = &g_edicts[0]; i < globals.num_edicts; i++, ent++)
+	{
+		if (ent->inuse && !(ent->svflags & SVF_NOCLIENT))
+		{
+			BotLib_BotUpdateEntity(ent);
+		}
+	}
+
+	for (i = 0; i < maxclients->value; i++)
+	{
+		ent = DF_CLIENTENT(i);
+		if (ent->inuse && (ent->flags & FL_BOT) && BotStarted(ent))
+		{
+			BotLib_BotUpdateClient(ent);
+			BotLib_BotAI(ent, FRAMETIME);
+			BotExecuteInput(ent);
+		}
+	}
+
+	CheckMinimumPlayers();
+	CoopBotDiag_FrameEnd();
 
 	/* see if it is time to end a deathmatch */
 	CheckDMRules();

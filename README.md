@@ -4,9 +4,14 @@ An experimental bot for cooperative playthroughs of the original
 Quake II under [Yamagi Quake II](https://github.com/yquake2/yquake2).
 
 The project is based on the source code from [Q2 Gladiator Bot Botlib Reconstruction](https://github.com/themuffinator/Q2-Gladiator-Bot).
-It retains the original botlib v0.96 interface, AAS format, and most of the
-original Gladiator game module. This repository adds the changes required for
-the first coop MVP.
+It retains the original botlib v0.96 interface, AAS format, and Gladiator
+botlib, but the current clean integration uses Yamagi's baseq2 game sources
+as the gameplay baseline. The bot bridge is added through a small compatibility
+layer and does not replace Yamagi's combat, collision, monster, or weapon code.
+
+The former all-in-one Gladiator game module remains available as the legacy
+`game` target for comparison. The clean port is built as `game_clean` while it
+is being validated.
 
 ## What's Included
 
@@ -44,7 +49,7 @@ cmake -S . -B build-x86 -G Ninja \
   -DCMAKE_C_COMPILER=gcc \
   -DCMAKE_CXX_COMPILER=g++
 
-cmake --build build-x86 --target gladiator game --parallel 4
+cmake --build build-x86 --target gladiator game_clean --parallel 4
 ~~~
 
 For x64, run the same commands with an x64 compiler and the `build-x64`
@@ -53,7 +58,7 @@ directory.
 Output files:
 
 ~~~text
-build-x86/src/game/gamex86.dll
+build-x86/src/game_clean/gamex86_clean.dll
 build-x86/libgladiator.dll
 
 build-x64/src/game/gamex86_64.dll
@@ -68,11 +73,13 @@ Create the mod directory:
 <Quake II>\YamagiQ2\coopbot\
 ~~~
 
-For the current 32-bit Windows Yamagi build, copy:
+For the current 32-bit Windows Yamagi build, copy the clean module and rename
+it to the filename expected by the engine:
 
 ~~~text
-gamex86.dll       -> coopbot\game.dll
-libgladiator.dll  -> coopbot\gladiator.dll
+gamex86_clean.dll -> coopbot_clean\game.dll
+gamex86_clean.dll -> coopbot_clean\gamex86.dll
+libgladiator.dll  -> coopbot_clean\gladiator.dll
 ~~~
 
 The mod directory must also contain the Gladiator data:

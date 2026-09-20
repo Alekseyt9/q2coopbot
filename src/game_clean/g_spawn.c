@@ -25,6 +25,7 @@
  */
 
 #include "header/local.h"
+#include "coopbot_local.h"
 #include "savegame/tables/spawnfunc_decs.h"
 
 typedef struct
@@ -479,6 +480,10 @@ SpawnEntities(const char *mapname, char *entities, const char *spawnpoint)
 	G_FindTeams();
 
 	PlayerTrail_Init();
+
+	BotInitMuzzleFlashToSoundindex();
+	BotSpawn();
+	BotLib_BotLoadMap((char *)mapname);
 }
 
 /* =================================================================== */
