@@ -87,6 +87,8 @@ static float g_botInterfaceFrameTime = 0.0f;
 static unsigned int g_botInterfaceFrameNumber = 0;
 static bool g_botInterfaceDebugDrawEnabled = false;
 static bool g_botInterfaceMapModelDumped = false;
+static bool g_botInterfaceMapModelWaitLogged = false;
+static bool g_botInterfaceStartFrameLogged = false;
 
 #define CHARACTERISTIC_CHAT_CPM 14
 #define CHARACTERISTIC_CHAT_INSULT 15
@@ -870,6 +872,8 @@ static void BotInterface_ResetMapCache(void)
     BotInterface_FreeAssetList(&g_botInterfaceMapCache.images);
     g_botInterfaceMapCache.map_name[0] = '\0';
     g_botInterfaceMapModelDumped = false;
+    g_botInterfaceMapModelWaitLogged = false;
+    g_botInterfaceStartFrameLogged = false;
 }
 
 /*
@@ -3302,9 +3306,17 @@ static void BotInterface_DumpCoopMapModel(void)
 	int control_count = 0;
 
 	if (g_botInterfaceMapModelDumped ||
-		LibVarGetValue("coopbot_map_model") == 0.0f ||
-		!AAS_Initialized())
+		LibVarGetValue("coopbot_map_model") == 0.0f)
 	{
+		return;
+	}
+	if (!AAS_Initialized())
+	{
+		if (!g_botInterfaceMapModelWaitLogged)
+		{
+			g_botInterfaceMapModelWaitLogged = true;
+			BotLib_LogWrite("coopbot_map_model_wait aas_initialized=0");
+		}
 		return;
 	}
 
@@ -3413,6 +3425,13 @@ static int BotStartFrame(float time)
 	if (!BotInterface_EnsureLibraryReady("BotStartFrame"))
 	{
 		return BLERR_LIBRARYNOTSETUP;
+	}
+	if (!g_botInterfaceStartFrameLogged)
+	{
+		g_botInterfaceStartFrameLogged = true;
+		BotLib_LogWrite(
+			"coopbot_start_frame aas_initialized=%d map_model=%.1f",
+			AAS_Initialized(), LibVarGetValue("coopbot_map_model"));
 	}
 
 	AAS_FrameSynchronise(time);

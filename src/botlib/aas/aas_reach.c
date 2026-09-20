@@ -1458,6 +1458,89 @@ void AAS_StoreReachability(void)
 
 /*
 =============
+AAS_AugmentLoadedElevatorReachability
+
+Rebuild the temporary per-area reachability view for an existing .aas file,
+add func_plat links from the current BSP entity list, and publish the merged
+table back to the normal routing cache. Retail-generated AAS files already
+contain their ordinary links, but the elevator pass only runs during a fresh
+reachability build; without this bridge a loaded map silently loses its
+vertical route even when the BSP still contains the platform.
+=============
+*/
+int AAS_AugmentLoadedElevatorReachability(void)
+{
+	if (!aasworld.loaded || aasworld.numReachabilityAreas < aasworld.numAreas ||
+		aasworld.reachability == NULL || aasworld.areasettings == NULL ||
+		aasworld.numAreaSettings <= 0 || areareachability != NULL)
+	{
+		return 0;
+	}
+
+	AAS_SetupReachabilityHeap();
+	reachabilityareacount = aasworld.numAreaSettings;
+	areareachability = (aas_lreachability_t **)GetClearedMemory(
+		(size_t)reachabilityareacount * sizeof(*areareachability));
+	if (areareachability == NULL)
+	{
+		AAS_ShutDownReachabilityHeap();
+		return 0;
+	}
+
+	for (int area = 0; area < reachabilityareacount; ++area)
+	{
+		const aas_areasettings_t *settings = &aasworld.areasettings[area];
+		int first = settings->firstreachablearea;
+		int count = settings->numreachableareas;
+		if (first < 1 || count <= 0)
+		{
+			continue;
+		}
+
+		for (int offset = 0; offset < count; ++offset)
+		{
+			int reachability_index = first + offset;
+			if (reachability_index <= 0 ||
+				reachability_index >= aasworld.numReachability)
+			{
+				continue;
+			}
+
+			const aas_reachability_t *stored =
+				&aasworld.reachability[reachability_index];
+			aas_lreachability_t *link = AAS_AllocReachability();
+			if (link == NULL)
+			{
+				AAS_ShutDownReachabilityHeap();
+				return 0;
+			}
+			link->areanum = stored->areanum;
+			link->facenum = stored->facenum;
+			link->edgenum = stored->edgenum;
+			VectorCopy(stored->start, link->start);
+			VectorCopy(stored->end, link->end);
+			link->traveltype = stored->traveltype;
+			link->traveltime = stored->traveltime;
+			link->next = areareachability[area];
+			areareachability[area] = link;
+		}
+	}
+
+	int created = 0;
+	aas_bspentity_t *entities = AAS_LoadBSPEntities();
+	created = AAS_Reachability_ElevatorEntityList(entities);
+	AAS_FreeBSPEntities(entities);
+	BotLib_LogWrite("coopbot_aas_elevators_loaded created=%d", created);
+	if (created > 0)
+	{
+		AAS_StoreReachability();
+	}
+	AAS_ShutDownReachabilityHeap();
+	return created;
+}
+
+/*
+=============
 AAS_Reachability_Swim
 
 Create a swim link across a shared liquid face between adjacent swim areas.
@@ -3067,11 +3150,11 @@ int AAS_Reachability_Ladder(int area1num, int area2num)
 						sharededgenum = edge1num;
 					}
 					shared = qtrue;
-					break;
+								break;
+							}
+						}
+					}
 				}
-			}
-		}
-	}
 	if (ladderface1 == NULL || ladderface2 == NULL ||
 		abs(sharededgenum) >= aasworld.numEdges)
 	{
@@ -3548,6 +3631,19 @@ int AAS_Reachability_ElevatorEntityList(const aas_bspentity_t *entities)
 		{
 			speed = 200.0f;
 		}
+		int source_point_areas = 0;
+		int source_grounded_areas = 0;
+		int destination_point_areas = 0;
+		int destination_grounded_areas = 0;
+		int destination_clear_traces = 0;
+		int sourcearea = 0;
+		int destinationarea = 0;
+		BotLib_LogWrite("coopbot_aas_elevator_probe model=%d origin=%.1f %.1f %.1f mins=%.1f %.1f %.1f maxs=%.1f %.1f %.1f lip=%.1f height=%.1f speed=%.1f",
+			modelnum,
+			origin[0], origin[1], origin[2],
+			mins[0], mins[1], mins[2],
+			maxs[0], maxs[1], maxs[2],
+			lip, height, speed);
 
 		vec3_t pos1;
 		vec3_t pos2;
@@ -3580,10 +3676,10 @@ int AAS_Reachability_ElevatorEntityList(const aas_bspentity_t *entities)
 			maxs[1], maxs[1], mins[1], mins[1]
 		};
 
-		for (int sourceindex = 0; sourceindex < 9; ++sourceindex)
+		/* Wide platforms can hide the walkable lower area from all side samples. */
+		for (int sourceindex = 0; sourceindex < 10; ++sourceindex)
 		{
 			vec3_t bottomorigin;
-			int sourcearea;
 			if (sourceindex < 8)
 			{
 				bottomorigin[0] = origin[0] + xvals[sourceindex];
@@ -3592,9 +3688,14 @@ int AAS_Reachability_ElevatorEntityList(const aas_bspentity_t *entities)
 				for (int offset = 0;; ++offset)
 				{
 					sourcearea = AAS_PointAreaNum(bottomorigin);
+					if (sourcearea > 0)
+					{
+						source_point_areas++;
+					}
 					if (sourcearea > 0 &&
 						(AAS_AreaGrounded(sourcearea) || AAS_AreaSwim(sourcearea)))
 					{
+						source_grounded_areas++;
 						break;
 					}
 					if (offset >= 15)
@@ -3611,15 +3712,44 @@ int AAS_Reachability_ElevatorEntityList(const aas_bspentity_t *entities)
 			}
 			else
 			{
-				VectorCopy(plattop, bottomorigin);
+				VectorCopy(sourceindex == 8 ? plattop : platbottom, bottomorigin);
 				bottomorigin[2] += 24.0f;
 				sourcearea = AAS_PointAreaNum(bottomorigin);
-				if (sourcearea <= 0)
+				if (sourcearea > 0)
+				{
+					source_point_areas++;
+				}
+				if (sourceindex == 9)
+				{
+					bottomorigin[2] = platbottom[2] + 16.0f;
+					for (int offset = 0; offset < 24; ++offset)
+					{
+						sourcearea = AAS_PointAreaNum(bottomorigin);
+						if (sourcearea > 0)
+						{
+							source_point_areas++;
+						}
+						if (sourcearea > 0 &&
+							(AAS_AreaGrounded(sourcearea) || AAS_AreaSwim(sourcearea)))
+						{
+							source_grounded_areas++;
+							break;
+						}
+						bottomorigin[2] += 4.0f;
+					}
+				}
+				if (sourcearea <= 0 ||
+					(sourceindex == 9 &&
+						!AAS_AreaGrounded(sourcearea) &&
+						!AAS_AreaSwim(sourcearea)))
 				{
 					continue;
 				}
-				VectorCopy(platbottom, bottomorigin);
-				bottomorigin[2] += 24.0f;
+				if (sourceindex == 8)
+				{
+					VectorCopy(platbottom, bottomorigin);
+					bottomorigin[2] += 24.0f;
+				}
 			}
 
 			for (int expansion = 0; expansion < 3; ++expansion)
@@ -3642,19 +3772,25 @@ int AAS_Reachability_ElevatorEntityList(const aas_bspentity_t *entities)
 					destinationindex < 8;
 					++destinationindex)
 				{
+					qboolean destination_fallback = qfalse;
 					vec3_t toporigin;
 					toporigin[0] = origin[0] + topx[destinationindex];
 					toporigin[1] = origin[1] + topy[destinationindex];
 					toporigin[2] = plattop[2] + 16.0f;
-					int destinationarea = 0;
+					destinationarea = 0;
 					int offset;
 					for (offset = 0; offset < 16; ++offset)
 					{
 						destinationarea = AAS_PointAreaNum(toporigin);
+						if (destinationarea > 0)
+						{
+							destination_point_areas++;
+						}
 						if (destinationarea > 0 &&
 							(AAS_AreaGrounded(destinationarea) ||
 								AAS_AreaSwim(destinationarea)))
 						{
+							destination_grounded_areas++;
 							vec3_t tracestart;
 							vec3_t traceend;
 							VectorCopy(plattop, tracestart);
@@ -3667,27 +3803,122 @@ int AAS_Reachability_ElevatorEntityList(const aas_bspentity_t *entities)
 								-1);
 							if (trace.fraction >= 1.0f)
 							{
+								destination_clear_traces++;
 								break;
 							}
 						}
 						toporigin[2] += 4.0f;
 					}
-					if (offset >= 16 || destinationarea == sourcearea ||
-						!AAS_AreaGrounded(destinationarea) ||
-						AAS_ReachabilityExists(sourcearea, destinationarea))
+					/* Some maps expose the upper walkable area below plattop+16. */
+					if (offset >= 16 ||
+						!AAS_AreaGrounded(destinationarea))
 					{
-						continue;
+						for (offset = 0; offset < 24; ++offset)
+						{
+							toporigin[2] = plattop[2] + 16.0f -
+								(float)(offset * 4);
+							destinationarea = AAS_PointAreaNum(toporigin);
+							if (destinationarea > 0)
+							{
+								destination_point_areas++;
+							}
+							if (destinationarea > 0 &&
+								AAS_AreaGrounded(destinationarea))
+							{
+								destination_fallback = qtrue;
+								destination_grounded_areas++;
+								vec3_t tracestart;
+								vec3_t traceend;
+								VectorCopy(plattop, tracestart);
+								tracestart[2] += 32.0f;
+								VectorCopy(toporigin, traceend);
+								traceend[2] += 1.0f;
+								aas_trace_t trace = AAS_TraceClientBBox(tracestart,
+									traceend,
+									PRESENCE_CROUCH,
+									-1);
+								if (trace.fraction >= 1.0f)
+								{
+									destination_clear_traces++;
+									break;
+								}
+								break;
+							}
 					}
+				}
+				qboolean destination_reachability_exists =
+					AAS_ReachabilityExists(sourcearea, destinationarea);
+				if ((!destination_fallback && offset >= 24) ||
+					destinationarea == sourcearea ||
+					(destination_fallback &&
+						!AAS_AreaGrounded(sourcearea) &&
+						!AAS_AreaSwim(sourcearea)) ||
+					!AAS_AreaGrounded(destinationarea) ||
+					destination_reachability_exists)
+				{
+					if (destinationarea > 0)
+					{
+						BotLib_LogWrite("coopbot_aas_elevator_candidate model=%d source=%d destination=%d bottom=%.1f %.1f %.1f top=%.1f %.1f %.1f grounded=%d flags=%d existing=%d offset=%d",
+							modelnum,
+							sourcearea,
+							destinationarea,
+							bottomorigin[0], bottomorigin[1], bottomorigin[2],
+							toporigin[0], toporigin[1], toporigin[2],
+							AAS_AreaGrounded(destinationarea),
+							aasworld.areasettings[destinationarea].areaflags,
+							destination_reachability_exists,
+							offset);
+					}
+					continue;
+				}
 
-					vec3_t direction;
+				vec3_t direction;
+				if (destination_fallback)
+				{
+					VectorSubtract(toporigin, platbottom, direction);
+					direction[2] = 0.0f;
+					if (AAS_VectorNormalize(direction) == 0.0f)
+					{
+						direction[0] = 1.0f;
+						direction[1] = 0.0f;
+						direction[2] = 0.0f;
+					}
+				}
+				else
+				{
 					VectorSubtract(bottomorigin, platbottom, direction);
 					AAS_VectorNormalize(direction);
-					vec3_t reachstart;
-					reachstart[0] = bottomorigin[0] + 24.0f * direction[0];
-					reachstart[1] = bottomorigin[1] + 24.0f * direction[1];
-					reachstart[2] = bottomorigin[2];
-					int axis;
-					for (axis = 0; axis < 3; ++axis)
+				}
+				vec3_t reachstart;
+				VectorCopy(bottomorigin, reachstart);
+				if (destination_fallback)
+				{
+					for (int distance = 0; distance < 256; distance += 4)
+					{
+						qboolean inside = qtrue;
+						for (int axis = 0; axis < 3; ++axis)
+						{
+							if (reachstart[axis] < origin[axis] + mins[axis] ||
+								reachstart[axis] > origin[axis] + maxs[axis])
+							{
+								inside = qfalse;
+								break;
+							}
+						}
+						if (!inside)
+						{
+							break;
+						}
+						VectorMA(reachstart, 4.0f, direction, reachstart);
+					}
+				}
+				else
+				{
+					reachstart[0] += 24.0f * direction[0];
+					reachstart[1] += 24.0f * direction[1];
+				}
+				int axis;
+				for (axis = 0; axis < 3; ++axis)
 					{
 						if (reachstart[axis] < origin[axis] + mins[axis] ||
 							reachstart[axis] > origin[axis] + maxs[axis])
@@ -3695,17 +3926,17 @@ int AAS_Reachability_ElevatorEntityList(const aas_bspentity_t *entities)
 							break;
 						}
 					}
-					if (axis >= 3)
+				if (axis >= 3)
 					{
 						continue;
 					}
 
-					int traveltime = (int)(height * 100.0f / speed);
+				int traveltime = (int)(height * 100.0f / speed);
 					if (traveltime == 0)
 					{
 						traveltime = 50;
 					}
-					aas_lreachability_t *reachability = AAS_LinkAdjacentReachability(
+				aas_lreachability_t *reachability = AAS_LinkAdjacentReachability(
 						sourcearea,
 						destinationarea,
 						(int)height,
@@ -3713,17 +3944,25 @@ int AAS_Reachability_ElevatorEntityList(const aas_bspentity_t *entities)
 						toporigin,
 						TRAVEL_ELEVATOR,
 						(unsigned short)traveltime);
-					if (reachability == NULL)
+				if (reachability == NULL)
 					{
 						continue;
 					}
-					reachability->facenum = modelnum;
-					reach_elevator++;
-					created++;
-					expansion = 9999;
+				reachability->facenum = modelnum;
+				reach_elevator++;
+				created++;
+				expansion = 9999;
 				}
 			}
 		}
+		BotLib_LogWrite("coopbot_aas_elevator_probe_result model=%d source_points=%d source_grounded=%d destination_points=%d destination_grounded=%d clear_traces=%d created=%d",
+			modelnum,
+			source_point_areas,
+			source_grounded_areas,
+			destination_point_areas,
+			destination_grounded_areas,
+			destination_clear_traces,
+			created);
 	}
 	return created;
 }

@@ -167,6 +167,10 @@ void AAS_ContinueInit(float time)
 	{
 		return;
 	}
+	if (!aasworld.saveFile)
+	{
+		(void)AAS_AugmentLoadedElevatorReachability();
+	}
 
 	AAS_InitClustering();
 	libvar_t *forcewrite = Bridge_ForceWrite();

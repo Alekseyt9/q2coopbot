@@ -824,6 +824,7 @@ aas_lreachability_t *AAS_AllocReachability(void);
 void AAS_FreeReachability(aas_lreachability_t *reachability);
 void AAS_InitReachability(void);
 int AAS_ContinueInitReachability(void);
+int AAS_AugmentLoadedElevatorReachability(void);
 void AAS_StoreReachability(void);
 void AAS_InitClustering(void);
 void AAS_Optimize(void);

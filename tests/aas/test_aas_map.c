@@ -4538,6 +4538,71 @@ static void test_reachability_retail_elevator_generation(void **state)
 
 /*
 =============
+test_reachability_wide_elevator_fallback_generation
+
+Pins the coop fallback for a wide platform whose lower walkable area is only
+visible from the platform center and whose upper area is below the retail
+plattop sampling band.
+=============
+*/
+static void test_reachability_wide_elevator_fallback_generation(void **state)
+{
+	(void)state;
+	memset(&aasworld, 0, sizeof(aasworld));
+	const char entity_data[] =
+		"{\n"
+		"\"classname\" \"func_plat\"\n"
+		"\"model\" \"*1\"\n"
+		"\"lip\" \"132\"\n"
+		"}\n";
+	aas_bspentity_t *entities = AAS_ParseBSPEntities(entity_data,
+		sizeof(entity_data) - 1U);
+	assert_non_null(entities);
+
+	aas_area_t areas[3] = {0};
+	aas_areasettings_t settings[3] = {0};
+	aas_bspmodel_t models[2] = {0};
+	areas[1].areanum = 1;
+	VectorSet(areas[1].mins, -136.0f, 1352.0f, -176.0f);
+	VectorSet(areas[1].maxs, -33.0f, 1464.0f, 128.0f);
+	areas[2].areanum = 2;
+	VectorSet(areas[2].mins, -32.0f, 1352.0f, 24.0f);
+	VectorSet(areas[2].maxs, 16.0f, 1464.0f, 96.0f);
+	settings[1].areaflags = AAS_AREA_GROUNDED;
+	settings[1].presencetype = PRESENCE_CROUCH;
+	settings[2].areaflags = AAS_AREA_GROUNDED;
+	settings[2].presencetype = PRESENCE_CROUCH;
+	VectorSet(models[1].mins, -152.0f, 1336.0f, -192.0f);
+	VectorSet(models[1].maxs, -16.0f, 1480.0f, 128.0f);
+	VectorClear(models[1].origin);
+
+	aasworld.loaded = qtrue;
+	aasworld.numAreas = 3;
+	aasworld.areas = areas;
+	aasworld.numAreaSettings = 3;
+	aasworld.areasettings = settings;
+	aasworld.numBspModels = 2;
+	aasworld.bspModels = models;
+
+	AAS_InitReachability();
+	assert_int_equal(AAS_Reachability_ElevatorEntityList(entities), 1);
+	assert_true(AAS_ReachabilityExists(1, 2));
+	AAS_StoreReachability();
+	assert_int_equal(aasworld.numReachability, 2);
+	assert_int_equal(aasworld.reachability[1].areanum, 2);
+	assert_int_equal(aasworld.reachability[1].facenum, 1);
+	assert_int_equal(aasworld.reachability[1].edgenum, 188);
+	assert_int_equal(aasworld.reachability[1].traveltype, TRAVEL_ELEVATOR);
+
+	AAS_FreeBSPEntities(entities);
+	AAS_ShutDownReachabilityHeap();
+	AAS_ClearReachabilityData();
+	FreeMemory(aasworld.reachability);
+	memset(&aasworld, 0, sizeof(aasworld));
+}
+
+/*
+=============
 test_reachability_retail_grapple_generation
 
 Pins the retail grounded-source grapple scan, higher solid-face selection,
@@ -5688,6 +5753,7 @@ int main(void)
 		cmocka_unit_test(test_retail_bsp_entity_lexer_flags),
 		cmocka_unit_test(test_reachability_retail_teleporter_generation),
 		cmocka_unit_test(test_reachability_retail_elevator_generation),
+		cmocka_unit_test(test_reachability_wide_elevator_fallback_generation),
 		cmocka_unit_test(test_reachability_retail_grapple_generation),
 		cmocka_unit_test(test_reachability_retail_weapon_jump_generation),
 		cmocka_unit_test(test_reachability_retail_secondary_walkoff_generation),
