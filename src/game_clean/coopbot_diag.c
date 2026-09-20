@@ -1,7 +1,9 @@
 #include "g_local.h"
 
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 #include "bl_main.h"
@@ -22,6 +24,8 @@ typedef struct coopbot_diag_client_s
 	unsigned long long jump_actions;
 	unsigned long long crouch_actions;
 	int last_actionflags;
+	int last_target_entity;
+	int last_visible_enemies;
 	clock_t ai_start;
 } coopbot_diag_client_t;
 
@@ -32,8 +36,14 @@ typedef struct coopbot_diag_state_s
 	cvar_t *metrics_interval;
 	cvar_t *slow_ai_ms;
 	cvar_t *map_dump;
+	cvar_t *jsonl_enabled;
+	cvar_t *episode_id_override;
+	cvar_t *seed;
 	FILE *log_file;
+	FILE *event_file;
 	char log_path[256];
+	char event_path[256];
+	char episode_id[96];
 	unsigned long long frames;
 	unsigned long long ai_calls;
 	unsigned long long ai_errors;
@@ -47,6 +57,7 @@ typedef struct coopbot_diag_state_s
 	unsigned long long map_loads;
 	unsigned long long map_load_errors;
 	unsigned long long reports;
+	unsigned long long episode_sequence;
 	clock_t ai_ticks_total;
 	clock_t ai_ticks_max;
 	float next_report_time;
@@ -58,6 +69,120 @@ static coopbot_diag_state_t coopbot_diag;
 
 static void CoopBotDiag_Dump(void);
 static void CoopBotDiag_DumpMapEntities(void);
+
+//===========================================================================
+//
+// Derive a stable event type from the first token of the existing log line.
+//
+//===========================================================================
+static const char *CoopBotDiag_EventName(const char *message)
+{
+	static char event_name[48];
+	const char *cursor = message;
+	size_t length = 0;
+
+	if (message == NULL)
+	{
+		return "diagnostic";
+	}
+
+	while (cursor[length] != '\0' && cursor[length] != ' ' &&
+		cursor[length] != '\t' && length < sizeof(event_name) - 1)
+	{
+		length += 1;
+	}
+	memcpy(event_name, message, length);
+	event_name[length] = '\0';
+	return event_name[0] != '\0' ? event_name : "diagnostic";
+}
+
+//===========================================================================
+//
+// Escape a value for the JSONL event stream without changing the text log.
+//
+//===========================================================================
+static void CoopBotDiag_JSONEscape(FILE *file, const char *value)
+{
+	const unsigned char *cursor = (const unsigned char *)value;
+
+	if (file == NULL)
+	{
+		return;
+	}
+
+	if (cursor == NULL)
+	{
+		fputs("<none>", file);
+		return;
+	}
+
+	while (*cursor != '\0')
+	{
+		switch (*cursor)
+		{
+		case '\\':
+			fputs("\\\\", file);
+			break;
+		case '"':
+			fputs("\\\"", file);
+			break;
+		case '\n':
+			fputs("\\n", file);
+			break;
+		case '\r':
+			fputs("\\r", file);
+			break;
+		case '\t':
+			fputs("\\t", file);
+			break;
+		default:
+			if (*cursor < 0x20)
+			{
+				fputc(' ', file);
+			}
+			else
+			{
+				fputc(*cursor, file);
+			}
+			break;
+		}
+		cursor += 1;
+	}
+}
+
+//===========================================================================
+//
+// Write one machine-readable event while retaining the legacy text log.
+// The message keeps the existing key=value representation until structured
+// event-specific fields are added by the P0 telemetry work.
+//
+//===========================================================================
+static void CoopBotDiag_WriteJSONEvent(const char *event,
+	int severity,
+	const char *message)
+{
+	if (coopbot_diag.event_file == NULL ||
+		coopbot_diag.jsonl_enabled == NULL ||
+		coopbot_diag.jsonl_enabled->value == 0.0f)
+	{
+		return;
+	}
+
+	fputs("{\"time\":", coopbot_diag.event_file);
+	fprintf(coopbot_diag.event_file, "%.3f", level.time);
+	fputs(",\"episode_id\":\"", coopbot_diag.event_file);
+	CoopBotDiag_JSONEscape(coopbot_diag.event_file, coopbot_diag.episode_id);
+	fputs("\",\"map\":\"", coopbot_diag.event_file);
+	CoopBotDiag_JSONEscape(coopbot_diag.event_file, coopbot_diag.map_name);
+	fputs("\",\"event\":\"", coopbot_diag.event_file);
+	CoopBotDiag_JSONEscape(coopbot_diag.event_file, event);
+	fputs("\",\"severity\":", coopbot_diag.event_file);
+	fprintf(coopbot_diag.event_file, "%d", severity);
+	fputs(",\"message\":\"", coopbot_diag.event_file);
+	CoopBotDiag_JSONEscape(coopbot_diag.event_file, message);
+	fputs("\"}\n", coopbot_diag.event_file);
+	fflush(coopbot_diag.event_file);
+}
 
 static int CoopBotDiag_ClientNumber(const edict_t *bot)
 {
@@ -103,18 +228,23 @@ static void CoopBotDiag_WriteLine(const char *line)
 
 static void CoopBotDiag_Log(int level, const char *fmt, ...)
 {
-	if (CoopBotDiag_LogLevel() < level || fmt == NULL)
+	char message[1024];
+	va_list args;
+
+	if (fmt == NULL)
 	{
 		return;
 	}
 
-	char message[1024];
-	va_list args;
 	va_start(args, fmt);
 	vsnprintf(message, sizeof(message), fmt, args);
 	va_end(args);
 	message[sizeof(message) - 1] = '\0';
-	CoopBotDiag_WriteLine(message);
+	if (CoopBotDiag_LogLevel() >= level)
+	{
+		CoopBotDiag_WriteLine(message);
+	}
+	CoopBotDiag_WriteJSONEvent(CoopBotDiag_EventName(message), level, message);
 }
 
 static const char *CoopBotDiag_Name(const edict_t *bot)
@@ -146,6 +276,252 @@ static const char *CoopBotDiag_Classname(const edict_t *ent)
 	}
 
 	return "<none>";
+}
+
+//===========================================================================
+//
+// Select the human player used as the companion's primary reference. Co-op
+// can have more than one human, so prefer the first active non-bot client and
+// fall back to another active client when a diagnostic run is bot-only.
+//
+//===========================================================================
+static edict_t *CoopBotDiag_Player(edict_t *bot)
+{
+	edict_t *fallback = NULL;
+	int client;
+
+	for (client = 0; client < game.maxclients; ++client)
+	{
+		edict_t *candidate = DF_CLIENTENT(client);
+
+		if (candidate == bot || !candidate->inuse)
+		{
+			continue;
+		}
+		if (fallback == NULL)
+		{
+			fallback = candidate;
+		}
+		if ((candidate->flags & FL_BOT) == 0)
+		{
+			return candidate;
+		}
+	}
+
+	return fallback;
+}
+
+//===========================================================================
+//
+// Return the three-dimensional distance between two active entities.
+//
+//===========================================================================
+static float CoopBotDiag_Distance(const edict_t *first, const edict_t *second)
+{
+	vec3_t delta;
+
+	if (first == NULL || second == NULL)
+	{
+		return -1.0f;
+	}
+
+	VectorSubtract(first->s.origin, second->s.origin, delta);
+	return sqrtf(DotProduct(delta, delta));
+}
+
+//===========================================================================
+//
+// Count active monsters visible from the bot's current position. This is a
+// game-side observation for telemetry; botlib remains the owner of AI state.
+//
+//===========================================================================
+static int CoopBotDiag_VisibleMonsters(edict_t *bot)
+{
+	int visible_count = 0;
+	int entity_number;
+
+	if (bot == NULL)
+	{
+		return 0;
+	}
+
+	for (entity_number = game.maxclients;
+		entity_number < globals.num_edicts; ++entity_number)
+	{
+		edict_t *candidate = &g_edicts[entity_number];
+
+		if (!candidate->inuse || (candidate->svflags & SVF_MONSTER) == 0 ||
+			candidate->deadflag != DEAD_NO)
+		{
+			continue;
+		}
+		if (visible(bot, candidate))
+		{
+			visible_count += 1;
+		}
+	}
+
+	return visible_count;
+}
+
+//===========================================================================
+//
+// Record the observable companion state at the input boundary. The state is
+// intentionally an inferred diagnostic label, not a new gameplay FSM.
+//
+//===========================================================================
+void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
+{
+	edict_t *player;
+	edict_t *target;
+	float distance_to_player;
+	int target_visible = 0;
+	int visible_enemies;
+	int target_entity;
+	const char *state = "idle";
+	int client;
+
+	if (bot == NULL || input == NULL)
+	{
+		return;
+	}
+
+	player = CoopBotDiag_Player(bot);
+	target = bot->enemy;
+	target_entity = (target != NULL && target->inuse &&
+		target->takedamage && target->health > 0)
+		? CoopBotDiag_EntityNumber(target) : -1;
+	distance_to_player = CoopBotDiag_Distance(bot, player);
+	if (bot->deadflag != DEAD_NO)
+	{
+		state = "dead";
+	}
+	else if (target != NULL && target->inuse && target->takedamage &&
+		target->health > 0)
+	{
+		state = "engaged";
+		target_visible = visible(bot, target);
+	}
+	else if (distance_to_player >= 0.0f && distance_to_player > 768.0f)
+	{
+		state = "far_from_player";
+	}
+	else if (distance_to_player >= 0.0f && distance_to_player > 384.0f)
+	{
+		state = "following";
+	}
+
+	client = CoopBotDiag_ClientNumber(bot);
+	visible_enemies = CoopBotDiag_VisibleMonsters(bot);
+	if (client >= 0 && client < COOPBOT_DIAG_MAX_CLIENTS)
+	{
+		if (coopbot_diag.clients[client].last_target_entity != target_entity)
+		{
+			if (target_entity >= 0)
+			{
+				CoopBotDiag_Log(2,
+					"target_acquired client=%d target=%d class=\"%s\"",
+					client, target_entity, CoopBotDiag_Classname(target));
+			}
+			else if (coopbot_diag.clients[client].last_target_entity >= 0)
+			{
+				CoopBotDiag_Log(2,
+					"target_lost client=%d target=%d",
+					client, coopbot_diag.clients[client].last_target_entity);
+			}
+			coopbot_diag.clients[client].last_target_entity = target_entity;
+		}
+		if (coopbot_diag.clients[client].last_visible_enemies == 0 &&
+			visible_enemies > 0)
+		{
+			CoopBotDiag_Log(2,
+				"encounter_observed client=%d visible_enemies=%d",
+				client, visible_enemies);
+		}
+		coopbot_diag.clients[client].last_visible_enemies = visible_enemies;
+	}
+	CoopBotDiag_Log(2,
+		"bot_snapshot client=%d name=\"%s\" state=%s player=%d "
+		"player_origin=(%.1f %.1f %.1f) bot_origin=(%.1f %.1f %.1f) "
+		"distance_to_player=%.1f target=%d target_class=\"%s\" "
+		"target_health=%d target_visible=%d visible_enemies=%d "
+		"input_flags=0x%x speed=%.1f",
+		client, CoopBotDiag_Name(bot), state,
+		CoopBotDiag_EntityNumber(player),
+		player != NULL ? player->s.origin[0] : 0.0f,
+		player != NULL ? player->s.origin[1] : 0.0f,
+		player != NULL ? player->s.origin[2] : 0.0f,
+		bot->s.origin[0], bot->s.origin[1], bot->s.origin[2],
+		distance_to_player,
+		CoopBotDiag_EntityNumber(target), CoopBotDiag_Classname(target),
+		target != NULL ? target->health : 0, target_visible,
+		visible_enemies, input->actionflags, input->speed);
+}
+
+//===========================================================================
+//
+// Record an actual physics contact between a bot and a human player. Contact
+// is deliberately kept separate from "blocked": a later reducer can require
+// repeated contact plus movement intent before calling it a path violation.
+//
+//===========================================================================
+void CoopBotDiag_RecordPlayerContact(edict_t *first,
+	edict_t *second,
+	const trace_t *trace)
+{
+	edict_t *bot;
+	edict_t *player;
+	edict_t *moving;
+	vec3_t velocity;
+	const char *moving_role;
+	float moving_speed;
+
+	if (first == NULL || second == NULL || trace == NULL)
+	{
+		return;
+	}
+
+	if ((first->flags & FL_BOT) != 0 && second->client != NULL)
+	{
+		bot = first;
+		player = second;
+		moving = first;
+		moving_role = "bot";
+	}
+	else if ((second->flags & FL_BOT) != 0 && first->client != NULL)
+	{
+		bot = second;
+		player = first;
+		moving = first;
+		moving_role = "player";
+	}
+	else
+	{
+		return;
+	}
+
+	VectorCopy(bot->velocity, velocity);
+	moving_speed = sqrtf(DotProduct(moving->velocity, moving->velocity));
+	CoopBotDiag_Log(2,
+		"player_contact bot=%d player=%d fraction=%.5f normal=(%.2f %.2f %.2f) "
+		"moving_role=%s moving_speed=%.1f bot_speed=%.1f "
+		"bot_origin=(%.1f %.1f %.1f) "
+		"player_origin=(%.1f %.1f %.1f)",
+		CoopBotDiag_EntityNumber(bot), CoopBotDiag_EntityNumber(player),
+		trace->fraction, trace->plane.normal[0], trace->plane.normal[1],
+		trace->plane.normal[2], moving_role, moving_speed,
+		sqrtf(DotProduct(velocity, velocity)),
+		bot->s.origin[0], bot->s.origin[1], bot->s.origin[2],
+		player->s.origin[0], player->s.origin[1], player->s.origin[2]);
+	if (moving == player && moving_speed > 1.0f && trace->fraction < 1.0f)
+	{
+		CoopBotDiag_Log(2,
+			"player_block_candidate bot=%d player=%d moving_speed=%.1f "
+			"fraction=%.5f normal=(%.2f %.2f %.2f)",
+			CoopBotDiag_EntityNumber(bot), CoopBotDiag_EntityNumber(player),
+			moving_speed, trace->fraction, trace->plane.normal[0],
+			trace->plane.normal[1], trace->plane.normal[2]);
+	}
 }
 
 static void CoopBotDiag_ResetCounters(void)
@@ -180,6 +556,8 @@ static void CoopBotDiag_ResetCounters(void)
 		coopbot_diag.clients[index].jump_actions = 0;
 		coopbot_diag.clients[index].crouch_actions = 0;
 		coopbot_diag.clients[index].last_actionflags = 0;
+		coopbot_diag.clients[index].last_target_entity = -1;
+		coopbot_diag.clients[index].last_visible_enemies = 0;
 		coopbot_diag.clients[index].ai_start = zero;
 	}
 }
@@ -194,6 +572,14 @@ void CoopBotDiag_Init(void)
 	coopbot_diag.metrics_interval = gi.cvar("coopbot_metrics_interval", "10", 0);
 	coopbot_diag.slow_ai_ms = gi.cvar("coopbot_slow_ai_ms", "100", 0);
 	coopbot_diag.map_dump = gi.cvar("coopbot_map_dump", "1", 0);
+	coopbot_diag.jsonl_enabled = gi.cvar("coopbot_jsonl", "1", 0);
+	coopbot_diag.episode_id_override = gi.cvar("coopbot_episode_id", "", 0);
+	coopbot_diag.seed = gi.cvar("coopbot_seed", "0", 0);
+	if (coopbot_diag.seed != NULL && coopbot_diag.seed->string != NULL &&
+		coopbot_diag.seed->value > 0.0f)
+	{
+		srand((unsigned int)strtoul(coopbot_diag.seed->string, NULL, 10));
+	}
 	game_dir = gi.cvar("game", "", 0);
 	if (game_dir != NULL && game_dir->string != NULL && game_dir->string[0] != '\0')
 	{
@@ -205,16 +591,50 @@ void CoopBotDiag_Init(void)
 		snprintf(coopbot_diag.log_path, sizeof(coopbot_diag.log_path),
 			"coopbot_debug.log");
 	}
+	snprintf(coopbot_diag.event_path, sizeof(coopbot_diag.event_path),
+		"%s", coopbot_diag.log_path);
+	{
+		char *extension = strrchr(coopbot_diag.event_path, '.');
+		if (extension != NULL)
+		{
+			snprintf(extension,
+				(size_t)(coopbot_diag.event_path + sizeof(coopbot_diag.event_path) - extension),
+				"_events.jsonl");
+		}
+		else
+		{
+			snprintf(coopbot_diag.event_path, sizeof(coopbot_diag.event_path),
+				"coopbot_events.jsonl");
+		}
+	}
 	coopbot_diag.log_file = fopen(coopbot_diag.log_path, "a");
+	coopbot_diag.event_file = fopen(coopbot_diag.event_path, "a");
+	if (coopbot_diag.episode_id_override != NULL &&
+		coopbot_diag.episode_id_override->string != NULL &&
+		coopbot_diag.episode_id_override->string[0] != '\0')
+	{
+		strncpy(coopbot_diag.episode_id,
+			coopbot_diag.episode_id_override->string,
+			sizeof(coopbot_diag.episode_id) - 1);
+		coopbot_diag.episode_id[sizeof(coopbot_diag.episode_id) - 1] = '\0';
+	}
+	else
+	{
+		strncpy(coopbot_diag.episode_id, "pending",
+			sizeof(coopbot_diag.episode_id) - 1);
+	}
 	CoopBotDiag_ResetCounters();
 	CoopBotDiag_Log(1,
-		"diagnostics initialized file=\"%s\" log=%d metrics=%d interval=%.1f slow_ai_ms=%.1f map_dump=%d",
+		"diagnostics initialized file=\"%s\" events=\"%s\" log=%d metrics=%d interval=%.1f slow_ai_ms=%.1f map_dump=%d jsonl=%d seed=\"%s\"",
 		coopbot_diag.log_path,
+		coopbot_diag.event_path,
 		CoopBotDiag_LogLevel(),
 		(int)coopbot_diag.metrics_enabled->value,
 		coopbot_diag.metrics_interval->value,
 		coopbot_diag.slow_ai_ms->value,
-		(int)coopbot_diag.map_dump->value);
+		(int)coopbot_diag.map_dump->value,
+		(int)coopbot_diag.jsonl_enabled->value,
+		coopbot_diag.seed != NULL ? coopbot_diag.seed->string : "0");
 }
 
 void CoopBotDiag_Shutdown(void)
@@ -224,6 +644,11 @@ void CoopBotDiag_Shutdown(void)
 	{
 		fclose(coopbot_diag.log_file);
 		coopbot_diag.log_file = NULL;
+	}
+	if (coopbot_diag.event_file != NULL)
+	{
+		fclose(coopbot_diag.event_file);
+		coopbot_diag.event_file = NULL;
 	}
 }
 
@@ -544,6 +969,22 @@ void CoopBotDiag_RecordMapEntities(const char *mapname)
 		coopbot_diag.map_name[sizeof(coopbot_diag.map_name) - 1] = '\0';
 	}
 
+	if (coopbot_diag.episode_id_override == NULL ||
+		coopbot_diag.episode_id_override->string == NULL ||
+		coopbot_diag.episode_id_override->string[0] == '\0')
+	{
+		coopbot_diag.episode_sequence += 1;
+		snprintf(coopbot_diag.episode_id, sizeof(coopbot_diag.episode_id),
+			"%s-%llu",
+			coopbot_diag.map_name[0] != '\0' ? coopbot_diag.map_name : "unknown",
+			coopbot_diag.episode_sequence);
+	}
+	CoopBotDiag_Log(1,
+		"episode_start episode_id=\"%s\" map=\"%s\" seed=\"%s\"",
+		coopbot_diag.episode_id,
+		coopbot_diag.map_name[0] != '\0' ? coopbot_diag.map_name : "<none>",
+		coopbot_diag.seed != NULL ? coopbot_diag.seed->string : "0");
+
 	if (coopbot_diag.map_dump == NULL || coopbot_diag.map_dump->value == 0.0f)
 	{
 		return;
@@ -601,6 +1042,65 @@ void CoopBotDiag_RecordBotRemove(edict_t *bot)
 	{
 		coopbot_diag.clients[client].active = false;
 	}
+}
+
+void CoopBotDiag_RecordBotState(const char *phase, edict_t *bot)
+{
+	client_persistant_t *pers;
+	const gitem_t *weapon;
+	const gitem_t *bullets;
+	const gitem_t *shells;
+	const gitem_t *rockets;
+	const gitem_t *grenades;
+	const gitem_t *cells;
+	const gitem_t *slugs;
+	const gitem_t *jacket;
+	const gitem_t *combat;
+	const gitem_t *body;
+	const gitem_t *power_shield;
+	int client;
+
+	if (bot == NULL || bot->client == NULL ||
+		!(bot->flags & FL_BOT))
+	{
+		return;
+	}
+
+	pers = &bot->client->pers;
+	weapon = pers->weapon;
+	bullets = FindItem("Bullets");
+	shells = FindItem("Shells");
+	rockets = FindItem("Rockets");
+	grenades = FindItem("Grenades");
+	cells = FindItem("Cells");
+	slugs = FindItem("Slugs");
+	jacket = FindItem("Jacket Armor");
+	combat = FindItem("Combat Armor");
+	body = FindItem("Body Armor");
+	power_shield = FindItem("Power Shield");
+	client = CoopBotDiag_ClientNumber(bot);
+
+	CoopBotDiag_Log(1,
+		"bot_state phase=\"%s\" client=%d hp=%d max_hp=%d weapon=\"%s\" "
+		"selected=%d bullets=%d shells=%d rockets=%d grenades=%d cells=%d slugs=%d "
+		"jacket=%d combat=%d body=%d power_shield=%d",
+		phase != NULL ? phase : "unknown",
+		client,
+		pers->health,
+		pers->max_health,
+		weapon != NULL && weapon->pickup_name != NULL
+			? weapon->pickup_name : "<none>",
+		pers->selected_item,
+		bullets != NULL ? pers->inventory[ITEM_INDEX(bullets)] : 0,
+		shells != NULL ? pers->inventory[ITEM_INDEX(shells)] : 0,
+		rockets != NULL ? pers->inventory[ITEM_INDEX(rockets)] : 0,
+		grenades != NULL ? pers->inventory[ITEM_INDEX(grenades)] : 0,
+		cells != NULL ? pers->inventory[ITEM_INDEX(cells)] : 0,
+		slugs != NULL ? pers->inventory[ITEM_INDEX(slugs)] : 0,
+		jacket != NULL ? pers->inventory[ITEM_INDEX(jacket)] : 0,
+		combat != NULL ? pers->inventory[ITEM_INDEX(combat)] : 0,
+		body != NULL ? pers->inventory[ITEM_INDEX(body)] : 0,
+		power_shield != NULL ? pers->inventory[ITEM_INDEX(power_shield)] : 0);
 }
 
 void CoopBotDiag_RecordShot(const char *kind,

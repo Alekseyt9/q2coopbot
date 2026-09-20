@@ -1,6 +1,7 @@
 // g_phys.c
 
 #include "g_local.h"
+#include "coopbot_diag.h"
 
 /*
 
@@ -107,6 +108,7 @@ void SV_Impact (edict_t *e1, trace_t *trace)
 //	cplane_t	backplane;
 
 	e2 = trace->ent;
+	CoopBotDiag_RecordPlayerContact(e1, e2, trace);
 
 	if (e1->touch && e1->solid != SOLID_NOT)
 		e1->touch (e1, e2, &trace->plane, trace->surface);

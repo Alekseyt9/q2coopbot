@@ -941,6 +941,18 @@ SaveClientData(void)
 		{
 			game.clients[i].pers.score = ent->client->resp.score;
 		}
+
+		/*
+		 * Inventory, weapons, ammo and armor already live in pers.  Keep an
+		 * explicit coop snapshot for fake clients as well, because the bot is
+		 * not reconnected by the engine during a level change.  PutClientInServer
+		 * consumes resp.coop_respawn when the bot is placed on the new map.
+		 */
+		if (coop->value && (ent->flags & FL_BOT))
+		{
+			game.clients[i].resp.coop_respawn = game.clients[i].pers;
+			CoopBotDiag_RecordBotState("save", ent);
+		}
 	}
 }
 
@@ -1642,6 +1654,8 @@ PutClientInServer(edict_t *ent)
 			client->pers.inventory[client->pers.selected_item] = 1;
 		}
 	}
+
+	CoopBotDiag_RecordBotState("restore", ent);
 
 	/* clear playerstate values */
 	memset(&ent->client->ps, 0, sizeof(client->ps));

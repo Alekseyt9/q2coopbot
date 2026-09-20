@@ -385,6 +385,16 @@ SpawnEntities(const char *mapname, char *entities, const char *spawnpoint)
 	memset(&level, 0, sizeof(level));
 	memset(g_edicts, 0, game.maxentities * sizeof(g_edicts[0]));
 
+	/*
+	 * TAG_LEVEL has just released the strings behind the bot redirect
+	 * indexes.  Clear the pointer tables before parsing the next map so
+	 * Bot_modelindex/Bot_soundindex/Bot_imageindex allocate fresh entries
+	 * instead of treating freed pointers as valid.  This is especially
+	 * important for a live coop session: the bot library survives the
+	 * level change and refreshes these tables while the new entities spawn.
+	 */
+	ClearIndexes();
+
 	Q_strlcpy(level.mapname, mapname, sizeof(level.mapname));
 	Q_strlcpy(game.spawnpoint, spawnpoint, sizeof(game.spawnpoint));
 

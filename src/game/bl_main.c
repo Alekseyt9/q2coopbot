@@ -734,6 +734,7 @@ void BotLibImport_BotInput(int client, bot_input_t *bi)
 	} //end if
 	memcpy(&botglobals.botinputs[client], bi, sizeof(bot_input_t));
 	botglobals.botnewinput[client] = true;
+	CoopBotDiag_RecordBotSnapshot(DF_CLIENTENT(client), bi);
 	CoopBotDiag_RecordInput(DF_CLIENTENT(client), bi);
 } //end of the function BotLibImport_BotInput
 //===========================================================================
@@ -910,6 +911,8 @@ int BotInitLibrary(bot_library_t *lib)
 	lib->funcs.BotLibVarSet("coopbot_log", cvar->string);
 	cvar = gi.cvar("coopbot_metrics", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_metrics", cvar->string);
+	cvar = gi.cvar("coopbot_seed", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_seed", cvar->string);
 #ifdef ZOID
 	lib->funcs.BotLibVarSet("ctf", ctf->string);
 	if (ctf->value)

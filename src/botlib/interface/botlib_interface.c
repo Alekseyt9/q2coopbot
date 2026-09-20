@@ -193,10 +193,22 @@ static int Botlib_SetupAISubsystem(void)
 	/*
 	 * Retail seeds the CRT generator here and nowhere else: 0x10029c99 is the
 	 * DLL's only call to the seed setter, and it runs before weapon, goal and
-	 * chat setup.  Without it every session replays the same chat picks, aim
-	 * error, roam directions and probability gates from the implicit seed 1.
+	 * chat setup.  The coop experiment harness may override that seed through
+	 * the host-pushed coopbot_seed libvar; zero retains retail time seeding.
 	 */
-	srand((unsigned int)time(NULL));
+	{
+		const char *seed_text = LibVarGetString("coopbot_seed");
+		unsigned long configured_seed = seed_text != NULL
+			? strtoul(seed_text, NULL, 10) : 0UL;
+		if (configured_seed != 0UL)
+		{
+			srand((unsigned int)configured_seed);
+		}
+		else
+		{
+			srand((unsigned int)time(NULL));
+		}
+	}
 
 	BotState_ResetClientSettings();
 

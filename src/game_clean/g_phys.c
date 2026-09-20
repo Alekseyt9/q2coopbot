@@ -26,6 +26,8 @@
 
 
 #include "header/local.h"
+#include "botlib.h"
+#include "coopbot_diag.h"
 
 #define STOP_EPSILON 0.1
 #define MAX_CLIP_PLANES 5
@@ -151,6 +153,7 @@ SV_Impact(edict_t *e1, trace_t *trace)
 	}
 
 	e2 = trace->ent;
+	CoopBotDiag_RecordPlayerContact(e1, e2, trace);
 
 	if (e1->touch && (e1->solid != SOLID_NOT))
 	{
