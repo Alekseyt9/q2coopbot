@@ -484,6 +484,7 @@ SpawnEntities(const char *mapname, char *entities, const char *spawnpoint)
 	BotInitMuzzleFlashToSoundindex();
 	BotSpawn();
 	BotLib_BotLoadMap((char *)mapname);
+	CoopBotDiag_RecordMapEntities();
 }
 
 /* =================================================================== */

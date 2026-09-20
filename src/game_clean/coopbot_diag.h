@@ -9,6 +9,7 @@ void CoopBotDiag_BotAIStart(edict_t *bot);
 void CoopBotDiag_BotAIEnd(edict_t *bot, int status);
 void CoopBotDiag_RecordInput(edict_t *bot, const bot_input_t *input);
 void CoopBotDiag_RecordEntity(edict_t *ent);
+void CoopBotDiag_RecordMapEntities(void);
 void CoopBotDiag_RecordMapLoad(const char *mapname,
 	const char *library,
 	int status);

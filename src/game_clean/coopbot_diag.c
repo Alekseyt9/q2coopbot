@@ -31,6 +31,7 @@ typedef struct coopbot_diag_state_s
 	cvar_t *metrics_enabled;
 	cvar_t *metrics_interval;
 	cvar_t *slow_ai_ms;
+	cvar_t *map_dump;
 	FILE *log_file;
 	char log_path[256];
 	unsigned long long frames;
@@ -56,6 +57,7 @@ typedef struct coopbot_diag_state_s
 static coopbot_diag_state_t coopbot_diag;
 
 static void CoopBotDiag_Dump(void);
+static void CoopBotDiag_DumpMapEntities(void);
 
 static int CoopBotDiag_ClientNumber(const edict_t *bot)
 {
@@ -191,6 +193,7 @@ void CoopBotDiag_Init(void)
 	coopbot_diag.metrics_enabled = gi.cvar("coopbot_metrics", "1", 0);
 	coopbot_diag.metrics_interval = gi.cvar("coopbot_metrics_interval", "10", 0);
 	coopbot_diag.slow_ai_ms = gi.cvar("coopbot_slow_ai_ms", "100", 0);
+	coopbot_diag.map_dump = gi.cvar("coopbot_map_dump", "1", 0);
 	game_dir = gi.cvar("game", "", 0);
 	if (game_dir != NULL && game_dir->string != NULL && game_dir->string[0] != '\0')
 	{
@@ -205,12 +208,13 @@ void CoopBotDiag_Init(void)
 	coopbot_diag.log_file = fopen(coopbot_diag.log_path, "a");
 	CoopBotDiag_ResetCounters();
 	CoopBotDiag_Log(1,
-		"diagnostics initialized file=\"%s\" log=%d metrics=%d interval=%.1f slow_ai_ms=%.1f",
+		"diagnostics initialized file=\"%s\" log=%d metrics=%d interval=%.1f slow_ai_ms=%.1f map_dump=%d",
 		coopbot_diag.log_path,
 		CoopBotDiag_LogLevel(),
 		(int)coopbot_diag.metrics_enabled->value,
 		coopbot_diag.metrics_interval->value,
-		coopbot_diag.slow_ai_ms->value);
+		coopbot_diag.slow_ai_ms->value,
+		(int)coopbot_diag.map_dump->value);
 }
 
 void CoopBotDiag_Shutdown(void)
@@ -358,6 +362,172 @@ void CoopBotDiag_RecordEntity(edict_t *ent)
 	{
 		coopbot_diag.monster_updates += 1;
 	}
+}
+
+//===========================================================================
+//
+// Classify an active Quake II entity for the first level-model inventory.
+//
+//===========================================================================
+static const char *CoopBotDiag_MapEntityKind(const edict_t *ent)
+{
+	const char *classname;
+
+	if (ent == NULL || ent->classname == NULL)
+	{
+		return "unknown";
+	}
+
+	classname = ent->classname;
+	if (strncmp(classname, "monster_", 8) == 0)
+	{
+		return "monster";
+	}
+	if (strncmp(classname, "trigger_", 8) == 0)
+	{
+		return "trigger";
+	}
+	if (strncmp(classname, "target_", 7) == 0)
+	{
+		return "target";
+	}
+	if (strncmp(classname, "func_", 5) == 0)
+	{
+		return "mover";
+	}
+	if (strncmp(classname, "item_", 5) == 0 ||
+		strncmp(classname, "weapon_", 7) == 0 ||
+		strncmp(classname, "ammo_", 5) == 0 ||
+		strncmp(classname, "key_", 4) == 0)
+	{
+		return "pickup";
+	}
+	if (strncmp(classname, "info_player_", 12) == 0)
+	{
+		return "spawn";
+	}
+	if (strcmp(classname, "worldspawn") == 0)
+	{
+		return "world";
+	}
+	return "other";
+}
+
+//===========================================================================
+//
+// Return a stable entity field for key/value diagnostics.
+//
+//===========================================================================
+static const char *CoopBotDiag_MapField(const char *value)
+{
+	return value != NULL && value[0] != '\0' ? value : "<none>";
+}
+
+//===========================================================================
+//
+// Emit the runtime map entity graph that is available to the game module.
+// This deliberately records post-spawn entities, so skill/co-op filtering and
+// the actual trigger/mover setup are reflected instead of just raw BSP text.
+//
+//===========================================================================
+static void CoopBotDiag_DumpMapEntities(void)
+{
+	int entity_count = 0;
+	int monster_count = 0;
+	int trigger_count = 0;
+	int mover_count = 0;
+	int target_count = 0;
+	int link_count = 0;
+	int entity_number;
+
+	for (entity_number = 0; entity_number < globals.num_edicts; ++entity_number)
+	{
+		edict_t *ent = &g_edicts[entity_number];
+		const char *kind;
+
+		if (!ent->inuse)
+		{
+			continue;
+		}
+
+		kind = CoopBotDiag_MapEntityKind(ent);
+		entity_count += 1;
+		monster_count += strcmp(kind, "monster") == 0;
+		trigger_count += strcmp(kind, "trigger") == 0;
+		mover_count += strcmp(kind, "mover") == 0;
+		target_count += strcmp(kind, "target") == 0;
+	}
+
+	CoopBotDiag_Log(1,
+		"map_inventory map=\"%s\" entities=%d monsters=%d triggers=%d movers=%d targets=%d",
+		coopbot_diag.map_name[0] != '\0' ? coopbot_diag.map_name : "<none>",
+		entity_count, monster_count, trigger_count, mover_count, target_count);
+
+	for (entity_number = 0; entity_number < globals.num_edicts; ++entity_number)
+	{
+		edict_t *ent = &g_edicts[entity_number];
+		const char *kind;
+		edict_t *target;
+
+		if (!ent->inuse)
+		{
+			continue;
+		}
+
+		kind = CoopBotDiag_MapEntityKind(ent);
+		CoopBotDiag_Log(1,
+			"map_entity ent=%d kind=%s class=\"%s\" model=\"%s\" "
+			"origin=(%.1f %.1f %.1f) mins=(%.1f %.1f %.1f) maxs=(%.1f %.1f %.1f) "
+			"solid=%d movetype=%d spawnflags=0x%x health=%d target=\"%s\" "
+			"targetname=\"%s\" killtarget=\"%s\" map=\"%s\"",
+			entity_number, kind, CoopBotDiag_MapField(ent->classname),
+			CoopBotDiag_MapField(ent->model), ent->s.origin[0], ent->s.origin[1],
+			ent->s.origin[2], ent->mins[0], ent->mins[1], ent->mins[2],
+			ent->maxs[0], ent->maxs[1], ent->maxs[2], ent->solid, ent->movetype,
+			ent->spawnflags, ent->health, CoopBotDiag_MapField(ent->target),
+			CoopBotDiag_MapField(ent->targetname),
+			CoopBotDiag_MapField(ent->killtarget), CoopBotDiag_MapField(ent->map));
+
+		if (ent->target == NULL || ent->target[0] == '\0')
+		{
+			continue;
+		}
+
+		for (target = g_edicts; target < &g_edicts[globals.num_edicts]; ++target)
+		{
+			if (!target->inuse || target->targetname == NULL ||
+				target->targetname[0] == '\0' ||
+				strcmp(ent->target, target->targetname) != 0)
+			{
+				continue;
+			}
+
+			link_count += 1;
+			CoopBotDiag_Log(1,
+				"map_link from=%d target=\"%s\" to=%d to_class=\"%s\"",
+				entity_number, ent->target, (int)(target - g_edicts),
+				CoopBotDiag_MapField(target->classname));
+		}
+	}
+
+	CoopBotDiag_Log(1, "map_inventory_links map=\"%s\" links=%d",
+		coopbot_diag.map_name[0] != '\0' ? coopbot_diag.map_name : "<none>",
+		link_count);
+}
+
+//===========================================================================
+//
+// Record the post-spawn level model when map diagnostics are enabled.
+//
+//===========================================================================
+void CoopBotDiag_RecordMapEntities(void)
+{
+	if (coopbot_diag.map_dump == NULL || coopbot_diag.map_dump->value == 0.0f)
+	{
+		return;
+	}
+
+	CoopBotDiag_DumpMapEntities();
 }
 
 void CoopBotDiag_RecordMapLoad(const char *mapname,
@@ -626,6 +796,12 @@ int CoopBotDiag_Command(char *cmd, edict_t *ent, int server)
 	if (cmd != NULL && Q_stricmp(cmd, "coopbot_metrics") == 0)
 	{
 		CoopBotDiag_Dump();
+		return true;
+	}
+
+	if (cmd != NULL && Q_stricmp(cmd, "coopbot_map") == 0)
+	{
+		CoopBotDiag_DumpMapEntities();
 		return true;
 	}
 

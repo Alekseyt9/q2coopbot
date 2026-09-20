@@ -851,6 +851,7 @@ void SpawnEntities (char *mapname, char *entities, char *spawnpoint)
 	BotSpawn();
 	//let the libraries load the map
 	BotLib_BotLoadMap(mapname);
+	CoopBotDiag_RecordMapEntities();
 #endif //BOT
 
 #ifdef ZOID
