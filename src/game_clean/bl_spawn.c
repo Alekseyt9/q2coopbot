@@ -355,7 +355,6 @@ void ShowLoadImage(edict_t *ent)
 	if (!ent->client) return;
 	sprintf(loadstring, "xv 104 yv 128 picn loading");
 	SendStatusBar(ent, loadstring);
-	ent->client->showloading = true;
 #endif //TOURNEY
 } //end of the function ShowLoadImage
 //===========================================================================
@@ -371,14 +370,8 @@ void RemoveLoadImage(edict_t *ent)
 {
 #ifndef TOURNEY
 	if (!ent->client) return;
-	//
-	if (!ent->client->showmenu)
-	{
-		//clear the image by drawing the status bar
-		if (deathmatch->value) SendStatusBar(ent, dm_statusbar);
-		else SendStatusBar(ent, single_statusbar);
-	} //end if
-	ent->client->showloading = false;
+	/* Clean Yamagi clients do not carry the legacy menu/loading flags. The
+	 * standard status bar is restored by the normal client frame path. */
 #endif //TOURNEY
 } //end of the function RemoveLoadImage
 //===========================================================================
@@ -637,7 +630,7 @@ Spawns a bot.
 
 void SP_bot(edict_t *self)
 {
-	BotStoreClientCommand("sv", "addbot", st.name, st.skin, st.charfile, st.charname, NULL);
+	BotStoreClientCommand("sv", "addbot", "CoopBot", "male/grunt", "", "", NULL);
 	BotAddDeathmatch(NULL);
 	BotClearCommandArguments();
 } //end of the function SP_bot

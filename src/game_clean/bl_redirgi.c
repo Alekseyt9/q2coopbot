@@ -962,18 +962,18 @@ void BotRedirectGameImport(void)
 	//copy the import structure
 	memcpy(&newgameimport, &gi, sizeof(game_import_t));
 	//replace some of the import functions
-	gi.cprintf = Bot_cprintf;
-	gi.bprintf = Bot_bprintf;
-	gi.centerprintf = Bot_centerprintf;
-	gi.sound = Bot_sound;
+	gi.cprintf = (void (*)(const edict_t *, int, const char *, ...))Bot_cprintf;
+	gi.bprintf = (void (*)(int, const char *, ...))Bot_bprintf;
+	gi.centerprintf = (void (*)(const edict_t *, const char *, ...))Bot_centerprintf;
+	gi.sound = (void (*)(const edict_t *, int, int, float, float, float))Bot_sound;
 
-	gi.modelindex = Bot_modelindex;
-	gi.soundindex = Bot_soundindex;
-	gi.imageindex = Bot_imageindex;
-	gi.setmodel = Bot_setmodel;
+	gi.modelindex = (int (*)(const char *))Bot_modelindex;
+	gi.soundindex = (int (*)(const char *))Bot_soundindex;
+	gi.imageindex = (int (*)(const char *))Bot_imageindex;
+	gi.setmodel = (void (*)(edict_t *, const char *))Bot_setmodel;
 
-	gi.multicast = Bot_multicast;
-	gi.unicast = Bot_unicast;
+	gi.multicast = (void (*)(const vec3_t, multicast_t))Bot_multicast;
+	gi.unicast = (void (*)(const edict_t *, qboolean))Bot_unicast;
 	gi.WriteByte = Bot_WriteByte;
 	gi.WriteShort = Bot_WriteShort;
 	gi.WriteChar = Bot_WriteChar;
@@ -981,9 +981,9 @@ void BotRedirectGameImport(void)
 	gi.WriteShort = Bot_WriteShort;
 	gi.WriteLong = Bot_WriteLong;
 	gi.WriteFloat = Bot_WriteFloat;
-	gi.WriteString = Bot_WriteString;
-	gi.WritePosition = Bot_WritePosition;
-	gi.WriteDir = Bot_WriteDir;
+	gi.WriteString = (void (*)(const char *))Bot_WriteString;
+	gi.WritePosition = (void (*)(const vec3_t))Bot_WritePosition;
+	gi.WriteDir = (void (*)(const vec3_t))Bot_WriteDir;
 	gi.WriteAngle = Bot_WriteAngle;
 
 	gi.argc = Bot_argc;

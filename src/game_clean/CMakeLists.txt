@@ -16,12 +16,10 @@ target_include_directories(game_clean PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/common")
 
-target_compile_definitions(game_clean PRIVATE C_ONLY BOT BOT_IMPORT)
-
-if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(game_clean PRIVATE
-        "-include${CMAKE_CURRENT_SOURCE_DIR}/coopbot_local.h")
-endif()
+target_compile_definitions(game_clean PRIVATE
+    C_ONLY BOT BOT_IMPORT
+    YQ2OSTYPE="Windows"
+    YQ2ARCH="x86")
 
 set_target_properties(game_clean PROPERTIES
     OUTPUT_NAME "gamex86_clean"

@@ -1331,7 +1331,9 @@ void BotSetupBotLibImport(void)
 	gamebotimport.Print = BotLibImport_Print;
 	//to be removed later below this
 	gamebotimport.Trace = BotLibImport_Trace;
-	gamebotimport.PointContents = gi.pointcontents;
+	/* Yamagi declares the engine callback's input const; the 1999 bot ABI
+	 * predates that qualifier, but the calling convention is identical. */
+	gamebotimport.PointContents = (int (*)(vec3_t))gi.pointcontents;
 	gamebotimport.GetMemory = BotLibImport_GetMemory;
 	gamebotimport.FreeMemory = BotLibImport_FreeMemory;
 	//debug lines
