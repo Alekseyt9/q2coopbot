@@ -3739,7 +3739,8 @@ the temporary entity list.
 void AAS_Reachability_Elevator(void)
 {
 	aas_bspentity_t *entities = AAS_LoadBSPEntities();
-	AAS_Reachability_ElevatorEntityList(entities);
+	int created = AAS_Reachability_ElevatorEntityList(entities);
+	BotLib_LogWrite("coopbot_aas_elevators created=%d", created);
 	AAS_FreeBSPEntities(entities);
 }
 

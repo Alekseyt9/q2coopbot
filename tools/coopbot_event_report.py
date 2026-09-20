@@ -66,7 +66,47 @@ def read_botlib_events(stream: TextIO) -> Counter[str]:
     for line in stream:
         for match in BOTLIB_EVENT_RE.finditer(line):
             events[match.group("event")] += 1
+        if "coopbot_regroup" in line and re.search(r"\btraveltype=11\b", line):
+            events["elevator_regroup"] += 1
     return events
+
+
+def read_botlib_map_model(stream: TextIO) -> dict | None:
+    """Extract the optional AAS map-model summary from the botlib log."""
+    model: dict[str, object] | None = None
+    controls: Counter[str] = Counter()
+    area_records = 0
+    edge_records = 0
+    elevator_edges = 0
+
+    for line in stream:
+        if "coopbot_map_model" in line:
+            fields = message_fields(line)
+            model = {
+                "map": fields.get("map", "<unknown>"),
+                "areas": int(number(fields.get("areas")) or 0),
+                "clusters": int(number(fields.get("clusters")) or 0),
+                "reachabilities": int(number(fields.get("reachabilities")) or 0),
+                "elevators": int(number(fields.get("elevators")) or 0),
+            }
+        elif "coopbot_map_area" in line:
+            area_records += 1
+        elif "coopbot_map_edge" in line:
+            fields = message_fields(line)
+            edge_records += 1
+            if fields.get("traveltype") == "11":
+                elevator_edges += 1
+        elif "coopbot_map_control" in line:
+            fields = message_fields(line)
+            controls[fields.get("class", "<unknown>")] += 1
+
+    if model is None:
+        return None
+    model["area_records"] = area_records
+    model["edge_records"] = edge_records
+    model["elevator_edge_records"] = elevator_edges
+    model["controls"] = dict(sorted(controls.items()))
+    return model
 
 
 def telemetry_summary(records: Iterable[dict]) -> dict:
@@ -86,6 +126,7 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
     target_acquired = 0
     target_lost = 0
     regroup_events = 0
+    stuck_events = 0
 
     for record in records:
         fields = message_fields(record.get("message"))
@@ -138,6 +179,9 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
         if event == "regroup":
             regroup_events += 1
 
+        if event == "stuck":
+            stuck_events += 1
+
     return {
         "bot_snapshots": {
             "records": snapshot_count,
@@ -174,6 +218,7 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
             "target_acquired": target_acquired,
             "target_lost": target_lost,
             "regroup": regroup_events,
+            "stuck": stuck_events,
         },
     }
 
@@ -257,11 +302,15 @@ def main() -> int:
         botlib_path = Path(args.botlib_log)
         with botlib_path.open("r", encoding="utf-8", errors="replace") as stream:
             botlib_events = read_botlib_events(stream)
+        with botlib_path.open("r", encoding="utf-8", errors="replace") as stream:
+            botlib_map_model = read_botlib_map_model(stream)
         result_object = json.loads(result)
         result_object["botlib_log"] = {
             "source": str(botlib_path),
             "events": dict(sorted(botlib_events.items())),
         }
+        if botlib_map_model is not None:
+            result_object["botlib_log"]["map_model"] = botlib_map_model
         result = json.dumps(
             result_object,
             ensure_ascii=False,

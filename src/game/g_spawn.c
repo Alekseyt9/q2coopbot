@@ -5,6 +5,7 @@
 #include "bl_spawn.h"
 #include "bl_main.h"
 #include "bl_redirgi.h"
+#include "coopbot_diag.h"
 #endif //BOT
 
 typedef struct

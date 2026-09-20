@@ -143,6 +143,12 @@ struct bot_client_state_s {
     float last_update_time;
     bot_moveresult_t last_move_result;
     bool has_move_result;
+	/* Coop regroup memory keeps the last static player area while riding a mover. */
+	int coop_player_area;
+	vec3_t coop_player_origin;
+	bool coop_player_goal_valid;
+	float coop_elevator_wait_started;
+	int coop_elevator_wait_area;
     float goal_avoid_duration;
     int active_goal_number;
 	float nearby_goal_time;

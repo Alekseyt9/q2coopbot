@@ -921,6 +921,10 @@ int BotInitLibrary(bot_library_t *lib)
 	lib->funcs.BotLibVarSet("coopbot_hard_leash", cvar->string);
 	cvar = gi.cvar("coopbot_new_group_guard", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_new_group_guard", cvar->string);
+	cvar = gi.cvar("coopbot_elevator_wait_timeout", "15", 0);
+	lib->funcs.BotLibVarSet("coopbot_elevator_wait_timeout", cvar->string);
+	cvar = gi.cvar("coopbot_map_model", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_map_model", cvar->string);
 #ifdef ZOID
 	lib->funcs.BotLibVarSet("ctf", ctf->string);
 	if (ctf->value)

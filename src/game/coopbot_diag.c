@@ -26,6 +26,10 @@ typedef struct coopbot_diag_client_s
 	int last_actionflags;
 	int last_target_entity;
 	int last_visible_enemies;
+	vec3_t last_origin;
+	qboolean origin_valid;
+	qboolean stuck_reported;
+	float last_progress_time;
 	clock_t ai_start;
 } coopbot_diag_client_t;
 
@@ -40,6 +44,7 @@ typedef struct coopbot_diag_state_s
 	cvar_t *episode_id_override;
 	cvar_t *seed;
 	cvar_t *leash_enabled;
+	cvar_t *soft_leash;
 	cvar_t *hard_leash;
 	FILE *log_file;
 	FILE *event_file;
@@ -377,6 +382,10 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 	edict_t *player;
 	edict_t *target;
 	float distance_to_player;
+	float soft_leash;
+	float hard_leash;
+	vec3_t origin_delta;
+	float no_progress_time;
 	int target_visible = 0;
 	int visible_enemies;
 	int target_entity;
@@ -389,6 +398,12 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 	}
 
 	player = CoopBotDiag_Player(bot);
+	soft_leash = coopbot_diag.soft_leash != NULL &&
+		coopbot_diag.soft_leash->value > 0.0f
+		? coopbot_diag.soft_leash->value : 384.0f;
+	hard_leash = coopbot_diag.hard_leash != NULL &&
+		coopbot_diag.hard_leash->value > 0.0f
+		? coopbot_diag.hard_leash->value : 768.0f;
 	target = bot->enemy;
 	target_entity = (target != NULL && target->inuse &&
 		target->takedamage && target->health > 0)
@@ -404,28 +419,61 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 		state = "engaged";
 		target_visible = visible(bot, target);
 	}
-	else if (distance_to_player >= 0.0f && distance_to_player > 768.0f)
+	else if (distance_to_player >= 0.0f && distance_to_player > hard_leash)
 	{
 		state = "far_from_player";
 	}
-	else if (distance_to_player >= 0.0f && distance_to_player > 384.0f)
+	else if (distance_to_player >= 0.0f && distance_to_player > soft_leash)
 	{
 		state = "following";
 	}
 
 	client = CoopBotDiag_ClientNumber(bot);
 	visible_enemies = CoopBotDiag_VisibleMonsters(bot);
+	if (client >= 0 && client < COOPBOT_DIAG_MAX_CLIENTS)
+	{
+		coopbot_diag_client_t *client_state = &coopbot_diag.clients[client];
+		if (!client_state->origin_valid)
+		{
+			VectorCopy(bot->s.origin, client_state->last_origin);
+			client_state->origin_valid = true;
+			client_state->last_progress_time = level.time;
+		}
+		else
+		{
+			VectorSubtract(bot->s.origin,
+				client_state->last_origin, origin_delta);
+			VectorCopy(bot->s.origin, client_state->last_origin);
+			if (DotProduct(origin_delta, origin_delta) >= 16.0f)
+			{
+				client_state->last_progress_time = level.time;
+				client_state->stuck_reported = false;
+			}
+		}
+		no_progress_time = level.time - client_state->last_progress_time;
+		if (!client_state->stuck_reported && bot->deadflag == DEAD_NO &&
+			(input->speed > 1.0f || input->actionflags != 0) &&
+			distance_to_player > soft_leash && no_progress_time >= 3.0f &&
+			(strcmp(state, "following") == 0 ||
+				strcmp(state, "far_from_player") == 0))
+		{
+			CoopBotDiag_Log(1,
+				"stuck client=%d distance=%.1f speed=%.1f no_progress=%.1f "
+				"origin=(%.1f %.1f %.1f)",
+				client, distance_to_player, input->speed, no_progress_time,
+				bot->s.origin[0], bot->s.origin[1], bot->s.origin[2]);
+			client_state->stuck_reported = true;
+		}
+	}
 	if (strcmp(state, "far_from_player") == 0 &&
 		coopbot_diag.leash_enabled != NULL &&
 		coopbot_diag.leash_enabled->value != 0.0f &&
-		coopbot_diag.hard_leash != NULL &&
-		coopbot_diag.hard_leash->value > 0.0f &&
-		distance_to_player > coopbot_diag.hard_leash->value &&
+		distance_to_player > hard_leash &&
 		input->speed > 0.0f)
 	{
 		CoopBotDiag_Log(1,
 			"regroup client=%d distance=%.1f hard_leash=%.1f",
-			client, distance_to_player, coopbot_diag.hard_leash->value);
+			client, distance_to_player, hard_leash);
 	}
 	if (client >= 0 && client < COOPBOT_DIAG_MAX_CLIENTS)
 	{
@@ -572,6 +620,10 @@ static void CoopBotDiag_ResetCounters(void)
 		coopbot_diag.clients[index].last_actionflags = 0;
 		coopbot_diag.clients[index].last_target_entity = -1;
 		coopbot_diag.clients[index].last_visible_enemies = 0;
+		VectorClear(coopbot_diag.clients[index].last_origin);
+		coopbot_diag.clients[index].origin_valid = false;
+		coopbot_diag.clients[index].stuck_reported = false;
+		coopbot_diag.clients[index].last_progress_time = 0.0f;
 		coopbot_diag.clients[index].ai_start = zero;
 	}
 }
@@ -590,6 +642,7 @@ void CoopBotDiag_Init(void)
 	coopbot_diag.episode_id_override = gi.cvar("coopbot_episode_id", "", 0);
 	coopbot_diag.seed = gi.cvar("coopbot_seed", "0", 0);
 	coopbot_diag.leash_enabled = gi.cvar("coopbot_leash", "0", 0);
+	coopbot_diag.soft_leash = gi.cvar("coopbot_soft_leash", "384", 0);
 	coopbot_diag.hard_leash = gi.cvar("coopbot_hard_leash", "768", 0);
 	if (coopbot_diag.seed != NULL && coopbot_diag.seed->string != NULL &&
 		coopbot_diag.seed->value > 0.0f)

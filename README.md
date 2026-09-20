@@ -139,6 +139,15 @@ The profile enables:
 - `coopbot_metrics 1` — periodic aggregate reports;
 - `coopbot_metrics_interval 10` — report interval in seconds;
 - `coopbot_slow_ai_ms 100` — warning threshold for a slow bot AI call.
+- `coopbot_leash 1` — enables coop regroup toward the player, including
+  independent elevator traversal;
+- `coopbot_soft_leash 384` and `coopbot_hard_leash 768` — distance thresholds
+  for discouraging new encounters and forcing regroup;
+- `coopbot_elevator_wait_timeout 15` — resets a stuck elevator route after
+  fifteen seconds of waiting.
+- `coopbot_map_model 1` — emits the initialized AAS area/reachability graph,
+  elevator edges, and BSP control entities (`func_plat`, doors, buttons,
+  triggers, and targets) once per map.
 
 Log levels are cumulative: `0` disables CoopBot logs, `1` keeps lifecycle,
 error, and slow-AI messages, `2` adds input and botlib target/node events, and

@@ -290,6 +290,11 @@ static void BotState_FreeResources(bot_client_state_t *state)
 	memset(state->goal_snapshot, 0, sizeof(state->goal_snapshot));
 	memset(&state->last_move_result, 0, sizeof(state->last_move_result));
 	state->has_move_result = false;
+	state->coop_player_area = 0;
+	VectorClear(state->coop_player_origin);
+	state->coop_player_goal_valid = false;
+	state->coop_elevator_wait_started = 0.0f;
+	state->coop_elevator_wait_area = 0;
 	state->goal_avoid_duration = 0.0f;
 	state->active_goal_number = 0;
 	state->nearby_goal_time = 0.0f;
