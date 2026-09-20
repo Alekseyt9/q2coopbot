@@ -15,6 +15,7 @@
 #include "bl_spawn.h"
 #include "bl_redirgi.h"
 #include "bl_botcfg.h"
+#include "coopbot_diag.h"
 
 //#define TOURNEY
 
@@ -343,6 +344,7 @@ void BotLib_BotLoadMap(char *mapname)
 		errno = lib->funcs.BotLoadMap(mapname, MAX_MODELINDEXES, modelindexes,
 												MAX_SOUNDINDEXES, soundindexes,
 												MAX_IMAGEINDEXES, imageindexes);
+		CoopBotDiag_RecordMapLoad(mapname, lib->path, errno);
 		if (errno != BLERR_NOERROR)
 		{
 			int i;
@@ -572,6 +574,7 @@ void BotLib_BotUpdateEntity(edict_t *ent)
 	bot_updateentity_t bue;
 	bot_library_t *lib;
 
+	CoopBotDiag_RecordEntity(ent);
 	VectorCopy(ent->s.origin, bue.origin);
 	VectorCopy(ent->s.angles, bue.angles);
 	VectorCopy(ent->s.old_origin, bue.old_origin);
@@ -659,7 +662,9 @@ void BotLib_BotAI(edict_t *bot, float thinktime)
 
 	lib = GetBotLibrary(bot);
 	if (!lib) return;
-	lib->funcs.BotAI(DF_ENTCLIENT(bot), thinktime);
+	CoopBotDiag_BotAIStart(bot);
+	int status = lib->funcs.BotAI(DF_ENTCLIENT(bot), thinktime);
+	CoopBotDiag_BotAIEnd(bot, status);
 } //end of the function BotLib_BotAI
 //===========================================================================
 //
@@ -729,6 +734,7 @@ void BotLibImport_BotInput(int client, bot_input_t *bi)
 	} //end if
 	memcpy(&botglobals.botinputs[client], bi, sizeof(bot_input_t));
 	botglobals.botnewinput[client] = true;
+	CoopBotDiag_RecordInput(DF_CLIENTENT(client), bi);
 } //end of the function BotLibImport_BotInput
 //===========================================================================
 //
@@ -900,6 +906,10 @@ int BotInitLibrary(bot_library_t *lib)
 	lib->funcs.BotDefine(buf);
 	/* Let the reconstructed botlib switch its enemy scan to monsters in coop. */
 	lib->funcs.BotLibVarSet("coop", coop->string);
+	cvar = gi.cvar("coopbot_log", "1", 0);
+	lib->funcs.BotLibVarSet("coopbot_log", cvar->string);
+	cvar = gi.cvar("coopbot_metrics", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_metrics", cvar->string);
 #ifdef ZOID
 	lib->funcs.BotLibVarSet("ctf", ctf->string);
 	if (ctf->value)

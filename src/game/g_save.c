@@ -3,6 +3,7 @@
 
 #ifdef BOT
 #include "bl_main.h"
+#include "coopbot_diag.h"
 #endif //BOT
 
 #define Function(f) {#f, f}
@@ -319,6 +320,7 @@ void InitGame (void)
 	}
 #endif //ROGUE
 #ifdef BOT
+	CoopBotDiag_Init();
 	BotSetup();
 	CreateBotMenu();
 #endif //BOT

@@ -1,41 +1,41 @@
 # Q2 CoopBot
 
-Экспериментальная версия бота для кооперативного прохождения оригинального
-Quake II под [Yamagi Quake II](https://github.com/yquake2/yquake2).
+An experimental bot for cooperative playthroughs of the original
+Quake II under [Yamagi Quake II](https://github.com/yquake2/yquake2).
 
-Проект основан на исходниках [Q2 Gladiator Bot Botlib Reconstruction](https://github.com/themuffinator/Q2-Gladiator-Bot).
-Сохраняются исходный интерфейс botlib v0.96, формат AAS и большая часть
-оригинального game-модуля Gladiator. В этот репозиторий добавлены изменения для
-первого coop-MVP.
+The project is based on the source code from [Q2 Gladiator Bot Botlib Reconstruction](https://github.com/themuffinator/Q2-Gladiator-Bot).
+It retains the original botlib v0.96 interface, AAS format, and most of the
+original Gladiator game module. This repository adds the changes required for
+the first coop MVP.
 
-## Что добавлено
+## What's Included
 
-- серверная команда **sv coopbot <name> <skin> <charfile> <charname>**;
-- передача значения **coop** в botlib;
-- поиск монстров за пределами клиентских слотов;
-- игроки не рассматриваются как враги в coop;
-- базовая совместимость с обычными Quake II coop-картами;
-- сборка под Windows x86 и x64.
+- the **sv coopbot <name> <skin> <charfile> <charname>** server command;
+- passing the **coop** value to botlib;
+- finding monsters outside the client slots;
+- players are not treated as enemies in coop;
+- basic compatibility with standard Quake II coop maps;
+- Windows x86 and x64 builds.
 
-Это не законченный автономный напарник для всей кампании. Бот умеет
-ориентироваться по AAS, искать и атаковать монстров, но пока не понимает
-полноценно цели уровня: кнопки, двери, лифты, сюжетные триггеры и переходы
-между картами требуют дальнейшей разработки.
+This is not yet a complete autonomous companion for the entire campaign. The
+bot can navigate using AAS and find and attack monsters, but it does not yet
+fully understand level objectives: buttons, doors, elevators, scripted
+triggers, and transitions between maps require further development.
 
-## Требования
+## Requirements
 
-- оригинальные файлы Quake II из легальной установки;
-- Yamagi Quake II для Windows;
-- CMake и Ninja;
-- MinGW-w64 или другой совместимый C-компилятор.
+- original Quake II files from a legitimate installation;
+- Yamagi Quake II for Windows;
+- CMake and Ninja;
+- MinGW-w64 or another compatible C compiler.
 
-Готовый официальный Windows-пакет Yamagi обычно запускается как **i386**, поэтому
-для него используется x86-сборка CoopBot. x64 DLL также собираются этим
-проектом и предназначены для x64-сборки движка.
+The official Yamagi Windows package usually runs as **i386**, so the x86
+CoopBot build should be used with it. This project also builds x64 DLLs for
+x64 engine builds.
 
-## Сборка
+## Building
 
-Примеры для MinGW-w64 из PowerShell:
+MinGW-w64 examples from PowerShell:
 
 ~~~powershell
 cmake -S . -B build-x86 -G Ninja \
@@ -47,10 +47,10 @@ cmake -S . -B build-x86 -G Ninja \
 cmake --build build-x86 --target gladiator game --parallel 4
 ~~~
 
-Для x64 нужно выполнить те же команды с x64-компилятором и каталогом
-build-x64.
+For x64, run the same commands with an x64 compiler and the `build-x64`
+directory.
 
-Результаты:
+Output files:
 
 ~~~text
 build-x86/src/game/gamex86.dll
@@ -60,22 +60,22 @@ build-x64/src/game/gamex86_64.dll
 build-x64/libgladiator_x64.dll
 ~~~
 
-## Установка в Yamagi
+## Installing in Yamagi
 
-Создайте каталог мода:
+Create the mod directory:
 
 ~~~text
 <Quake II>\YamagiQ2\coopbot\
 ~~~
 
-Для текущего 32-битного Windows Yamagi скопируйте:
+For the current 32-bit Windows Yamagi build, copy:
 
 ~~~text
 gamex86.dll       -> coopbot\game.dll
 libgladiator.dll  -> coopbot\gladiator.dll
 ~~~
 
-Также в каталоге мода должны находиться данные Gladiator:
+The mod directory must also contain the Gladiator data:
 
 ~~~text
 coopbot\pak7.pak
@@ -84,69 +84,102 @@ coopbot\Gladiator.gsl
 coopbot\default\
 ~~~
 
-Эти данные берутся из оригинального дистрибутива Gladiator или из сохранённой
-копии в archive/gladiator-bot/. Файлы Quake II pak0.pak, pak1.pak и pak2.pak
-в репозиторий не входят.
+These files come from the original Gladiator distribution or from the archived
+copy in `archive/gladiator-bot/`. The Quake II files `pak0.pak`, `pak1.pak`, and
+`pak2.pak` are not included in this repository.
 
-Если MinGW собрал DLL с динамической зависимостью на libgcc, положите
-libgcc_s_dw2-1.dll рядом с q2ded.exe или quake2.exe.
+If MinGW built a DLL with a dynamic dependency on libgcc, place
+`libgcc_s_dw2-1.dll` next to `q2ded.exe` or `quake2.exe`.
 
-## Запуск coop с ботом
+## Starting Coop with a Bot
 
-Запустите Yamagi с модом:
+Start Yamagi with the mod:
 
 ~~~text
 quake2.exe -portable +set game coopbot
 ~~~
 
-В консоли игры выполните:
+Run the following commands in the game console:
 
 ~~~text
 map base1
 exec coopbot.cfg
 ~~~
 
-Файл coopbot.cfg содержит:
+The `coopbot.cfg` file contains:
 
 ~~~text
 sv coopbot "RangerBot" "male/grunt" "bots/player_c.c" "player"
 ~~~
 
-Для ручного добавления другого бота используйте ту же команду с другим именем,
-skin и character-файлом. На сервере можно проверить результат командой status.
+To add another bot manually, use the same command with a different name, skin,
+and character file. Use the `status` command on the server to verify the result.
 
-## AAS для новых карт
+## Diagnostics and Metrics
 
-Gladiator требует навигационный файл .aas. Для карты, которой нет в готовых
-данных, извлеките её BSP и запустите BSPC:
+The game module contains opt-in diagnostics for collecting data during bot
+testing. Load the ready-made profile from the server console:
+
+~~~text
+exec coopbot_debug.cfg
+~~~
+
+The profile enables:
+
+- `coopbot_log 2` — lifecycle events, map loading, bot input changes, and
+  detailed botlib target/node events;
+- `coopbot_metrics 1` — periodic aggregate reports;
+- `coopbot_metrics_interval 10` — report interval in seconds;
+- `coopbot_slow_ai_ms 100` — warning threshold for a slow bot AI call.
+
+Log levels are cumulative: `0` disables CoopBot logs, `1` keeps lifecycle,
+error, and slow-AI messages, `2` adds input and botlib target/node events, and
+`3` also records every AI call. The `coopbot_metrics` console command prints a
+report immediately.
+
+The engine writes lifecycle and metric messages to `qconsole.log`. The
+timestamped botlib events are written to `botlib.log` when the botlib logger is
+enabled. Useful records include `event=enemy`, `event=node`, and `event=ai`.
+The timing fields use process CPU time (`clock()`), so they are intended for
+relative comparisons between bot versions rather than wall-clock profiling.
+
+For a useful test sample, start one bot on a known map, play until it gets
+stuck or fails to fight, then save both logs together with the map name and
+the exact bot configuration. This makes it possible to correlate navigation,
+target selection, input decisions, and performance regressions.
+
+## AAS for New Maps
+
+Gladiator requires a `.aas` navigation file. For a map that is not included in
+the existing data, extract its BSP and run BSPC:
 
 ~~~text
 bspc.exe -bsp2aas path\to\map.bsp -output path\to\coopbot
 ~~~
 
-Результат должен находиться здесь:
+The result should be located here:
 
 ~~~text
 coopbot\maps\map.aas
 ~~~
 
-Для base1 в рабочей установке уже подготовлен coopbot\maps\base1.aas.
+The working installation already includes `coopbot\maps\base1.aas` for base1.
 
-## Происхождение и благодарности
+## Origins and Acknowledgements
 
-Основная база проекта — [Q2-Gladiator-Bot](https://github.com/themuffinator/Q2-Gladiator-Bot),
-репозиторий реконструкции Gladiator botlib. Исходники game-модуля происходят
-из опубликованного исходного кода Gladiator Bot; реконструированный botlib
-воспроизводит интерфейс и поведение оригинальной библиотеки насколько это
-возможно по доступным материалам.
+The project is primarily based on [Q2-Gladiator-Bot](https://github.com/themuffinator/Q2-Gladiator-Bot),
+a Gladiator botlib reconstruction repository. The game module is derived from
+the published Gladiator Bot source code; the reconstructed botlib reproduces
+the original library's interface and behavior as closely as possible based on
+the available materials.
 
-Отдельная благодарность Mr Elusive / Jan Paul van Waveren за оригинальный
-Gladiator Bot и архитектуру AAS.
+Special thanks to Mr Elusive / Jan Paul van Waveren for the original Gladiator
+Bot and the AAS architecture.
 
-Q2 CoopBot не связан с id Software или Yamagi Software.
+Q2 CoopBot is not affiliated with id Software or Yamagi Software.
 
-## Статус
+## Status
 
-Проект экспериментальный. Рабочая проверка выполнена на Yamagi Q2 8.70a,
-оригинальной карте base1 и 32-битной Windows-сборке. Изменения наследуют
-ограничения и предупреждения исходного проекта Gladiator.
+This is an experimental project. It has been tested with Yamagi Q2 8.70a, the
+original base1 map, and a 32-bit Windows build. The changes inherit the
+limitations and warnings of the original Gladiator project.

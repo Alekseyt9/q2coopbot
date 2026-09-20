@@ -15,6 +15,7 @@
 #include "bl_spawn.h"
 #include "bl_redirgi.h"
 #include "bl_botcfg.h"
+#include "coopbot_diag.h"
 
 void ClientUserinfoChanged (edict_t *ent, char *userinfo);
 
@@ -283,6 +284,11 @@ qboolean BotDebugCmd(char *cmd, edict_t *ent, int server)
 //===========================================================================
 qboolean BotServerCmd(char *cmd, edict_t *ent, int server)
 {
+	if (CoopBotDiag_Command(cmd, ent, server))
+	{
+		return true;
+	}
+
 	if (Q_stricmp(cmd, "addbot") == 0)
 	{
 		if (ent && (gi.cvar("serveronlybotcmds", "0", 0))->value)

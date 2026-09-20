@@ -14,6 +14,7 @@
 #include "bl_main.h"
 #include "bl_redirgi.h"
 #include "bl_botcfg.h"
+#include "coopbot_diag.h"
 
 /* PORT(arch): default botlib filename, per platform AND word size.
 
@@ -136,6 +137,7 @@ void BotBecome(edict_t *ent, bot_library_t *lib)
 	botglobals.numbots++;
 	//setup the bot client in the library
 	BotLib_BotSetupClient(ent, ent->client->pers.userinfo);
+	CoopBotDiag_RecordBotSpawn(ent);
 } //end of the function BotBecome
 //===========================================================================
 // destroy the given bot
@@ -151,6 +153,7 @@ void BotDestroy(edict_t *bot)
 
 	if (!(bot->flags & FL_BOT)) return;
 	if (!bot->client) return;
+	CoopBotDiag_RecordBotRemove(bot);
 	//shutdown the bot client in the library
 	BotLib_BotShutdownClient(bot);
 	//remove bot flag before disconnecting to prevent printing messages to
@@ -250,6 +253,7 @@ edict_t *BotCreate(char *userinfo, bot_library_t *lib)
 #endif //ROCKETARENA
 	//one extra bot
 	botglobals.numbots++;
+	CoopBotDiag_RecordBotSpawn(ent);
 	//
 	return ent;
 } //end of the function CreateBot

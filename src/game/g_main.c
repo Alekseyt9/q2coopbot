@@ -8,6 +8,7 @@
 #ifdef BOT
 #include "bl_main.h"
 #include "bl_spawn.h"
+#include "coopbot_diag.h"
 #endif //BOT
 
 game_locals_t	game;
@@ -146,6 +147,7 @@ void G_RunFrame (void);
 void ShutdownGame (void)
 {
 #ifdef BOT
+	CoopBotDiag_Shutdown();
 	BotUnloadAllLibraries();
 #endif
 #ifdef LOGFILE
@@ -504,6 +506,10 @@ void G_RunFrame (void)
 	level.framenum++;
 	level.time = level.framenum*FRAMETIME;
 
+#ifdef BOT
+	CoopBotDiag_FrameBegin();
+#endif
+
 	// choose a client for monsters to target this frame
 	AI_SetSightClient ();
 
@@ -597,6 +603,7 @@ void G_RunFrame (void)
 	} //end for
 	//check if a minimum number of players should be in the game
 	CheckMinimumPlayers();
+	CoopBotDiag_FrameEnd();
 #endif //BOT
 
 	// see if it is time to end a deathmatch

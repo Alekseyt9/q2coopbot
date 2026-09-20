@@ -552,6 +552,14 @@ static int BotAI_AcceptEnemy(bot_client_state_t *state,
 
 	state->combat.current_enemy = entity_info->number;
 	state->combat.enemy_sight_time = now;
+	if (LibVarGetValue("coopbot_log") >= 2.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"event=enemy client=%d name=\"%s\" entity=%d distance=%.1f fov=%.1f damaged=%d",
+			state->client_number,
+			BotState_ClientName(state->client_number),
+			entity_info->number, distance, field_of_view, health_decrease);
+	}
 	return qtrue;
 }
 
@@ -6833,6 +6841,16 @@ static void BotAI_EnterNode(bot_client_state_t *state, int node)
 		}
 	}
 
+	if (LibVarGetValue("coopbot_log") >= 2.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"event=node client=%d name=\"%s\" node=\"%s\" goal=\"%s\" enemy=%d",
+			state->client_number,
+			BotState_ClientName(state->client_number),
+			BotAI_NodeSwitchName(node), detail,
+			state->combat.current_enemy);
+	}
+
 	snprintf(g_bot_node_switches[g_bot_node_switch_count],
 		sizeof(g_bot_node_switches[0]),
 		"%s at %2.1f entered %s: %s\n",
@@ -9508,6 +9526,13 @@ static int BotAI(int client, float thinktime)
 
 	int status = BotAI_Think(state, thinktime);
 	BotUpdateEntityItemsThrottled(g_botInterfaceFrameTime);
+	if (LibVarGetValue("coopbot_log") >= 3.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"event=ai client=%d name=\"%s\" status=%d node=%d enemy=%d",
+			client, BotState_ClientName(client), status,
+			state->ai_node, state->combat.current_enemy);
+	}
 	return status;
 }
 
