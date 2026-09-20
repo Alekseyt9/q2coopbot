@@ -1629,6 +1629,20 @@ PutClientInServer(edict_t *ent)
 	VectorCopy(maxs, ent->maxs);
 	VectorClear(ent->velocity);
 
+	/* Fake clients enter through the bot path and can reach this function
+	 * without the normal network client's persistent weapon setup.  The
+	 * standard player path already has a Blaster here, but a freshly spawned
+	 * bot may still carry a NULL weapon pointer. */
+	if (client->pers.weapon == NULL)
+	{
+		client->pers.weapon = FindItem("Blaster");
+		if (client->pers.weapon != NULL)
+		{
+			client->pers.selected_item = ITEM_INDEX(client->pers.weapon);
+			client->pers.inventory[client->pers.selected_item] = 1;
+		}
+	}
+
 	/* clear playerstate values */
 	memset(&ent->client->ps, 0, sizeof(client->ps));
 
@@ -1654,7 +1668,8 @@ PutClientInServer(edict_t *ent)
 		}
 	}
 
-	client->ps.gunindex = gi.modelindex(client->pers.weapon->view_model);
+	client->ps.gunindex = client->pers.weapon != NULL
+		? gi.modelindex(client->pers.weapon->view_model) : 0;
 
 	/* clear entity state values */
 	ent->s.effects = 0;

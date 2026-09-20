@@ -396,6 +396,8 @@ InitGame(void)
 	/* initialize entities and clients arrays */
 	InitAllocations();
 
+	/* Start file diagnostics before the bot bridge can emit spawn/AI events. */
+	CoopBotDiag_Init();
 	BotSetup();
 }
 

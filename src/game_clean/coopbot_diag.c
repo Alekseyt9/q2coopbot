@@ -188,7 +188,7 @@ void CoopBotDiag_Init(void)
 
 	memset(&coopbot_diag, 0, sizeof(coopbot_diag));
 	coopbot_diag.log_level = gi.cvar("coopbot_log", "1", 0);
-	coopbot_diag.metrics_enabled = gi.cvar("coopbot_metrics", "0", 0);
+	coopbot_diag.metrics_enabled = gi.cvar("coopbot_metrics", "1", 0);
 	coopbot_diag.metrics_interval = gi.cvar("coopbot_metrics_interval", "10", 0);
 	coopbot_diag.slow_ai_ms = gi.cvar("coopbot_slow_ai_ms", "100", 0);
 	game_dir = gi.cvar("game", "", 0);

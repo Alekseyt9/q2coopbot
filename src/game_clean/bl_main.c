@@ -850,14 +850,26 @@ bsp_trace_t BotLibImport_Trace(vec3_t start, vec3_t mins, vec3_t maxs, vec3_t en
 	p = DF_NUMBERENT(passent);
 	//
 	trace = gi.trace(start, mins, maxs, end, p, contentmask);
-	memcpy(bsptrace.surface.name, trace.surface->name, 16);
-	bsptrace.surface.flags = trace.surface->flags;
-	bsptrace.surface.value = trace.surface->value;
+	/*
+	 * Yamagi may return a trace without a surface when the trace ends in
+	 * empty space or starts inside a volume.  The original Gladiator bridge
+	 * assumed this pointer was always present, which turns a normal botlib
+	 * map-load trace into an access violation.  Keep the botlib contract
+	 * deterministic and return an empty surface in that case.
+	 */
+	memset(&bsptrace.surface, 0, sizeof(bsptrace.surface));
+	if (trace.surface != NULL)
+	{
+		memcpy(bsptrace.surface.name, trace.surface->name,
+			sizeof(bsptrace.surface.name));
+		bsptrace.surface.flags = trace.surface->flags;
+		bsptrace.surface.value = trace.surface->value;
+	}
 	bsptrace.allsolid = trace.allsolid;
 	bsptrace.startsolid = trace.startsolid;
 	bsptrace.fraction = trace.fraction;
 	VectorCopy(trace.endpos, bsptrace.endpos);
-	bsptrace.ent = DF_ENTNUMBER(trace.ent);
+	bsptrace.ent = trace.ent != NULL ? DF_ENTNUMBER(trace.ent) : -1;
 	bsptrace.contents = trace.contents;
 	memcpy(&bsptrace.plane, &trace.plane, sizeof(cplane_t));
 #ifdef __LCC__ //Riv++ Prevent dll from crashing, heh... Some issues remain though
