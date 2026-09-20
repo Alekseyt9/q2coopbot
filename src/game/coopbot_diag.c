@@ -438,6 +438,7 @@ static void CoopBotDiag_DumpMapEntities(void)
 	int mover_count = 0;
 	int target_count = 0;
 	int link_count = 0;
+	int unresolved_link_count = 0;
 	int entity_number;
 
 	for (entity_number = 0; entity_number < globals.num_edicts; ++entity_number)
@@ -468,6 +469,7 @@ static void CoopBotDiag_DumpMapEntities(void)
 		edict_t *ent = &g_edicts[entity_number];
 		const char *kind;
 		edict_t *target;
+		int matched_target = 0;
 
 		if (!ent->inuse)
 		{
@@ -478,15 +480,18 @@ static void CoopBotDiag_DumpMapEntities(void)
 		CoopBotDiag_Log(1,
 			"map_entity ent=%d kind=%s class=\"%s\" model=\"%s\" "
 			"origin=(%.1f %.1f %.1f) mins=(%.1f %.1f %.1f) maxs=(%.1f %.1f %.1f) "
-			"solid=%d movetype=%d spawnflags=0x%x health=%d target=\"%s\" "
-			"targetname=\"%s\" killtarget=\"%s\" map=\"%s\"",
+		"solid=%d movetype=%d spawnflags=0x%x health=%d target=\"%s\" "
+			"targetname=\"%s\" killtarget=\"%s\" map=\"%s\" "
+			"move_state=%d target_ent=%d has_use=%d has_touch=%d",
 			entity_number, kind, CoopBotDiag_MapField(ent->classname),
 			CoopBotDiag_MapField(ent->model), ent->s.origin[0], ent->s.origin[1],
 			ent->s.origin[2], ent->mins[0], ent->mins[1], ent->mins[2],
 			ent->maxs[0], ent->maxs[1], ent->maxs[2], ent->solid, ent->movetype,
 			ent->spawnflags, ent->health, CoopBotDiag_MapField(ent->target),
 			CoopBotDiag_MapField(ent->targetname),
-			CoopBotDiag_MapField(ent->killtarget), CoopBotDiag_MapField(ent->map));
+			CoopBotDiag_MapField(ent->killtarget), CoopBotDiag_MapField(ent->map),
+			ent->moveinfo.state, CoopBotDiag_EntityNumber(ent->target_ent),
+			ent->use != NULL, ent->touch != NULL);
 
 		if (ent->target == NULL || ent->target[0] == '\0')
 		{
@@ -503,16 +508,26 @@ static void CoopBotDiag_DumpMapEntities(void)
 			}
 
 			link_count += 1;
+			matched_target = 1;
 			CoopBotDiag_Log(1,
 				"map_link from=%d target=\"%s\" to=%d to_class=\"%s\"",
 				entity_number, ent->target, (int)(target - g_edicts),
 				CoopBotDiag_MapField(target->classname));
 		}
+
+		if (!matched_target)
+		{
+			unresolved_link_count += 1;
+			CoopBotDiag_Log(1,
+				"map_link from=%d target=\"%s\" to=-1 to_class=\"<unresolved>\"",
+				entity_number, ent->target);
+		}
 	}
 
-	CoopBotDiag_Log(1, "map_inventory_links map=\"%s\" links=%d",
+	CoopBotDiag_Log(1,
+		"map_inventory_links map=\"%s\" links=%d unresolved=%d",
 		coopbot_diag.map_name[0] != '\0' ? coopbot_diag.map_name : "<none>",
-		link_count);
+		link_count, unresolved_link_count);
 }
 
 //===========================================================================
@@ -520,8 +535,15 @@ static void CoopBotDiag_DumpMapEntities(void)
 // Record the post-spawn level model when map diagnostics are enabled.
 //
 //===========================================================================
-void CoopBotDiag_RecordMapEntities(void)
+void CoopBotDiag_RecordMapEntities(const char *mapname)
 {
+	if (mapname != NULL && mapname[0] != '\0')
+	{
+		strncpy(coopbot_diag.map_name, mapname,
+			sizeof(coopbot_diag.map_name) - 1);
+		coopbot_diag.map_name[sizeof(coopbot_diag.map_name) - 1] = '\0';
+	}
+
 	if (coopbot_diag.map_dump == NULL || coopbot_diag.map_dump->value == 0.0f)
 	{
 		return;
