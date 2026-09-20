@@ -2,6 +2,10 @@
 
 #include "g_local.h"
 
+#ifdef BOT
+#include "coopbot_diag.h"
+#endif // BOT
+
 #ifdef ROGUE
 void M_SetEffects (edict_t *self);
 
@@ -540,6 +544,7 @@ qboolean CheckTeamDamage (edict_t *targ, edict_t *attacker)
 
 void T_Damage (edict_t *targ, edict_t *inflictor, edict_t *attacker, vec3_t dir, vec3_t point, vec3_t normal, int damage, int knockback, int dflags, int mod)
 {
+	int health_before;
 	gclient_t	*client;
 	int			take;
 	int			save;
@@ -549,6 +554,12 @@ void T_Damage (edict_t *targ, edict_t *inflictor, edict_t *attacker, vec3_t dir,
 #ifdef ROGUE
 	int			sphere_notified;	// PGM
 #endif //ROGUE
+
+	health_before = targ->health;
+#ifdef BOT
+	CoopBotDiag_RecordDamageAttempt(targ, inflictor, attacker, damage,
+		dflags, mod);
+#endif // BOT
 
 	if (!targ->takedamage)
 		return;
@@ -794,6 +805,11 @@ void T_Damage (edict_t *targ, edict_t *inflictor, edict_t *attacker, vec3_t dir,
 #endif //ROGUE
 
 		targ->health = targ->health - take;
+
+#ifdef BOT
+		CoopBotDiag_RecordDamageApplied(targ, attacker, damage, take,
+			health_before, mod);
+#endif // BOT
 
 #ifdef ROGUE
 //PGM - spheres need to know who to shoot at

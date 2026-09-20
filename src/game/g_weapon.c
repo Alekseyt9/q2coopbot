@@ -1,5 +1,9 @@
 #include "g_local.h"
 
+#ifdef BOT
+#include "coopbot_diag.h"
+#endif // BOT
+
 
 /*
 =================
@@ -145,6 +149,10 @@ static void fire_lead (edict_t *self, vec3_t start, vec3_t aimdir, int damage, i
 		}
 
 		tr = gi.trace (start, NULL, NULL, end, self, content_mask);
+
+#ifdef BOT
+		CoopBotDiag_RecordShot("lead", self, &tr, damage, mod);
+#endif // BOT
 
 		// see if we hit water
 		if (tr.contents & MASK_WATER)
@@ -292,6 +300,15 @@ void blaster_touch (edict_t *self, edict_t *other, cplane_t *plane, csurface_t *
 	if (other == self->owner)
 		return;
 
+	if (self->spawnflags & 1)
+		mod = MOD_HYPERBLASTER;
+	else
+		mod = MOD_BLASTER;
+
+#ifdef BOT
+	CoopBotDiag_RecordProjectileTouch(self, other, self->dmg, mod);
+#endif // BOT
+
 	if (surf && (surf->flags & SURF_SKY))
 	{
 		G_FreeEdict (self);
@@ -303,10 +320,6 @@ void blaster_touch (edict_t *self, edict_t *other, cplane_t *plane, csurface_t *
 
 	if (other->takedamage)
 	{
-		if (self->spawnflags & 1)
-			mod = MOD_HYPERBLASTER;
-		else
-			mod = MOD_BLASTER;
 		T_Damage (other, self, self->owner, self->velocity, self->s.origin, plane->normal, self->dmg, 1, DAMAGE_ENERGY, mod);
 	}
 	else
@@ -366,10 +379,20 @@ void fire_blaster (edict_t *self, vec3_t start, vec3_t dir, int damage, int spee
 		bolt->spawnflags = 1;
 	gi.linkentity (bolt);
 
+#ifdef BOT
+	CoopBotDiag_RecordProjectileLaunch(bolt, self, damage,
+		vhyper ? MOD_HYPERBLASTER : MOD_BLASTER);
+#endif // BOT
+
 	if (self->client)
 		check_dodge (self, bolt->s.origin, dir, speed);
 
 	tr = gi.trace (self->s.origin, NULL, NULL, bolt->s.origin, bolt, MASK_SHOT);
+
+#ifdef BOT
+	CoopBotDiag_RecordShot("blaster_initial", self, &tr, damage,
+		vhyper ? MOD_HYPERBLASTER : MOD_BLASTER);
+#endif // BOT
 	if (tr.fraction < 1.0)
 	{
 		VectorMA (bolt->s.origin, -10, dir, bolt->s.origin);

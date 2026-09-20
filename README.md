@@ -126,8 +126,9 @@ exec coopbot_debug.cfg
 
 The profile enables:
 
-- `coopbot_log 2` — lifecycle events, map loading, bot input changes, and
-  detailed botlib target/node events;
+- `coopbot_log 2` — lifecycle events, map loading, bot input changes, weapon
+  trace results, damage attempts, applied damage, and detailed botlib
+  target/node events;
 - `coopbot_metrics 1` — periodic aggregate reports;
 - `coopbot_metrics_interval 10` — report interval in seconds;
 - `coopbot_slow_ai_ms 100` — warning threshold for a slow bot AI call.
@@ -137,9 +138,11 @@ error, and slow-AI messages, `2` adds input and botlib target/node events, and
 `3` also records every AI call. The `coopbot_metrics` console command prints a
 report immediately.
 
-The engine writes lifecycle and metric messages to `qconsole.log`. The
+CoopBot diagnostics are written to `coopbot_debug.log` inside the active mod
+directory, so shot and damage traces do not fill the game console. The
 timestamped botlib events are written to `botlib.log` when the botlib logger is
-enabled. Useful records include `event=enemy`, `event=node`, and `event=ai`.
+enabled. Useful records include `shot`, `damage_attempt`, `damage_applied`,
+`event=enemy`, `event=node`, and `event=ai`.
 The timing fields use process CPU time (`clock()`), so they are intended for
 relative comparisons between bot versions rather than wall-clock profiling.
 

@@ -14,6 +14,31 @@ void CoopBotDiag_RecordMapLoad(const char *mapname,
 	int status);
 void CoopBotDiag_RecordBotSpawn(edict_t *bot);
 void CoopBotDiag_RecordBotRemove(edict_t *bot);
+void CoopBotDiag_RecordShot(const char *kind,
+	edict_t *attacker,
+	const trace_t *trace,
+	int damage,
+	int mod);
+void CoopBotDiag_RecordProjectileLaunch(edict_t *projectile,
+	edict_t *owner,
+	int damage,
+	int mod);
+void CoopBotDiag_RecordProjectileTouch(edict_t *projectile,
+	edict_t *other,
+	int damage,
+	int mod);
+void CoopBotDiag_RecordDamageAttempt(edict_t *targ,
+	edict_t *inflictor,
+	edict_t *attacker,
+	int damage,
+	int dflags,
+	int mod);
+void CoopBotDiag_RecordDamageApplied(edict_t *targ,
+	edict_t *attacker,
+	int requested,
+	int applied,
+	int health_before,
+	int mod);
 int CoopBotDiag_Command(char *cmd, edict_t *ent, int server);
 
 #endif

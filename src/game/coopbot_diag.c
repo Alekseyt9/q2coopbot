@@ -31,6 +31,8 @@ typedef struct coopbot_diag_state_s
 	cvar_t *metrics_enabled;
 	cvar_t *metrics_interval;
 	cvar_t *slow_ai_ms;
+	FILE *log_file;
+	char log_path[256];
 	unsigned long long frames;
 	unsigned long long ai_calls;
 	unsigned long long ai_errors;
@@ -85,6 +87,18 @@ static unsigned long CoopBotDiag_ClockMilliseconds(clock_t ticks)
 	return (unsigned long)((1000.0 * (double)ticks) / CLOCKS_PER_SEC);
 }
 
+static void CoopBotDiag_WriteLine(const char *line)
+{
+	if (coopbot_diag.log_file == NULL || line == NULL)
+	{
+		return;
+	}
+
+	fprintf(coopbot_diag.log_file, "[coopbot] time=%.3f %s\n",
+		level.time, line);
+	fflush(coopbot_diag.log_file);
+}
+
 static void CoopBotDiag_Log(int level, const char *fmt, ...)
 {
 	if (CoopBotDiag_LogLevel() < level || fmt == NULL)
@@ -98,7 +112,7 @@ static void CoopBotDiag_Log(int level, const char *fmt, ...)
 	vsnprintf(message, sizeof(message), fmt, args);
 	va_end(args);
 	message[sizeof(message) - 1] = '\0';
-	gi.dprintf("[coopbot] %s\n", message);
+	CoopBotDiag_WriteLine(message);
 }
 
 static const char *CoopBotDiag_Name(const edict_t *bot)
@@ -110,6 +124,26 @@ static const char *CoopBotDiag_Name(const edict_t *bot)
 	}
 
 	return "<unnamed>";
+}
+
+static int CoopBotDiag_EntityNumber(const edict_t *ent)
+{
+	if (ent == NULL || g_edicts == NULL)
+	{
+		return -1;
+	}
+
+	return (int)(ent - g_edicts);
+}
+
+static const char *CoopBotDiag_Classname(const edict_t *ent)
+{
+	if (ent != NULL && ent->classname != NULL && ent->classname[0] != '\0')
+	{
+		return ent->classname;
+	}
+
+	return "<none>";
 }
 
 static void CoopBotDiag_ResetCounters(void)
@@ -150,14 +184,29 @@ static void CoopBotDiag_ResetCounters(void)
 
 void CoopBotDiag_Init(void)
 {
+	cvar_t *game_dir;
+
 	memset(&coopbot_diag, 0, sizeof(coopbot_diag));
 	coopbot_diag.log_level = gi.cvar("coopbot_log", "1", 0);
 	coopbot_diag.metrics_enabled = gi.cvar("coopbot_metrics", "0", 0);
 	coopbot_diag.metrics_interval = gi.cvar("coopbot_metrics_interval", "10", 0);
 	coopbot_diag.slow_ai_ms = gi.cvar("coopbot_slow_ai_ms", "100", 0);
+	game_dir = gi.cvar("game", "", 0);
+	if (game_dir != NULL && game_dir->string != NULL && game_dir->string[0] != '\0')
+	{
+		snprintf(coopbot_diag.log_path, sizeof(coopbot_diag.log_path),
+			"%s/coopbot_debug.log", game_dir->string);
+	}
+	else
+	{
+		snprintf(coopbot_diag.log_path, sizeof(coopbot_diag.log_path),
+			"coopbot_debug.log");
+	}
+	coopbot_diag.log_file = fopen(coopbot_diag.log_path, "a");
 	CoopBotDiag_ResetCounters();
 	CoopBotDiag_Log(1,
-		"diagnostics initialized log=%d metrics=%d interval=%.1f slow_ai_ms=%.1f",
+		"diagnostics initialized file=\"%s\" log=%d metrics=%d interval=%.1f slow_ai_ms=%.1f",
+		coopbot_diag.log_path,
 		CoopBotDiag_LogLevel(),
 		(int)coopbot_diag.metrics_enabled->value,
 		coopbot_diag.metrics_interval->value,
@@ -167,6 +216,11 @@ void CoopBotDiag_Init(void)
 void CoopBotDiag_Shutdown(void)
 {
 	CoopBotDiag_Log(1, "diagnostics shutdown");
+	if (coopbot_diag.log_file != NULL)
+	{
+		fclose(coopbot_diag.log_file);
+		coopbot_diag.log_file = NULL;
+	}
 }
 
 void CoopBotDiag_FrameBegin(void)
@@ -357,6 +411,149 @@ void CoopBotDiag_RecordBotRemove(edict_t *bot)
 	}
 }
 
+void CoopBotDiag_RecordShot(const char *kind,
+	edict_t *attacker,
+	const trace_t *trace,
+	int damage,
+	int mod)
+{
+	edict_t *target;
+
+	if (CoopBotDiag_LogLevel() < 2 || trace == NULL)
+	{
+		return;
+	}
+
+	target = trace->ent;
+	CoopBotDiag_Log(2,
+		"shot kind=%s attacker=%d attacker_class=\"%s\" damage=%d mod=%d "
+		"fraction=%.5f target=%d target_class=\"%s\" inuse=%d solid=%d "
+		"takedamage=%d svflags=0x%x health=%d max_health=%d origin=(%.1f %.1f %.1f)",
+		kind != NULL ? kind : "<unknown>",
+		CoopBotDiag_EntityNumber(attacker), CoopBotDiag_Classname(attacker),
+		damage, mod, trace->fraction, CoopBotDiag_EntityNumber(target),
+		CoopBotDiag_Classname(target), target != NULL ? target->inuse : 0,
+		target != NULL ? target->solid : 0,
+		target != NULL ? target->takedamage : 0,
+		target != NULL ? target->svflags : 0,
+		target != NULL ? target->health : 0,
+		target != NULL ? target->max_health : 0,
+		target != NULL ? target->s.origin[0] : 0.0f,
+		target != NULL ? target->s.origin[1] : 0.0f,
+		target != NULL ? target->s.origin[2] : 0.0f);
+}
+
+void CoopBotDiag_RecordProjectileLaunch(edict_t *projectile,
+	edict_t *owner,
+	int damage,
+	int mod)
+{
+	if (CoopBotDiag_LogLevel() < 2 || projectile == NULL)
+	{
+		return;
+	}
+
+	CoopBotDiag_Log(2,
+		"projectile_launch projectile=%d owner=%d damage=%d mod=%d "
+		"origin=(%.1f %.1f %.1f) velocity=(%.1f %.1f %.1f) "
+		"clipmask=0x%x solid=%d mins=(%.1f %.1f %.1f) maxs=(%.1f %.1f %.1f)",
+		CoopBotDiag_EntityNumber(projectile), CoopBotDiag_EntityNumber(owner),
+		damage, mod,
+		projectile->s.origin[0], projectile->s.origin[1], projectile->s.origin[2],
+		projectile->velocity[0], projectile->velocity[1], projectile->velocity[2],
+		projectile->clipmask, projectile->solid,
+		projectile->mins[0], projectile->mins[1], projectile->mins[2],
+		projectile->maxs[0], projectile->maxs[1], projectile->maxs[2]);
+}
+
+void CoopBotDiag_RecordProjectileTouch(edict_t *projectile,
+	edict_t *other,
+	int damage,
+	int mod)
+{
+	if (CoopBotDiag_LogLevel() < 2 || projectile == NULL)
+	{
+		return;
+	}
+
+	CoopBotDiag_Log(2,
+		"projectile_touch projectile=%d owner=%d target=%d class=\"%s\" "
+		"damage=%d mod=%d origin=(%.1f %.1f %.1f) target_origin=(%.1f %.1f %.1f) "
+		"target_mins=(%.1f %.1f %.1f) target_maxs=(%.1f %.1f %.1f) "
+		"target_absmin=(%.1f %.1f %.1f) target_absmax=(%.1f %.1f %.1f) "
+		"inuse=%d takedamage=%d solid=%d svflags=0x%x",
+		CoopBotDiag_EntityNumber(projectile),
+		CoopBotDiag_EntityNumber(projectile->owner),
+		CoopBotDiag_EntityNumber(other), CoopBotDiag_Classname(other),
+		damage, mod,
+		projectile->s.origin[0], projectile->s.origin[1], projectile->s.origin[2],
+		other != NULL ? other->s.origin[0] : 0.0f,
+		other != NULL ? other->s.origin[1] : 0.0f,
+		other != NULL ? other->s.origin[2] : 0.0f,
+		other != NULL ? other->mins[0] : 0.0f,
+		other != NULL ? other->mins[1] : 0.0f,
+		other != NULL ? other->mins[2] : 0.0f,
+		other != NULL ? other->maxs[0] : 0.0f,
+		other != NULL ? other->maxs[1] : 0.0f,
+		other != NULL ? other->maxs[2] : 0.0f,
+		other != NULL ? other->absmin[0] : 0.0f,
+		other != NULL ? other->absmin[1] : 0.0f,
+		other != NULL ? other->absmin[2] : 0.0f,
+		other != NULL ? other->absmax[0] : 0.0f,
+		other != NULL ? other->absmax[1] : 0.0f,
+		other != NULL ? other->absmax[2] : 0.0f,
+		other != NULL ? other->inuse : 0,
+		other != NULL ? other->takedamage : 0,
+		other != NULL ? other->solid : 0,
+		other != NULL ? other->svflags : 0);
+}
+
+void CoopBotDiag_RecordDamageAttempt(edict_t *targ,
+	edict_t *inflictor,
+	edict_t *attacker,
+	int damage,
+	int dflags,
+	int mod)
+{
+	if (CoopBotDiag_LogLevel() < 2)
+	{
+		return;
+	}
+
+	CoopBotDiag_Log(2,
+		"damage_attempt target=%d class=\"%s\" inflictor=%d attacker=%d "
+		"requested=%d dflags=0x%x mod=%d takedamage=%d health=%d deadflag=%d "
+		"solid=%d svflags=0x%x",
+		CoopBotDiag_EntityNumber(targ), CoopBotDiag_Classname(targ),
+		CoopBotDiag_EntityNumber(inflictor), CoopBotDiag_EntityNumber(attacker),
+		damage, dflags, mod, targ != NULL ? targ->takedamage : 0,
+		targ != NULL ? targ->health : 0, targ != NULL ? targ->deadflag : 0,
+		targ != NULL ? targ->solid : 0, targ != NULL ? targ->svflags : 0);
+}
+
+void CoopBotDiag_RecordDamageApplied(edict_t *targ,
+	edict_t *attacker,
+	int requested,
+	int applied,
+	int health_before,
+	int mod)
+{
+	if (CoopBotDiag_LogLevel() < 2)
+	{
+		return;
+	}
+
+	CoopBotDiag_Log(2,
+		"damage_applied target=%d class=\"%s\" attacker=%d requested=%d "
+		"applied=%d health=%d->%d mod=%d deadflag=%d solid=%d takedamage=%d",
+		CoopBotDiag_EntityNumber(targ), CoopBotDiag_Classname(targ),
+		CoopBotDiag_EntityNumber(attacker), requested, applied, health_before,
+		targ != NULL ? targ->health : 0, mod,
+		targ != NULL ? targ->deadflag : 0,
+		targ != NULL ? targ->solid : 0,
+		targ != NULL ? targ->takedamage : 0);
+}
+
 static void CoopBotDiag_Dump(void)
 {
 	unsigned long total_ms = CoopBotDiag_ClockMilliseconds(
@@ -379,8 +576,10 @@ static void CoopBotDiag_Dump(void)
 	}
 
 	coopbot_diag.reports += 1;
-	gi.dprintf(
-		"[coopbot metrics] report=%llu map=\"%s\" time=%.1f frames=%llu bots=%d "
+	{
+		char line[2048];
+		snprintf(line, sizeof(line),
+			"metrics report=%llu map=\"%s\" time=%.1f frames=%llu bots=%d "
 		"ai_calls=%llu ai_errors=%llu ai_avg_ms=%.3f ai_max_ms=%lu "
 		"inputs=%llu attack=%llu use=%llu jump=%llu crouch=%llu "
 		"entity_updates=%llu monster_updates=%llu map_loads=%llu map_errors=%llu\n",
@@ -393,6 +592,9 @@ static void CoopBotDiag_Dump(void)
 		coopbot_diag.crouch_actions, coopbot_diag.entity_updates,
 		coopbot_diag.monster_updates, coopbot_diag.map_loads,
 		coopbot_diag.map_load_errors);
+		line[sizeof(line) - 1] = '\0';
+		CoopBotDiag_WriteLine(line);
+	}
 
 	for (client = 0; client < game.maxclients; ++client)
 	{
@@ -402,12 +604,17 @@ static void CoopBotDiag_Dump(void)
 			continue;
 		}
 
-		gi.dprintf(
-			"[coopbot metrics bot] client=%d name=\"%s\" ai=%llu errors=%llu "
+		{
+			char line[1024];
+			snprintf(line, sizeof(line),
+				"metrics bot client=%d name=\"%s\" ai=%llu errors=%llu "
 			"inputs=%llu attack=%llu use=%llu jump=%llu crouch=%llu\n",
 			client, stats->name, stats->ai_calls, stats->ai_errors,
 			stats->input_calls, stats->attack_actions, stats->use_actions,
 			stats->jump_actions, stats->crouch_actions);
+			line[sizeof(line) - 1] = '\0';
+			CoopBotDiag_WriteLine(line);
+		}
 	}
 }
 
