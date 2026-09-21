@@ -9,6 +9,8 @@
 extern "C" {
 #endif
 
+aas_bspentity_t *BotInterface_CoopMapEntities(void);
+
 /* Map-only helpers used by the cooperative objective layer. */
 bool BotInterface_MapPointInsideChangelevelTrigger(
 	const aas_bspentity_t *entities,

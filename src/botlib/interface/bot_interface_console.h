@@ -1,0 +1,125 @@
+#ifndef BOTLIB_INTERFACE_BOT_INTERFACE_CONSOLE_H
+#define BOTLIB_INTERFACE_BOT_INTERFACE_CONSOLE_H
+
+#include <stdbool.h>
+#include <stddef.h>
+
+#include "bot_interface.h"
+#include "botlib/ai_goal/bot_goal.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define BOT_CONSOLE_MATCH_CONTEXT 7UL
+#define BOT_CONSOLE_MATCH_DEATH 1
+#define BOT_CONSOLE_MATCH_HELP 3
+#define BOT_CONSOLE_MATCH_ACCOMPANY 4
+#define BOT_CONSOLE_MATCH_DEFEND_KEY_AREA 5
+#define BOT_CONSOLE_MATCH_RUSH_BASE 6
+#define BOT_CONSOLE_MATCH_GET_FLAG 7
+#define BOT_CONSOLE_MATCH_START_TEAM_LEADERSHIP 8
+#define BOT_CONSOLE_MATCH_STOP_TEAM_LEADERSHIP 9
+#define BOT_CONSOLE_MATCH_WAIT 10
+#define BOT_CONSOLE_MATCH_WHAT_ARE_YOU_DOING 11
+#define BOT_CONSOLE_MATCH_JOIN_SUBTEAM 12
+#define BOT_CONSOLE_MATCH_LEAVE_SUBTEAM 13
+#define BOT_CONSOLE_MATCH_CREATE_FORMATION 14
+#define BOT_CONSOLE_MATCH_FORMATION_POSITION 15
+#define BOT_CONSOLE_MATCH_FORMATION_SPACE 16
+#define BOT_CONSOLE_MATCH_DO_FORMATION 17
+#define BOT_CONSOLE_MATCH_DISMISS 18
+#define BOT_CONSOLE_MATCH_CAMP 19
+#define BOT_CONSOLE_MATCH_CHECKPOINT 20
+#define BOT_CONSOLE_MATCH_PATROL 21
+#define BOT_CONSOLE_MATCH_VICTIM 0
+#define BOT_CONSOLE_MATCH_NETNAME 0
+#define BOT_CONSOLE_MATCH_ADDRESSEE 1
+#define BOT_CONSOLE_MATCH_TEAMMATE 3
+#define BOT_CONSOLE_MATCH_KEYAREA 4
+#define BOT_CONSOLE_MATCH_NUMBER 4
+#define BOT_CONSOLE_MATCH_POSITION 4
+#define BOT_CONSOLE_MATCH_TIME 5
+#define BOT_CONSOLE_MATCH_NAME 5
+#define BOT_CONSOLE_MATCH_MORE 5
+#define BOT_CONSOLE_MATCH_ITEM 2
+#define BOT_CONSOLE_MATCH_ME 100
+#define BOT_CONSOLE_MATCH_SUBTYPE_NEARITEM 0x01
+#define BOT_CONSOLE_MATCH_SUBTYPE_ADDRESSED 0x02
+#define BOT_CONSOLE_MATCH_SUBTYPE_FEET 0x08
+#define BOT_CONSOLE_MATCH_SUBTYPE_TIME 0x10
+#define BOT_CONSOLE_MATCH_SUBTYPE_HERE 0x20
+#define BOT_CONSOLE_MATCH_SUBTYPE_THERE 0x40
+#define BOT_CONSOLE_MATCH_SUBTYPE_I 0x80
+#define BOT_CONSOLE_MATCH_SUBTYPE_MORE 0x100
+#define BOT_CONSOLE_MATCH_SUBTYPE_BACK 0x200
+#define BOT_CONSOLE_MATCH_SUBTYPE_REVERSE 0x400
+
+#define BOT_CONSOLE_TIME_CONTEXT 8UL
+#define BOT_CONSOLE_TEAMMATE_CONTEXT 16UL
+#define BOT_CONSOLE_PATROL_CONTEXT 64UL
+#define BOT_CONSOLE_MATCH_PATROL_KEYAREA 104
+#define BOT_CONSOLE_MATCH_MINUTES 105
+#define BOT_CONSOLE_MATCH_SECONDS 106
+#define BOT_CONSOLE_PATROL_LOOP 0x01
+#define BOT_CONSOLE_PATROL_REVERSE 0x02
+#define BOT_CONSOLE_PATROL_FORWARD 0x04
+#define BOT_CONSOLE_DEFAULT_TEAM_GOAL_DURATION 300.0f
+#define BOT_CONSOLE_HELP_DURATION 60.0f
+#define BOT_CONSOLE_ACCOMPANY_DURATION 240.0f
+#define BOT_CONSOLE_DEFEND_DURATION 120.0f
+#define BOT_CONSOLE_RUSH_BASE_DURATION 120.0f
+#define BOT_CONSOLE_GET_FLAG_DURATION 180.0f
+#define BOT_CONSOLE_ACCOMPANY_DISTANCE 112.0f
+
+#define BOT_CONSOLE_ADDRESSEE_CONTEXT 32UL
+#define BOT_CONSOLE_ADDRESSEE_EVERYONE 101
+#define BOT_CONSOLE_ADDRESSEE_MULTIPLE_NAMES 102
+#define BOT_CONSOLE_CHAT_TEAM 1
+#define BOT_CONSOLE_EASY_NAME_CHARS 0x1cU
+#define BOT_CONSOLE_TEAM_DMFLAGS 0xc0
+#define BOT_CONSOLE_SKIN_TEAMS 0x40
+#define BOT_CONSOLE_MODEL_TEAMS 0x80
+#define BOT_CONSOLE_SYNONYM_BASE 3UL
+#define BOT_CONSOLE_SYNONYM_CTF_RED 7UL
+#define BOT_CONSOLE_SYNONYM_CTF_BLUE 11UL
+#define BOT_LTG_GET_FLAG 4
+#define BOT_LTG_RUSH_BASE 5
+
+#define CHARACTERISTIC_CHAT_CPM 14
+#define CHARACTERISTIC_CHAT_INSULT 15
+#define CHARACTERISTIC_CHAT_MISC 16
+#define CHARACTERISTIC_CHAT_STARTENDLEVEL 17
+#define CHARACTERISTIC_CHAT_ENTEREXITGAME 18
+#define CHARACTERISTIC_CHAT_KILL 19
+#define CHARACTERISTIC_CHAT_DEATH 20
+#define CHARACTERISTIC_CHAT_RANDOM 21
+#define CHARACTERISTIC_CHAT_REPLY 22
+
+void BotAI_EnterNode(bot_client_state_t *state, int node);
+void BotCheckConsoleMessages(bot_client_state_t *state);
+float BotAI_ChatTime(const bot_client_state_t *state);
+bool BotAI_ConstructRandomChat(bot_client_state_t *state, float thinktime);
+bool BotAI_ConstructLifecycleChat(bot_client_state_t *state,
+	const char *type,
+	int characteristic,
+	bool require_valid_position);
+bool BotAI_ConstructDeathChat(bot_client_state_t *state);
+bool BotAI_ConstructKillChat(bot_client_state_t *state);
+void BotAI_ConsoleEasyClientName(int client, char *buffer, size_t size);
+void BotAI_ConsoleEnterInitialTeamChat(bot_client_state_t *state,
+	const char *type,
+	const char *variable);
+void BotAI_ConsoleSetPointGoal(bot_goal_t *goal,
+	const vec3_t origin,
+	int areanum,
+	int entitynum);
+bool BotAI_ConsoleCTFFlagGoals(bot_goal_t *red_flag,
+	bot_goal_t *blue_flag);
+void BotAI_SelectAutomaticCTFGoal(bot_client_state_t *state);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
+#endif /* BOTLIB_INTERFACE_BOT_INTERFACE_CONSOLE_H */

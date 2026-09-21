@@ -2,7 +2,20 @@ add_library(botlib_interface STATIC
     bot_interface.c
     bot_interface_area.c
     bot_interface_assets.c
+    bot_interface_behavior.c
+    bot_interface_battle.c
+    bot_interface_battle_state.c
+    bot_interface_combat.c
+    bot_interface_coop_state.c
+    bot_interface_coop_role.c
+    bot_interface_coop_overlay.c
+    bot_interface_console.c
+    bot_interface_entity.c
     bot_interface_elevator.c
+    bot_interface_exports.c
+    bot_interface_import.c
+    bot_interface_lifecycle.c
+    bot_interface_runtime.c
     bot_interface_map.c
     bot_interface_objective.c
     bot_state.c
@@ -15,7 +28,20 @@ register_botlib_sources(
         bot_interface.c
         bot_interface_area.c
         bot_interface_assets.c
+        bot_interface_behavior.c
+        bot_interface_battle.c
+        bot_interface_battle_state.c
+        bot_interface_combat.c
+        bot_interface_coop_state.c
+        bot_interface_coop_role.c
+        bot_interface_coop_overlay.c
+        bot_interface_console.c
+        bot_interface_entity.c
         bot_interface_elevator.c
+        bot_interface_exports.c
+        bot_interface_import.c
+        bot_interface_lifecycle.c
+        bot_interface_runtime.c
         bot_interface_map.c
         bot_interface_objective.c
         bot_state.c
