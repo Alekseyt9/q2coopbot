@@ -311,11 +311,15 @@ static void BotState_FreeResources(bot_client_state_t *state)
 	state->coop_player_armor = 0;
 	state->coop_player_damage_blood = 0;
 	state->coop_player_telemetry_valid = false;
+	state->coop_player_focus_entity = 0;
+	state->coop_player_focus_confidence = 0.0f;
 	state->coop_role = BOT_COOP_ROLE_FOLLOWER;
 	state->coop_initiative_budget = 0.0f;
 	state->coop_role_confidence = 0.0f;
 	state->coop_role_time = 0.0f;
 	state->coop_role_next_position_time = 0.0f;
+	state->coop_joint_retreat_until = 0.0f;
+	state->coop_joint_retreat_active = false;
 	state->goal_avoid_duration = 0.0f;
 	state->active_goal_number = 0;
 	state->nearby_goal_time = 0.0f;

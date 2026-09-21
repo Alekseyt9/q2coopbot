@@ -1017,6 +1017,10 @@ int BotInitLibrary(bot_library_t *lib)
 	lib->funcs.BotLibVarSet("coopbot_role_position_interval", cvar->string);
 	cvar = gi.cvar("coopbot_role_position_radius", "64", 0);
 	lib->funcs.BotLibVarSet("coopbot_role_position_radius", cvar->string);
+	cvar = gi.cvar("coopbot_joint_retreat", "1", 0);
+	lib->funcs.BotLibVarSet("coopbot_joint_retreat", cvar->string);
+	cvar = gi.cvar("coopbot_joint_retreat_duration", "1.5", 0);
+	lib->funcs.BotLibVarSet("coopbot_joint_retreat_duration", cvar->string);
 	cvar = gi.cvar("coopbot_rescue", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_rescue", cvar->string);
 	cvar = gi.cvar("coopbot_player_critical_health", "25", 0);
@@ -1025,6 +1029,12 @@ int BotInitLibrary(bot_library_t *lib)
 	lib->funcs.BotLibVarSet("coopbot_rescue_damage_threshold", cvar->string);
 	cvar = gi.cvar("coopbot_rescue_radius", "160", 0);
 	lib->funcs.BotLibVarSet("coopbot_rescue_radius", cvar->string);
+	cvar = gi.cvar("coopbot_shared_focus", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_shared_focus", cvar->string);
+	cvar = gi.cvar("coopbot_kill_steal_control", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_kill_steal_control", cvar->string);
+	cvar = gi.cvar("coopbot_kill_steal_radius", "192", 0);
+	lib->funcs.BotLibVarSet("coopbot_kill_steal_radius", cvar->string);
 	cvar = gi.cvar("coopbot_target_hysteresis", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_target_hysteresis", cvar->string);
 	cvar = gi.cvar("coopbot_target_switch_ratio", "1.25", 0);

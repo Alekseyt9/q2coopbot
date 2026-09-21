@@ -739,11 +739,43 @@ static float BotAI_CoopTargetUtility(const bot_client_state_t *state,
 	{
 		utility += 0.01f;
 	}
+	if (LibVarGetValue("coopbot_shared_focus") != 0.0f &&
+		candidate->number == state->coop_player_focus_entity)
+	{
+		utility += 0.03f;
+	}
 	if (candidate->number == state->combat.current_enemy)
 	{
 		utility += 0.01f;
 	}
 	return utility;
+}
+
+static bool BotAI_CoopYieldPlayerFocus(const bot_client_state_t *state,
+	const aas_entityinfo_t *candidate,
+	float distance,
+	int health_decrease)
+{
+	float radius;
+
+	if (state == NULL || candidate == NULL ||
+		LibVarGetValue("coopbot_shared_focus") == 0.0f ||
+		LibVarGetValue("coopbot_kill_steal_control") == 0.0f ||
+		candidate->number != state->coop_player_focus_entity ||
+		candidate->number == state->combat.current_enemy)
+	{
+		return false;
+	}
+	if (health_decrease || BotAI_EntityIsShooting(candidate))
+	{
+		return false;
+	}
+	radius = LibVarGetValue("coopbot_kill_steal_radius");
+	if (radius <= 0.0f)
+	{
+		radius = 192.0f;
+	}
+	return distance > radius;
 }
 
 /*
@@ -884,11 +916,25 @@ int BotAI_FindEnemy(bot_client_state_t *state, ai_dm_enemy_info_t *enemy)
 		360.0f,
 		16,
 		visible_entities);
-	for (int index = 0; index < visible_count; ++index)
+	bool shared_focus = BotAI_CoopMode() &&
+		LibVarGetValue("coopbot_shared_focus") != 0.0f &&
+		state->coop_player_focus_entity > 0;
+	int scan_passes = shared_focus ? 2 : 1;
+	for (int pass = 0; pass < scan_passes; ++pass)
 	{
-		aas_entityinfo_t entity_info;
-		bool active_group;
-		AAS_EntityInfo(visible_entities[index], &entity_info);
+		for (int index = 0; index < visible_count; ++index)
+		{
+			aas_entityinfo_t entity_info;
+			bool active_group;
+			AAS_EntityInfo(visible_entities[index], &entity_info);
+			if (shared_focus &&
+				((pass == 0 && entity_info.number !=
+					state->coop_player_focus_entity) ||
+					(pass == 1 && entity_info.number ==
+					state->coop_player_focus_entity)))
+			{
+				continue;
+			}
 		if (BotAI_EntityIsDead(&entity_info) ||
 			entity_info.number == state->entity_number ||
 			(BotAI_CoopMode() && entity_info.number <= aasworld.maxClients))
@@ -901,6 +947,13 @@ int BotAI_FindEnemy(bot_client_state_t *state, ai_dm_enemy_info_t *enemy)
 			state->last_client_update.origin,
 			direction);
 		float distance = sqrtf(DotProduct(direction, direction));
+		if (BotAI_CoopYieldPlayerFocus(state,
+			&entity_info,
+			distance,
+			health_decrease))
+		{
+			continue;
+		}
 		if (!accelerator_3d && distance > 900.0f)
 		{
 			continue;
@@ -1012,6 +1065,7 @@ int BotAI_FindEnemy(bot_client_state_t *state, ai_dm_enemy_info_t *enemy)
 				field_of_view,
 				health_decrease,
 				enemy);
+		}
 		}
 	}
 
@@ -7229,7 +7283,8 @@ static int BotAI_NodeStep(bot_client_state_t *state, void *context)
 			BotAI_EnterNode(state, BOT_AI_NODE_SEEK_LTG);
 			return qfalse;
 		}
-		if (BotAI_CoopIntentIsConfident(state,
+		if (state->coop_joint_retreat_active ||
+			BotAI_CoopIntentIsConfident(state,
 			BOT_COOP_INTENT_RETREAT) ||
 			BotAI_CoopRoleBreaksChase(state))
 		{
@@ -7283,7 +7338,8 @@ static int BotAI_NodeStep(bot_client_state_t *state, void *context)
 		}
 		BotAI_UpdateEnemyBattleInventory(state,
 			state->combat.current_enemy);
-		if (BotAI_WantsToChase(state))
+		if (BotAI_WantsToChase(state) &&
+			!state->coop_joint_retreat_active)
 		{
 			if (state->goal_handle > 0)
 			{
@@ -10166,6 +10222,8 @@ static void BotAI_UpdateCoopPlayerIntent(bot_client_state_t *state)
 	int player_area;
 	int visible_count = 0;
 	int enemy_count = 0;
+	int player_focus_entity = 0;
+	float player_focus_distance = 0.0f;
 	bool player_shooting;
 	bool player_target_visible = false;
 	bool area_changed = false;
@@ -10182,6 +10240,8 @@ static void BotAI_UpdateCoopPlayerIntent(bot_client_state_t *state)
 			state->coop_player_motion_valid = false;
 			state->coop_player_threat_valid = false;
 			state->coop_player_area_valid = false;
+			state->coop_player_focus_entity = 0;
+			state->coop_player_focus_confidence = 0.0f;
 		}
 		return;
 	}
@@ -10196,6 +10256,8 @@ static void BotAI_UpdateCoopPlayerIntent(bot_client_state_t *state)
 		state->coop_player_motion_valid = false;
 		state->coop_player_threat_valid = false;
 		state->coop_player_area_valid = false;
+		state->coop_player_focus_entity = 0;
+		state->coop_player_focus_confidence = 0.0f;
 		return;
 	}
 	BotAI_UpdateCoopPlayerTelemetry(state, player_entity);
@@ -10254,6 +10316,12 @@ static void BotAI_UpdateCoopPlayerIntent(bot_client_state_t *state)
 				target_angles))
 			{
 				player_target_visible = true;
+				if (player_focus_entity == 0 ||
+					distance < player_focus_distance)
+				{
+					player_focus_entity = entity_info.number;
+					player_focus_distance = distance;
+				}
 			}
 			if (!has_threat || distance < threat_distance)
 			{
@@ -10344,6 +10412,16 @@ static void BotAI_UpdateCoopPlayerIntent(bot_client_state_t *state)
 	VectorCopy(velocity, state->coop_player_last_velocity);
 	state->coop_player_last_yaw = player_info.angles[YAW];
 	state->coop_player_motion_valid = true;
+	if (player_shooting && player_target_visible)
+	{
+		state->coop_player_focus_entity = player_focus_entity;
+		state->coop_player_focus_confidence = 0.85f;
+	}
+	else
+	{
+		state->coop_player_focus_entity = 0;
+		state->coop_player_focus_confidence = 0.0f;
+	}
 	if (has_threat)
 	{
 		state->coop_player_last_threat_distance = threat_distance;
@@ -10397,6 +10475,76 @@ static const char *BotAI_CoopRoleName(bot_coop_role_t role)
 		case BOT_COOP_ROLE_FOLLOWER:
 		default:
 			return "FOLLOWER";
+	}
+}
+
+/*
+===============
+BotAI_UpdateCoopJointRetreat
+
+Keep a short cooperative retreat commitment after the human has clearly
+fallen back. Intent is sampled every AI frame, so without this lease a
+stationary frame immediately after the retreat would let Battle Retreat hand
+control back to Chase. The lease is deliberately short and configurable;
+hard leash/elevator and danger overlays still have priority over it.
+===============
+*/
+static void BotAI_UpdateCoopJointRetreat(bot_client_state_t *state)
+{
+	float now;
+	float duration;
+	bool enabled;
+
+	if (state == NULL)
+	{
+		return;
+	}
+
+	now = AAS_Time();
+	enabled = BotAI_CoopMode() != 0 &&
+		LibVarGetValue("coopbot_player_intent") != 0.0f &&
+		LibVarGetValue("coopbot_joint_retreat") != 0.0f;
+	if (!enabled)
+	{
+		state->coop_joint_retreat_until = 0.0f;
+		state->coop_joint_retreat_active = false;
+		return;
+	}
+
+	duration = LibVarGetValue("coopbot_joint_retreat_duration");
+	if (duration <= 0.0f)
+	{
+		duration = 1.5f;
+	}
+
+	if (BotAI_CoopIntentIsConfident(state, BOT_COOP_INTENT_RETREAT))
+	{
+		if (!state->coop_joint_retreat_active &&
+			LibVarGetValue("coopbot_log") >= 1.0f)
+		{
+			BotLib_LogWriteTimeStamped(
+				"coopbot_joint_retreat client=%d phase=start duration=%.2f",
+				state->client_number, duration);
+		}
+		state->coop_joint_retreat_active = true;
+		if (state->coop_joint_retreat_until < now + duration)
+		{
+			state->coop_joint_retreat_until = now + duration;
+		}
+		return;
+	}
+
+	if (state->coop_joint_retreat_active &&
+		now >= state->coop_joint_retreat_until)
+	{
+		if (LibVarGetValue("coopbot_log") >= 1.0f)
+		{
+			BotLib_LogWriteTimeStamped(
+				"coopbot_joint_retreat client=%d phase=end",
+				state->client_number);
+		}
+		state->coop_joint_retreat_active = false;
+		state->coop_joint_retreat_until = 0.0f;
 	}
 }
 
@@ -10493,6 +10641,12 @@ static void BotAI_UpdateCoopRole(bot_client_state_t *state)
 	{
 		role = BOT_COOP_ROLE_RESCUER;
 		budget = 0.85f;
+		confidence = 0.90f;
+	}
+	else if (state->coop_joint_retreat_active)
+	{
+		role = BOT_COOP_ROLE_COVER;
+		budget = 0.75f;
 		confidence = 0.90f;
 	}
 	else if (BotAI_CoopIntentIsConfident(state,
@@ -11724,6 +11878,7 @@ static int BotAI_Think(bot_client_state_t *state, float thinktime)
 
 	/* Feed the coop intent model before node selection can acquire a target. */
 	BotAI_UpdateCoopPlayerIntent(state);
+	BotAI_UpdateCoopJointRetreat(state);
 	BotAI_UpdateCoopRole(state);
 
 	/*

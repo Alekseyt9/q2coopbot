@@ -165,6 +165,10 @@ The profile enables:
   regroup remain higher priority.
   The game-side bridge publishes this telemetry through namespaced internal
   libvars; the legacy export table is unchanged.
+- `coopbot_shared_focus 1` — when the player is visibly firing at a monster,
+  the bot scans that target first. `coopbot_kill_steal_control 1` yields a
+  non-urgent focused target outside `coopbot_kill_steal_radius`, while a
+  shooting or close threat still overrides the yield.
 - `coopbot_target_hysteresis 1` — avoids replacing a current enemy for a
   marginally better candidate; `coopbot_target_switch_ratio 1.25` controls
   the required utility improvement.

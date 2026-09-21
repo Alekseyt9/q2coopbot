@@ -196,11 +196,15 @@ struct bot_client_state_s {
 	int coop_player_armor;
 	int coop_player_damage_blood;
 	bool coop_player_telemetry_valid;
+	int coop_player_focus_entity;
+	float coop_player_focus_confidence;
 	bot_coop_role_t coop_role;
 	float coop_initiative_budget;
 	float coop_role_confidence;
 	float coop_role_time;
 	float coop_role_next_position_time;
+	float coop_joint_retreat_until;
+	bool coop_joint_retreat_active;
     float goal_avoid_duration;
     int active_goal_number;
 	float nearby_goal_time;

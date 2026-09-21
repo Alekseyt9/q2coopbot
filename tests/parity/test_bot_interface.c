@@ -6654,6 +6654,7 @@ static void test_coop_player_intent_tracks_advance(void **state)
 		BLERR_NOERROR);
 	VectorSet(player_entity.origin, 128.0f, 0.0f, 32.0f);
 	VectorSet(player_entity.old_origin, 176.0f, 0.0f, 32.0f);
+	player_entity.frame = 46;
 	VectorSet(update.origin, 160.0f, 0.0f, 32.0f);
 	bot->combat.current_enemy = 4;
 	bot->ai_node = BOT_AI_NODE_BATTLE_CHASE;
@@ -6669,6 +6670,7 @@ static void test_coop_player_intent_tracks_advance(void **state)
 	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
 	assert_int_equal(bot->coop_player_intent, BOT_COOP_INTENT_RETREAT);
 	assert_true(bot->coop_player_intent_confidence >= 0.60f);
+	assert_int_equal(bot->coop_player_focus_entity, 4);
 	assert_int_equal(bot->coop_role, BOT_COOP_ROLE_COVER);
 	assert_float_equal(bot->coop_initiative_budget, 0.75f, 0.0001f);
 	assert_int_equal(bot->ai_node, BOT_AI_NODE_BATTLE_RETREAT);
@@ -8312,6 +8314,69 @@ static void test_find_enemy_numeric_first_and_visible_cap(void **state)
 	assert_false(enemy.valid);
 	assert_int_equal(enemy.entity, -1);
 	assert_int_equal(bot->combat.current_enemy, -77);
+}
+
+/*
+=============
+test_coop_shared_focus_and_kill_steal_yield
+
+The player's focused target gets first consideration, but a non-urgent target
+outside the configured radius is yielded so the bot can help elsewhere.
+=============
+*/
+static void test_coop_shared_focus_and_kill_steal_yield(void **state)
+{
+	bot_interface_test_context_t *context =
+		(bot_interface_test_context_t *)*state;
+	bot_client_state_t *bot = BotFindEnemy_SetupHarness(context,
+		1,
+		"bots/babe_c.c",
+		"babe");
+	aas_entity_t *near_target = BotFindEnemy_PrepareEntity(2,
+		50.0f,
+		0.0f,
+		0.0f);
+	aas_entity_t *focused_target = BotFindEnemy_PrepareEntity(3,
+		100.0f,
+		0.0f,
+		0.0f);
+	near_target->solid = SOLID_BBOX;
+	near_target->modelindex = 1;
+	focused_target->solid = SOLID_BBOX;
+	focused_target->modelindex = 1;
+
+	LibVarSet("coop", "1");
+	LibVarSet("coopbot_shared_focus", "1");
+	LibVarSet("coopbot_kill_steal_control", "0");
+	LibVarSet("coopbot_kill_steal_radius", "192");
+	LibVarSet("coopbot_new_group_guard", "0");
+	LibVarSet("coopbot_leash", "0");
+	LibVarSet("coopbot_target_hysteresis", "0");
+	bot->coop_player_focus_entity = 3;
+	bot->coop_player_focus_confidence = 0.85f;
+	BotFindEnemy_ResetCallState(bot, 100);
+
+	ai_dm_enemy_info_t enemy;
+	assert_int_equal(BotAI_FindEnemy(bot, &enemy), qtrue);
+	assert_int_equal(enemy.entity, 3);
+
+	LibVarSet("coopbot_kill_steal_control", "1");
+	LibVarSet("coopbot_kill_steal_radius", "50");
+	BotFindEnemy_ResetCallState(bot, 100);
+	assert_int_equal(BotAI_FindEnemy(bot, &enemy), qtrue);
+	assert_int_equal(enemy.entity, 2);
+
+	/* A close focused threat overrides the yield. */
+	LibVarSet("coopbot_kill_steal_radius", "192");
+	BotFindEnemy_ResetCallState(bot, 100);
+	assert_int_equal(BotAI_FindEnemy(bot, &enemy), qtrue);
+	assert_int_equal(enemy.entity, 3);
+
+	assert_int_equal(context->api->BotShutdownClient(0), BLERR_NOERROR);
+	assert_int_equal(context->api->BotShutdownLibrary(), BLERR_NOERROR);
+	LibVarSet("coop", "0");
+	LibVarSet("coopbot_shared_focus", "0");
+	LibVarSet("coopbot_kill_steal_control", "0");
 }
 
 /*
@@ -12536,6 +12601,10 @@ int main(void)
 		cmocka_unit_test_setup_teardown(test_find_enemy_numeric_first_and_visible_cap,
 							setup_bot_interface,
 							teardown_bot_interface),
+		cmocka_unit_test_setup_teardown(
+			test_coop_shared_focus_and_kill_steal_yield,
+			setup_bot_interface,
+			teardown_bot_interface),
 		cmocka_unit_test_setup_teardown(
 			test_find_enemy_nonaccelerated_range_fov_and_close_boundaries,
 			setup_bot_interface,
