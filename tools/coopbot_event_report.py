@@ -66,6 +66,20 @@ def read_botlib_events(stream: TextIO) -> Counter[str]:
     for line in stream:
         for match in BOTLIB_EVENT_RE.finditer(line):
             events[match.group("event")] += 1
+        if "coopbot_action" in line:
+            fields = message_fields(line)
+            action = fields.get("action", "unknown").lower()
+            phase = fields.get("phase", "unknown").lower()
+            events[f"action_{action}_{phase}"] += 1
+        if "coopbot_area_transition" in line:
+            fields = message_fields(line)
+            actor = fields.get("actor", "unknown").lower()
+            events[f"area_{actor}_transition"] += 1
+        if "coopbot_objective" in line:
+            fields = message_fields(line)
+            objective = fields.get("objective", "unknown").lower()
+            phase = fields.get("phase", "unknown").lower()
+            events[f"objective_{objective}_{phase}"] += 1
         if "coopbot_path_failure" in line:
             # A botlib route failure is the lower-level equivalent of the
             # game-side stuck event and must not be reported as idle follow.
@@ -84,6 +98,8 @@ def read_botlib_map_model(stream: TextIO) -> dict | None:
     area_records = 0
     edge_records = 0
     elevator_edges = 0
+    control_links = 0
+    unresolved_controls = 0
 
     for line in stream:
         if "coopbot_map_model" in line:
@@ -102,6 +118,10 @@ def read_botlib_map_model(stream: TextIO) -> dict | None:
             edge_records += 1
             if fields.get("traveltype") == "11":
                 elevator_edges += 1
+        elif "coopbot_map_control_link" in line:
+            control_links += 1
+        elif "coopbot_map_control_unresolved" in line:
+            unresolved_controls += 1
         elif "coopbot_map_control" in line:
             fields = message_fields(line)
             controls[fields.get("class", "<unknown>")] += 1
@@ -112,6 +132,8 @@ def read_botlib_map_model(stream: TextIO) -> dict | None:
     model["edge_records"] = edge_records
     model["elevator_edge_records"] = elevator_edges
     model["controls"] = dict(sorted(controls.items()))
+    model["control_links"] = control_links
+    model["unresolved_controls"] = unresolved_controls
     return model
 
 
@@ -306,6 +328,16 @@ def main() -> int:
         action="store_true",
         help="fail unless botlib logged regroup completion",
     )
+    parser.add_argument(
+        "--require-player-area-transition",
+        action="store_true",
+        help="fail unless botlib logged a player AAS-area transition",
+    )
+    parser.add_argument(
+        "--require-bot-area-transition",
+        action="store_true",
+        help="fail unless botlib logged a bot AAS-area transition",
+    )
     parser.add_argument("-o", "--output", help="write summary JSON to this path")
     args = parser.parse_args()
 
@@ -362,10 +394,24 @@ def main() -> int:
         validation_errors.append("no completed coop regroup was recorded by botlib")
 
     if (
+        args.require_player_area_transition
+        and botlib_events.get("area_player_transition", 0) < 1
+    ):
+        validation_errors.append("no player AAS-area transition was recorded")
+
+    if (
+        args.require_bot_area_transition
+        and botlib_events.get("area_bot_transition", 0) < 1
+    ):
+        validation_errors.append("no bot AAS-area transition was recorded")
+
+    if (
         args.require_elevator_edge
         or args.require_elevator_regroup
         or args.require_regroup_path_failure
         or args.require_regroup_complete
+        or args.require_player_area_transition
+        or args.require_bot_area_transition
     ):
         result_object["validation"] = {
             "ok": not validation_errors,

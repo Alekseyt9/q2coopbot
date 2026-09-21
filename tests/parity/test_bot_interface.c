@@ -6417,6 +6417,9 @@ static void test_coop_hard_leash_uses_elevator_regroup(void **state)
 		assert_true(bot->has_move_result);
 		assert_int_equal(bot->last_move_result.type, RESULTTYPE_ELEVATORUP);
 		assert_true((bot->last_move_result.flags & MOVERESULT_WAITING) != 0);
+		assert_int_equal(bot->coop_objective_phase,
+			BOT_COOP_OBJECTIVE_WAIT_ELEVATOR);
+		assert_int_equal(bot->coop_objective_goal_area, 2);
 
 		VectorSet(update.origin, 128.0f, 0.0f, 32.0f);
 		assert_int_equal(context->api->BotUpdateClient(1, &update),
@@ -6426,6 +6429,8 @@ static void test_coop_hard_leash_uses_elevator_regroup(void **state)
 			BLERR_NOERROR);
 		assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
 		assert_false(bot->coop_player_goal_valid);
+		assert_int_equal(bot->coop_objective_phase,
+			BOT_COOP_OBJECTIVE_REACQUIRE);
 
 		context->api->BotShutdownClient(1);
 		context->api->BotShutdownLibrary();
@@ -6529,6 +6534,8 @@ static void test_coop_hard_leash_elevator_timeout_retries(void **state)
 	assert_true(bot->has_move_result);
 	assert_int_equal(bot->last_move_result.type, RESULTTYPE_ELEVATORUP);
 	assert_true((bot->last_move_result.flags & MOVERESULT_WAITING) != 0);
+	assert_int_equal(bot->coop_objective_phase,
+		BOT_COOP_OBJECTIVE_WAIT_ELEVATOR);
 
 	/* The bounded wait expires while the platform is still absent. */
 	assert_int_equal(context->api->BotUpdateClient(1, &update),
@@ -6540,6 +6547,8 @@ static void test_coop_hard_leash_elevator_timeout_retries(void **state)
 
 	assert_true(bot->coop_player_goal_valid);
 	assert_true(bot->last_move_result.failure);
+	assert_int_equal(bot->coop_objective_phase, BOT_COOP_OBJECTIVE_RETRY);
+	assert_true(bot->coop_objective_retries >= 1);
 	assert_float_equal(bot->coop_elevator_wait_started, 0.0f, 0.0001f);
 	assert_int_equal(bot->coop_elevator_wait_area, 0);
 	move_state = BotMoveStateFromHandle(bot->move_handle);
@@ -6598,6 +6607,11 @@ static void test_coop_player_intent_tracks_advance(void **state)
 	LibVarSet("coopbot_intent_hold_speed", "24");
 	LibVarSet("coopbot_hard_leash", "768");
 	LibVarSet("coopbot_roles", "1");
+	LibVarSet("coopbot_joint_retreat", "1");
+	LibVarSet("coopbot_joint_retreat_duration", "1.5");
+	LibVarSet("coopbot_focus_memory", "0.25");
+	LibVarSet("coopbot_intent_signal", "1");
+	LibVarSet("coopbot_action_commitment", "0.75");
 	LibVarSet("coopbot_log", "0");
 
 	memset(&player_entity, 0, sizeof(player_entity));
@@ -6674,9 +6688,76 @@ static void test_coop_player_intent_tracks_advance(void **state)
 	assert_int_equal(bot->coop_role, BOT_COOP_ROLE_COVER);
 	assert_float_equal(bot->coop_initiative_budget, 0.75f, 0.0001f);
 	assert_int_equal(bot->ai_node, BOT_AI_NODE_BATTLE_RETREAT);
+	assert_int_equal(bot->coop_action, BOT_COOP_ACTION_POSITION);
+	assert_true(bot->coop_action_valid);
+	assert_true(bot->coop_action_until > aasworld.time);
+	float first_position_lateral = context->mock.inputs[
+		context->mock.bot_input_count - 1].dir[1];
+	assert_true(fabsf(first_position_lateral) > 0.1f);
+	assert_true(bot->coop_joint_retreat_active);
+	assert_true(bot->coop_joint_retreat_until > aasworld.time);
 	assert_true(context->mock.bot_input_count > 0);
 	assert_true(fabsf(context->mock.inputs[
 		context->mock.bot_input_count - 1].dir[1]) > 0.1f);
+
+	/* A stopped player must not release the retreat lease immediately. */
+	bot->coop_role_next_position_time = 0.0f;
+	player_entity.frame = 0;
+	VectorSet(player_entity.origin, 128.0f, 0.0f, 32.0f);
+	VectorCopy(player_entity.origin, player_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.4f), BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(4, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_int_equal(bot->coop_player_intent, BOT_COOP_INTENT_HOLD);
+	assert_true(bot->coop_joint_retreat_active);
+	assert_int_equal(bot->coop_player_focus_entity, 4);
+	assert_true(bot->coop_player_focus_confidence > 0.0f);
+	assert_int_equal(bot->coop_role, BOT_COOP_ROLE_COVER);
+	assert_int_equal(bot->ai_node, BOT_AI_NODE_BATTLE_RETREAT);
+	assert_true(bot->coop_action_valid);
+	assert_true(context->mock.inputs[
+		context->mock.bot_input_count - 1].dir[1] *
+		first_position_lateral > 0.01f);
+
+	/* An expired positioning action must be restarted, not reused forever. */
+	bot->coop_action_started = -1.0f;
+	float previous_position_start = bot->coop_action_started;
+	bot->coop_action_until = -0.01f;
+	bot->coop_role_next_position_time = 0.0f;
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.1f), BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(4, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_int_equal(bot->coop_role, BOT_COOP_ROLE_COVER);
+	assert_int_equal(bot->coop_action, BOT_COOP_ACTION_POSITION);
+	assert_true(bot->coop_action_valid);
+	assert_true(bot->coop_action_started > previous_position_start);
+	assert_true(bot->coop_action_until > aasworld.time);
+
+	/* The commitment is finite; once its deadline passes it must release. */
+	bot->coop_joint_retreat_until = aasworld.time + 0.1f;
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.6f), BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(4, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_false(bot->coop_joint_retreat_active);
+	assert_int_equal(bot->coop_player_focus_entity, 0);
+	assert_float_equal(bot->coop_player_focus_confidence, 0.0f, 0.0001f);
 
 	/* Confirmed low player health promotes RESCUER and closes the gap. */
 	LibVarSet("coopbot_rescue", "1");
@@ -6694,7 +6775,7 @@ static void test_coop_player_intent_tracks_advance(void **state)
 		BLERR_NOERROR);
 	assert_int_equal(context->api->BotUpdateClient(1, &update),
 		BLERR_NOERROR);
-	assert_int_equal(context->api->BotStartFrame(0.4f), BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.7f), BLERR_NOERROR);
 	assert_int_equal(context->api->BotUpdateEntity(4, &enemy_entity),
 		BLERR_NOERROR);
 	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
@@ -6703,8 +6784,14 @@ static void test_coop_player_intent_tracks_advance(void **state)
 	assert_true(bot->coop_player_telemetry_valid);
 	assert_int_equal(bot->coop_player_health, 20);
 	assert_int_equal(bot->coop_role, BOT_COOP_ROLE_RESCUER);
+	assert_int_equal(bot->coop_action, BOT_COOP_ACTION_RESCUE);
+	assert_true(bot->coop_action_valid);
+	assert_true(bot->coop_action_until > aasworld.time);
 	assert_true(context->mock.inputs[
 		context->mock.bot_input_count - 1].dir[0] < -0.1f);
+	assert_true(cosf(context->mock.inputs[
+		context->mock.bot_input_count - 1].viewangles[YAW] *
+		((float)M_PI / 180.0f)) < -0.95f);
 
 	context->api->BotShutdownClient(1);
 	context->api->BotShutdownLibrary();
@@ -6713,6 +6800,11 @@ static void test_coop_player_intent_tracks_advance(void **state)
 	LibVarSet("coopbot_leash", "0");
 	LibVarSet("coopbot_player_intent", "0");
 	LibVarSet("coopbot_roles", "0");
+	LibVarSet("coopbot_joint_retreat", "0");
+	LibVarSet("coopbot_joint_retreat_duration", "1.5");
+	LibVarSet("coopbot_focus_memory", "0.75");
+	LibVarSet("coopbot_intent_signal", "0");
+	LibVarSet("coopbot_action_commitment", "0.75");
 	LibVarSet("coopbot_rescue", "0");
 	LibVarSet("coopbot_log", "0");
 }

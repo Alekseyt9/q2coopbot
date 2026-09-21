@@ -72,6 +72,23 @@ typedef enum bot_coop_role_e
 	BOT_COOP_ROLE_REGROUP,
 } bot_coop_role_t;
 
+typedef enum bot_coop_action_e
+{
+	BOT_COOP_ACTION_NONE = 0,
+	BOT_COOP_ACTION_POSITION,
+	BOT_COOP_ACTION_RESCUE,
+} bot_coop_action_t;
+
+typedef enum bot_coop_objective_phase_e
+{
+	BOT_COOP_OBJECTIVE_NONE = 0,
+	BOT_COOP_OBJECTIVE_APPROACH,
+	BOT_COOP_OBJECTIVE_WAIT_ELEVATOR,
+	BOT_COOP_OBJECTIVE_TRAVEL_ELEVATOR,
+	BOT_COOP_OBJECTIVE_RETRY,
+	BOT_COOP_OBJECTIVE_REACQUIRE,
+} bot_coop_objective_phase_t;
+
 /**
  * Characteristic indices required during client setup. These values mirror the
  * macros defined in the Gladiator assets (chars.h) and describe where the
@@ -198,11 +215,23 @@ struct bot_client_state_s {
 	bool coop_player_telemetry_valid;
 	int coop_player_focus_entity;
 	float coop_player_focus_confidence;
+	float coop_player_focus_time;
+	int coop_bot_last_area;
+	bool coop_bot_area_valid;
 	bot_coop_role_t coop_role;
 	float coop_initiative_budget;
 	float coop_role_confidence;
 	float coop_role_time;
 	float coop_role_next_position_time;
+	bot_coop_action_t coop_action;
+	float coop_action_started;
+	float coop_action_until;
+	vec3_t coop_action_direction;
+	bool coop_action_valid;
+	bot_coop_objective_phase_t coop_objective_phase;
+	float coop_objective_started;
+	int coop_objective_goal_area;
+	int coop_objective_retries;
 	float coop_joint_retreat_until;
 	bool coop_joint_retreat_active;
     float goal_avoid_duration;

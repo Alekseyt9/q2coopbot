@@ -153,6 +153,10 @@ The profile enables:
   `coopbot_intent_hold_speed 24` tune movement classification. A confident
   `ADVANCE`/`EXPLORE` permits a new group; a confident `RETREAT` interrupts
   an otherwise continuing battle chase.
+- `coopbot_joint_retreat 1` keeps the bot in the cooperative retreat/cover
+  decision for `coopbot_joint_retreat_duration 1.5` seconds after the player
+  stops moving, preventing an immediate chase oscillation. The interval is
+  logged as `coopbot_joint_retreat` with `phase=start/end`.
 - `coopbot_roles 1` — enables temporary role modifiers and the bounded
   initiative budget; roles are logged as `coopbot_role` and currently cover
   `FOLLOWER`, `SUPPORT`, `ANCHOR`, `COVER`, `VANGUARD`, and `REGROUP`.
@@ -166,9 +170,19 @@ The profile enables:
   The game-side bridge publishes this telemetry through namespaced internal
   libvars; the legacy export table is unchanged.
 - `coopbot_shared_focus 1` — when the player is visibly firing at a monster,
-  the bot scans that target first. `coopbot_kill_steal_control 1` yields a
-  non-urgent focused target outside `coopbot_kill_steal_radius`, while a
-  shooting or close threat still overrides the yield.
+  the bot scans that target first and retains the signal briefly for
+  `coopbot_focus_memory 0.75` seconds after the last confirmed shot.
+  `coopbot_kill_steal_control 1` yields a non-urgent focused target outside
+  `coopbot_kill_steal_radius`, while a shooting or close threat still
+  overrides the yield.
+- `coopbot_intent_signal 1` briefly turns the bot toward its selected
+  `COVER`/`RESCUER` movement before taking the step, making the intended
+  maneuver readable without changing ordinary follow/avoidance movement.
+- `coopbot_action_commitment 0.75` keeps a selected `COVER/SUPPORT` side for
+  a short interval instead of recomputing left/right every positioning tick;
+  the same commitment window also stabilizes `RESCUER`. A role change, hard
+  regroup, or blocked move interrupts it. `coopbot_action` logs start/end
+  for `POSITION` and `RESCUE`, and marks `REGROUP` transitions.
 - `coopbot_target_hysteresis 1` — avoids replacing a current enemy for a
   marginally better candidate; `coopbot_target_switch_ratio 1.25` controls
   the required utility improvement.
@@ -191,7 +205,11 @@ The profile enables:
   crosses into its AAS area through a narrow passage; radius defaults to 160.
 - `coopbot_map_model 1` — emits the initialized AAS area/reachability graph,
   elevator edges, and BSP control entities (`func_plat`, doors, buttons,
-  triggers, and targets) once per map.
+  triggers, and targets) once per map. During the episode it also records
+  `coopbot_area_transition` for player/bot AAS-area changes, including a
+  coarse `VISITED`, `ACTIVE_COMBAT`, or `REGROUP` observation. Control
+  `target`/`targetname` links are emitted as `coopbot_map_control_link`; broken
+  links are emitted as `coopbot_map_control_unresolved`.
 
 Log levels are cumulative: `0` disables CoopBot logs, `1` keeps lifecycle,
 error, and slow-AI messages, `2` adds input and botlib target/node events, and
@@ -214,10 +232,15 @@ python tools/coopbot_event_report.py coopbot_debug_events.jsonl \
 ~~~
 
 After a real two-client separation run, add
-`--require-elevator-regroup`; it requires a regroup frame whose selected
-travel type is `TRAVEL_ELEVATOR`. A failed regroup emits
+`--require-elevator-regroup --require-player-area-transition
+--require-bot-area-transition`; these require a regroup frame whose selected
+travel type is `TRAVEL_ELEVATOR` and evidence that both participants changed
+AAS areas. A failed regroup emits
 `coopbot_elevator_failed` plus `coopbot_path_failure phase=regroup`, so the
 report distinguishes a failed elevator/path traversal from idle follow. The
+objective phases are also counted as `objective_regroup_approach`,
+`objective_regroup_wait_elevator`, `objective_regroup_travel_elevator`,
+`objective_regroup_retry`, and `objective_regroup_reacquire`. The
 negative-path check is available as `--require-regroup-path-failure`; successful
 reacquisition emits `coopbot_regroup_complete` and can be required with
 `--require-regroup-complete`.

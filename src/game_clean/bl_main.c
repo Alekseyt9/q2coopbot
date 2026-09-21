@@ -1031,6 +1031,12 @@ int BotInitLibrary(bot_library_t *lib)
 	lib->funcs.BotLibVarSet("coopbot_rescue_radius", cvar->string);
 	cvar = gi.cvar("coopbot_shared_focus", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_shared_focus", cvar->string);
+	cvar = gi.cvar("coopbot_focus_memory", "0.75", 0);
+	lib->funcs.BotLibVarSet("coopbot_focus_memory", cvar->string);
+	cvar = gi.cvar("coopbot_intent_signal", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_intent_signal", cvar->string);
+	cvar = gi.cvar("coopbot_action_commitment", "0.75", 0);
+	lib->funcs.BotLibVarSet("coopbot_action_commitment", cvar->string);
 	cvar = gi.cvar("coopbot_kill_steal_control", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_kill_steal_control", cvar->string);
 	cvar = gi.cvar("coopbot_kill_steal_radius", "192", 0);
