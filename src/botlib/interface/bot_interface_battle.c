@@ -5,6 +5,7 @@
 #include "botlib/ai_move/bot_move.h"
 #include "botlib/ai_weight/bot_weight.h"
 #include "botlib/aas/aas_local.h"
+#include "botlib/common/l_log.h"
 #include "botlib/common/l_utils.h"
 #include "botlib/ea/ea_local.h"
 #include "bot_interface_assets.h"
@@ -290,6 +291,11 @@ Runs retail's weapon score/select operation after its frame input is current.
 */
 static void BotAI_ChooseBattleWeapon(bot_client_state_t *state)
 {
+	const bot_weaponstate_t *weapon_state;
+	int weapon_count = 0;
+	int weight_count = 0;
+	float best_weight = 0.0f;
+
 	if (state == NULL || state->weapon_state <= 0)
 	{
 		return;
@@ -299,6 +305,30 @@ static void BotAI_ChooseBattleWeapon(bot_client_state_t *state)
 		state->weapon_state,
 		state->last_client_update.inventory,
 		BotInterface_CurrentFrameTime());
+	weapon_state = BotWeaponStatePeek(state->weapon_state);
+	if (weapon_state != NULL)
+	{
+		weapon_count = weapon_state->config != NULL
+			? weapon_state->config->num_weapons : 0;
+		weight_count = weapon_state->weights != NULL
+			? weapon_state->weights->index_count : 0;
+		best_weight = weapon_state->last_best_weight;
+	}
+	BotLib_LogWriteTimeStamped(
+		"weapon_select client=%d current=%d blaster=%d health=%d "
+		"enemy_height=%d aggression=%.1f retreat=%d best_weight=%.1f "
+		"weapon_count=%d weight_count=%d model=\"%s\"",
+		state->client_number,
+		state->current_weapon,
+		state->last_client_update.inventory[BOT_BATTLE_INVENTORY_BLASTER],
+		state->last_client_update.inventory[BOT_BATTLE_INVENTORY_HEALTH],
+		state->last_client_update.inventory[BOT_BATTLE_ENEMY_HEIGHT],
+		BotAI_Aggression(state),
+		BotAI_WantsToRetreat(state),
+		best_weight,
+		weapon_count,
+		weight_count,
+		BotInterface_ModelNameForIndex(state->last_client_update.gunindex));
 }
 
 /*

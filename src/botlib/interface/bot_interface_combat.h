@@ -9,6 +9,7 @@ typedef struct aas_entityinfo_s aas_entityinfo_t;
 
 enum bot_battle_inventory_slot_e
 {
+	BOT_BATTLE_INVENTORY_BLASTER = 7,
 	BOT_BATTLE_INVENTORY_ARMORBODY = 1,
 	BOT_BATTLE_INVENTORY_ARMORCOMBAT = 2,
 	BOT_BATTLE_INVENTORY_ARMORJACKET = 3,

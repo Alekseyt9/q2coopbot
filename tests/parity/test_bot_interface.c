@@ -49,6 +49,7 @@
 
 enum retail_battle_inventory_slot_e
 {
+	RETAIL_INVENTORY_BLASTER = 7,
 	RETAIL_INVENTORY_ARMORBODY = 1,
 	RETAIL_INVENTORY_ARMORCOMBAT = 2,
 	RETAIL_INVENTORY_ARMORJACKET = 3,
@@ -8685,6 +8686,33 @@ static void test_battle_aggression_retail_gate_boundaries(void **state)
 
 /*
 =============
+test_coop_starter_blaster_is_actionable
+
+The co-op companion starts with a Blaster and must not enter Battle Retreat
+solely because retail's aggression table has no positive Blaster gate.
+=============
+*/
+static void test_coop_starter_blaster_is_actionable(void **state)
+{
+	(void)state;
+	bot_client_state_t bot;
+	memset(&bot, 0, sizeof(bot));
+	int *inventory = bot.last_client_update.inventory;
+
+	LibVarSet("coop", "1");
+	inventory[RETAIL_INVENTORY_HEALTH] = 70;
+	inventory[RETAIL_ENEMY_HEIGHT] = 200;
+	inventory[RETAIL_INVENTORY_BLASTER] = 1;
+
+	assert_float_equal(BotAI_Aggression(&bot), 100.0f, 0.0001f);
+	assert_int_equal(BotAI_WantsToRetreat(&bot), qfalse);
+
+	LibVarSet("coop", "0");
+	assert_float_equal(BotAI_Aggression(&bot), 0.0f, 0.0001f);
+}
+
+/*
+=============
 test_battle_rocket_jump_retail_gate_boundaries
 
 Pins sub_10022990's ordered raw inventory gates, invulnerability bypass,
@@ -13437,6 +13465,9 @@ int main(void)
 												setup_bot_interface,
 												teardown_bot_interface),
 		cmocka_unit_test_setup_teardown(test_battle_aggression_retail_gate_boundaries,
+							setup_bot_interface,
+							teardown_bot_interface),
+		cmocka_unit_test_setup_teardown(test_coop_starter_blaster_is_actionable,
 							setup_bot_interface,
 							teardown_bot_interface),
 		cmocka_unit_test_setup_teardown(test_battle_rocket_jump_retail_gate_boundaries,

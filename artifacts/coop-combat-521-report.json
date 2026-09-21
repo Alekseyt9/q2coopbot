@@ -1,0 +1,133 @@
+{
+  "episodes": {
+    "coop-combat-521": {
+      "events": {
+        "bot_remove": 1,
+        "bot_snapshot": 30,
+        "bot_spawn": 1,
+        "damage_attempt": 2,
+        "diagnostics": 1,
+        "encounter_observed": 2,
+        "episode_start": 1,
+        "input": 1,
+        "map_entity": 367,
+        "map_inventory": 1,
+        "map_inventory_links": 1,
+        "map_link": 145,
+        "projectile_launch": 1,
+        "projectile_touch": 1,
+        "shot": 1
+      },
+      "first_time": 0.0,
+      "last_time": 3.2,
+      "maps": [
+        "",
+        "base2"
+      ],
+      "records": 556,
+      "seed": "312"
+    }
+  },
+  "events": {
+    "bot_remove": 1,
+    "bot_snapshot": 30,
+    "bot_spawn": 1,
+    "damage_attempt": 2,
+    "diagnostics": 1,
+    "encounter_observed": 2,
+    "episode_start": 1,
+    "input": 1,
+    "map_entity": 367,
+    "map_inventory": 1,
+    "map_inventory_links": 1,
+    "map_link": 145,
+    "projectile_launch": 1,
+    "projectile_touch": 1,
+    "shot": 1
+  },
+  "invalid_lines": 0,
+  "maps": {
+    "": {
+      "events": {
+        "diagnostics": 1
+      },
+      "records": 1
+    },
+    "base2": {
+      "events": {
+        "bot_remove": 1,
+        "bot_snapshot": 30,
+        "bot_spawn": 1,
+        "damage_attempt": 2,
+        "encounter_observed": 2,
+        "episode_start": 1,
+        "input": 1,
+        "map_entity": 367,
+        "map_inventory": 1,
+        "map_inventory_links": 1,
+        "map_link": 145,
+        "projectile_launch": 1,
+        "projectile_touch": 1,
+        "shot": 1
+      },
+      "records": 555
+    }
+  },
+  "records": 556,
+  "schema_version": 1,
+  "severities": {
+    "1": 518,
+    "2": 38
+  },
+  "source": "F:\\src\\quake2\\q2coopbot-runtime-bot\\coopbot_debug_events.jsonl#episode=coop-combat-521",
+  "telemetry": {
+    "bot_snapshots": {
+      "distance_to_player": {
+        "average": 135.76666666666665,
+        "maximum": 136.2,
+        "samples": 9
+      },
+      "records": 30,
+      "states": {
+        "idle": 30
+      },
+      "visible_enemies": {
+        "maximum": 1.0,
+        "samples": 30,
+        "target_visible_samples": 0
+      }
+    },
+    "coop": {
+      "encounter_observed": 2,
+      "human_player_entities": [
+        1
+      ],
+      "human_player_samples": 9,
+      "map_transitions": 0,
+      "player_block_candidates": 0,
+      "player_contacts": 0,
+      "regroup": 0,
+      "stuck": 0,
+      "target_acquired": 0,
+      "target_lost": 0
+    },
+    "damage": {
+      "applied_events": 0,
+      "applied_total": 0.0,
+      "attempts": 2,
+      "requested_total": 0.0
+    },
+    "shots": {
+      "kinds": {
+        "blaster_initial": 1
+      },
+      "records": 1
+    }
+  },
+  "validation": {
+    "errors": [
+      "no coopbot_decision TARGET_SELECT record was emitted"
+    ],
+    "ok": false
+  }
+}

@@ -447,6 +447,19 @@ float BotAI_Aggression(const bot_client_state_t *state)
 		return 100.0f;
 	}
 
+	/*
+	 * The retail aggression table has no positive Blaster gate, but a co-op
+	 * companion is guaranteed to spawn with this weapon and must be able to
+	 * answer a nearby monster before collecting a stronger weapon.  Keep the
+	 * retail/deathmatch result unchanged and only provide this starter-weapon
+	 * floor for the co-op overlay.
+	 */
+	if (BotAI_CoopMode() &&
+		inventory[BOT_BATTLE_INVENTORY_BLASTER] > 0)
+	{
+		return 100.0f;
+	}
+
 	return 0.0f;
 }
 
