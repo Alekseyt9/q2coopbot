@@ -389,6 +389,7 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 	int target_visible = 0;
 	int visible_enemies;
 	int target_entity;
+	int player_is_human;
 	const char *state = "idle";
 	int client;
 
@@ -398,6 +399,7 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 	}
 
 	player = CoopBotDiag_Player(bot);
+	player_is_human = player != NULL && (player->flags & FL_BOT) == 0;
 	soft_leash = coopbot_diag.soft_leash != NULL &&
 		coopbot_diag.soft_leash->value > 0.0f
 		? coopbot_diag.soft_leash->value : 384.0f;
@@ -504,12 +506,14 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 	}
 	CoopBotDiag_Log(2,
 		"bot_snapshot client=%d name=\"%s\" state=%s player=%d "
+		"player_is_human=%d "
 		"player_origin=(%.1f %.1f %.1f) bot_origin=(%.1f %.1f %.1f) "
 		"distance_to_player=%.1f target=%d target_class=\"%s\" "
 		"target_health=%d target_visible=%d visible_enemies=%d "
 		"input_flags=0x%x speed=%.1f",
 		client, CoopBotDiag_Name(bot), state,
 		CoopBotDiag_EntityNumber(player),
+		player_is_human,
 		player != NULL ? player->s.origin[0] : 0.0f,
 		player != NULL ? player->s.origin[1] : 0.0f,
 		player != NULL ? player->s.origin[2] : 0.0f,

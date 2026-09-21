@@ -326,6 +326,8 @@ static void BotState_FreeResources(bot_client_state_t *state)
 	state->coop_player_focus_entity = 0;
 	state->coop_player_focus_confidence = 0.0f;
 	state->coop_player_focus_time = 0.0f;
+	state->coop_target_candidate_entity = 0;
+	state->coop_target_candidate_time = 0.0f;
 	state->coop_bot_last_area = 0;
 	state->coop_bot_area_valid = false;
 	state->coop_role = BOT_COOP_ROLE_FOLLOWER;

@@ -9150,6 +9150,84 @@ static void test_coop_shared_focus_and_kill_steal_yield(void **state)
 
 /*
 =============
+test_coop_target_acquisition_delay
+
+Pins the optional human-like delay between first seeing a target and adopting
+it, while damage and an actively shooting target keep their immediate path.
+=============
+*/
+static void test_coop_target_acquisition_delay(void **state)
+{
+	bot_interface_test_context_t *context =
+		(bot_interface_test_context_t *)*state;
+	bot_client_state_t *bot = BotFindEnemy_SetupHarness(context,
+		1,
+		"bots/babe_c.c",
+		"babe");
+	aas_entity_t *candidate = BotFindEnemy_PrepareEntity(2,
+		100.0f,
+		0.0f,
+		0.0f);
+	candidate->solid = SOLID_BBOX;
+	candidate->modelindex = 1;
+
+	LibVarSet("coop", "1");
+	LibVarSet("coopbot_target_hysteresis", "0");
+	LibVarSet("coopbot_target_acquisition_delay", "0.25");
+	LibVarSet("coopbot_log", "0");
+	aasworld.time = 100.0f;
+	BotFindEnemy_ResetCallState(bot, 100);
+
+	ai_dm_enemy_info_t enemy;
+	assert_int_equal(BotAI_FindEnemy(bot, &enemy), qfalse);
+	assert_int_equal(bot->coop_target_candidate_entity, 2);
+	assert_float_equal(bot->coop_target_candidate_time,
+		100.0f,
+		0.0001f);
+
+	aasworld.time = 100.249f;
+	BotFindEnemy_ResetCallState(bot, 100);
+	assert_int_equal(BotAI_FindEnemy(bot, &enemy), qfalse);
+
+	aasworld.time = 100.25f;
+	BotFindEnemy_ResetCallState(bot, 100);
+	assert_int_equal(BotAI_FindEnemy(bot, &enemy), qtrue);
+	assert_int_equal(enemy.entity, 2);
+	assert_int_equal(bot->coop_target_candidate_entity, 0);
+
+	/* A damaged bot must not wait for the target-acquisition timer. */
+	candidate->frame = 173;
+	candidate->modelindex = 255;
+	candidate->solid = 0;
+	candidate = BotFindEnemy_PrepareEntity(3, 100.0f, 0.0f, 0.0f);
+	candidate->solid = SOLID_BBOX;
+	candidate->modelindex = 1;
+	LibVarSet("coopbot_target_acquisition_delay", "10");
+	aasworld.time = 200.0f;
+	BotFindEnemy_ResetCallState(bot, 90);
+	bot->combat.last_known_health = 100;
+	bot->combat.last_health_valid = true;
+	assert_int_equal(BotAI_FindEnemy(bot, &enemy), qtrue);
+	assert_int_equal(enemy.entity, 3);
+
+	/* A shooting threat also interrupts the delay without damage. */
+	BotFindEnemy_ResetCallState(bot, 100);
+	bot->combat.last_known_health = 100;
+	candidate->modelindex = 255;
+	candidate->frame = 46;
+	aasworld.time = 210.0f;
+	assert_int_equal(BotAI_FindEnemy(bot, &enemy), qtrue);
+	assert_int_equal(enemy.entity, 3);
+
+	assert_int_equal(context->api->BotShutdownClient(0), BLERR_NOERROR);
+	assert_int_equal(context->api->BotShutdownLibrary(), BLERR_NOERROR);
+	LibVarSet("coop", "0");
+	LibVarSet("coopbot_target_hysteresis", "0");
+	LibVarSet("coopbot_target_acquisition_delay", "0");
+}
+
+/*
+=============
 test_find_enemy_nonaccelerated_range_fov_and_close_boundaries
 
 Pins the no-3D 900-unit cap, 810-unit FOV saturation, and inclusive 300-unit
@@ -13372,6 +13450,10 @@ int main(void)
 							teardown_bot_interface),
 		cmocka_unit_test_setup_teardown(
 			test_coop_shared_focus_and_kill_steal_yield,
+			setup_bot_interface,
+			teardown_bot_interface),
+		cmocka_unit_test_setup_teardown(
+			test_coop_target_acquisition_delay,
 			setup_bot_interface,
 			teardown_bot_interface),
 		cmocka_unit_test_setup_teardown(

@@ -1038,6 +1038,8 @@ int BotInitLibrary(bot_library_t *lib)
 	lib->funcs.BotLibVarSet("coopbot_kill_steal_radius", cvar->string);
 	cvar = gi.cvar("coopbot_target_hysteresis", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_target_hysteresis", cvar->string);
+	cvar = gi.cvar("coopbot_target_acquisition_delay", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_target_acquisition_delay", cvar->string);
 	cvar = gi.cvar("coopbot_target_switch_ratio", "1.25", 0);
 	lib->funcs.BotLibVarSet("coopbot_target_switch_ratio", cvar->string);
 	cvar = gi.cvar("coopbot_burst_control", "0", 0);

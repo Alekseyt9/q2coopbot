@@ -270,6 +270,8 @@ struct bot_client_state_s {
 	int coop_player_focus_entity;
 	float coop_player_focus_confidence;
 	float coop_player_focus_time;
+	int coop_target_candidate_entity;
+	float coop_target_candidate_time;
 	int coop_bot_last_area;
 	bool coop_bot_area_valid;
 	bot_coop_role_t coop_role;

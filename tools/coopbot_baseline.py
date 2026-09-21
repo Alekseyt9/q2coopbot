@@ -21,7 +21,11 @@ def load_report(path: Path) -> dict:
     return value
 
 
-def aggregate(reports: Iterable[tuple[Path, dict]], minimum_runs: int) -> dict:
+def aggregate(
+    reports: Iterable[tuple[Path, dict]],
+    minimum_runs: int,
+    require_human_player: bool = False,
+) -> dict:
     """Combine per-run reports without hiding missing or duplicate seeds."""
     run_entries: list[dict] = []
     seeds: list[str] = []
@@ -35,10 +39,18 @@ def aggregate(reports: Iterable[tuple[Path, dict]], minimum_runs: int) -> dict:
         if not isinstance(episodes, dict) or not episodes:
             errors.append(f"{path}: no episodes")
             continue
+        real_episodes = {
+            episode_id: episode
+            for episode_id, episode in episodes.items()
+            if episode_id != "pending"
+        }
+        if not real_episodes:
+            errors.append(f"{path}: no non-pending episodes")
+            continue
 
         episode_seeds: set[str] = set()
         episode_maps: set[str] = set()
-        for episode_id, episode in episodes.items():
+        for episode_id, episode in real_episodes.items():
             if not isinstance(episode, dict):
                 errors.append(f"{path}: episode {episode_id} is not an object")
                 continue
@@ -64,13 +76,25 @@ def aggregate(reports: Iterable[tuple[Path, dict]], minimum_runs: int) -> dict:
                 if str(event).startswith("decision_") and isinstance(count, int):
                     decisions[str(event)] += count
 
+        telemetry = report.get("telemetry", {})
+        coop = telemetry.get("coop", {}) if isinstance(telemetry, dict) else {}
+        human_samples = coop.get("human_player_samples", 0)
+        if require_human_player and not isinstance(human_samples, int):
+            errors.append(f"{path}: human player sample count is invalid")
+            human_samples = 0
+        if require_human_player and human_samples < 1:
+            errors.append(
+                f"{path}: no human player entity was observed in bot snapshots"
+            )
+
         run_entries.append(
             {
                 "source": str(path),
-                "episodes": len(episodes),
+                "episodes": len(real_episodes),
                 "seeds": sorted(episode_seeds),
                 "maps": sorted(episode_maps),
                 "records": int(report.get("records", 0)),
+                "human_player_samples": int(human_samples),
             }
         )
 
@@ -86,6 +110,7 @@ def aggregate(reports: Iterable[tuple[Path, dict]], minimum_runs: int) -> dict:
     return {
         "schema_version": 1,
         "minimum_runs": minimum_runs,
+        "require_human_player": require_human_player,
         "runs": len(run_entries),
         "episodes": sum(entry["episodes"] for entry in run_entries),
         "seeds": sorted(set(seeds)),
@@ -107,6 +132,11 @@ def main() -> int:
         default=20,
         help="minimum number of valid reports required (default: 20)",
     )
+    parser.add_argument(
+        "--require-human-player",
+        action="store_true",
+        help="reject reports without a real non-bot player entity",
+    )
     parser.add_argument("-o", "--output", help="write baseline JSON to this path")
     args = parser.parse_args()
     if args.min_runs < 1:
@@ -121,7 +151,11 @@ def main() -> int:
         except (OSError, json.JSONDecodeError, ValueError) as exc:
             errors.append(str(exc))
 
-    result = aggregate(loaded, args.min_runs)
+    result = aggregate(
+        loaded,
+        args.min_runs,
+        require_human_player=args.require_human_player,
+    )
     if errors:
         result["validation"]["ok"] = False
         result["validation"]["errors"] = errors + result["validation"]["errors"]

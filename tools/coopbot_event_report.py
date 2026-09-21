@@ -443,6 +443,8 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
     regroup_events = 0
     stuck_events = 0
     map_transition_events = 0
+    human_player_samples = 0
+    human_player_entities: set[int] = set()
 
     for record in records:
         fields = message_fields(record.get("message"))
@@ -453,6 +455,11 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
             state = fields.get("state")
             if state:
                 states[state] += 1
+            player_entity = integer(fields.get("player"), -1)
+            player_is_human = integer(fields.get("player_is_human"), 0)
+            if player_entity >= 0 and player_is_human == 1:
+                human_player_samples += 1
+                human_player_entities.add(player_entity)
             distance = number(fields.get("distance_to_player"))
             if distance is not None and distance >= 0.0:
                 snapshot_distances.append(distance)
@@ -531,6 +538,8 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
             "applied_total": damage_applied,
         },
         "coop": {
+            "human_player_samples": human_player_samples,
+            "human_player_entities": sorted(human_player_entities),
             "player_contacts": player_contacts,
             "player_block_candidates": player_block_candidates,
             "encounter_observed": encounter_events,
@@ -685,6 +694,11 @@ def main() -> int:
         choices=("role_select", "target_select", "target_yield", "action_select"),
         help="fail unless botlib recorded the named coop decision (repeatable)",
     )
+    parser.add_argument(
+        "--require-human-player",
+        action="store_true",
+        help="fail unless bot snapshots reference a real non-bot player entity",
+    )
     parser.add_argument("-o", "--output", help="write summary JSON to this path")
     args = parser.parse_args()
 
@@ -701,6 +715,14 @@ def main() -> int:
     botlib_events: Counter[str] = Counter()
     botlib_map_model: dict | None = None
     validation_errors: list[str] = []
+
+    if (
+        args.require_human_player
+        and result_object["telemetry"]["coop"]["human_player_samples"] < 1
+    ):
+        validation_errors.append(
+            "no human player entity was observed in bot snapshots"
+        )
 
     if args.botlib_log:
         botlib_path = Path(args.botlib_log)
@@ -830,6 +852,7 @@ def main() -> int:
         or args.require_decision
         or args.require_map_transition
         or args.require_runtime_map_transition
+        or args.require_human_player
     ):
         result_object["validation"] = {
             "ok": not validation_errors,

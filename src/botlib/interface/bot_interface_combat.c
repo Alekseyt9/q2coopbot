@@ -1287,6 +1287,68 @@ static bool BotAI_CoopYieldPlayerFocus(const bot_client_state_t *state,
 
 /*
 =============
+BotAI_CoopTargetAcquisitionAllowed
+
+Keeps a newly noticed coop target pending for a bounded human-like reaction
+interval.  Damage and an actively shooting threat remain immediate so the
+delay cannot make the companion ignore an urgent attack.
+=============
+*/
+static bool BotAI_CoopTargetAcquisitionAllowed(
+	bot_client_state_t *state,
+	const aas_entityinfo_t *candidate,
+	int health_decrease)
+{
+	float delay;
+	float now;
+
+	if (state == NULL || candidate == NULL || !BotAI_CoopMode())
+	{
+		return true;
+	}
+
+	delay = LibVarGetValue("coopbot_target_acquisition_delay");
+	if (delay <= 0.0f || health_decrease ||
+		BotAI_EntityIsShooting(candidate) ||
+		candidate->number == state->combat.current_enemy)
+	{
+		state->coop_target_candidate_entity = 0;
+		state->coop_target_candidate_time = 0.0f;
+		return true;
+	}
+
+	now = AAS_Time();
+	if (state->coop_target_candidate_entity != candidate->number)
+	{
+		if (state->coop_target_candidate_entity == 0 ||
+			now - state->coop_target_candidate_time >= delay)
+		{
+			state->coop_target_candidate_entity = candidate->number;
+			state->coop_target_candidate_time = now;
+			if (LibVarGetValue("coopbot_log") >= 2.0f)
+			{
+				BotLib_LogWriteTimeStamped(
+					"coopbot_target_pending client=%d target=%d delay=%.3f",
+					state->client_number,
+					candidate->number,
+					delay);
+			}
+		}
+		return false;
+	}
+
+	if (now - state->coop_target_candidate_time < delay)
+	{
+		return false;
+	}
+
+	state->coop_target_candidate_entity = 0;
+	state->coop_target_candidate_time = 0.0f;
+	return true;
+}
+
+/*
+=============
 BotAI_CoopTargetSwitchAllowed
 
 Applies target hysteresis only when a coop scan is trying to replace an
@@ -1294,7 +1356,7 @@ existing enemy. Immediate threats always interrupt; otherwise the candidate
 must beat the retained target utility by the configured ratio.
 =============
 */
-static bool BotAI_CoopTargetSwitchAllowed(const bot_client_state_t *state,
+static bool BotAI_CoopTargetSwitchAllowed(bot_client_state_t *state,
 	const aas_entityinfo_t *candidate,
 	float distance,
 	bool active_group,
@@ -1307,6 +1369,10 @@ static bool BotAI_CoopTargetSwitchAllowed(const bot_client_state_t *state,
 	float switch_ratio;
 	vec3_t direction;
 
+	if (!BotAI_CoopTargetAcquisitionAllowed(state, candidate, health_decrease))
+	{
+		return false;
+	}
 	if (state == NULL || candidate == NULL || !BotAI_CoopMode() ||
 		LibVarGetValue("coopbot_target_hysteresis") == 0.0f ||
 		state->combat.current_enemy <= 0 ||

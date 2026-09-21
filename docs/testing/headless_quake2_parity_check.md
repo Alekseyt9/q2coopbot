@@ -6,6 +6,12 @@ compatible with the original mod.  The check is optional and tagged as a
 long-running CTest so CI can run it on a separate cadence (nightly or
 on-demand).
 
+This harness is bot-only server parity; it does not prove that a human client
+joined the coop session. For a cooperative acceptance report, pass
+`--require-human-player` to `tools/coopbot_event_report.py` and to
+`tools/coopbot_baseline.py`. The gate requires an explicit game-side
+`player_is_human=1` snapshot marker, so a bot fallback slot cannot pass it.
+
 ## Prerequisites
 
 * **Quake II dedicated server build** – Provide a legal copy of the Quake II
@@ -41,6 +47,7 @@ invoking the harness.
 | `GLADIATOR_Q2_CAPTURE_DIR` | ⛔ | Optional destination for harness logs and generated configs.  Defaults to `headless-parity-captures/` inside the build directory. |
 | `GLADIATOR_Q2_PARITY_CFG` | ⛔ | Optional override for the config executed by the dedicated server.  When unset the harness writes a minimal config that starts `q2dm1`, enables bots, and quits after the map loads. |
 | `GLADIATOR_Q2_MOD_DIR` | ⛔ | Optional directory inside the Quake II install tree where the Gladiator module should be staged.  Defaults to `<basedir>/gladiator/`. |
+| `GLADIATOR_Q2_PRE_MAP_ARGS` | ⛔ | Optional space-separated `+set`/`+exec` tokens inserted before `+map`; use this for deterministic `coopbot_seed`, `coopbot_episode_id`, or game-mode cvars that must exist during map initialization. |
 | `GLADIATOR_Q2_EXTRA_ARGS` | ⛔ | Additional command-line tokens appended to the dedicated server launch (useful for debug flags). |
 | `GLADIATOR_Q2_TIMEOUT` | ⛔ | Timeout in seconds before the harness aborts the dedicated server (default `180`). |
 

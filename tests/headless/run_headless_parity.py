@@ -19,6 +19,7 @@ Environment:
   GLADIATOR_Q2_BOTS              bots to require in game (default 4)
   GLADIATOR_Q2_RUNTIME           seconds to let the server run (default 45)
   GLADIATOR_Q2_PORT              server port (default 27920)
+  GLADIATOR_Q2_PRE_MAP_ARGS      space-separated +set/+exec arguments before map
   GLADIATOR_Q2_CAPTURE_DIR       where to copy the captured log
 """
 from __future__ import annotations
@@ -197,8 +198,15 @@ def main() -> int:
         "+set", "minimumplayers", str(want_bots),
         "+set", "port", port,
         "+set", "logfile", "2",
-        "+map", game_map,
     ]
+
+    # Map loading starts the game-side diagnostic episode.  Seed and episode
+    # identity therefore have to be installed before +map; arguments appended
+    # after it are too late on Yamagi's command buffer.
+    pre_map = os.environ.get("GLADIATOR_Q2_PRE_MAP_ARGS")
+    if pre_map:
+        command.extend(pre_map.split())
+    command.extend(["+map", game_map])
 
     extra = os.environ.get("GLADIATOR_Q2_EXTRA_ARGS")
     if extra:

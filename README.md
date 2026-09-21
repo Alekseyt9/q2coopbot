@@ -191,6 +191,9 @@ The profile enables:
 - `coopbot_target_hysteresis 1` — avoids replacing a current enemy for a
   marginally better candidate; `coopbot_target_switch_ratio 1.25` controls
   the required utility improvement.
+- `coopbot_target_acquisition_delay 0.25` — keeps a newly noticed target
+  pending for a short human-like reaction interval. Set it to `0` to disable;
+  damage and actively shooting threats still interrupt immediately.
 - `coopbot_burst_control 1` — enables short bursts for automatic coop
   weapons; `coopbot_burst_shots 4` and `coopbot_burst_pause 0.25` control
   burst length and the re-aim pause.
@@ -272,7 +275,7 @@ Scenario 11 has report gates for repeatable checks:
 
 ~~~text
 python tools/coopbot_event_report.py coopbot_debug_events.jsonl \
-  --botlib-log botlib.log --require-elevator-edge
+  --botlib-log botlib.log --require-elevator-edge --require-human-player
 ~~~
 
 After a real two-client separation run, add
@@ -323,6 +326,9 @@ Each `episode_start` summary also retains its configured seed. After collecting
 per-run reports, `tools/coopbot_baseline.py --min-runs 20 report-*.json`
 checks that every report contains an episode seed and produces a machine-readable
 aggregate; it deliberately fails until the requested number of real runs exists.
+For cooperative acceptance runs, add `--require-human-player` to both the
+report and baseline commands; this requires the explicit game-side
+`player_is_human=1` marker, so a bot-only fallback slot cannot pass the gate.
 
 When `--botlib-log` is supplied, `botlib_log.map_model` also includes the
 concrete elevator edges, their source/destination AAS areas and bounds, BSP
