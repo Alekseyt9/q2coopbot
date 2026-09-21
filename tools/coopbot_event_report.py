@@ -615,6 +615,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", help="JSONL path, or '-' for stdin")
     parser.add_argument(
+        "--episode-id",
+        help="restrict telemetry and validation to one episode_id",
+    )
+    parser.add_argument(
         "--botlib-log",
         help="optional botlib.log path; counts CoopBot records emitted by botlib",
     )
@@ -710,6 +714,14 @@ def main() -> int:
         with path.open("r", encoding="utf-8") as stream:
             records, invalid = read_records(stream)
         source = str(path)
+
+    if args.episode_id is not None:
+        records = [
+            record
+            for record in records
+            if str(record.get("episode_id", "")) == args.episode_id
+        ]
+        source = f"{source}#episode={args.episode_id}"
 
     result_object = summarise(records, invalid, source)
     botlib_events: Counter[str] = Counter()

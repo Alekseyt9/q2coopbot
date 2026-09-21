@@ -333,6 +333,7 @@ def main() -> int:
     move_started: float | None = None
     next_move_at = 0.0
     check_table: bytes | None = None
+    socket_error: str | None = None
     zero_cmd = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     previous_cmd = zero_cmd
     move_cmd = (
@@ -366,6 +367,18 @@ def main() -> int:
             except socket.timeout:
                 packet = b""
                 source = None
+            except ConnectionResetError as exc:
+                # Windows reports an ICMP/peer close on a connected UDP socket
+                # as WSAECONNRESET.  Treat it as an observable transport end,
+                # not as a harness traceback; the JSON result still exposes
+                # whether the client had completed the game handshake.
+                socket_error = str(exc)
+                break
+            except OSError as exc:
+                if getattr(exc, "winerror", None) == 10054:
+                    socket_error = str(exc)
+                    break
+                raise
 
             if packet:
                 if packet[:4] == OOB:
@@ -507,6 +520,7 @@ def main() -> int:
         "commands_sent": commands_sent,
         "move_packets": move_packets,
         "human_marker_seen": human_marker,
+        "socket_error": socket_error,
         "responses": responses,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))

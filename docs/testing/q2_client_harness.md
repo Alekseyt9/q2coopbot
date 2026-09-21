@@ -31,13 +31,36 @@ human-playability здесь нет. Зато он позволяет прове
 $runtime = 'F:\src\quake2\q2coopbot-runtime-bot'
 $stdout = Join-Path $runtime 'protocol-client.stdout.log'
 $stderr = Join-Path $runtime 'protocol-client.stderr.log'
-$serverArgs = '+set game baseq2 +set dedicated 1 +set deathmatch 1 +set maxclients 8 +set minimumplayers 1 +set port 27934 +set logfile 2 +set botlib libgladiator_x64.dll +set coopbot_seed 305 +set coopbot_episode_id protocol-client-305 +map base2'
+$serverArgs = '+set game baseq2 +set dedicated 1 +set coop 1 +set deathmatch 0 +set maxclients 8 +set minimumplayers 1 +set port 27934 +set logfile 2 +set botlib libgladiator_x64.dll +set coopbot_seed 305 +set coopbot_episode_id protocol-client-305 +map base2'
 $server = Start-Process (Join-Path $runtime 'q2ded.exe') -ArgumentList $serverArgs -WorkingDirectory $runtime -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
 $server.Id
 ```
 
 Порт и episode ID должны совпадать с параметрами harness. Не запускайте второй
 server на том же порту.
+
+Для сценариев с монстрами обязательны `+set coop 1 +set deathmatch 0`.
+Deathmatch-прогон на `base2` оставляйте только для транспортных/следящих
+проверок: в нём карта не активирует монстров.
+
+## Кеш AAS
+
+`base2.aas` уже содержит готовый lump reachability, поэтому при co-op старте
+сервер сразу пишет `AAS initialized.` без `calculating reachability...`.
+
+Если у карты reachability-lump пустой (так было у исходного `base1.aas`),
+один раз прогрейте карту и сохраните результат:
+
+```powershell
+$serverArgs = '+set game baseq2 +set dedicated 1 +set coop 1 +set deathmatch 0 +set framereachability 2000 +set forcewrite 1 +set maxclients 8 +set minimumplayers 1 +set port 27950 +set logfile 2 +set botlib libgladiator_x64.dll +set coopbot_seed 510 +set coopbot_episode_id aas-prewarm-base1-510 +map base1'
+$server = Start-Process (Join-Path $runtime 'q2ded.exe') -ArgumentList $serverArgs -WorkingDirectory $runtime -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
+```
+
+Ждите `AAS initialized.` и только после этого останавливайте этот PID. В
+проверенном прогоне `base1.aas` был переписан с reachability length `470492`;
+следующий старт `base1` уже загрузил AAS без расчёта. Не используйте
+`forcereachability 1` для обычных тестов: это принудительная регенерация, а не
+загрузка кеша.
 
 ## Подключение и вход в игру
 
@@ -129,6 +152,8 @@ python .\tools\q2_client_handshake.py `
 
 `--forward-speed -400` моделирует движение назад, `--side-speed` — strafe,
 `--yaw-rate` задаётся в градусах в секунду, `--jump` удерживает up input.
+Если Windows возвращает UDP `WSAECONNRESET`, harness завершает транспортный
+цикл и сообщает его в JSON-поле `socket_error`, не выдавая traceback.
 
 ## Проверенные сценарии через UDP
 
@@ -136,11 +161,14 @@ python .\tools\q2_client_handshake.py `
 | --- | --- | --- |
 | Follow-style | `protocol-client-309` | 100 move-пакетов; 31 human snapshot; бот записал 26 кадров `following` и 5 `regroup` |
 | Retreat-style | `harness-retreat-402` | 60 move-пакетов с backward/strafe/yaw/attack/jump; 31 human snapshot; 31 `regroup` |
+| Co-op combat probe | `coop-combat-509` | настоящий co-op `base2`; 41 монстр; 360 move-пакетов stationary-spin/attack; human получил урон от монстров; botlib записал выбор целей `entity=45/306/293/374` |
 
-Это уже проверяет transport/input/telemetry слой игрока. Это ещё не финальная
-кооперативная acceptance-проверка: на `base2` в этих deathmatch-прогонах нет
-монстров, поэтому cover, rescue, target focus и kill-steal нельзя честно
-подтвердить только этим запуском.
+Первые две строки — исторические transport/input прогоны; они были выполнены
+в deathmatch и не являются доказательством боевой кооперации. Последняя строка
+уже выполнена в правильном co-op режиме: карта содержит монстров, игрок
+реально получает входящий урон, а AI выбирает наблюдаемые monster entities.
+При этом bot-side `shot/damage` по монстру и acceptance baseline `N >= 20`
+ещё не подтверждены.
 
 Поворот, strafe, прыжок и произвольная временная последовательность клавиш
 пока не вынесены в CLI. Их следующий шаг — расширение того же usercmd-потока,
