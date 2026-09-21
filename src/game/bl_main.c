@@ -621,6 +621,62 @@ void BotLib_BotUpdateEntity(edict_t *ent)
 		} //end if
 	} //end if
 } //end of the function BotLib_BotUpdateEntity
+
+/*
+====================
+BotLib_BotUpdateCoopPlayers
+
+Publish the small amount of human player-state data that the legacy
+BotUpdateEntity contract cannot carry. Names are keyed by entity number so
+multiple coop humans remain distinguishable; botlib treats absent values as
+unknown rather than as zero health.
+====================
+*/
+void BotLib_BotUpdateCoopPlayers(void)
+{
+	int client;
+	edict_t *ent;
+	bot_library_t *lib;
+	char name[64];
+	char value[32];
+
+	for (client = 0; client < maxclients->value; ++client)
+	{
+		ent = DF_CLIENTENT(client);
+		if (!ent->inuse || ent->client == NULL || (ent->flags & FL_BOT))
+		{
+			continue;
+		}
+
+		for (lib = botglobals.firstbotlib; lib; lib = lib->next)
+		{
+			if (!lib->funcs.BotLibraryInitialized())
+			{
+				continue;
+			}
+
+			Com_sprintf(name, sizeof(name),
+				"coopbot_player_health_%d", DF_ENTNUMBER(ent));
+			Com_sprintf(value, sizeof(value), "%d", ent->health);
+			lib->funcs.BotLibVarSet(name, value);
+			Com_sprintf(name, sizeof(name),
+				"coopbot_player_max_health_%d", DF_ENTNUMBER(ent));
+			Com_sprintf(value, sizeof(value), "%d",
+				ent->client->pers.max_health);
+			lib->funcs.BotLibVarSet(name, value);
+			Com_sprintf(name, sizeof(name),
+				"coopbot_player_armor_%d", DF_ENTNUMBER(ent));
+			Com_sprintf(value, sizeof(value), "%d",
+				ent->client->ps.stats[STAT_ARMOR]);
+			lib->funcs.BotLibVarSet(name, value);
+			Com_sprintf(name, sizeof(name),
+				"coopbot_player_damage_blood_%d", DF_ENTNUMBER(ent));
+			Com_sprintf(value, sizeof(value), "%d",
+				ent->client->damage_blood);
+			lib->funcs.BotLibVarSet(name, value);
+		}
+	}
+}
 //===========================================================================
 //
 // Parameter:				-
@@ -935,6 +991,28 @@ int BotInitLibrary(bot_library_t *lib)
 	lib->funcs.BotLibVarSet("coopbot_new_group_guard", cvar->string);
 	cvar = gi.cvar("coopbot_enemy_group_radius", "384", 0);
 	lib->funcs.BotLibVarSet("coopbot_enemy_group_radius", cvar->string);
+	cvar = gi.cvar("coopbot_player_intent", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_player_intent", cvar->string);
+	cvar = gi.cvar("coopbot_intent_confidence", "0.60", 0);
+	lib->funcs.BotLibVarSet("coopbot_intent_confidence", cvar->string);
+	cvar = gi.cvar("coopbot_intent_advance_speed", "48", 0);
+	lib->funcs.BotLibVarSet("coopbot_intent_advance_speed", cvar->string);
+	cvar = gi.cvar("coopbot_intent_hold_speed", "24", 0);
+	lib->funcs.BotLibVarSet("coopbot_intent_hold_speed", cvar->string);
+	cvar = gi.cvar("coopbot_roles", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_roles", cvar->string);
+	cvar = gi.cvar("coopbot_role_position_interval", "0.5", 0);
+	lib->funcs.BotLibVarSet("coopbot_role_position_interval", cvar->string);
+	cvar = gi.cvar("coopbot_role_position_radius", "64", 0);
+	lib->funcs.BotLibVarSet("coopbot_role_position_radius", cvar->string);
+	cvar = gi.cvar("coopbot_rescue", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_rescue", cvar->string);
+	cvar = gi.cvar("coopbot_player_critical_health", "25", 0);
+	lib->funcs.BotLibVarSet("coopbot_player_critical_health", cvar->string);
+	cvar = gi.cvar("coopbot_rescue_damage_threshold", "15", 0);
+	lib->funcs.BotLibVarSet("coopbot_rescue_damage_threshold", cvar->string);
+	cvar = gi.cvar("coopbot_rescue_radius", "160", 0);
+	lib->funcs.BotLibVarSet("coopbot_rescue_radius", cvar->string);
 	cvar = gi.cvar("coopbot_target_hysteresis", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_target_hysteresis", cvar->string);
 	cvar = gi.cvar("coopbot_target_switch_ratio", "1.25", 0);

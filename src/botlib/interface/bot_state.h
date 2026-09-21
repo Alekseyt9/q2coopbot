@@ -41,6 +41,37 @@ typedef enum bot_ai_node_e
 	BOT_AI_NODE_INTERMISSION,
 } bot_ai_node_t;
 
+/*
+ * Co-op player intent is deliberately a small, inspectable heuristic state
+ * rather than an opaque planner result.  UNKNOWN remains the safe fallback
+ * whenever the game feed does not provide enough evidence.
+ */
+typedef enum bot_coop_player_intent_e
+{
+	BOT_COOP_INTENT_UNKNOWN = 0,
+	BOT_COOP_INTENT_ADVANCE,
+	BOT_COOP_INTENT_HOLD,
+	BOT_COOP_INTENT_RETREAT,
+	BOT_COOP_INTENT_ENGAGE_TARGET,
+	BOT_COOP_INTENT_SEARCH,
+	BOT_COOP_INTENT_EXPLORE,
+	BOT_COOP_INTENT_INTERACT,
+	BOT_COOP_INTENT_LOOT,
+	BOT_COOP_INTENT_WAIT,
+} bot_coop_player_intent_t;
+
+typedef enum bot_coop_role_e
+{
+	BOT_COOP_ROLE_FOLLOWER = 0,
+	BOT_COOP_ROLE_SUPPORT,
+	BOT_COOP_ROLE_ANCHOR,
+	BOT_COOP_ROLE_COVER,
+	BOT_COOP_ROLE_RESCUER,
+	BOT_COOP_ROLE_FINISHER,
+	BOT_COOP_ROLE_VANGUARD,
+	BOT_COOP_ROLE_REGROUP,
+} bot_coop_role_t;
+
 /**
  * Characteristic indices required during client setup. These values mirror the
  * macros defined in the Gladiator assets (chars.h) and describe where the
@@ -149,6 +180,27 @@ struct bot_client_state_s {
 	bool coop_player_goal_valid;
 	float coop_elevator_wait_started;
 	int coop_elevator_wait_area;
+	bot_coop_player_intent_t coop_player_intent;
+	float coop_player_intent_confidence;
+	float coop_player_intent_time;
+	vec3_t coop_player_last_origin;
+	vec3_t coop_player_last_velocity;
+	float coop_player_last_yaw;
+	float coop_player_last_threat_distance;
+	int coop_player_last_area;
+	bool coop_player_motion_valid;
+	bool coop_player_threat_valid;
+	bool coop_player_area_valid;
+	int coop_player_health;
+	int coop_player_max_health;
+	int coop_player_armor;
+	int coop_player_damage_blood;
+	bool coop_player_telemetry_valid;
+	bot_coop_role_t coop_role;
+	float coop_initiative_budget;
+	float coop_role_confidence;
+	float coop_role_time;
+	float coop_role_next_position_time;
     float goal_avoid_duration;
     int active_goal_number;
 	float nearby_goal_time;

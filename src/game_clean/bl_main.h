@@ -94,6 +94,7 @@ void BotLib_BotLibVarSet(char *var_name, char *value);
 void BotLib_BotStartFrame(float time);
 void BotLib_BotUpdateClient(edict_t *bot);
 void BotLib_BotUpdateEntity(edict_t *ent);
+void BotLib_BotUpdateCoopPlayers(void);
 void BotLib_BotAddSound(edict_t *ent, int channel, int soundindex, float volume, float attenuation, float timeofs);
 void BotLib_BotAddPointLight(vec3_t origin, int ent, float radius, float r, float g, float b, float time, float decay);
 void BotLib_BotAI(edict_t *bot, float thinktime);

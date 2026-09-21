@@ -147,6 +147,24 @@ The profile enables:
 - `coopbot_new_group_guard 1` — blocks non-urgent distant new encounters;
   `coopbot_enemy_group_radius 384` keeps nearby members of an active fight
   eligible.
+- `coopbot_player_intent 1` — enables the heuristic player-intent model;
+  `coopbot_intent_confidence 0.60` is the minimum confidence for tactical
+  overrides, while `coopbot_intent_advance_speed 48` and
+  `coopbot_intent_hold_speed 24` tune movement classification. A confident
+  `ADVANCE`/`EXPLORE` permits a new group; a confident `RETREAT` interrupts
+  an otherwise continuing battle chase.
+- `coopbot_roles 1` — enables temporary role modifiers and the bounded
+  initiative budget; roles are logged as `coopbot_role` and currently cover
+  `FOLLOWER`, `SUPPORT`, `ANCHOR`, `COVER`, `VANGUARD`, and `REGROUP`.
+  `COVER`/`SUPPORT` also make a bounded lateral step when the bot occupies the
+  player's direct line to its current enemy; `coopbot_role_position_interval`
+  and `coopbot_role_position_radius` limit that positioning overlay.
+- `coopbot_rescue 1` — enables `RESCUER` when the game supplies a confirmed
+  critical-health/damage snapshot for the human. The rescue overlay closes a
+  bounded gap toward the player, but the bot's own danger retreat and elevator
+  regroup remain higher priority.
+  The game-side bridge publishes this telemetry through namespaced internal
+  libvars; the legacy export table is unchanged.
 - `coopbot_target_hysteresis 1` — avoids replacing a current enemy for a
   marginally better candidate; `coopbot_target_switch_ratio 1.25` controls
   the required utility improvement.

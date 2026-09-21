@@ -501,6 +501,8 @@ G_RunFrame(void)
 		}
 	}
 
+	BotLib_BotUpdateCoopPlayers();
+
 	for (i = 0; i < maxclients->value; i++)
 	{
 		ent = DF_CLIENTENT(i);

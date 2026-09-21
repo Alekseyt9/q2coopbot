@@ -573,6 +573,7 @@ void G_RunFrame (void)
 			BotLib_BotUpdateEntity(ent);
 		} //end if
 	} //end for
+	BotLib_BotUpdateCoopPlayers();
 	//The bot AI and execution of the input is prefered
 	//not to be called between entity, sound and client
 	//updates. This way the bot won't miss any updates.
