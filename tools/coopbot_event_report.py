@@ -95,6 +95,18 @@ def read_botlib_events(stream: TextIO) -> Counter[str]:
             objective = fields.get("objective", "unknown").lower()
             phase = fields.get("phase", "unknown").lower()
             events[f"objective_{objective}_{phase}"] += 1
+        if "coopbot_changelevel_gate" in line:
+            fields = message_fields(line)
+            phase = fields.get("phase", "unknown").lower()
+            events[f"changelevel_gate_{phase}"] += 1
+        if "coopbot_player_style" in line:
+            fields = message_fields(line)
+            events["player_style_updates"] += 1
+            if fields.get("confidence") is not None:
+                events["player_style_observations"] = max(
+                    events.get("player_style_observations", 0),
+                    integer(fields.get("observations"), 0),
+                )
         if "coopbot_path_failure" in line:
             # A botlib route failure is the lower-level equivalent of the
             # game-side stuck event and must not be reported as idle follow.

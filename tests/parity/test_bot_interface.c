@@ -6871,6 +6871,9 @@ static void test_coop_player_intent_tracks_advance(void **state)
 	LibVarSet("coopbot_focus_memory", "0.25");
 	LibVarSet("coopbot_intent_signal", "1");
 	LibVarSet("coopbot_action_commitment", "0.75");
+	LibVarSet("coopbot_player_style", "1");
+	LibVarSet("coopbot_style_learning_rate", "0.10");
+	LibVarSet("coopbot_style_update_interval", "0");
 	LibVarSet("coopbot_log", "0");
 
 	memset(&player_entity, 0, sizeof(player_entity));
@@ -6914,6 +6917,10 @@ static void test_coop_player_intent_tracks_advance(void **state)
 	assert_true(bot->coop_player_intent_confidence >= 0.60f);
 	assert_int_equal(bot->coop_role, BOT_COOP_ROLE_VANGUARD);
 	assert_float_equal(bot->coop_initiative_budget, 0.20f, 0.0001f);
+	assert_true(bot->coop_player_style_valid);
+	assert_true(bot->coop_player_style_observations >= 2);
+	assert_true(bot->coop_player_style_pace > 0.0f);
+	assert_true(bot->coop_player_style_aggression < 0.50f);
 	assert_true(bot->coop_bot_area_valid);
 	assert_int_equal(bot->coop_area_state, BOT_COOP_AREA_VISITED);
 	assert_true(bot->coop_last_safe_valid);
@@ -6950,6 +6957,7 @@ static void test_coop_player_intent_tracks_advance(void **state)
 	assert_int_equal(bot->coop_player_intent, BOT_COOP_INTENT_RETREAT);
 	assert_true(bot->coop_player_intent_confidence >= 0.60f);
 	assert_int_equal(bot->coop_player_focus_entity, 4);
+	assert_true(bot->coop_player_style_aggression > 0.30f);
 	assert_int_equal(bot->coop_role, BOT_COOP_ROLE_COVER);
 	assert_float_equal(bot->coop_initiative_budget, 0.75f, 0.0001f);
 	assert_int_equal(bot->ai_node, BOT_AI_NODE_BATTLE_RETREAT);
@@ -7072,6 +7080,9 @@ static void test_coop_player_intent_tracks_advance(void **state)
 	LibVarSet("coopbot_focus_memory", "0.75");
 	LibVarSet("coopbot_intent_signal", "0");
 	LibVarSet("coopbot_action_commitment", "0.75");
+	LibVarSet("coopbot_player_style", "0");
+	LibVarSet("coopbot_style_learning_rate", "0.10");
+	LibVarSet("coopbot_style_update_interval", "1.0");
 	LibVarSet("coopbot_rescue", "0");
 	LibVarSet("coopbot_log", "0");
 }
@@ -7340,6 +7351,107 @@ static void test_coop_objective_wait_timeout_retries(void **state)
 	LibVarSet("coop", "0");
 	LibVarSet("coopbot_leash", "0");
 	LibVarSet("coopbot_objective_htn", "0");
+	LibVarSet("coopbot_objective_wait_timeout", "30");
+	LibVarSet("coopbot_log", "0");
+}
+
+/*
+=============
+test_coop_objective_wait_releases_after_player_arrival
+
+The successful OpenPath branch must leave WAIT_FOR_PLAYER when the human
+reaches the activated control.  This protects the normal HTN completion path
+separately from the timeout/retry path above.
+=============
+*/
+static void test_coop_objective_wait_releases_after_player_arrival(void **state)
+{
+	bot_interface_test_context_t *context =
+		(bot_interface_test_context_t *)*state;
+	bot_mover_fixture_t fixture;
+	bot_settings_t settings;
+	bot_updateentity_t player_entity;
+	bot_updateclient_t update;
+	bot_client_state_t *bot;
+
+	Mock_Reset(&context->mock);
+	assert_int_equal(context->api->BotSetupLibrary(), BLERR_NOERROR);
+	memset(&fixture, 0, sizeof(fixture));
+	bot_mover_fixture_init(&fixture);
+	aasworld.maxClients = 2;
+
+	memset(&settings, 0, sizeof(settings));
+	snprintf(settings.characterfile, sizeof(settings.characterfile),
+		"bots/babe_c.c");
+	snprintf(settings.charactername, sizeof(settings.charactername), "babe");
+	assert_true(context->api->BotSetupClient(1, &settings));
+	bot = BotState_Get(1);
+	assert_non_null(bot);
+	bot->enter_game_time = -1000.0f;
+
+	LibVarSet("coop", "1");
+	LibVarSet("coopbot_leash", "0");
+	LibVarSet("coopbot_objective_htn", "1");
+	LibVarSet("coopbot_objective_wait_distance", "256");
+	LibVarSet("coopbot_objective_wait_timeout", "30");
+	LibVarSet("coopbot_log", "0");
+
+	memset(&player_entity, 0, sizeof(player_entity));
+	VectorSet(player_entity.origin, 64.0f, 0.0f, 32.0f);
+	VectorCopy(player_entity.origin, player_entity.old_origin);
+	VectorSet(player_entity.mins, -16.0f, -16.0f, -24.0f);
+	VectorSet(player_entity.maxs, 16.0f, 16.0f, 32.0f);
+	player_entity.solid = SOLID_BBOX;
+	player_entity.modelindex = 255;
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+
+	memset(&update, 0, sizeof(update));
+	VectorClear(update.origin);
+	update.pm_flags = PMF_ON_GROUND;
+	update.stats[STAT_HEALTH] = 100;
+	update.inventory[RETAIL_INVENTORY_HEALTH] = 100;
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(1.0f), BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+
+	bot->coop_control_phase = BOT_COOP_CONTROL_WAIT_PLAYER;
+	bot->coop_control_entity = 50;
+	bot->coop_control_goal_area = 2;
+	bot->coop_control_started = aasworld.time;
+	bot->activation_goal_time = aasworld.time + 10.0f;
+
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_int_equal(bot->coop_control_phase, BOT_COOP_CONTROL_COMPLETE);
+	assert_int_equal(bot->coop_control_entity, 50);
+	assert_int_equal(bot->coop_control_goal_area, 2);
+
+	/* The next frame exposes the explicit ReturnToPath HTN step. */
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_int_equal(bot->coop_control_phase,
+		BOT_COOP_CONTROL_RETURN_PATH);
+
+	/* ReturnToPath then releases the stale control objective. */
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_int_equal(bot->coop_control_phase, BOT_COOP_CONTROL_NONE);
+	assert_int_equal(bot->coop_control_entity, 0);
+	assert_int_equal(bot->coop_control_goal_area, 0);
+
+	context->api->BotShutdownClient(1);
+	context->api->BotShutdownLibrary();
+	bot_mover_fixture_shutdown(&fixture);
+	LibVarSet("coop", "0");
+	LibVarSet("coopbot_leash", "0");
+	LibVarSet("coopbot_objective_htn", "0");
+	LibVarSet("coopbot_objective_wait_distance", "256");
 	LibVarSet("coopbot_objective_wait_timeout", "30");
 	LibVarSet("coopbot_log", "0");
 }
@@ -13446,6 +13558,10 @@ int main(void)
 		teardown_bot_interface),
 	cmocka_unit_test_setup_teardown(
 		test_coop_objective_wait_timeout_retries,
+		setup_bot_interface,
+		teardown_bot_interface),
+	cmocka_unit_test_setup_teardown(
+		test_coop_objective_wait_releases_after_player_arrival,
 		setup_bot_interface,
 		teardown_bot_interface),
 	cmocka_unit_test_setup_teardown(

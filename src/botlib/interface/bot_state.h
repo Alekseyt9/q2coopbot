@@ -100,6 +100,7 @@ typedef enum bot_coop_control_phase_e
 	BOT_COOP_CONTROL_NAVIGATE,
 	BOT_COOP_CONTROL_WAIT_PLAYER,
 	BOT_COOP_CONTROL_COMPLETE,
+	BOT_COOP_CONTROL_RETURN_PATH,
 	BOT_COOP_CONTROL_RETRY,
 } bot_coop_control_phase_t;
 
@@ -255,6 +256,17 @@ struct bot_client_state_s {
 	int coop_player_armor;
 	int coop_player_damage_blood;
 	bool coop_player_telemetry_valid;
+	/* Bounded EMA of human play style; values stay normalized except range. */
+	float coop_player_style_aggression;
+	float coop_player_style_pace;
+	float coop_player_style_preferred_range;
+	float coop_player_style_risk_tolerance;
+	float coop_player_style_retreat_frequency;
+	float coop_player_style_exploration;
+	float coop_player_style_confidence;
+	float coop_player_style_time;
+	int coop_player_style_observations;
+	bool coop_player_style_valid;
 	int coop_player_focus_entity;
 	float coop_player_focus_confidence;
 	float coop_player_focus_time;
@@ -278,6 +290,8 @@ struct bot_client_state_s {
 	int coop_control_entity;
 	int coop_control_goal_area;
 	float coop_control_started;
+	bool coop_changelevel_gate_active;
+	int coop_changelevel_gate_model;
 	int coop_current_area;
 	bot_coop_area_state_t coop_area_state;
 	int coop_area_enemy_count;

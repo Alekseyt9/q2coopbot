@@ -313,6 +313,16 @@ static void BotState_FreeResources(bot_client_state_t *state)
 	state->coop_player_armor = 0;
 	state->coop_player_damage_blood = 0;
 	state->coop_player_telemetry_valid = false;
+	state->coop_player_style_aggression = 0.5f;
+	state->coop_player_style_pace = 0.5f;
+	state->coop_player_style_preferred_range = 256.0f;
+	state->coop_player_style_risk_tolerance = 0.5f;
+	state->coop_player_style_retreat_frequency = 0.0f;
+	state->coop_player_style_exploration = 0.0f;
+	state->coop_player_style_confidence = 0.0f;
+	state->coop_player_style_time = 0.0f;
+	state->coop_player_style_observations = 0;
+	state->coop_player_style_valid = false;
 	state->coop_player_focus_entity = 0;
 	state->coop_player_focus_confidence = 0.0f;
 	state->coop_player_focus_time = 0.0f;
@@ -336,6 +346,8 @@ static void BotState_FreeResources(bot_client_state_t *state)
 	state->coop_control_entity = 0;
 	state->coop_control_goal_area = 0;
 	state->coop_control_started = 0.0f;
+	state->coop_changelevel_gate_active = false;
+	state->coop_changelevel_gate_model = 0;
 	state->coop_current_area = 0;
 	state->coop_area_state = BOT_COOP_AREA_UNKNOWN;
 	state->coop_area_enemy_count = 0;

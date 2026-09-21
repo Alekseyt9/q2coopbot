@@ -11053,6 +11053,283 @@ static void BotAI_UpdateCoopPlayerIntent(bot_client_state_t *state)
 	}
 }
 
+static void BotAI_CoopResetPlayerStyle(bot_client_state_t *state)
+{
+	if (state == NULL)
+	{
+		return;
+	}
+	state->coop_player_style_aggression = 0.5f;
+	state->coop_player_style_pace = 0.5f;
+	state->coop_player_style_preferred_range = 256.0f;
+	state->coop_player_style_risk_tolerance = 0.5f;
+	state->coop_player_style_retreat_frequency = 0.0f;
+	state->coop_player_style_exploration = 0.0f;
+	state->coop_player_style_confidence = 0.0f;
+	state->coop_player_style_time = 0.0f;
+	state->coop_player_style_observations = 0;
+	state->coop_player_style_valid = false;
+}
+
+static float BotAI_CoopStyleClamp01(float value)
+{
+	return fminf(fmaxf(value, 0.0f), 1.0f);
+}
+
+/*
+=============
+BotAI_UpdateCoopPlayerStyle
+
+Accumulate a small, inspectable style model from observations already exposed
+by the coop bridge.  This deliberately does not invent accuracy or inventory
+usage: those signals are not part of the current ABI.  Each sample is
+smoothed with an EMA and confidence grows only with actual observations.
+=============
+*/
+static void BotAI_UpdateCoopPlayerStyle(bot_client_state_t *state)
+{
+	aas_entityinfo_t player_info;
+	aas_entityinfo_t target_info;
+	vec3_t velocity;
+	vec3_t horizontal_velocity;
+	vec3_t to_target;
+	float speed;
+	float target_distance = 0.0f;
+	float health_ratio = 0.5f;
+	float learning_rate;
+	float interval;
+	float now;
+	float aggression;
+	float pace;
+	float risk_tolerance;
+	float retreat;
+	float exploration;
+	bool has_target = false;
+	bool player_shooting;
+	bool moving_toward_target = false;
+	int player_entity;
+	int visible_entities[32];
+	int visible_count;
+
+	if (state == NULL)
+	{
+		return;
+	}
+	if (LibVarGetValue("coopbot_player_style") == 0.0f ||
+		!BotAI_CoopMode())
+	{
+		BotAI_CoopResetPlayerStyle(state);
+		return;
+	}
+
+	now = AAS_Time();
+	interval = LibVarGetValue("coopbot_style_update_interval");
+	if (interval < 0.0f)
+	{
+		interval = 1.0f;
+	}
+	if (state->coop_player_style_valid &&
+		now - state->coop_player_style_time < interval)
+	{
+		return;
+	}
+
+	memset(&player_info, 0, sizeof(player_info));
+	player_entity = BotAI_CoopPlayerEntityInfo(state, &player_info);
+	if (player_entity < 0)
+	{
+		BotAI_CoopResetPlayerStyle(state);
+		return;
+	}
+	BotAI_UpdateCoopPlayerTelemetry(state, player_entity);
+
+	VectorSubtract(player_info.origin, player_info.old_origin, velocity);
+	VectorCopy(velocity, horizontal_velocity);
+	horizontal_velocity[2] = 0.0f;
+	speed = sqrtf(DotProduct(horizontal_velocity, horizontal_velocity));
+	player_shooting = BotAI_EntityIsShooting(&player_info) != 0;
+
+	memset(&target_info, 0, sizeof(target_info));
+	if (state->coop_player_focus_entity > aasworld.maxClients)
+	{
+		AAS_EntityInfo(state->coop_player_focus_entity, &target_info);
+		if (target_info.valid && !BotAI_EntityIsDead(&target_info))
+		{
+			has_target = true;
+		}
+	}
+	if (!has_target && player_entity > 0)
+	{
+		/* The style model remains useful when the optional intent model is off. */
+		visible_count = AAS_VisibleEntities(player_entity,
+			player_info.origin,
+			player_info.angles,
+			360.0f,
+			(int)(sizeof(visible_entities) / sizeof(visible_entities[0])),
+			visible_entities);
+		for (int index = 0; index < visible_count; ++index)
+		{
+			aas_entityinfo_t candidate;
+			memset(&candidate, 0, sizeof(candidate));
+			AAS_EntityInfo(visible_entities[index], &candidate);
+			if (candidate.number <= aasworld.maxClients ||
+				candidate.number == state->entity_number ||
+				!candidate.valid || BotAI_EntityIsDead(&candidate))
+			{
+				continue;
+			}
+			if (!has_target)
+			{
+				target_info = candidate;
+				has_target = true;
+			}
+			else
+			{
+				vec3_t current_direction;
+				vec3_t candidate_direction;
+				VectorSubtract(target_info.origin, player_info.origin,
+					current_direction);
+				VectorSubtract(candidate.origin, player_info.origin,
+					candidate_direction);
+				if (DotProduct(candidate_direction, candidate_direction) <
+					DotProduct(current_direction, current_direction))
+				{
+					target_info = candidate;
+				}
+			}
+		}
+	}
+	if (has_target)
+	{
+		VectorSubtract(target_info.origin, player_info.origin, to_target);
+		target_distance = sqrtf(DotProduct(to_target, to_target));
+		to_target[2] = 0.0f;
+		float target_length = sqrtf(DotProduct(to_target, to_target));
+		if (speed >= 32.0f && target_length > 1.0f)
+		{
+			VectorScale(to_target, 1.0f / target_length, to_target);
+			VectorScale(horizontal_velocity, 1.0f / speed,
+				horizontal_velocity);
+			moving_toward_target =
+				DotProduct(horizontal_velocity, to_target) > 0.25f;
+		}
+	}
+
+	if (state->coop_player_telemetry_valid &&
+		state->coop_player_max_health > 0)
+	{
+		health_ratio = BotAI_CoopStyleClamp01(
+			(float)state->coop_player_health /
+			(float)state->coop_player_max_health);
+	}
+
+	/* Aggression is inferred from target engagement and forward pressure. */
+	aggression = has_target ? 0.65f : 0.30f;
+	if (player_shooting && has_target)
+	{
+		aggression += 0.25f;
+	}
+	if (moving_toward_target)
+	{
+		aggression += 0.10f;
+	}
+	if (state->coop_player_intent == BOT_COOP_INTENT_RETREAT)
+	{
+		aggression -= 0.25f;
+	}
+	aggression = BotAI_CoopStyleClamp01(aggression);
+
+	pace = BotAI_CoopStyleClamp01(speed / 160.0f);
+	risk_tolerance = 0.50f;
+	if (moving_toward_target)
+	{
+		risk_tolerance += 0.25f;
+	}
+	if (health_ratio < 0.35f && moving_toward_target)
+	{
+		risk_tolerance += 0.15f;
+	}
+	if (state->coop_player_intent == BOT_COOP_INTENT_RETREAT)
+	{
+		risk_tolerance -= 0.35f;
+	}
+	risk_tolerance = BotAI_CoopStyleClamp01(risk_tolerance);
+	retreat = state->coop_player_intent == BOT_COOP_INTENT_RETREAT
+		? 1.0f : 0.0f;
+	exploration = (state->coop_player_intent == BOT_COOP_INTENT_ADVANCE ||
+		state->coop_player_intent == BOT_COOP_INTENT_EXPLORE ||
+		state->coop_player_intent == BOT_COOP_INTENT_SEARCH) ? 1.0f : 0.0f;
+
+	learning_rate = LibVarGetValue("coopbot_style_learning_rate");
+	if (learning_rate <= 0.0f)
+	{
+		learning_rate = 0.10f;
+	}
+	learning_rate = fminf(learning_rate, 0.50f);
+	if (!state->coop_player_style_valid)
+	{
+		state->coop_player_style_aggression = aggression;
+		state->coop_player_style_pace = pace;
+		state->coop_player_style_risk_tolerance = risk_tolerance;
+		state->coop_player_style_retreat_frequency = retreat;
+		state->coop_player_style_exploration = exploration;
+		if (has_target)
+		{
+			state->coop_player_style_preferred_range =
+				fminf(fmaxf(target_distance, 64.0f), 768.0f);
+		}
+		state->coop_player_style_valid = true;
+	}
+	else
+	{
+		state->coop_player_style_aggression =
+			state->coop_player_style_aggression * (1.0f - learning_rate) +
+			aggression * learning_rate;
+		state->coop_player_style_pace =
+			state->coop_player_style_pace * (1.0f - learning_rate) +
+			pace * learning_rate;
+		state->coop_player_style_risk_tolerance =
+			state->coop_player_style_risk_tolerance * (1.0f - learning_rate) +
+			risk_tolerance * learning_rate;
+		state->coop_player_style_retreat_frequency =
+			state->coop_player_style_retreat_frequency * (1.0f - learning_rate) +
+			retreat * learning_rate;
+		state->coop_player_style_exploration =
+			state->coop_player_style_exploration * (1.0f - learning_rate) +
+			exploration * learning_rate;
+		if (has_target)
+		{
+			state->coop_player_style_preferred_range =
+				state->coop_player_style_preferred_range *
+					(1.0f - learning_rate) +
+				fminf(fmaxf(target_distance, 64.0f), 768.0f) *
+					learning_rate;
+		}
+	}
+	state->coop_player_style_time = now;
+	state->coop_player_style_observations += 1;
+	state->coop_player_style_confidence = fminf(1.0f,
+		(float)state->coop_player_style_observations / 20.0f);
+	if (LibVarGetValue("coopbot_log") >= 1.0f &&
+		(state->coop_player_style_observations == 1 ||
+			state->coop_player_style_observations % 5 == 0))
+	{
+		BotLib_LogWriteTimeStamped(
+			"coopbot_player_style client=%d player=%d aggression=%.2f "
+			"pace=%.2f preferred_range=%.1f risk=%.2f retreat=%.2f "
+			"exploration=%.2f confidence=%.2f observations=%d",
+			state->client_number, player_entity,
+			state->coop_player_style_aggression,
+			state->coop_player_style_pace,
+			state->coop_player_style_preferred_range,
+			state->coop_player_style_risk_tolerance,
+			state->coop_player_style_retreat_frequency,
+			state->coop_player_style_exploration,
+			state->coop_player_style_confidence,
+			state->coop_player_style_observations);
+	}
+}
+
 static const char *BotAI_CoopRoleName(bot_coop_role_t role)
 {
 	switch (role)
@@ -11381,6 +11658,32 @@ static void BotAI_UpdateCoopRole(bot_client_state_t *state)
 		confidence = state->coop_player_intent_confidence;
 	}
 
+	/* Adapt only the soft role choice; regroup, rescue and other safety gates
+	 * above remain authoritative regardless of the learned style. */
+	if (state->coop_player_style_valid &&
+		state->coop_player_style_confidence >= 0.25f)
+	{
+		if (state->coop_player_style_aggression >= 0.68f &&
+			role == BOT_COOP_ROLE_VANGUARD)
+		{
+			/* An aggressive player already creates forward pressure; support
+			 * them instead of trying to lead the encounter. */
+			role = BOT_COOP_ROLE_SUPPORT;
+			budget = 0.35f;
+		}
+		else if (role == BOT_COOP_ROLE_VANGUARD &&
+			state->coop_player_style_risk_tolerance >= 0.55f)
+		{
+			/* A confident, fast player gives the companion a little more room
+			 * to take the next useful position. */
+			budget = fminf(budget + 0.10f, 0.35f);
+		}
+		if (state->coop_player_style_risk_tolerance < 0.30f)
+		{
+			budget = fminf(budget, 0.20f);
+		}
+	}
+
 	if (role == BOT_COOP_ROLE_REGROUP)
 	{
 		if (state->coop_action == BOT_COOP_ACTION_RESCUE)
@@ -11497,6 +11800,8 @@ static const char *BotAI_CoopControlPhaseName(
 			return "WAIT_FOR_PLAYER";
 		case BOT_COOP_CONTROL_COMPLETE:
 			return "COMPLETE";
+		case BOT_COOP_CONTROL_RETURN_PATH:
+			return "RETURN_TO_PATH";
 		case BOT_COOP_CONTROL_RETRY:
 			return "RETRY";
 		case BOT_COOP_CONTROL_NONE:
@@ -11536,6 +11841,141 @@ static void BotAI_CoopSetControlObjectivePhase(
 			control_entity,
 			goal_area);
 	}
+}
+
+/*
+=============
+BotAI_CoopEntityLeadsToChangelevel
+
+Follow the static target graph used by Quake II triggers.  The bounded depth
+keeps malformed or cyclic map links from turning a per-frame safety check into
+an unbounded traversal.
+=============
+*/
+static bool BotAI_CoopEntityLeadsToChangelevel(
+	const aas_bspentity_t *entities,
+	const aas_bspentity_t *entity,
+	int depth)
+{
+	const char *classname;
+	const char *target;
+
+	if (entities == NULL || entity == NULL || depth >= 8)
+	{
+		return false;
+	}
+	classname = AAS_ValueForBSPEpairKey(entity, "classname");
+	if (classname == NULL)
+	{
+		return false;
+	}
+	if (strcmp(classname, "target_changelevel") == 0 ||
+		strcmp(classname, "trigger_changelevel") == 0)
+	{
+		return true;
+	}
+	target = AAS_ValueForBSPEpairKey(entity, "target");
+	if (target == NULL || target[0] == '\0')
+	{
+		return false;
+	}
+	for (const aas_bspentity_t *candidate = entities;
+		candidate != NULL;
+		candidate = candidate->next)
+	{
+		const char *targetname = AAS_ValueForBSPEpairKey(candidate,
+			"targetname");
+		if (candidate != entity && targetname != NULL &&
+			strcmp(targetname, target) == 0 &&
+			BotAI_CoopEntityLeadsToChangelevel(entities,
+				candidate,
+				depth + 1))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool BotAI_CoopPointInsideChangelevelTrigger(
+	const aas_bspentity_t *entity,
+	const vec3_t point,
+	int *model_number)
+{
+	const char *classname;
+	const char *model;
+	vec3_t mins;
+	vec3_t maxs;
+	vec3_t model_origin;
+	vec3_t zero_angles = {0.0f, 0.0f, 0.0f};
+	int modelnum;
+
+	if (entity == NULL || point == NULL)
+	{
+		return false;
+	}
+	classname = AAS_ValueForBSPEpairKey(entity, "classname");
+	if (classname == NULL ||
+		(strcmp(classname, "trigger_once") != 0 &&
+			strcmp(classname, "trigger_multiple") != 0 &&
+			strcmp(classname, "trigger_changelevel") != 0))
+	{
+		return false;
+	}
+	model = AAS_ValueForBSPEpairKey(entity, "model");
+	if (model == NULL || model[0] != '*')
+	{
+		return false;
+	}
+	modelnum = (int)strtol(model + 1, NULL, 10);
+	if (modelnum <= 0 || modelnum > aasworld.numBspModels)
+	{
+		return false;
+	}
+	if (!BotAI_CoopEntityLeadsToChangelevel(
+		BotInterface_CoopMapEntities(), entity, 0))
+	{
+		return false;
+	}
+	AAS_BSPModelMinsMaxsOrigin(modelnum - 1,
+		zero_angles, mins, maxs, model_origin);
+	for (int axis = 0; axis < 3; ++axis)
+	{
+		if (point[axis] < model_origin[axis] + mins[axis] - 16.0f ||
+			point[axis] > model_origin[axis] + maxs[axis] + 16.0f)
+		{
+			return false;
+		}
+	}
+	if (model_number != NULL)
+	{
+		*model_number = modelnum;
+	}
+	return true;
+}
+
+static const aas_bspentity_t *BotAI_CoopChangelevelTrigger(
+	const vec3_t bot_origin,
+	int *model_number)
+{
+	aas_bspentity_t *entities = BotInterface_CoopMapEntities();
+
+	if (entities == NULL || bot_origin == NULL)
+	{
+		return NULL;
+	}
+	for (const aas_bspentity_t *entity = entities;
+		entity != NULL;
+		entity = entity->next)
+	{
+		if (BotAI_CoopPointInsideChangelevelTrigger(entity,
+			bot_origin,
+			model_number))
+		{
+			return entity;
+		}
+	}
+	return NULL;
 }
 
 static const char *BotAI_CoopObjectivePhaseName(
@@ -12037,10 +12477,143 @@ static bool BotAI_ApplyCoopControlWait(bot_client_state_t *state,
 			BOT_COOP_CONTROL_COMPLETE,
 			state->coop_control_entity,
 			state->coop_control_goal_area);
-		return false;
+		/* Stop the overlay chain for this frame.  The next frame exposes
+		 * RETURN_TO_PATH instead of immediately consuming COMPLETE here. */
+		return true;
 	}
 
 	/* Preserve an attack command while removing only the committed movement. */
+	status = EA_GetInput(state->client_number, thinktime, input);
+	if (status != BLERR_NOERROR)
+	{
+		return false;
+	}
+	VectorClear(input->dir);
+	input->speed = 0.0f;
+	input->thinktime = thinktime;
+	return EA_SubmitInput(state->client_number, input) == BLERR_NOERROR;
+}
+
+/*
+=============
+BotAI_ApplyCoopControlReturnPath
+
+Make the final OpenPath HTN step explicit. COMPLETE is the successful
+WaitForPlayer result; RETURN_TO_PATH releases the stale control target on the
+following frame so ordinary navigation can resume without keeping the button
+or trigger objective armed.
+=============
+*/
+static bool BotAI_ApplyCoopControlReturnPath(bot_client_state_t *state)
+{
+	if (state == NULL || !BotAI_CoopObjectiveControlEnabled())
+	{
+		return false;
+	}
+	if (state->coop_control_phase == BOT_COOP_CONTROL_COMPLETE)
+	{
+		BotAI_CoopSetControlObjectivePhase(state,
+			BOT_COOP_CONTROL_RETURN_PATH,
+			state->coop_control_entity,
+			state->coop_control_goal_area);
+		return false;
+	}
+	if (state->coop_control_phase == BOT_COOP_CONTROL_RETURN_PATH)
+	{
+		BotAI_CoopSetControlObjectivePhase(state,
+			BOT_COOP_CONTROL_NONE,
+			0,
+			0);
+	}
+	return false;
+}
+
+/*
+=============
+BotAI_ApplyCoopChangelevelGate
+
+Do not let a companion touch a trigger whose target chain changes maps while
+the human is still behind.  The trigger volume is resolved from the cached
+BSP entity graph, so this remains a map-driven safety rule rather than a
+hard-coded list of campaign maps.
+=============
+*/
+static bool BotAI_ApplyCoopChangelevelGate(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input)
+{
+	vec3_t player_origin;
+	vec3_t direction;
+	float distance;
+	float wait_distance;
+	int player_entity;
+	int model_number = 0;
+	int status;
+	const aas_bspentity_t *trigger;
+
+	if (state == NULL || input == NULL ||
+		!BotAI_CoopObjectiveControlEnabled())
+	{
+		return false;
+	}
+
+	player_entity = BotAI_CoopPlayerEntity(state, player_origin);
+	if (player_entity < 0)
+	{
+		state->coop_changelevel_gate_active = false;
+		state->coop_changelevel_gate_model = 0;
+		return false;
+	}
+	trigger = BotAI_CoopChangelevelTrigger(
+		state->last_client_update.origin, &model_number);
+	if (trigger == NULL)
+	{
+		state->coop_changelevel_gate_active = false;
+		state->coop_changelevel_gate_model = 0;
+		return false;
+	}
+
+	VectorSubtract(player_origin, state->last_client_update.origin,
+		direction);
+	distance = sqrtf(DotProduct(direction, direction));
+	wait_distance = LibVarGetValue("coopbot_objective_wait_distance");
+	if (wait_distance <= 0.0f)
+	{
+		wait_distance = 256.0f;
+	}
+	if (distance <= wait_distance)
+	{
+		if (state->coop_changelevel_gate_active &&
+			LibVarGetValue("coopbot_log") >= 1.0f)
+		{
+			BotLib_LogWriteTimeStamped(
+				"coopbot_changelevel_gate client=%d model=%d "
+				"phase=RELEASE reason=player_near distance=%.1f",
+				state->client_number, model_number, distance);
+		}
+		state->coop_changelevel_gate_active = false;
+		state->coop_changelevel_gate_model = 0;
+		return false;
+	}
+
+	if (!state->coop_changelevel_gate_active ||
+		state->coop_changelevel_gate_model != model_number)
+	{
+		state->coop_changelevel_gate_active = true;
+		state->coop_changelevel_gate_model = model_number;
+		if (LibVarGetValue("coopbot_log") >= 1.0f)
+		{
+			const char *map = AAS_ValueForBSPEpairKey(trigger, "target");
+			BotLib_LogWriteTimeStamped(
+				"coopbot_changelevel_gate client=%d model=%d "
+				"phase=WAIT_FOR_PLAYER player=%d distance=%.1f target=\"%s\"",
+				state->client_number, model_number, player_entity, distance,
+				map != NULL ? map : "");
+		}
+	}
+
+	/* Preserve attack/view state but cancel the movement that would touch the
+	 * transition trigger.  The next frame rechecks the player's distance. */
 	status = EA_GetInput(state->client_number, thinktime, input);
 	if (status != BLERR_NOERROR)
 	{
@@ -13075,6 +13648,7 @@ static int BotAI_Think(bot_client_state_t *state, float thinktime)
 	/* Feed area and intent observations before node selection can acquire a target. */
 	BotAI_UpdateCoopBotArea(state);
 	BotAI_UpdateCoopPlayerIntent(state);
+	BotAI_UpdateCoopPlayerStyle(state);
 	BotAI_UpdateCoopJointRetreat(state);
 	BotAI_UpdateCoopRole(state);
 
@@ -13318,7 +13892,9 @@ static int BotAI_Think(bot_client_state_t *state, float thinktime)
 	}
 
 	if (!BotAI_ApplyCoopHardLeash(state, thinktime, &input) &&
+		!BotAI_ApplyCoopChangelevelGate(state, thinktime, &input) &&
 		!BotAI_ApplyCoopControlWait(state, thinktime, &input) &&
+		!BotAI_ApplyCoopControlReturnPath(state) &&
 		!BotAI_ApplyCoopAreaAdvanceGate(state, thinktime, &input) &&
 		!BotAI_ApplyCoopRescuePositioning(state, thinktime, &input) &&
 		!BotAI_ApplyCoopRolePositioning(state, thinktime, &input) &&

@@ -216,6 +216,12 @@ The profile enables:
 - `coopbot_objective_wait_timeout 30` — maximum time in seconds to wait for
   the player after activating a control; expiry returns the objective to
   `RETRY` so the bot cannot remain paused forever.
+- `coopbot_player_style 1` — enables the bounded EMA of player aggression,
+  pace, preferred combat range, risk tolerance, retreat frequency, and
+  exploration tendency. `coopbot_style_learning_rate 0.10` controls the EMA
+  step and `coopbot_style_update_interval 1.0` limits updates to once per
+  second. The model only adapts soft roles; regroup and rescue safety gates
+  remain authoritative.
 - `coopbot_advance_radius 256` — maximum player-to-bot distance for the
   area-transition gate to accept confident `ADVANCE`/`EXPLORE` intent.
 - `coopbot_personal_space 1` — enables the opt-in close-range companion
@@ -273,7 +279,11 @@ objective phases are also counted as `objective_regroup_approach`,
 `objective_regroup_retry`, and `objective_regroup_reacquire`. The
 map-control objective emits `objective_open_path_navigate_control`,
 `objective_open_path_wait_for_player`, `objective_open_path_complete`, and
-`objective_open_path_retry` when the corresponding phases occur;
+`objective_open_path_return_to_path`, and `objective_open_path_retry` when the
+corresponding phases occur;
+`changelevel_gate_wait_for_player` and `changelevel_gate_release` record the
+cooperative transition gate, which prevents a bot from touching a
+changelevel-trigger volume while the player is still behind.
 `--require-open-path-complete` turns the completed control objective into a
 report gate. `--require-safe-area` requires at least one remembered no-enemy
 position. `--require-map-transition` requires at least one extracted

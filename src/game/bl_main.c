@@ -1059,6 +1059,12 @@ int BotInitLibrary(bot_library_t *lib)
 	lib->funcs.BotLibVarSet("coopbot_objective_wait_distance", cvar->string);
 	cvar = gi.cvar("coopbot_objective_wait_timeout", "30", 0);
 	lib->funcs.BotLibVarSet("coopbot_objective_wait_timeout", cvar->string);
+	cvar = gi.cvar("coopbot_player_style", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_player_style", cvar->string);
+	cvar = gi.cvar("coopbot_style_learning_rate", "0.10", 0);
+	lib->funcs.BotLibVarSet("coopbot_style_learning_rate", cvar->string);
+	cvar = gi.cvar("coopbot_style_update_interval", "1.0", 0);
+	lib->funcs.BotLibVarSet("coopbot_style_update_interval", cvar->string);
 	cvar = gi.cvar("coopbot_advance_radius", "256", 0);
 	lib->funcs.BotLibVarSet("coopbot_advance_radius", cvar->string);
 	cvar = gi.cvar("coopbot_map_model", "0", 0);
