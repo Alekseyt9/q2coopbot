@@ -23,9 +23,11 @@ is being validated.
 - Windows x86 and x64 builds.
 
 This is not yet a complete autonomous companion for the entire campaign. The
-bot can navigate using AAS and find and attack monsters, but it does not yet
-fully understand level objectives: buttons, doors, elevators, scripted
-triggers, and transitions between maps require further development.
+bot can navigate using AAS, regroup through reachable elevators, inspect a
+diagnostic map model, extract changelevel targets, remember local safe
+positions, and follow the first blocker-driven objective HTN, but it does not
+yet fully understand every level objective: scripted multi-step triggers and
+transitions between maps still require further development.
 
 ## Requirements
 
@@ -195,8 +197,27 @@ The profile enables:
 - `coopbot_basic_cover 1` — enables the P1 short-step cover fallback: when
   danger is high and the current enemy is visible, the bot tries a reachable
   backward or lateral step that breaks line of sight.
+- `coopbot_safe_area_retreat 1` — enables the P5 safe-area fallback: areas
+  observed without live enemies are remembered, and a dangerous retreat can
+  return to the last reachable safe position when no higher-priority team or
+  item retreat goal exists.
 - `coopbot_elevator_wait_timeout 15` — resets a stuck elevator route after
   fifteen seconds of waiting.
+- `coopbot_elevator_travel_timeout 30` — resets a route that selected an
+  elevator but does not reach the target level within thirty seconds.
+  During the lift ride, a temporarily unknown player AAS area uses the last
+  valid area instead of cancelling vertical regroup.
+- `coopbot_objective_htn 1` — enables the first map-objective slice: when a
+  real navigation blocker resolves to a button/trigger, the bot navigates to
+  that related control, activates it, and waits for the player before
+  continuing. It does not scan or activate unrelated controls.
+- `coopbot_objective_wait_distance 256` — distance at which the
+  `OPEN_PATH/WAIT_FOR_PLAYER` step releases the bot.
+- `coopbot_objective_wait_timeout 30` — maximum time in seconds to wait for
+  the player after activating a control; expiry returns the objective to
+  `RETRY` so the bot cannot remain paused forever.
+- `coopbot_advance_radius 256` — maximum player-to-bot distance for the
+  area-transition gate to accept confident `ADVANCE`/`EXPLORE` intent.
 - `coopbot_personal_space 1` — enables the opt-in close-range companion
   separation overlay; `coopbot_personal_space_radius 96` sets its radius.
 - `coopbot_fireline_avoid 1` — lets the bot step sideways when it blocks the
@@ -205,11 +226,20 @@ The profile enables:
   crosses into its AAS area through a narrow passage; radius defaults to 160.
 - `coopbot_map_model 1` — emits the initialized AAS area/reachability graph,
   elevator edges, and BSP control entities (`func_plat`, doors, buttons,
-  triggers, and targets) once per map. During the episode it also records
-  `coopbot_area_transition` for player/bot AAS-area changes, including a
-  coarse `VISITED`, `ACTIVE_COMBAT`, or `REGROUP` observation. Control
+  triggers, changelevel transitions, and targets) once per map. During the episode it also records
+  `coopbot_area_transition` for player/bot AAS-area changes, including
+  `VISITED`, `ACTIVE_COMBAT`, `PARTIALLY_CLEARED`, `CLEARED`, `DANGEROUS`, or
+  `REGROUP` observations. `coopbot_safe_area` records the last reachable
+  no-enemy position. A bounded per-bot area ledger restores a room's
+  remembered `VISITED`/combat/`CLEARED` state when the bot revisits it. With
+  `coopbot_objective_htn 1`, a confident player `ADVANCE`/`EXPLORE` intent
+  and `coopbot_advance_radius` release the area-transition gate; otherwise
+  the companion waits instead of silently exploring. Control
   `target`/`targetname` links are emitted as `coopbot_map_control_link`; broken
-  links are emitted as `coopbot_map_control_unresolved`.
+  links are emitted as `coopbot_map_control_unresolved`. The parsed BSP
+  control graph is cached for the loaded map and reused by the blocker-driven
+  Objective HTN, so activation does not depend on reparsing a changing entity
+  snapshot every frame.
 
 Log levels are cumulative: `0` disables CoopBot logs, `1` keeps lifecycle,
 error, and slow-AI messages, `2` adds input and botlib target/node events, and
@@ -241,9 +271,25 @@ report distinguishes a failed elevator/path traversal from idle follow. The
 objective phases are also counted as `objective_regroup_approach`,
 `objective_regroup_wait_elevator`, `objective_regroup_travel_elevator`,
 `objective_regroup_retry`, and `objective_regroup_reacquire`. The
+map-control objective emits `objective_open_path_navigate_control`,
+`objective_open_path_wait_for_player`, `objective_open_path_complete`, and
+`objective_open_path_retry` when the corresponding phases occur;
+`--require-open-path-complete` turns the completed control objective into a
+report gate. `--require-safe-area` requires at least one remembered no-enemy
+position. `--require-map-transition` requires at least one extracted
+changelevel record in the map model. The
+runtime activation check is separate: `--require-runtime-map-transition`
+requires a `map_transition` event in the game-side JSONL log, proving that a
+changelevel trigger actually fired during the run. The
 negative-path check is available as `--require-regroup-path-failure`; successful
 reacquisition emits `coopbot_regroup_complete` and can be required with
 `--require-regroup-complete`.
+
+When `--botlib-log` is supplied, `botlib_log.map_model` also includes the
+concrete elevator edges, their source/destination AAS areas and bounds, BSP
+control records, extracted map transitions, resolved control links, and
+unresolved targets. This makes a map-level diagnosis inspectable without
+guessing from bot movement alone.
 
 For a useful test sample, start one bot on a known map, play until it gets
 stuck or fails to fight, then save both logs together with the map name and

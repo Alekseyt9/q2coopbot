@@ -6443,6 +6443,131 @@ static void test_coop_hard_leash_uses_elevator_regroup(void **state)
 
 /*
 =============
+test_coop_hard_leash_keeps_regroup_when_player_area_is_unknown
+
+During a lift ride the player's origin can briefly fall outside every AAS
+area. The companion must retain the last valid player area and continue the
+vertical regroup instead of clearing its elevator goal as ordinary follow.
+=============
+*/
+static void test_coop_hard_leash_keeps_regroup_when_player_area_is_unknown(
+	void **state)
+{
+	bot_interface_test_context_t *context =
+		(bot_interface_test_context_t *)*state;
+	bot_mover_fixture_t fixture;
+	bot_mover_catalogue_entry_t mover_entry = {
+		.modelnum = 8,
+		.lip = 0.0f,
+		.height = 0.0f,
+		.speed = 0.0f,
+		.spawnflags = 0,
+		.doortype = 0,
+		.kind = BOT_MOVER_KIND_FUNC_PLAT,
+	};
+	char model_name[] = "*8";
+	char *model_entries[] = {model_name};
+	bot_settings_t settings;
+	bot_updateentity_t mover_entity;
+	bot_updateentity_t player_entity;
+	bot_updateclient_t update;
+	bot_client_state_t *bot;
+
+	Mock_Reset(&context->mock);
+	assert_int_equal(context->api->BotSetupLibrary(), BLERR_NOERROR);
+	memset(&fixture, 0, sizeof(fixture));
+	bot_mover_fixture_init(&fixture);
+	aasworld.maxClients = 2;
+
+	BotMove_MoverCatalogueReset();
+	assert_true(BotMove_MoverCatalogueInsert(&mover_entry));
+	assert_true(BotMove_MoverCatalogueFinalize(model_entries,
+		ARRAY_LEN(model_entries)));
+	fixture.reachability[1].traveltype = TRAVEL_ELEVATOR;
+	fixture.reachability[1].facenum = mover_entry.modelnum;
+	AAS_InitTravelFlagFromType();
+	assert_int_equal(AAS_PrepareReachability(), BLERR_NOERROR);
+
+	memset(&mover_entity, 0, sizeof(mover_entity));
+	VectorSet(mover_entity.origin, 64.0f, 0.0f, 16.0f);
+	VectorCopy(mover_entity.origin, mover_entity.old_origin);
+	VectorSet(mover_entity.mins, -32.0f, -32.0f, -16.0f);
+	VectorSet(mover_entity.maxs, 32.0f, 32.0f, 16.0f);
+	mover_entity.solid = SOLID_BSP;
+	mover_entity.modelindex = mover_entry.modelnum + 1;
+
+	memset(&settings, 0, sizeof(settings));
+	snprintf(settings.characterfile, sizeof(settings.characterfile),
+		"bots/babe_c.c");
+	snprintf(settings.charactername, sizeof(settings.charactername), "babe");
+	assert_true(context->api->BotSetupClient(1, &settings));
+	bot = BotState_Get(1);
+	assert_non_null(bot);
+	bot->enter_game_time = -1000.0f;
+
+	LibVarSet("coop", "1");
+	LibVarSet("coopbot_leash", "1");
+	LibVarSet("coopbot_hard_leash", "256");
+	LibVarSet("coopbot_elevator_wait_timeout", "15");
+	LibVarSet("coopbot_elevator_travel_timeout", "30");
+	LibVarSet("coopbot_log", "0");
+
+	memset(&player_entity, 0, sizeof(player_entity));
+	VectorSet(player_entity.origin, 128.0f, 0.0f, 32.0f);
+	VectorCopy(player_entity.origin, player_entity.old_origin);
+	VectorSet(player_entity.mins, -16.0f, -16.0f, -24.0f);
+	VectorSet(player_entity.maxs, 16.0f, 16.0f, 32.0f);
+	player_entity.solid = SOLID_BBOX;
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+
+	memset(&update, 0, sizeof(update));
+	VectorClear(update.origin);
+	update.pm_flags = PMF_ON_GROUND;
+	update.stats[STAT_HEALTH] = 100;
+	for (int index = 0; index < MAX_ITEMS; ++index)
+	{
+		update.inventory[index] = 1;
+	}
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.1f), BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(3, &mover_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+
+	/* The player is now inside the lift volume, outside the fixture's AAS. */
+	VectorSet(player_entity.origin, 128.0f, 0.0f, 128.0f);
+	VectorCopy(player_entity.origin, player_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.2f), BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(3, &mover_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+
+	assert_true(bot->coop_player_goal_valid);
+	assert_int_equal(bot->coop_player_area, 2);
+	assert_int_equal(bot->coop_objective_phase,
+		BOT_COOP_OBJECTIVE_WAIT_ELEVATOR);
+
+	context->api->BotShutdownClient(1);
+	context->api->BotShutdownLibrary();
+	bot_mover_fixture_shutdown(&fixture);
+	LibVarSet("coop", "0");
+	LibVarSet("coopbot_leash", "0");
+	LibVarSet("coopbot_hard_leash", "768");
+	LibVarSet("coopbot_log", "0");
+}
+
+/*
+=============
 test_coop_hard_leash_elevator_timeout_retries
 
 If the player is above the bot but the mover entity is unavailable, the first
@@ -6566,6 +6691,138 @@ static void test_coop_hard_leash_elevator_timeout_retries(void **state)
 
 /*
 =============
+test_coop_hard_leash_elevator_travel_timeout_retries
+
+Once the platform has been selected and the bot is moving toward the lift,
+remaining on the lower level must still be bounded.  This covers the second
+failure mode separately from waiting for a platform that is not available.
+=============
+*/
+static void test_coop_hard_leash_elevator_travel_timeout_retries(void **state)
+{
+	bot_interface_test_context_t *context =
+		(bot_interface_test_context_t *)*state;
+	bot_mover_fixture_t fixture;
+	bot_mover_catalogue_entry_t mover_entry = {
+		.modelnum = 8,
+		.lip = 0.0f,
+		.height = 0.0f,
+		.speed = 0.0f,
+		.spawnflags = 0,
+		.doortype = 0,
+		.kind = BOT_MOVER_KIND_FUNC_PLAT,
+	};
+	char model_name[] = "*8";
+	char *model_entries[] = {model_name};
+	bot_settings_t settings;
+	bot_updateentity_t mover_entity;
+	bot_updateentity_t player_entity;
+	bot_updateclient_t update;
+	bot_client_state_t *bot;
+	bot_movestate_t *move_state;
+
+	Mock_Reset(&context->mock);
+	assert_int_equal(context->api->BotSetupLibrary(), BLERR_NOERROR);
+	memset(&fixture, 0, sizeof(fixture));
+	bot_mover_fixture_init(&fixture);
+	aasworld.maxClients = 2;
+
+	BotMove_MoverCatalogueReset();
+	assert_true(BotMove_MoverCatalogueInsert(&mover_entry));
+	assert_true(BotMove_MoverCatalogueFinalize(model_entries,
+		ARRAY_LEN(model_entries)));
+	fixture.reachability[1].traveltype = TRAVEL_ELEVATOR;
+	fixture.reachability[1].facenum = mover_entry.modelnum;
+	AAS_InitTravelFlagFromType();
+	assert_int_equal(AAS_PrepareReachability(), BLERR_NOERROR);
+
+	memset(&mover_entity, 0, sizeof(mover_entity));
+	/* The platform is below the reach start, so this is travel, not wait. */
+	VectorSet(mover_entity.origin, 64.0f, 0.0f, -128.0f);
+	VectorCopy(mover_entity.origin, mover_entity.old_origin);
+	VectorSet(mover_entity.mins, -32.0f, -32.0f, -16.0f);
+	VectorSet(mover_entity.maxs, 32.0f, 32.0f, 16.0f);
+	mover_entity.solid = SOLID_BSP;
+	mover_entity.modelindex = mover_entry.modelnum + 1;
+
+	memset(&settings, 0, sizeof(settings));
+	snprintf(settings.characterfile, sizeof(settings.characterfile),
+		"bots/babe_c.c");
+	snprintf(settings.charactername, sizeof(settings.charactername), "babe");
+	assert_true(context->api->BotSetupClient(1, &settings));
+	bot = BotState_Get(1);
+	assert_non_null(bot);
+	bot->enter_game_time = -1000.0f;
+
+	LibVarSet("coop", "1");
+	LibVarSet("coopbot_leash", "1");
+	LibVarSet("coopbot_hard_leash", "64");
+	LibVarSet("coopbot_elevator_wait_timeout", "15");
+	LibVarSet("coopbot_elevator_travel_timeout", "0.05");
+	LibVarSet("coopbot_log", "0");
+
+	memset(&player_entity, 0, sizeof(player_entity));
+	VectorSet(player_entity.origin, 128.0f, 0.0f, 32.0f);
+	VectorCopy(player_entity.origin, player_entity.old_origin);
+	VectorSet(player_entity.mins, -16.0f, -16.0f, -24.0f);
+	VectorSet(player_entity.maxs, 16.0f, 16.0f, 32.0f);
+	player_entity.solid = SOLID_BBOX;
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+
+	memset(&update, 0, sizeof(update));
+	VectorClear(update.origin);
+	update.pm_flags = PMF_ON_GROUND;
+	update.stats[STAT_HEALTH] = 100;
+	for (int i = 0; i < MAX_ITEMS; ++i)
+	{
+		update.inventory[i] = 1;
+	}
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.1f), BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(3, &mover_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_true(bot->coop_player_goal_valid);
+	assert_true(bot->has_move_result);
+	assert_true(bot->coop_elevator_travel_started > 0.0f);
+	assert_int_equal(bot->coop_objective_phase,
+		BOT_COOP_OBJECTIVE_TRAVEL_ELEVATOR);
+
+	/* The platform remains below the bot long enough to expire travel. */
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.2f), BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(3, &mover_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+
+	assert_true(bot->coop_player_goal_valid);
+	assert_true(bot->last_move_result.failure);
+	assert_int_equal(bot->coop_objective_phase, BOT_COOP_OBJECTIVE_RETRY);
+	assert_float_equal(bot->coop_elevator_travel_started, 0.0f, 0.0001f);
+	assert_int_equal(bot->coop_elevator_travel_area, 0);
+	move_state = BotMoveStateFromHandle(bot->move_handle);
+	assert_non_null(move_state);
+	assert_int_equal(move_state->lastreachnum, 0);
+
+	context->api->BotShutdownClient(1);
+	context->api->BotShutdownLibrary();
+	bot_mover_fixture_shutdown(&fixture);
+	LibVarSet("coop", "0");
+	LibVarSet("coopbot_leash", "0");
+	LibVarSet("coopbot_elevator_wait_timeout", "15");
+	LibVarSet("coopbot_elevator_travel_timeout", "30");
+	LibVarSet("coopbot_log", "0");
+}
+
+/*
+=============
 test_coop_player_intent_tracks_advance
 
 The first human snapshot is intentionally inconclusive. After the human moves
@@ -6606,6 +6863,8 @@ static void test_coop_player_intent_tracks_advance(void **state)
 	LibVarSet("coopbot_intent_advance_speed", "48");
 	LibVarSet("coopbot_intent_hold_speed", "24");
 	LibVarSet("coopbot_hard_leash", "768");
+	LibVarSet("coopbot_objective_htn", "1");
+	LibVarSet("coopbot_advance_radius", "256");
 	LibVarSet("coopbot_roles", "1");
 	LibVarSet("coopbot_joint_retreat", "1");
 	LibVarSet("coopbot_joint_retreat_duration", "1.5");
@@ -6655,6 +6914,12 @@ static void test_coop_player_intent_tracks_advance(void **state)
 	assert_true(bot->coop_player_intent_confidence >= 0.60f);
 	assert_int_equal(bot->coop_role, BOT_COOP_ROLE_VANGUARD);
 	assert_float_equal(bot->coop_initiative_budget, 0.20f, 0.0001f);
+	assert_true(bot->coop_bot_area_valid);
+	assert_int_equal(bot->coop_area_state, BOT_COOP_AREA_VISITED);
+	assert_true(bot->coop_last_safe_valid);
+	assert_int_equal(bot->coop_last_safe_area, bot->coop_current_area);
+	assert_float_equal(bot->coop_last_safe_origin[0],
+		bot->last_client_update.origin[0], 0.0001f);
 
 	/* Moving farther from a visible threat must abort the chase intent. */
 	memset(&enemy_entity, 0, sizeof(enemy_entity));
@@ -6798,6 +7063,8 @@ static void test_coop_player_intent_tracks_advance(void **state)
 	bot_mover_fixture_shutdown(&fixture);
 	LibVarSet("coop", "0");
 	LibVarSet("coopbot_leash", "0");
+	LibVarSet("coopbot_objective_htn", "0");
+	LibVarSet("coopbot_advance_radius", "256");
 	LibVarSet("coopbot_player_intent", "0");
 	LibVarSet("coopbot_roles", "0");
 	LibVarSet("coopbot_joint_retreat", "0");
@@ -6806,6 +7073,274 @@ static void test_coop_player_intent_tracks_advance(void **state)
 	LibVarSet("coopbot_intent_signal", "0");
 	LibVarSet("coopbot_action_commitment", "0.75");
 	LibVarSet("coopbot_rescue", "0");
+	LibVarSet("coopbot_log", "0");
+}
+
+/*
+=============
+test_coop_area_state_tracks_progress_and_danger
+
+Pins the P5 area memory contract: two live enemies are an active encounter,
+removing one marks the area partially cleared, clearing the last one records a
+safe position, and a later low-health encounter is explicitly dangerous.
+=============
+*/
+static void test_coop_area_state_tracks_progress_and_danger(void **state)
+{
+	bot_interface_test_context_t *context =
+		(bot_interface_test_context_t *)*state;
+	bot_mover_fixture_t fixture;
+	bot_settings_t settings;
+	bot_updateentity_t player_entity;
+	bot_updateentity_t enemy_entity;
+	bot_updateclient_t update;
+	bot_client_state_t *bot;
+
+	Mock_Reset(&context->mock);
+	assert_int_equal(context->api->BotSetupLibrary(), BLERR_NOERROR);
+	memset(&fixture, 0, sizeof(fixture));
+	bot_mover_fixture_init(&fixture);
+	aasworld.maxClients = 2;
+
+	memset(&settings, 0, sizeof(settings));
+	snprintf(settings.characterfile, sizeof(settings.characterfile),
+		"bots/babe_c.c");
+	snprintf(settings.charactername, sizeof(settings.charactername), "babe");
+	assert_true(context->api->BotSetupClient(1, &settings));
+	bot = BotState_Get(1);
+	assert_non_null(bot);
+	bot->enter_game_time = -1000.0f;
+
+	LibVarSet("coop", "1");
+	LibVarSet("coopbot_leash", "0");
+	LibVarSet("coopbot_objective_htn", "1");
+	LibVarSet("coopbot_safe_area_retreat", "1");
+	LibVarSet("coopbot_danger_critical_health", "25");
+	LibVarSet("coopbot_log", "0");
+
+	memset(&player_entity, 0, sizeof(player_entity));
+	VectorClear(player_entity.origin);
+	VectorClear(player_entity.old_origin);
+	VectorSet(player_entity.mins, -16.0f, -16.0f, -24.0f);
+	VectorSet(player_entity.maxs, 16.0f, 16.0f, 32.0f);
+	player_entity.solid = SOLID_BBOX;
+	player_entity.modelindex = 255;
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+
+	memset(&enemy_entity, 0, sizeof(enemy_entity));
+	VectorSet(enemy_entity.origin, 0.0f, 0.0f, 32.0f);
+	VectorCopy(enemy_entity.origin, enemy_entity.old_origin);
+	VectorSet(enemy_entity.mins, -16.0f, -16.0f, -24.0f);
+	VectorSet(enemy_entity.maxs, 16.0f, 16.0f, 32.0f);
+	enemy_entity.solid = SOLID_BBOX;
+	enemy_entity.modelindex = 1;
+	assert_int_equal(context->api->BotUpdateEntity(4, &enemy_entity),
+		BLERR_NOERROR);
+	VectorSet(enemy_entity.origin, 8.0f, 0.0f, 32.0f);
+	VectorCopy(enemy_entity.origin, enemy_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(5, &enemy_entity),
+		BLERR_NOERROR);
+
+	memset(&update, 0, sizeof(update));
+	VectorClear(update.origin);
+	update.pm_flags = PMF_ON_GROUND;
+	update.stats[STAT_HEALTH] = 100;
+	for (int i = 0; i < MAX_ITEMS; ++i)
+	{
+		update.inventory[i] = 1;
+	}
+	update.inventory[RETAIL_INVENTORY_HEALTH] = 100;
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.1f), BLERR_NOERROR);
+	/* BotStartFrame invalidates the entity table, so republish both monsters
+	 * after the frame boundary just like the game bridge does. */
+	VectorSet(enemy_entity.origin, 0.0f, 0.0f, 32.0f);
+	VectorCopy(enemy_entity.origin, enemy_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(4, &enemy_entity),
+		BLERR_NOERROR);
+	VectorSet(enemy_entity.origin, 8.0f, 0.0f, 32.0f);
+	VectorCopy(enemy_entity.origin, enemy_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(5, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_int_equal(bot->coop_area_state, BOT_COOP_AREA_ACTIVE_COMBAT);
+	assert_int_equal(bot->coop_area_enemy_count, 2);
+
+	/* Move one enemy to the next AAS area while one remains in the room. */
+	VectorSet(enemy_entity.origin, 256.0f, 0.0f, 32.0f);
+	VectorCopy(enemy_entity.origin, enemy_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(5, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.2f), BLERR_NOERROR);
+	VectorSet(enemy_entity.origin, 0.0f, 0.0f, 32.0f);
+	VectorCopy(enemy_entity.origin, enemy_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(4, &enemy_entity),
+		BLERR_NOERROR);
+	VectorSet(enemy_entity.origin, 256.0f, 0.0f, 32.0f);
+	VectorCopy(enemy_entity.origin, enemy_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(5, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_int_equal(bot->coop_area_state, BOT_COOP_AREA_PARTIALLY_CLEARED);
+	assert_int_equal(bot->coop_area_enemy_count, 1);
+
+	/* Clearing the final enemy creates the remembered safe position. */
+	VectorSet(enemy_entity.origin, 256.0f, 0.0f, 32.0f);
+	VectorCopy(enemy_entity.origin, enemy_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(4, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.3f), BLERR_NOERROR);
+	VectorSet(enemy_entity.origin, 256.0f, 0.0f, 32.0f);
+	VectorCopy(enemy_entity.origin, enemy_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(4, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(5, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_int_equal(bot->coop_area_state, BOT_COOP_AREA_CLEARED);
+	assert_true(bot->coop_last_safe_valid);
+
+	/* Visit an adjacent empty area, then return: the original area's
+	 * CLEARED state must come from the bounded map memory, not the current
+	 * area snapshot. */
+	VectorSet(update.origin, 128.0f, 0.0f, 32.0f);
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.35f), BLERR_NOERROR);
+	VectorSet(enemy_entity.origin, 0.0f, 0.0f, 32.0f);
+	VectorCopy(enemy_entity.origin, enemy_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(4, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(5, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_true(bot->coop_area_memory_count >= 2);
+
+	VectorClear(update.origin);
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.36f), BLERR_NOERROR);
+	VectorSet(enemy_entity.origin, 128.0f, 0.0f, 32.0f);
+	VectorCopy(enemy_entity.origin, enemy_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(4, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(5, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_int_equal(bot->coop_area_state, BOT_COOP_AREA_CLEARED);
+
+	/* Re-enter the room with an explicit critical-health sample. */
+	VectorSet(enemy_entity.origin, 0.0f, 0.0f, 32.0f);
+	VectorCopy(enemy_entity.origin, enemy_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(4, &enemy_entity),
+		BLERR_NOERROR);
+	update.inventory[RETAIL_INVENTORY_HEALTH] = 20;
+	update.stats[STAT_HEALTH] = 20;
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.4f), BLERR_NOERROR);
+	VectorSet(enemy_entity.origin, 0.0f, 0.0f, 32.0f);
+	VectorCopy(enemy_entity.origin, enemy_entity.old_origin);
+	assert_int_equal(context->api->BotUpdateEntity(4, &enemy_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_int_equal(bot->coop_area_state, BOT_COOP_AREA_DANGEROUS);
+
+	context->api->BotShutdownClient(1);
+	context->api->BotShutdownLibrary();
+	bot_mover_fixture_shutdown(&fixture);
+	LibVarSet("coop", "0");
+	LibVarSet("coopbot_leash", "0");
+	LibVarSet("coopbot_objective_htn", "0");
+	LibVarSet("coopbot_safe_area_retreat", "0");
+	LibVarSet("coopbot_danger_critical_health", "25");
+	LibVarSet("coopbot_log", "0");
+}
+
+/*
+=============
+test_coop_objective_wait_timeout_retries
+
+An activated control may leave the bot waiting while the player is on the
+other side of a lift or has disconnected.  The wait phase must be bounded so
+the next objective attempt can reacquire the route.
+=============
+*/
+static void test_coop_objective_wait_timeout_retries(void **state)
+{
+	bot_interface_test_context_t *context =
+		(bot_interface_test_context_t *)*state;
+	bot_mover_fixture_t fixture;
+	bot_settings_t settings;
+	bot_updateclient_t update;
+	bot_client_state_t *bot;
+
+	Mock_Reset(&context->mock);
+	assert_int_equal(context->api->BotSetupLibrary(), BLERR_NOERROR);
+	memset(&fixture, 0, sizeof(fixture));
+	bot_mover_fixture_init(&fixture);
+	aasworld.maxClients = 2;
+
+	memset(&settings, 0, sizeof(settings));
+	snprintf(settings.characterfile, sizeof(settings.characterfile),
+		"bots/babe_c.c");
+	snprintf(settings.charactername, sizeof(settings.charactername), "babe");
+	assert_true(context->api->BotSetupClient(1, &settings));
+	bot = BotState_Get(1);
+	assert_non_null(bot);
+	bot->enter_game_time = -1000.0f;
+
+	LibVarSet("coop", "1");
+	LibVarSet("coopbot_leash", "0");
+	LibVarSet("coopbot_objective_htn", "1");
+	LibVarSet("coopbot_objective_wait_timeout", "0.05");
+	LibVarSet("coopbot_log", "0");
+
+	memset(&update, 0, sizeof(update));
+	VectorClear(update.origin);
+	update.pm_flags = PMF_ON_GROUND;
+	update.stats[STAT_HEALTH] = 100;
+	update.inventory[RETAIL_INVENTORY_HEALTH] = 100;
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(1.0f), BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+
+	bot->coop_control_phase = BOT_COOP_CONTROL_WAIT_PLAYER;
+	bot->coop_control_entity = 50;
+	bot->coop_control_goal_area = 2;
+	bot->coop_control_started = aasworld.time - 1.0f;
+	bot->activation_goal_time = aasworld.time + 10.0f;
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_int_equal(bot->coop_control_phase, BOT_COOP_CONTROL_RETRY);
+	assert_true(bot->activation_goal_time <= 0.0f);
+
+	context->api->BotShutdownClient(1);
+	context->api->BotShutdownLibrary();
+	bot_mover_fixture_shutdown(&fixture);
+	LibVarSet("coop", "0");
+	LibVarSet("coopbot_leash", "0");
+	LibVarSet("coopbot_objective_htn", "0");
+	LibVarSet("coopbot_objective_wait_timeout", "30");
 	LibVarSet("coopbot_log", "0");
 }
 
@@ -12890,15 +13425,31 @@ int main(void)
 			setup_bot_interface,
 			teardown_bot_interface),
 		cmocka_unit_test_setup_teardown(
+			test_coop_hard_leash_keeps_regroup_when_player_area_is_unknown,
+			setup_bot_interface,
+			teardown_bot_interface),
+	cmocka_unit_test_setup_teardown(
 			test_coop_hard_leash_elevator_timeout_retries,
-			setup_bot_interface,
-			teardown_bot_interface),
-		cmocka_unit_test_setup_teardown(
-			test_coop_player_intent_tracks_advance,
-			setup_bot_interface,
-			teardown_bot_interface),
-		cmocka_unit_test_setup_teardown(
-			test_ai_battle_chase_preserves_mover_set_view,
+		setup_bot_interface,
+		teardown_bot_interface),
+	cmocka_unit_test_setup_teardown(
+		test_coop_hard_leash_elevator_travel_timeout_retries,
+		setup_bot_interface,
+		teardown_bot_interface),
+	cmocka_unit_test_setup_teardown(
+		test_coop_player_intent_tracks_advance,
+		setup_bot_interface,
+		teardown_bot_interface),
+	cmocka_unit_test_setup_teardown(
+		test_coop_area_state_tracks_progress_and_danger,
+		setup_bot_interface,
+		teardown_bot_interface),
+	cmocka_unit_test_setup_teardown(
+		test_coop_objective_wait_timeout_retries,
+		setup_bot_interface,
+		teardown_bot_interface),
+	cmocka_unit_test_setup_teardown(
+		test_ai_battle_chase_preserves_mover_set_view,
 			setup_bot_interface,
 			teardown_bot_interface),
 		cmocka_unit_test_setup_teardown(

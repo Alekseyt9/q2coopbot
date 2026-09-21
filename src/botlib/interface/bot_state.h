@@ -89,6 +89,46 @@ typedef enum bot_coop_objective_phase_e
 	BOT_COOP_OBJECTIVE_REACQUIRE,
 } bot_coop_objective_phase_t;
 
+/*
+ * The first map-objective HTN is deliberately narrow: it is entered only
+ * after navigation reports a real BSP blocker and ends by waiting for the
+ * player.  It must not become a free-running search over every map control.
+ */
+typedef enum bot_coop_control_phase_e
+{
+	BOT_COOP_CONTROL_NONE = 0,
+	BOT_COOP_CONTROL_NAVIGATE,
+	BOT_COOP_CONTROL_WAIT_PLAYER,
+	BOT_COOP_CONTROL_COMPLETE,
+	BOT_COOP_CONTROL_RETRY,
+} bot_coop_control_phase_t;
+
+typedef enum bot_coop_area_state_e
+{
+	BOT_COOP_AREA_UNKNOWN = 0,
+	BOT_COOP_AREA_VISITED,
+	BOT_COOP_AREA_ACTIVE_COMBAT,
+	BOT_COOP_AREA_PARTIALLY_CLEARED,
+	BOT_COOP_AREA_CLEARED,
+	BOT_COOP_AREA_DANGEROUS,
+} bot_coop_area_state_t;
+
+/*
+ * Keep a small per-bot area ledger instead of treating the current AAS area
+ * as the whole map history.  The ledger is intentionally bounded: it is
+ * episode-local memory for revisits, not a second copy of the AAS graph.
+ */
+#define BOT_COOP_AREA_MEMORY_MAX 16
+
+typedef struct bot_coop_area_memory_s
+{
+	int area;
+	bot_coop_area_state_t state;
+	int enemy_count;
+	bool combat_seen;
+	float last_observed;
+} bot_coop_area_memory_t;
+
 /**
  * Characteristic indices required during client setup. These values mirror the
  * macros defined in the Gladiator assets (chars.h) and describe where the
@@ -197,6 +237,8 @@ struct bot_client_state_s {
 	bool coop_player_goal_valid;
 	float coop_elevator_wait_started;
 	int coop_elevator_wait_area;
+	float coop_elevator_travel_started;
+	int coop_elevator_travel_area;
 	bot_coop_player_intent_t coop_player_intent;
 	float coop_player_intent_confidence;
 	float coop_player_intent_time;
@@ -232,6 +274,19 @@ struct bot_client_state_s {
 	float coop_objective_started;
 	int coop_objective_goal_area;
 	int coop_objective_retries;
+	bot_coop_control_phase_t coop_control_phase;
+	int coop_control_entity;
+	int coop_control_goal_area;
+	float coop_control_started;
+	int coop_current_area;
+	bot_coop_area_state_t coop_area_state;
+	int coop_area_enemy_count;
+	bool coop_area_combat_seen;
+	bool coop_area_gate_active;
+	int coop_last_safe_area;
+	vec3_t coop_last_safe_origin;
+	float coop_last_safe_time;
+	bool coop_last_safe_valid;
 	float coop_joint_retreat_until;
 	bool coop_joint_retreat_active;
     float goal_avoid_duration;
@@ -277,6 +332,8 @@ struct bot_client_state_s {
 	bot_console_waypoint_t *patrol_points;
 	bot_console_waypoint_t *current_patrol_point;
 	int patrol_flags;
+	bot_coop_area_memory_t coop_area_memory[BOT_COOP_AREA_MEMORY_MAX];
+	int coop_area_memory_count;
 		};
 		struct
 		{

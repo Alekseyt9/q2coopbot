@@ -63,6 +63,18 @@ static bool BotAI_CoopRejectNewGroup(const bot_client_state_t *state,
 	const aas_entityinfo_t *candidate,
 	int health_decrease,
 	bool active_group);
+static bool BotAI_CoopObjectiveControlEnabled(void);
+static void BotAI_CoopSetControlObjectivePhase(
+	bot_client_state_t *state,
+	bot_coop_control_phase_t phase,
+	int control_entity,
+	int goal_area);
+static bool BotAI_ApplyCoopControlWait(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input);
+static bool BotAI_ApplyCoopAreaAdvanceGate(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input);
 
 
 static bot_import_extended_t g_botImportStorage;
@@ -89,6 +101,8 @@ typedef struct botinterface_entity_snapshot_s
 #define BOT_INTERFACE_MAX_ENTITIES 1024
 
 static botinterface_map_cache_t g_botInterfaceMapCache;
+/* Parsed BSP controls are immutable for the lifetime of the loaded map. */
+static aas_bspentity_t *g_botInterfaceCoopMapEntities = NULL;
 static botinterface_entity_snapshot_t g_botInterfaceEntityCache[BOT_INTERFACE_MAX_ENTITIES];
 static float g_botInterfaceFrameTime = 0.0f;
 static unsigned int g_botInterfaceFrameNumber = 0;
@@ -1176,14 +1190,38 @@ static void BotInterface_ResetEntityCache(void)
 
 static void BotInterface_ResetMapCache(void)
 {
-    BotMove_MoverCatalogueReset();
+	if (g_botInterfaceCoopMapEntities != NULL)
+	{
+		AAS_FreeBSPEntities(g_botInterfaceCoopMapEntities);
+		g_botInterfaceCoopMapEntities = NULL;
+	}
+	BotMove_MoverCatalogueReset();
     BotInterface_FreeAssetList(&g_botInterfaceMapCache.models);
     BotInterface_FreeAssetList(&g_botInterfaceMapCache.sounds);
     BotInterface_FreeAssetList(&g_botInterfaceMapCache.images);
     g_botInterfaceMapCache.map_name[0] = '\0';
     g_botInterfaceMapModelDumped = false;
     g_botInterfaceMapModelWaitLogged = false;
-    g_botInterfaceStartFrameLogged = false;
+	g_botInterfaceStartFrameLogged = false;
+}
+
+/*
+=============
+BotInterface_CoopMapEntities
+
+Keep one parsed copy of the map's BSP entity/control graph.  The objective
+overlay and the diagnostic dump must use the same immutable source so a
+blocked inline model cannot be resolved against a different entity snapshot
+than the one reported for the map.
+=============
+*/
+static aas_bspentity_t *BotInterface_CoopMapEntities(void)
+{
+	if (g_botInterfaceCoopMapEntities == NULL && AAS_Initialized())
+	{
+		g_botInterfaceCoopMapEntities = AAS_LoadBSPEntities();
+	}
+	return g_botInterfaceCoopMapEntities;
 }
 
 /*
@@ -3881,11 +3919,37 @@ static void BotInterface_DumpCoopMapModel(void)
 			reach->end[0], reach->end[1], reach->end[2]);
 	}
 
-	entities = AAS_LoadBSPEntities();
+	entities = BotInterface_CoopMapEntities();
+	if (entities == NULL)
+	{
+		BotLib_LogWrite("coopbot_map_controls count=0 reason=entities_unavailable");
+		return;
+	}
 	for (aas_bspentity_t *entity = entities; entity != NULL;
 		entity = entity->next)
 	{
 		const char *classname = AAS_ValueForBSPEpairKey(entity, "classname");
+		const char *model = AAS_ValueForBSPEpairKey(entity, "model");
+		vec3_t entity_origin;
+		vec3_t model_mins;
+		vec3_t model_maxs;
+		vec3_t model_origin;
+		vec3_t angles = {0.0f, 0.0f, 0.0f};
+		int modelnum = 0;
+		VectorClear(entity_origin);
+		VectorClear(model_mins);
+		VectorClear(model_maxs);
+		VectorClear(model_origin);
+		(void)AAS_VectorForBSPEpairKey(entity, "origin", entity_origin);
+		if (model != NULL && model[0] == '*')
+		{
+			modelnum = (int)strtol(model + 1, NULL, 10);
+			if (modelnum > 0 && modelnum < aasworld.numBspModels)
+			{
+				AAS_BSPModelMinsMaxsOrigin(modelnum, angles,
+					model_mins, model_maxs, model_origin);
+			}
+		}
 		if (classname == NULL ||
 			(strncmp(classname, "func_", 5) != 0 &&
 				strncmp(classname, "trigger_", 8) != 0 &&
@@ -3898,10 +3962,9 @@ static void BotInterface_DumpCoopMapModel(void)
 		BotLib_LogWrite(
 			"coopbot_map_control class=\"%s\" model=\"%s\" "
 			"target=\"%s\" targetname=\"%s\" speed=%.1f height=%.1f "
-			"lip=%.1f spawnflags=%d",
+			"lip=%.1f spawnflags=%d map=\"%s\" message=\"%s\"",
 			classname,
-			AAS_ValueForBSPEpairKey(entity, "model") != NULL
-				? AAS_ValueForBSPEpairKey(entity, "model") : "",
+			model != NULL ? model : "",
 			AAS_ValueForBSPEpairKey(entity, "target") != NULL
 				? AAS_ValueForBSPEpairKey(entity, "target") : "",
 			AAS_ValueForBSPEpairKey(entity, "targetname") != NULL
@@ -3909,7 +3972,35 @@ static void BotInterface_DumpCoopMapModel(void)
 			AAS_FloatForBSPEpairKey(entity, "speed"),
 			AAS_FloatForBSPEpairKey(entity, "height"),
 			AAS_FloatForBSPEpairKey(entity, "lip"),
-			AAS_IntForBSPEpairKey(entity, "spawnflags"));
+			AAS_IntForBSPEpairKey(entity, "spawnflags"),
+			AAS_ValueForBSPEpairKey(entity, "map") != NULL
+				? AAS_ValueForBSPEpairKey(entity, "map") : "",
+			AAS_ValueForBSPEpairKey(entity, "message") != NULL
+				? AAS_ValueForBSPEpairKey(entity, "message") : "");
+		if (strcmp(classname, "trigger_changelevel") == 0 ||
+			strcmp(classname, "target_changelevel") == 0)
+		{
+			BotLib_LogWrite(
+				"coopbot_map_transition class=\"%s\" map=\"%s\" "
+				"message=\"%s\" target=\"%s\"",
+				classname,
+				AAS_ValueForBSPEpairKey(entity, "map") != NULL
+					? AAS_ValueForBSPEpairKey(entity, "map") : "",
+				AAS_ValueForBSPEpairKey(entity, "message") != NULL
+					? AAS_ValueForBSPEpairKey(entity, "message") : "",
+				AAS_ValueForBSPEpairKey(entity, "target") != NULL
+					? AAS_ValueForBSPEpairKey(entity, "target") : "");
+		}
+		BotLib_LogWrite(
+			"coopbot_map_geometry class=\"%s\" model=\"%s\" "
+			"origin=(%.1f %.1f %.1f) model_origin=(%.1f %.1f %.1f) "
+			"mins=(%.1f %.1f %.1f) maxs=(%.1f %.1f %.1f)",
+			classname,
+			model != NULL ? model : "",
+			entity_origin[0], entity_origin[1], entity_origin[2],
+			model_origin[0], model_origin[1], model_origin[2],
+			model_mins[0], model_mins[1], model_mins[2],
+			model_maxs[0], model_maxs[1], model_maxs[2]);
 	}
 	for (aas_bspentity_t *source = entities; source != NULL;
 		source = source->next)
@@ -3953,7 +4044,6 @@ static void BotInterface_DumpCoopMapModel(void)
 				source_class, target);
 		}
 	}
-	AAS_FreeBSPEntities(entities);
 	BotLib_LogWrite("coopbot_map_controls count=%d", control_count);
 }
 
@@ -3988,22 +4078,240 @@ static void BotAI_LogCoopAreaTransition(bot_client_state_t *state,
 		area_state);
 }
 
+static int BotAI_CountCoopEnemiesInArea(int area)
+{
+	int enemy_count = 0;
+
+	if (area <= 0 || !AAS_Initialized() || aasworld.entities == NULL)
+	{
+		return 0;
+	}
+
+	for (int entity = aasworld.maxClients + 1;
+		entity < aasworld.maxEntities;
+		entity += 1)
+	{
+		aas_entityinfo_t entity_info;
+		memset(&entity_info, 0, sizeof(entity_info));
+		AAS_EntityInfo(entity, &entity_info);
+		if (BotAI_EntityIsDead(&entity_info) ||
+			AAS_PointAreaNum(entity_info.origin) != area)
+		{
+			continue;
+		}
+		enemy_count += 1;
+	}
+	return enemy_count;
+}
+
+static const char *BotAI_CoopAreaStateName(bot_coop_area_state_t state)
+{
+	switch (state)
+	{
+		case BOT_COOP_AREA_VISITED:
+			return "VISITED";
+		case BOT_COOP_AREA_ACTIVE_COMBAT:
+			return "ACTIVE_COMBAT";
+		case BOT_COOP_AREA_PARTIALLY_CLEARED:
+			return "PARTIALLY_CLEARED";
+		case BOT_COOP_AREA_CLEARED:
+			return "CLEARED";
+		case BOT_COOP_AREA_DANGEROUS:
+			return "DANGEROUS";
+		case BOT_COOP_AREA_UNKNOWN:
+		default:
+			return "UNKNOWN";
+	}
+}
+
+/*
+ * Find or allocate the small episode-local record for an AAS area.  Replacing
+ * the least recently observed record keeps the memory bounded on maps with
+ * many areas while preserving the useful history near the bot's route.
+ */
+static bot_coop_area_memory_t *BotAI_FindCoopAreaMemory(
+	bot_client_state_t *state,
+	int area,
+	bool create)
+{
+	bot_coop_area_memory_t *memory;
+	int index;
+	int slot;
+	float oldest_time;
+
+	if (state == NULL || area <= 0)
+	{
+		return NULL;
+	}
+
+	for (index = 0; index < state->coop_area_memory_count; index += 1)
+	{
+		memory = &state->coop_area_memory[index];
+		if (memory->area == area)
+		{
+			return memory;
+		}
+	}
+	if (!create)
+	{
+		return NULL;
+	}
+
+	if (state->coop_area_memory_count < BOT_COOP_AREA_MEMORY_MAX)
+	{
+		slot = state->coop_area_memory_count;
+		state->coop_area_memory_count += 1;
+	}
+	else
+	{
+		slot = 0;
+		oldest_time = state->coop_area_memory[0].last_observed;
+		for (index = 1; index < BOT_COOP_AREA_MEMORY_MAX; index += 1)
+		{
+			if (state->coop_area_memory[index].last_observed < oldest_time)
+			{
+				slot = index;
+				oldest_time =
+					state->coop_area_memory[index].last_observed;
+			}
+		}
+	}
+
+	memory = &state->coop_area_memory[slot];
+	memset(memory, 0, sizeof(*memory));
+	memory->area = area;
+	memory->state = BOT_COOP_AREA_VISITED;
+	return memory;
+}
+
+/*
+=============
+BotAI_CoopAreaIsDangerous
+
+Keep the area label conservative.  Missing health telemetry is not treated as
+critical, but an explicitly critical health sample or recent incoming damage
+marks a live encounter as dangerous until the area is clear.
+=============
+*/
+static bool BotAI_CoopAreaIsDangerous(const bot_client_state_t *state,
+	int enemy_count)
+{
+	float critical_health;
+	int health;
+
+	if (state == NULL || enemy_count <= 0)
+	{
+		return false;
+	}
+
+	/* BotAI_UpdateBattleInventory runs later in the frame; use the raw
+	 * client stat here so a synthetic/missing inventory slot cannot look like
+	 * one point of health. */
+	health = state->last_client_update.stats[STAT_HEALTH];
+	critical_health = LibVarGetValue("coopbot_danger_critical_health");
+	if (critical_health <= 0.0f)
+	{
+		critical_health = 25.0f;
+	}
+	if (health > 0 && health <= critical_health)
+	{
+		return true;
+	}
+
+	return state->combat.took_damage &&
+		AAS_Time() - state->combat.last_damage_time <= 2.0f;
+}
+
+/*
+=============
+BotAI_RecordCoopSafeArea
+
+Remember an actual no-enemy position rather than an abstract area center.  The
+position is later usable as a normal bot_goal_t, so the mover/path planner can
+decide whether the remembered spot is still reachable.
+=============
+*/
+static void BotAI_RecordCoopSafeArea(bot_client_state_t *state,
+	int area,
+	int enemy_count)
+{
+	vec3_t delta;
+	float distance;
+	int health;
+	float critical_health;
+
+	if (state == NULL || area <= 0 || enemy_count != 0)
+	{
+		return;
+	}
+
+	/* The area observer runs before the derived battle inventory is refreshed. */
+	health = state->last_client_update.stats[STAT_HEALTH];
+	critical_health = LibVarGetValue("coopbot_danger_critical_health");
+	if (critical_health <= 0.0f)
+	{
+		critical_health = 25.0f;
+	}
+	if ((health > 0 && health <= critical_health) ||
+		(state->combat.took_damage &&
+		 AAS_Time() - state->combat.last_damage_time <= 2.0f))
+	{
+		return;
+	}
+
+	VectorSubtract(state->last_client_update.origin,
+		state->coop_last_safe_origin, delta);
+	distance = sqrtf(DotProduct(delta, delta));
+	if (state->coop_last_safe_valid &&
+		state->coop_last_safe_area == area && distance < 64.0f)
+	{
+		return;
+	}
+
+	state->coop_last_safe_area = area;
+	VectorCopy(state->last_client_update.origin,
+		state->coop_last_safe_origin);
+	state->coop_last_safe_time = AAS_Time();
+	state->coop_last_safe_valid = true;
+	if (LibVarGetValue("coopbot_log") >= 1.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"coopbot_safe_area client=%d area=%d origin=(%.1f %.1f %.1f) "
+			"state=%s",
+			state->client_number,
+			area,
+			state->coop_last_safe_origin[0],
+			state->coop_last_safe_origin[1],
+			state->coop_last_safe_origin[2],
+			BotAI_CoopAreaStateName(state->coop_area_state));
+	}
+}
+
 /*
 =============
 BotAI_UpdateCoopBotArea
 
-Observe the companion's current AAS area once per AI frame.  The state is
-intentionally small; the complete adjacency remains in the opt-in map dump.
+Observe the companion's current AAS area once per AI frame.  A current area
+becomes CLEARED only after combat was observed there and no live coop enemy
+remains.  This is deliberately conservative; the complete adjacency remains
+in the opt-in map dump.
 =============
 */
 static void BotAI_UpdateCoopBotArea(bot_client_state_t *state)
 {
+	bot_coop_area_memory_t *memory;
 	int bot_area;
 	int previous_area;
+	int previous_enemy_count;
+	int enemy_count;
+	bot_coop_area_state_t previous_state;
 	const char *area_state;
+	bool dangerous;
 
 	if (state == NULL || !BotAI_CoopMode() ||
-		LibVarGetValue("coopbot_map_model") == 0.0f ||
+		(LibVarGetValue("coopbot_map_model") == 0.0f &&
+			LibVarGetValue("coopbot_objective_htn") == 0.0f &&
+			LibVarGetValue("coopbot_safe_area_retreat") == 0.0f) ||
 		!AAS_Initialized())
 	{
 		return;
@@ -4013,19 +4321,59 @@ static void BotAI_UpdateCoopBotArea(bot_client_state_t *state)
 	{
 		return;
 	}
+	memory = BotAI_FindCoopAreaMemory(state, bot_area, true);
+	if (memory == NULL)
+	{
+		return;
+	}
+	enemy_count = BotAI_CountCoopEnemiesInArea(bot_area);
+	dangerous = BotAI_CoopAreaIsDangerous(state, enemy_count);
 	previous_area = state->coop_bot_area_valid
 		? state->coop_bot_last_area : 0;
-	if (!state->coop_bot_area_valid || bot_area != previous_area)
+	previous_state = memory->state;
+	previous_enemy_count = memory->enemy_count;
+	if (enemy_count > 0)
 	{
-		area_state = state->coop_role == BOT_COOP_ROLE_REGROUP
-			? "REGROUP"
-			: (state->combat.current_enemy > aasworld.maxClients
-				? "ACTIVE_COMBAT" : "VISITED");
+		memory->combat_seen = true;
+		if (dangerous)
+		{
+			memory->state = BOT_COOP_AREA_DANGEROUS;
+		}
+		else if (previous_enemy_count > enemy_count)
+		{
+			memory->state = BOT_COOP_AREA_PARTIALLY_CLEARED;
+		}
+		else
+		{
+			memory->state = BOT_COOP_AREA_ACTIVE_COMBAT;
+		}
+	}
+	else if (memory->combat_seen)
+	{
+		memory->state = BOT_COOP_AREA_CLEARED;
+	}
+	else
+	{
+		memory->state = BOT_COOP_AREA_VISITED;
+	}
+	memory->enemy_count = enemy_count;
+	memory->last_observed = AAS_Time();
+	state->coop_current_area = bot_area;
+	state->coop_area_enemy_count = enemy_count;
+	state->coop_area_combat_seen = memory->combat_seen;
+	state->coop_area_state = memory->state;
+	area_state = state->coop_role == BOT_COOP_ROLE_REGROUP
+		? "REGROUP" : BotAI_CoopAreaStateName(memory->state);
+	if (!state->coop_bot_area_valid || bot_area != previous_area ||
+		memory->state != previous_state ||
+		previous_enemy_count != enemy_count)
+	{
 		BotAI_LogCoopAreaTransition(state, "bot", previous_area,
 			bot_area, area_state);
 	}
 	state->coop_bot_last_area = bot_area;
 	state->coop_bot_area_valid = true;
+	BotAI_RecordCoopSafeArea(state, bot_area, enemy_count);
 }
 
 /*
@@ -7198,6 +7546,68 @@ static int BotAI_TryBattleChaseNearbyGoal(bot_client_state_t *state,
 
 /*
 =============
+BotAI_BuildCoopSafeAreaGoal
+
+Turn the last observed safe position into a retreat goal only for a genuine
+danger retreat.  It is a fallback below team/item retreat goals, and the AAS
+travel-time check prevents a stale cross-area memory from trapping the bot.
+=============
+*/
+static bool BotAI_BuildCoopSafeAreaGoal(const bot_client_state_t *state,
+	bot_goal_t *goal)
+{
+	vec3_t start_origin;
+	int start_area;
+	int travel_time;
+
+	if (state == NULL || goal == NULL ||
+		LibVarGetValue("coopbot_safe_area_retreat") == 0.0f ||
+		!state->coop_last_safe_valid ||
+		!BotAI_CoopMode() ||
+		(state->coop_area_state != BOT_COOP_AREA_DANGEROUS &&
+		 !BotAI_CoopDangerRequiresRetreat(state)) ||
+		!AAS_Initialized())
+	{
+		return false;
+	}
+
+	start_area = AAS_PointAreaNum(state->last_client_update.origin);
+	if (start_area <= 0 || state->coop_last_safe_area <= 0)
+	{
+		return false;
+	}
+
+	VectorCopy(state->last_client_update.origin, start_origin);
+	travel_time = AAS_AreaTravelTimeToGoalArea(start_area,
+		start_origin,
+		state->coop_last_safe_area,
+		BotAI_BattleRetreatTravelFlags());
+	if (travel_time <= 0 && start_area != state->coop_last_safe_area)
+	{
+		return false;
+	}
+
+	memset(goal, 0, sizeof(*goal));
+	VectorCopy(state->coop_last_safe_origin, goal->origin);
+	VectorSet(goal->mins, -16.0f, -16.0f, -24.0f);
+	VectorSet(goal->maxs, 16.0f, 16.0f, 32.0f);
+	goal->areanum = state->coop_last_safe_area;
+	goal->entitynum = -1;
+	if (LibVarGetValue("coopbot_log") >= 1.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"coopbot_safe_area_retreat client=%d from_area=%d to_area=%d "
+			"safe_time=%.2f",
+			state->client_number,
+			start_area,
+			state->coop_last_safe_area,
+			state->coop_last_safe_time);
+	}
+	return true;
+}
+
+/*
+=============
 BotAI_CTFRetreatGoals
 
 Retail BotCTFRetreatGoals (sub_100263d0, ref be_ai2_dmq2.c:2124-2139).  It only
@@ -7289,9 +7699,26 @@ static int BotAI_NodeStep(bot_client_state_t *state, void *context)
 			&state->activation_goal))
 		{
 			state->activation_goal_time = 0.0f;
+			if (state->coop_control_phase == BOT_COOP_CONTROL_NAVIGATE)
+			{
+				/* Contact is the Activate step.  Keep the bot at the
+				 * control until the human catches up instead of letting the
+				 * next LTG immediately pull it through the opened path. */
+				BotAI_CoopSetControlObjectivePhase(state,
+					BOT_COOP_CONTROL_WAIT_PLAYER,
+					state->coop_control_entity,
+					state->coop_control_goal_area);
+			}
 		}
 		if (AAS_Time() > state->activation_goal_time)
 		{
+			if (state->coop_control_phase == BOT_COOP_CONTROL_NAVIGATE)
+			{
+				BotAI_CoopSetControlObjectivePhase(state,
+					BOT_COOP_CONTROL_RETRY,
+					state->coop_control_entity,
+					state->coop_control_goal_area);
+			}
 			BotAI_EnterNode(state, BOT_AI_NODE_SEEK_NBG);
 			return qfalse;
 		}
@@ -7484,6 +7911,7 @@ static int BotAI_NodeStep(bot_client_state_t *state, void *context)
 		vec3_t retreat_viewangles;
 		bool retreat_view_set = false;
 		int retreat_actionflags = 0;
+		bool has_retreat_goal = false;
 		bot_team_goal_result_t retreat_result =
 			BotAI_ResolveTeamLongTermGoal(state,
 				frame->thinktime,
@@ -7492,7 +7920,6 @@ static int BotAI_NodeStep(bot_client_state_t *state, void *context)
 				&retreat_view_set,
 				&retreat_actionflags,
 				1);
-		bool has_retreat_goal = false;
 		if (retreat_result == BOT_TEAM_GOAL_READY)
 		{
 			has_retreat_goal = true;
@@ -7502,6 +7929,12 @@ static int BotAI_NodeStep(bot_client_state_t *state, void *context)
 			has_retreat_goal = BotAI_GetItemLongTermGoal(state,
 				&retreat_goal,
 				travel_flags);
+		}
+		if (!has_retreat_goal)
+		{
+			/* Team and item retreat semantics remain higher priority. */
+			has_retreat_goal = BotAI_BuildCoopSafeAreaGoal(state,
+				&retreat_goal);
 		}
 		if (!has_retreat_goal)
 		{
@@ -8527,6 +8960,16 @@ static bool BotAI_StoreBlockedActivationGoal(bot_client_state_t *state,
 		return true;
 	}
 
+	if (BotAI_CoopObjectiveControlEnabled())
+	{
+		/* This is the HTN's NavigateToButton step.  The blocker itself is
+		 * the authorization to pursue the control; no global button search is
+		 * started here. */
+		BotAI_CoopSetControlObjectivePhase(state,
+			BOT_COOP_CONTROL_NAVIGATE,
+			result->blockentity,
+			areanum);
+	}
 	BotAI_EnterNode(state, BOT_AI_NODE_ACTIVATE_ENTITY);
 	return true;
 }
@@ -8926,17 +9369,18 @@ static bool BotAI_HandleBlockedMovement(bot_client_state_t *state,
 		if (entity_info.valid && entity_info.solid == SOLID_BSP &&
 			entity_info.modelindex > 0)
 		{
-			aas_bspentity_t *entities = AAS_LoadBSPEntities();
-			const aas_bspentity_t *entity = BotAI_EntityToActivate(entities,
-				result->blockentity);
-			if (entity != NULL && BotAI_HandleBlockedStaticEntity(state,
-				result,
-				entity))
+			aas_bspentity_t *entities = BotInterface_CoopMapEntities();
+			if (entities != NULL)
 			{
-				AAS_FreeBSPEntities(entities);
-				return false;
+				const aas_bspentity_t *entity = BotAI_EntityToActivate(
+					entities, result->blockentity);
+				if (entity != NULL && BotAI_HandleBlockedStaticEntity(state,
+					result,
+					entity))
+				{
+					return false;
+				}
 			}
-			AAS_FreeBSPEntities(entities);
 		}
 	}
 
@@ -9081,6 +9525,14 @@ static int BotAI_RunTeamGoalMovement(bot_client_state_t *state,
 		&result,
 		true,
 		alternate_direction);
+	if (state->ai_node == BOT_AI_NODE_ACTIVATE_ENTITY && result.failure &&
+		state->coop_control_phase == BOT_COOP_CONTROL_NAVIGATE)
+	{
+		BotAI_CoopSetControlObjectivePhase(state,
+			BOT_COOP_CONTROL_RETRY,
+			state->coop_control_entity,
+			state->coop_control_goal_area);
+	}
 
 	status = EA_GetInput(state->client_number, thinktime, input);
 	if (status != BLERR_NOERROR)
@@ -11028,6 +11480,64 @@ static bool BotAI_CoopResultUsesElevator(const bot_client_state_t *state,
 		TRAVELTYPE_MASK) == TRAVEL_ELEVATOR;
 }
 
+static bool BotAI_CoopObjectiveControlEnabled(void)
+{
+	return BotAI_CoopMode() != 0 &&
+		LibVarGetValue("coopbot_objective_htn") != 0.0f;
+}
+
+static const char *BotAI_CoopControlPhaseName(
+	bot_coop_control_phase_t phase)
+{
+	switch (phase)
+	{
+		case BOT_COOP_CONTROL_NAVIGATE:
+			return "NAVIGATE_CONTROL";
+		case BOT_COOP_CONTROL_WAIT_PLAYER:
+			return "WAIT_FOR_PLAYER";
+		case BOT_COOP_CONTROL_COMPLETE:
+			return "COMPLETE";
+		case BOT_COOP_CONTROL_RETRY:
+			return "RETRY";
+		case BOT_COOP_CONTROL_NONE:
+		default:
+			return "NONE";
+	}
+}
+
+static void BotAI_CoopSetControlObjectivePhase(
+	bot_client_state_t *state,
+	bot_coop_control_phase_t phase,
+	int control_entity,
+	int goal_area)
+{
+	bot_coop_control_phase_t previous_phase;
+
+	if (state == NULL || !BotAI_CoopObjectiveControlEnabled())
+	{
+		return;
+	}
+	previous_phase = state->coop_control_phase;
+	state->coop_control_entity = control_entity;
+	state->coop_control_goal_area = goal_area;
+	if (previous_phase == phase)
+	{
+		return;
+	}
+	state->coop_control_phase = phase;
+	state->coop_control_started = AAS_Time();
+	if (LibVarGetValue("coopbot_log") >= 1.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"coopbot_objective client=%d objective=OPEN_PATH phase=%s "
+			"control_entity=%d goal_area=%d",
+			state->client_number,
+			BotAI_CoopControlPhaseName(phase),
+			control_entity,
+			goal_area);
+	}
+}
+
 static const char *BotAI_CoopObjectivePhaseName(
 	bot_coop_objective_phase_t phase)
 {
@@ -11110,10 +11620,13 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 	int player_area;
 	int bot_area;
 	int current_player_area;
+	int known_player_area;
 	float elevator_wait_timeout;
+	float elevator_travel_timeout;
 	bot_goal_t goal;
 	bot_moveresult_t result;
 	bool elevator_result;
+	bool elevator_travel_timeout_hit;
 	bool needs_regroup;
 	int logged_traveltype;
 	int status;
@@ -11137,11 +11650,26 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 	bot_area = AAS_PointAreaNum(state->last_client_update.origin);
 	vertical_separation = fabsf(player_origin[2] -
 		state->last_client_update.origin[2]);
+	/*
+	 * A player can be inside the lift volume, or on its moving brush, for a
+	 * frame in which the point-area query returns zero. Preserve the last
+	 * valid area so that a vertical split cannot turn into ordinary follow
+	 * merely because the mover temporarily hides the AAS sample.
+	 */
+	if (current_player_area > 0)
+	{
+		state->coop_player_area = current_player_area;
+		VectorCopy(player_origin, state->coop_player_origin);
+	}
+	known_player_area = current_player_area > 0
+		? current_player_area : state->coop_player_area;
 	/* A nearby player on another vertical AAS layer still requires regroup. */
 	needs_regroup = hard_leash > 0.0f &&
 		(distance > hard_leash ||
-			(bot_area > 0 && current_player_area > 0 &&
-				bot_area != current_player_area &&
+			(bot_area > 0 && known_player_area > 0 &&
+				bot_area != known_player_area &&
+				vertical_separation >= 64.0f) ||
+			(current_player_area <= 0 && known_player_area > 0 &&
 				vertical_separation >= 64.0f));
 	if (!needs_regroup)
 	{
@@ -11163,6 +11691,8 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 			state->coop_player_goal_valid = false;
 			state->coop_elevator_wait_started = 0.0f;
 			state->coop_elevator_wait_area = 0;
+			state->coop_elevator_travel_started = 0.0f;
+			state->coop_elevator_travel_area = 0;
 		}
 		return false;
 	}
@@ -11171,6 +11701,13 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 	if (current_player_area > 0)
 	{
 		state->coop_player_area = current_player_area;
+		VectorCopy(player_origin, state->coop_player_origin);
+		state->coop_player_goal_valid = true;
+	}
+	else if (known_player_area > 0)
+	{
+		/* Keep the current player origin, but route to the last valid area. */
+		state->coop_player_area = known_player_area;
 		VectorCopy(player_origin, state->coop_player_origin);
 		state->coop_player_goal_valid = true;
 	}
@@ -11218,9 +11755,18 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 	{
 		elevator_wait_timeout = 15.0f;
 	}
+	elevator_travel_timeout = LibVarGetValue("coopbot_elevator_travel_timeout");
+	if (elevator_travel_timeout <= 0.0f)
+	{
+		elevator_travel_timeout = 30.0f;
+	}
+	elevator_travel_timeout_hit = false;
 	if (elevator_result &&
 		(result.flags & MOVERESULT_WAITING) != 0)
 	{
+		/* Waiting for the platform is a separate bounded phase. */
+		state->coop_elevator_travel_started = 0.0f;
+		state->coop_elevator_travel_area = 0;
 		BotAI_CoopSetObjectivePhase(state,
 			BOT_COOP_OBJECTIVE_WAIT_ELEVATOR,
 			player_entity,
@@ -11240,6 +11786,8 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 			BotResetMoveStateHandle(state->move_handle);
 			state->coop_elevator_wait_started = 0.0f;
 			state->coop_elevator_wait_area = 0;
+			state->coop_elevator_travel_started = 0.0f;
+			state->coop_elevator_travel_area = 0;
 			if (LibVarGetValue("coopbot_log") >= 2.0f)
 			{
 				BotLib_LogWriteTimeStamped(
@@ -11257,6 +11805,30 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 				player_entity,
 				player_area,
 				TRAVEL_ELEVATOR);
+			if (state->coop_elevator_travel_area != player_area ||
+				state->coop_elevator_travel_started <= 0.0f)
+			{
+				state->coop_elevator_travel_area = player_area;
+				state->coop_elevator_travel_started = AAS_Time();
+			}
+			else if (AAS_Time() - state->coop_elevator_travel_started >
+				elevator_travel_timeout)
+			{
+				result.failure = 1;
+				elevator_travel_timeout_hit = true;
+				BotResetAvoidReachHandle(state->move_handle);
+				BotResetMoveStateHandle(state->move_handle);
+				state->coop_elevator_travel_started = 0.0f;
+				state->coop_elevator_travel_area = 0;
+				if (LibVarGetValue("coopbot_log") >= 2.0f)
+				{
+					BotLib_LogWriteTimeStamped(
+						"coopbot_elevator_failed client=%d player=%d "
+						"reason=travel_timeout timeout=%.1f",
+						state->client_number, player_entity,
+						elevator_travel_timeout);
+				}
+			}
 		}
 		else if (!result.failure && !result.blocked)
 		{
@@ -11268,6 +11840,11 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 		}
 		state->coop_elevator_wait_started = 0.0f;
 		state->coop_elevator_wait_area = 0;
+		if (!elevator_result || result.failure || result.blocked)
+		{
+			state->coop_elevator_travel_started = 0.0f;
+			state->coop_elevator_travel_area = 0;
+		}
 	}
 	if (elevator_result &&
 		(result.failure || result.blocked))
@@ -11287,12 +11864,14 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 		BotResetMoveStateHandle(state->move_handle);
 		state->coop_elevator_wait_started = 0.0f;
 		state->coop_elevator_wait_area = 0;
+		state->coop_elevator_travel_started = 0.0f;
+		state->coop_elevator_travel_area = 0;
 		if (LibVarGetValue("coopbot_log") >= 2.0f)
 		{
 			BotLib_LogWriteTimeStamped(
-				"coopbot_elevator_retry client=%d player=%d failure=%d blocked=%d",
+				"coopbot_elevator_retry client=%d player=%d failure=%d blocked=%d timeout=%d",
 				state->client_number, player_entity, result.failure,
-				result.blocked);
+				result.blocked, elevator_travel_timeout_hit);
 		}
 	}
 	else if (result.failure)
@@ -11371,6 +11950,210 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 			player_area, result.blockentity);
 	}
 	return true;
+}
+
+/*
+=============
+BotAI_ApplyCoopControlWait
+
+Completes the first OpenPath HTN with an explicit WaitForPlayer step.  The
+wait is only armed by a control entity that actually blocked the bot's route;
+it is never a map-wide search or an unconditional pause after every door.
+=============
+*/
+static bool BotAI_ApplyCoopControlWait(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input)
+{
+	vec3_t player_origin;
+	vec3_t direction;
+	float distance;
+	float wait_distance;
+	float wait_timeout;
+	int player_entity;
+	int status;
+
+	if (state == NULL || input == NULL ||
+		state->coop_control_phase != BOT_COOP_CONTROL_WAIT_PLAYER)
+	{
+		return false;
+	}
+	if (!BotAI_CoopObjectiveControlEnabled())
+	{
+		state->coop_control_phase = BOT_COOP_CONTROL_NONE;
+		state->coop_control_entity = 0;
+		state->coop_control_goal_area = 0;
+		return false;
+	}
+	wait_timeout = LibVarGetValue("coopbot_objective_wait_timeout");
+	if (wait_timeout <= 0.0f)
+	{
+		wait_timeout = 30.0f;
+	}
+	if (AAS_Time() - state->coop_control_started >= wait_timeout)
+	{
+		BotAI_CoopSetControlObjectivePhase(state,
+			BOT_COOP_CONTROL_RETRY,
+			state->coop_control_entity,
+			state->coop_control_goal_area);
+		state->activation_goal_time = 0.0f;
+		BotResetAvoidReachHandle(state->move_handle);
+		if (LibVarGetValue("coopbot_log") >= 1.0f)
+		{
+			BotLib_LogWriteTimeStamped(
+				"coopbot_objective client=%d objective=OPEN_PATH "
+				"phase=RETRY reason=wait_timeout timeout=%.1f",
+				state->client_number, wait_timeout);
+		}
+		return false;
+	}
+
+	player_entity = BotAI_CoopPlayerEntity(state, player_origin);
+	if (player_entity < 0)
+	{
+		/* A missing player is not permission to continue through the
+		 * objective.  Keep the last attack state but cancel movement. */
+		status = EA_GetInput(state->client_number, thinktime, input);
+		if (status != BLERR_NOERROR)
+		{
+			return false;
+		}
+		VectorClear(input->dir);
+		input->speed = 0.0f;
+		input->thinktime = thinktime;
+		return EA_SubmitInput(state->client_number, input) == BLERR_NOERROR;
+	}
+	VectorSubtract(player_origin, state->last_client_update.origin,
+		direction);
+	distance = sqrtf(DotProduct(direction, direction));
+	wait_distance = LibVarGetValue("coopbot_objective_wait_distance");
+	if (wait_distance <= 0.0f)
+	{
+		wait_distance = 256.0f;
+	}
+	if (distance <= wait_distance)
+	{
+		BotAI_CoopSetControlObjectivePhase(state,
+			BOT_COOP_CONTROL_COMPLETE,
+			state->coop_control_entity,
+			state->coop_control_goal_area);
+		return false;
+	}
+
+	/* Preserve an attack command while removing only the committed movement. */
+	status = EA_GetInput(state->client_number, thinktime, input);
+	if (status != BLERR_NOERROR)
+	{
+		return false;
+	}
+	VectorClear(input->dir);
+	input->speed = 0.0f;
+	input->thinktime = thinktime;
+	return EA_SubmitInput(state->client_number, input) == BLERR_NOERROR;
+}
+
+/*
+=============
+BotAI_ApplyCoopAreaAdvanceGate
+
+Do not let a companion silently turn a local path choice into solo
+exploration.  Crossing into another AAS area is released only by a confident
+ADVANCE/EXPLORE intent while the player is still close enough to follow.  A
+hard leash/elevator regroup runs first and therefore retains priority for
+vertical separation.
+=============
+*/
+static bool BotAI_ApplyCoopAreaAdvanceGate(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input)
+{
+	vec3_t player_origin;
+	vec3_t direction;
+	float distance;
+	float advance_radius;
+	int player_entity;
+	int player_area;
+	int bot_area;
+	bool allowed;
+	int status;
+
+	if (state == NULL || input == NULL ||
+		!BotAI_CoopObjectiveControlEnabled() ||
+		!state->coop_bot_area_valid)
+	{
+		return false;
+	}
+
+	player_entity = BotAI_CoopPlayerEntity(state, player_origin);
+	if (player_entity < 0)
+	{
+		return false;
+	}
+	player_area = AAS_PointAreaNum(player_origin);
+	bot_area = state->coop_current_area;
+	if (player_area <= 0 || bot_area <= 0 || player_area == bot_area ||
+		state->combat.current_enemy > aasworld.maxClients)
+	{
+		if (state->coop_area_gate_active)
+		{
+			state->coop_area_gate_active = false;
+			if (LibVarGetValue("coopbot_log") >= 1.0f)
+			{
+				BotLib_LogWriteTimeStamped(
+					"coopbot_area_gate client=%d phase=RELEASE bot_area=%d "
+					"player_area=%d reason=area_or_combat",
+					state->client_number, bot_area, player_area);
+			}
+		}
+		return false;
+	}
+
+	VectorSubtract(player_origin, state->last_client_update.origin,
+		direction);
+	distance = sqrtf(DotProduct(direction, direction));
+	advance_radius = LibVarGetValue("coopbot_advance_radius");
+	if (advance_radius <= 0.0f)
+	{
+		advance_radius = 256.0f;
+	}
+	allowed = distance <= advance_radius &&
+		BotAI_CoopIntentAllowsForwardProgress(state);
+	if (allowed)
+	{
+		if (state->coop_area_gate_active)
+		{
+			state->coop_area_gate_active = false;
+			if (LibVarGetValue("coopbot_log") >= 1.0f)
+			{
+				BotLib_LogWriteTimeStamped(
+					"coopbot_area_gate client=%d phase=RELEASE bot_area=%d "
+					"player_area=%d distance=%.1f intent=%s",
+					state->client_number, bot_area, player_area, distance,
+					BotAI_CoopPlayerIntentName(state->coop_player_intent));
+			}
+		}
+		return false;
+	}
+
+	if (!state->coop_area_gate_active && LibVarGetValue("coopbot_log") >= 1.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"coopbot_area_gate client=%d phase=WAIT_FOR_PLAYER bot_area=%d "
+			"player_area=%d state=%s distance=%.1f intent=%s",
+			state->client_number, bot_area, player_area,
+			BotAI_CoopAreaStateName(state->coop_area_state), distance,
+			BotAI_CoopPlayerIntentName(state->coop_player_intent));
+	}
+	state->coop_area_gate_active = true;
+	status = EA_GetInput(state->client_number, thinktime, input);
+	if (status != BLERR_NOERROR)
+	{
+		return false;
+	}
+	VectorClear(input->dir);
+	input->speed = 0.0f;
+	input->thinktime = thinktime;
+	return EA_SubmitInput(state->client_number, input) == BLERR_NOERROR;
 }
 
 /*
@@ -12535,6 +13318,8 @@ static int BotAI_Think(bot_client_state_t *state, float thinktime)
 	}
 
 	if (!BotAI_ApplyCoopHardLeash(state, thinktime, &input) &&
+		!BotAI_ApplyCoopControlWait(state, thinktime, &input) &&
+		!BotAI_ApplyCoopAreaAdvanceGate(state, thinktime, &input) &&
 		!BotAI_ApplyCoopRescuePositioning(state, thinktime, &input) &&
 		!BotAI_ApplyCoopRolePositioning(state, thinktime, &input) &&
 		!BotAI_ApplyCoopFirelineAvoidance(state, thinktime, &input) &&

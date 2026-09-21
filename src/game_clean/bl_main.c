@@ -1059,8 +1059,20 @@ int BotInitLibrary(bot_library_t *lib)
 	lib->funcs.BotLibVarSet("coopbot_danger_critical_health", cvar->string);
 	cvar = gi.cvar("coopbot_basic_cover", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_basic_cover", cvar->string);
+	cvar = gi.cvar("coopbot_safe_area_retreat", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_safe_area_retreat", cvar->string);
 	cvar = gi.cvar("coopbot_elevator_wait_timeout", "15", 0);
 	lib->funcs.BotLibVarSet("coopbot_elevator_wait_timeout", cvar->string);
+	cvar = gi.cvar("coopbot_elevator_travel_timeout", "30", 0);
+	lib->funcs.BotLibVarSet("coopbot_elevator_travel_timeout", cvar->string);
+	cvar = gi.cvar("coopbot_objective_htn", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_objective_htn", cvar->string);
+	cvar = gi.cvar("coopbot_objective_wait_distance", "256", 0);
+	lib->funcs.BotLibVarSet("coopbot_objective_wait_distance", cvar->string);
+	cvar = gi.cvar("coopbot_objective_wait_timeout", "30", 0);
+	lib->funcs.BotLibVarSet("coopbot_objective_wait_timeout", cvar->string);
+	cvar = gi.cvar("coopbot_advance_radius", "256", 0);
+	lib->funcs.BotLibVarSet("coopbot_advance_radius", cvar->string);
 	cvar = gi.cvar("coopbot_map_model", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_map_model", cvar->string);
 #ifdef ZOID

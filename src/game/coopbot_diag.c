@@ -1084,6 +1084,15 @@ void CoopBotDiag_RecordMapLoad(const char *mapname,
 		status);
 }
 
+void CoopBotDiag_RecordMapTransition(const char *from_map,
+	const char *to_map)
+{
+	CoopBotDiag_Log(1,
+		"map_transition from=\"%s\" to=\"%s\"",
+		from_map != NULL ? from_map : "<unknown>",
+		to_map != NULL ? to_map : "<unknown>");
+}
+
 void CoopBotDiag_RecordBotSpawn(edict_t *bot)
 {
 	int client = CoopBotDiag_ClientNumber(bot);

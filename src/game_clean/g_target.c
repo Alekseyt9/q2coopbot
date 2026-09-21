@@ -24,7 +24,7 @@
  * =======================================================================
  */
 
-#include "header/local.h"
+#include "coopbot_local.h"
 
 #define TARGET_HELP_PRIMARY 1
 #define TARGET_HELP_THINK_DELAY 0.3f
@@ -507,6 +507,8 @@ use_target_changelevel(edict_t *self, edict_t *other, edict_t *activator)
 	{
 		game.serverflags &= ~(SFL_CROSS_TRIGGER_MASK);
 	}
+
+	CoopBotDiag_RecordMapTransition(level.mapname, self->map);
 
 	BeginIntermission(self);
 }

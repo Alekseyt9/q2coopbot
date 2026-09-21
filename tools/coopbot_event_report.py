@@ -60,6 +60,15 @@ def number(value: object) -> float | None:
         return None
 
 
+def integer(value: object, default: int = 0) -> int:
+    """Parse decimal or C-style hexadecimal fields from botlib diagnostics."""
+    try:
+        return int(str(value), 0)
+    except (TypeError, ValueError):
+        parsed = number(value)
+        return int(parsed) if parsed is not None else default
+
+
 def read_botlib_events(stream: TextIO) -> Counter[str]:
     """Count CoopBot records emitted by the legacy botlib text log."""
     events: Counter[str] = Counter()
@@ -75,6 +84,12 @@ def read_botlib_events(stream: TextIO) -> Counter[str]:
             fields = message_fields(line)
             actor = fields.get("actor", "unknown").lower()
             events[f"area_{actor}_transition"] += 1
+            area_state = fields.get("state", "unknown").lower()
+            events[f"area_{actor}_{area_state}"] += 1
+        if "coopbot_area_gate" in line:
+            fields = message_fields(line)
+            phase = fields.get("phase", "unknown").lower()
+            events[f"area_gate_{phase}"] += 1
         if "coopbot_objective" in line:
             fields = message_fields(line)
             objective = fields.get("objective", "unknown").lower()
@@ -92,14 +107,18 @@ def read_botlib_events(stream: TextIO) -> Counter[str]:
 
 
 def read_botlib_map_model(stream: TextIO) -> dict | None:
-    """Extract the optional AAS map-model summary from the botlib log."""
+    """Extract the optional AAS map model and actionable control details."""
     model: dict[str, object] | None = None
     controls: Counter[str] = Counter()
+    control_records: list[dict[str, object]] = []
+    geometry_records: list[dict[str, str]] = []
+    control_links: list[dict[str, str]] = []
+    unresolved_links: list[dict[str, str]] = []
+    map_transitions: list[dict[str, str]] = []
+    areas: dict[int, dict[str, object]] = {}
+    elevator_edges: list[dict[str, object]] = []
     area_records = 0
     edge_records = 0
-    elevator_edges = 0
-    control_links = 0
-    unresolved_controls = 0
 
     for line in stream:
         if "coopbot_map_model" in line:
@@ -112,28 +131,119 @@ def read_botlib_map_model(stream: TextIO) -> dict | None:
                 "elevators": int(number(fields.get("elevators")) or 0),
             }
         elif "coopbot_map_area" in line:
+            fields = message_fields(line)
             area_records += 1
+            area_number = integer(fields.get("area"))
+            if area_number > 0:
+                areas[area_number] = {
+                    "area": area_number,
+                    "cluster": integer(fields.get("cluster"), -1),
+                    "flags": integer(fields.get("flags")),
+                    "presence": integer(fields.get("presence")),
+                    "reachable": integer(fields.get("reachable")),
+                    "mins": fields.get("mins", ""),
+                    "maxs": fields.get("maxs", ""),
+                    "center": fields.get("center", ""),
+                }
         elif "coopbot_map_edge" in line:
             fields = message_fields(line)
             edge_records += 1
             if fields.get("traveltype") == "11":
-                elevator_edges += 1
+                elevator_edges.append({
+                    "reach": integer(fields.get("reach")),
+                    "from": integer(fields.get("from")),
+                    "to": integer(fields.get("to")),
+                    "traveltype": integer(fields.get("traveltype")),
+                    "traveltime": integer(fields.get("traveltime")),
+                    "facenum": integer(fields.get("facenum")),
+                    "edgenum": integer(fields.get("edgenum")),
+                    "start": fields.get("start", ""),
+                    "end": fields.get("end", ""),
+                })
         elif "coopbot_map_control_link" in line:
-            control_links += 1
+            fields = message_fields(line)
+            control_links.append({
+                "source": fields.get("source", ""),
+                "target": fields.get("target", ""),
+                "destination": fields.get("destination", ""),
+            })
         elif "coopbot_map_control_unresolved" in line:
-            unresolved_controls += 1
+            fields = message_fields(line)
+            unresolved_links.append({
+                "source": fields.get("source", ""),
+                "target": fields.get("target", ""),
+            })
+        elif "coopbot_map_transition" in line:
+            fields = message_fields(line)
+            map_transitions.append({
+                "class": fields.get("class", ""),
+                "map": fields.get("map", ""),
+                "message": fields.get("message", ""),
+                "target": fields.get("target", ""),
+            })
+        elif "coopbot_map_geometry" in line:
+            fields = message_fields(line)
+            geometry_records.append({
+                "class": fields.get("class", ""),
+                "model": fields.get("model", ""),
+                "origin": fields.get("origin", ""),
+                "model_origin": fields.get("model_origin", ""),
+                "mins": fields.get("mins", ""),
+                "maxs": fields.get("maxs", ""),
+            })
         elif "coopbot_map_control" in line:
             fields = message_fields(line)
             controls[fields.get("class", "<unknown>")] += 1
+            control_records.append({
+                "class": fields.get("class", ""),
+                "model": fields.get("model", ""),
+                "target": fields.get("target", ""),
+                "targetname": fields.get("targetname", ""),
+                "speed": number(fields.get("speed")) or 0.0,
+                "height": number(fields.get("height")) or 0.0,
+                "lip": number(fields.get("lip")) or 0.0,
+                "spawnflags": integer(fields.get("spawnflags")),
+                "map": fields.get("map", ""),
+                "message": fields.get("message", ""),
+                "origin": fields.get("origin", ""),
+                "model_origin": fields.get("model_origin", ""),
+                "model_mins": fields.get("model_mins", ""),
+                "model_maxs": fields.get("model_maxs", ""),
+            })
 
     if model is None:
         return None
+    geometry_by_key = {
+        (record["class"], record["model"]): record
+        for record in geometry_records
+    }
+    for control in control_records:
+        geometry = geometry_by_key.get((control["class"], control["model"]))
+        if geometry is not None:
+            for field in ("origin", "model_origin", "mins", "maxs"):
+                control[field] = geometry[field]
     model["area_records"] = area_records
     model["edge_records"] = edge_records
-    model["elevator_edge_records"] = elevator_edges
+    model["elevator_edge_records"] = len(elevator_edges)
+    model["elevator_edges"] = elevator_edges
+    elevator_area_ids = {
+        area_id
+        for edge in elevator_edges
+        for area_id in (edge["from"], edge["to"])
+        if isinstance(area_id, int) and area_id > 0
+    }
+    model["elevator_areas"] = [
+        areas[area_id]
+        for area_id in sorted(elevator_area_ids)
+        if area_id in areas
+    ]
     model["controls"] = dict(sorted(controls.items()))
+    model["control_records"] = control_records
+    model["geometry_records"] = geometry_records
     model["control_links"] = control_links
-    model["unresolved_controls"] = unresolved_controls
+    model["unresolved_controls"] = len(unresolved_links)
+    model["unresolved_control_links"] = unresolved_links
+    model["map_transitions"] = map_transitions
     return model
 
 
@@ -155,6 +265,7 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
     target_lost = 0
     regroup_events = 0
     stuck_events = 0
+    map_transition_events = 0
 
     for record in records:
         fields = message_fields(record.get("message"))
@@ -210,6 +321,9 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
         if event == "stuck":
             stuck_events += 1
 
+        if event == "map_transition":
+            map_transition_events += 1
+
     return {
         "bot_snapshots": {
             "records": snapshot_count,
@@ -247,6 +361,7 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
             "target_lost": target_lost,
             "regroup": regroup_events,
             "stuck": stuck_events,
+            "map_transitions": map_transition_events,
         },
     }
 
@@ -338,6 +453,26 @@ def main() -> int:
         action="store_true",
         help="fail unless botlib logged a bot AAS-area transition",
     )
+    parser.add_argument(
+        "--require-open-path-complete",
+        action="store_true",
+        help="fail unless botlib completed an OPEN_PATH control objective",
+    )
+    parser.add_argument(
+        "--require-map-transition",
+        action="store_true",
+        help="fail unless botlib extracted at least one map transition",
+    )
+    parser.add_argument(
+        "--require-runtime-map-transition",
+        action="store_true",
+        help="fail unless runtime JSONL recorded a map transition",
+    )
+    parser.add_argument(
+        "--require-safe-area",
+        action="store_true",
+        help="fail unless botlib recorded at least one safe area",
+    )
     parser.add_argument("-o", "--output", help="write summary JSON to this path")
     args = parser.parse_args()
 
@@ -406,12 +541,36 @@ def main() -> int:
         validation_errors.append("no bot AAS-area transition was recorded")
 
     if (
+        args.require_open_path_complete
+        and botlib_events.get("objective_open_path_complete", 0) < 1
+    ):
+        validation_errors.append(
+            "no completed OPEN_PATH control objective was recorded"
+        )
+
+    if args.require_safe_area and botlib_events.get("safe_area", 0) < 1:
+        validation_errors.append("no coopbot_safe_area record was emitted")
+
+    if args.require_map_transition:
+        if botlib_map_model is None:
+            validation_errors.append("botlib map model is missing")
+        elif len(botlib_map_model.get("map_transitions", [])) < 1:
+            validation_errors.append("no map transition was extracted")
+
+    if args.require_runtime_map_transition and result_object["telemetry"]["coop"]["map_transitions"] < 1:
+        validation_errors.append("no runtime map transition was recorded")
+
+    if (
         args.require_elevator_edge
         or args.require_elevator_regroup
         or args.require_regroup_path_failure
         or args.require_regroup_complete
         or args.require_player_area_transition
         or args.require_bot_area_transition
+        or args.require_open_path_complete
+        or args.require_safe_area
+        or args.require_map_transition
+        or args.require_runtime_map_transition
     ):
         result_object["validation"] = {
             "ok": not validation_errors,

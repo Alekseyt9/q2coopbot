@@ -17,6 +17,8 @@ void CoopBotDiag_RecordMapEntities(const char *mapname);
 void CoopBotDiag_RecordMapLoad(const char *mapname,
 	const char *library,
 	int status);
+void CoopBotDiag_RecordMapTransition(const char *from_map,
+	const char *to_map);
 void CoopBotDiag_RecordBotSpawn(edict_t *bot);
 void CoopBotDiag_RecordBotRemove(edict_t *bot);
 void CoopBotDiag_RecordShot(const char *kind,
