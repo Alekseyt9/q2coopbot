@@ -346,6 +346,7 @@ static void BotState_FreeResources(bot_client_state_t *state)
 	state->coop_control_entity = 0;
 	state->coop_control_goal_area = 0;
 	state->coop_control_started = 0.0f;
+	state->coop_control_route_confirmed = false;
 	state->coop_changelevel_gate_active = false;
 	state->coop_changelevel_gate_model = 0;
 	state->coop_current_area = 0;

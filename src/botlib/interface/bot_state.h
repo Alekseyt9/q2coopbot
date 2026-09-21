@@ -290,6 +290,7 @@ struct bot_client_state_s {
 	int coop_control_entity;
 	int coop_control_goal_area;
 	float coop_control_started;
+	bool coop_control_route_confirmed;
 	bool coop_changelevel_gate_active;
 	int coop_changelevel_gate_model;
 	int coop_current_area;
