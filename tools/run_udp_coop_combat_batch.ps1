@@ -1,5 +1,7 @@
 [CmdletBinding()]
 param(
+    [ValidateSet('combat', 'follow', 'retreat')]
+    [string]$Scenario = 'combat',
     [int]$FirstSeed = 532,
     [int]$Count = 20,
     [int]$Port = 27952,
@@ -13,7 +15,7 @@ $q2ded = Join-Path $RuntimeRoot 'q2ded.exe'
 $client = Join-Path $RepoRoot 'tools\q2_client_handshake.py'
 $reporter = Join-Path $RepoRoot 'tools\coopbot_event_report.py'
 $eventLog = Join-Path $RuntimeRoot 'coopbot_debug_events.jsonl'
-$artifactRoot = Join-Path $RepoRoot 'artifacts\udp-coop-combat-baseline'
+$artifactRoot = Join-Path $RepoRoot "artifacts\udp-$Scenario-baseline"
 
 if (-not (Test-Path -LiteralPath $q2ded)) {
     throw "q2ded is missing: $q2ded"
@@ -31,9 +33,30 @@ if (Get-Process q2ded -ErrorAction SilentlyContinue) {
 New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
 $results = [System.Collections.Generic.List[object]]::new()
 
+$moveForward = 400
+$sideSpeed = 0
+$yawRate = 0
+$attack = $false
+$jump = $false
+switch ($Scenario) {
+    'combat' {
+        $attack = $true
+    }
+    'follow' {
+        $moveForward = 400
+    }
+    'retreat' {
+        $moveForward = -400
+        $sideSpeed = 200
+        $yawRate = 35
+        $attack = $true
+        $jump = $true
+    }
+}
+
 for ($offset = 0; $offset -lt $Count; $offset++) {
     $seed = $FirstSeed + $offset
-    $episode = "coop-combat-$seed"
+    $episode = "coop-$Scenario-$seed"
     $runPort = $Port + $offset
     $serverStdout = Join-Path $artifactRoot "$episode-server.stdout.log"
     $serverStderr = Join-Path $artifactRoot "$episode-server.stderr.log"
@@ -64,7 +87,7 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
     try {
         $server = Start-Process -FilePath $q2ded -WorkingDirectory $RuntimeRoot `
             -ArgumentList $serverArgs -RedirectStandardOutput $serverStdout `
-            -RedirectStandardError $serverStderr -PassThru
+            -RedirectStandardError $serverStderr -WindowStyle Hidden -PassThru
         Start-Sleep -Milliseconds 1800
 
         $harnessArgs = @(
@@ -77,10 +100,12 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
             '--require-human-marker',
             '--server-command', 'use blaster',
             '--move-forward', "$MoveSeconds",
-            '--forward-speed', '400',
-            '--yaw-rate', '0',
-            '--attack'
+            '--forward-speed', "$moveForward",
+            '--side-speed', "$sideSpeed",
+            '--yaw-rate', "$yawRate"
         )
+        if ($attack) { $harnessArgs += '--attack' }
+        if ($jump) { $harnessArgs += '--jump' }
         & python @harnessArgs 1> $harnessOutput 2> $harnessError
         $harnessExit = $LASTEXITCODE
     }
@@ -94,9 +119,14 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
         }
     }
 
-    & python $reporter $eventLog --episode-id $episode `
-        --require-human-player --require-bot-monster-damage `
-        --output $reportOutput
+    $reportArgs = @(
+        $reporter, $eventLog, '--episode-id', $episode,
+        '--require-human-player', '--output', $reportOutput
+    )
+    if ($Scenario -eq 'combat') {
+        $reportArgs += '--require-bot-monster-damage'
+    }
+    & python @reportArgs
     $reportExit = $LASTEXITCODE
     if (Test-Path -LiteralPath $reportOutput) {
         $report = Get-Content -LiteralPath $reportOutput -Raw | ConvertFrom-Json -AsHashtable
@@ -112,6 +142,8 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
         bot_shots = if ($null -ne $report) { $report['telemetry']['bot_combat']['shots'] } else { 0 }
         bot_monster_damage_events = if ($null -ne $report) { $report['telemetry']['bot_combat']['monster_damage_events'] } else { 0 }
         bot_monster_damage_total = if ($null -ne $report) { $report['telemetry']['bot_combat']['monster_damage_total'] } else { 0 }
+        regroup_events = if ($null -ne $report) { $report['telemetry']['coop']['regroup'] } else { 0 }
+        stuck_events = if ($null -ne $report) { $report['telemetry']['coop']['stuck'] } else { 0 }
     })
 
     Write-Host ("{0}: harness={1} report={2} bot_shots={3} bot_monster_damage={4}" -f `

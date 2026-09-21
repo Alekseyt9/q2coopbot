@@ -20,3 +20,5 @@ NUL.obj
 # The preservation archive is deliberately tracked. This negation is a guard:
 # it keeps a future broad rule (*.zip, *.exe, ...) from swallowing it.
 !archive/**
+/artifacts/udp-follow-baseline
+/artifacts/udp-retreat-baseline
