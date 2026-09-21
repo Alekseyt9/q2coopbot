@@ -295,6 +295,8 @@ static void BotAI_ChooseBattleWeapon(bot_client_state_t *state)
 	int weapon_count = 0;
 	int weight_count = 0;
 	float best_weight = 0.0f;
+	const char *selected_name = "<none>";
+	const char *selected_projectile = "<none>";
 
 	if (state == NULL || state->weapon_state <= 0)
 	{
@@ -313,11 +315,20 @@ static void BotAI_ChooseBattleWeapon(bot_client_state_t *state)
 		weight_count = weapon_state->weights != NULL
 			? weapon_state->weights->index_count : 0;
 		best_weight = weapon_state->last_best_weight;
+		if (weapon_state->config != NULL && state->current_weapon >= 0 &&
+			state->current_weapon < weapon_state->config->num_weapons)
+		{
+			const bot_weapon_info_t *weapon =
+				&weapon_state->config->weapons[state->current_weapon];
+			selected_name = weapon->name;
+			selected_projectile = weapon->projectile;
+		}
 	}
 	BotLib_LogWriteTimeStamped(
 		"weapon_select client=%d current=%d blaster=%d health=%d "
 		"enemy_height=%d aggression=%.1f retreat=%d best_weight=%.1f "
-		"weapon_count=%d weight_count=%d model=\"%s\"",
+		"weapon_count=%d weight_count=%d gunindex=%d name=\"%s\" "
+		"projectile=\"%s\" model=\"%s\"",
 		state->client_number,
 		state->current_weapon,
 		state->last_client_update.inventory[BOT_BATTLE_INVENTORY_BLASTER],
@@ -328,6 +339,9 @@ static void BotAI_ChooseBattleWeapon(bot_client_state_t *state)
 		best_weight,
 		weapon_count,
 		weight_count,
+		state->last_client_update.gunindex,
+		selected_name,
+		selected_projectile,
 		BotInterface_ModelNameForIndex(state->last_client_update.gunindex));
 }
 

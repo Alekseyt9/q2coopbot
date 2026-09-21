@@ -435,6 +435,12 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
     damage_applied = 0.0
     damage_attempts = 0
     damage_events = 0
+    bot_entity_ids: set[int] = set()
+    bot_projectile_launches = 0
+    bot_shots = 0
+    bot_monster_shots = 0
+    bot_monster_damage_events = 0
+    bot_monster_damage_total = 0.0
     player_contacts = 0
     player_block_candidates = 0
     encounter_events = 0
@@ -456,6 +462,10 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
             if state:
                 states[state] += 1
             player_entity = integer(fields.get("player"), -1)
+            bot_client = integer(fields.get("client"), -1)
+            if bot_client >= 0:
+                # Quake II entity numbers are client slot + 1.
+                bot_entity_ids.add(bot_client + 1)
             player_is_human = integer(fields.get("player_is_human"), 0)
             if player_entity >= 0 and player_is_human == 1:
                 human_player_samples += 1
@@ -471,6 +481,15 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
 
         if event == "shot":
             shot_kinds[fields.get("kind", "<unknown>")] += 1
+            attacker = integer(fields.get("attacker"), -1)
+            if attacker in bot_entity_ids:
+                bot_shots += 1
+                if fields.get("target_class", "").startswith("monster_"):
+                    bot_monster_shots += 1
+
+        if event == "projectile_launch":
+            if integer(fields.get("owner"), -1) in bot_entity_ids:
+                bot_projectile_launches += 1
 
         if event == "damage_attempt":
             damage_attempts += 1
@@ -483,6 +502,13 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
                 damage_requested += requested
             if applied is not None:
                 damage_applied += applied
+            if (
+                integer(fields.get("attacker"), -1) in bot_entity_ids
+                and fields.get("class", "").startswith("monster_")
+            ):
+                bot_monster_damage_events += 1
+                if applied is not None:
+                    bot_monster_damage_total += applied
 
         if event == "player_contact":
             player_contacts += 1
@@ -536,6 +562,14 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
             "applied_events": damage_events,
             "requested_total": damage_requested,
             "applied_total": damage_applied,
+        },
+        "bot_combat": {
+            "entity_ids": sorted(bot_entity_ids),
+            "projectile_launches": bot_projectile_launches,
+            "shots": bot_shots,
+            "monster_shots": bot_monster_shots,
+            "monster_damage_events": bot_monster_damage_events,
+            "monster_damage_total": bot_monster_damage_total,
         },
         "coop": {
             "human_player_samples": human_player_samples,
@@ -703,6 +737,16 @@ def main() -> int:
         action="store_true",
         help="fail unless bot snapshots reference a real non-bot player entity",
     )
+    parser.add_argument(
+        "--require-bot-shot",
+        action="store_true",
+        help="fail unless telemetry contains a projectile/shot owned by the bot",
+    )
+    parser.add_argument(
+        "--require-bot-monster-damage",
+        action="store_true",
+        help="fail unless the bot applied damage to a monster entity",
+    )
     parser.add_argument("-o", "--output", help="write summary JSON to this path")
     args = parser.parse_args()
 
@@ -735,6 +779,15 @@ def main() -> int:
         validation_errors.append(
             "no human player entity was observed in bot snapshots"
         )
+
+    if args.require_bot_shot and result_object["telemetry"]["bot_combat"]["shots"] < 1:
+        validation_errors.append("no bot-owned shot was recorded")
+
+    if (
+        args.require_bot_monster_damage
+        and result_object["telemetry"]["bot_combat"]["monster_damage_events"] < 1
+    ):
+        validation_errors.append("no bot damage to a monster was recorded")
 
     if args.botlib_log:
         botlib_path = Path(args.botlib_log)
@@ -865,6 +918,8 @@ def main() -> int:
         or args.require_map_transition
         or args.require_runtime_map_transition
         or args.require_human_player
+        or args.require_bot_shot
+        or args.require_bot_monster_damage
     ):
         result_object["validation"] = {
             "ok": not validation_errors,

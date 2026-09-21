@@ -1,0 +1,56 @@
+Winsock Initialized
+==== Yamagi Quake II Initialized ====
+
+*************************************
+
+NET_IPSocket ERROR: getaddrinfo: No such host is known. 
+-------- game initialization -------
+
+=====================================
+ This game library contains the bot
+    library interface developed
+           by Mr Elusive.
+=====================================
+
+==== InitGame ====
+ch initialized
+------------------------------------
+
+------- server initialization ------
+.ent file maps/base2@0ae9.ent loaded.
+loading...
+42 entities inhibited
+2 teams with 4 entities
+------------------------------------
+
+Opened log botlib.log
+------- BotLib Initialization -------
+BotLib v0.96
+AAS initialized.
+loaded ./baseq2/pak7.pak\sounds.c
+Warning: [botlib_interface] unable to resolve Gladiator asset root
+loaded ./baseq2/pak7.pak\weapons.c
+loaded ./baseq2/pak7.pak\items.c
+loaded ./baseq2/pak7.pak\syn.c
+loaded ./baseq2/pak7.pak\rnd.c
+loaded ./baseq2/pak7.pak\match.c
+loaded ./baseq2/pak7.pak\rchat.c
+-------------------------------------
+------------ Map Loading ------------
+loaded maps\base2.bsp
+loaded .\baseq2\maps\base2.aas
+found 81 level items
+-------------------------------------
+loaded libgladiator_x64.dll
+ProbeBot connected
+loaded player from bots/player_c.c
+loaded bots/player_i.c
+loaded bots/player_w.c
+loaded player from bots/player_t.c
+AAS initialized.
+ProbeBot entered the game
+extended delayed ucmd heap
+CombatHuman552 connected
+CombatHuman552 entered the game
+ProbeBot died.
+ProbeBot: cool

@@ -43,6 +43,10 @@ server на том же порту.
 Deathmatch-прогон на `base2` оставляйте только для транспортных/следящих
 проверок: в нём карта не активирует монстров.
 
+Для combat-прогона используйте `+set minimumplayers 2`: один слот занимает
+Gladiator companion, второй — подключаемый UDP human. При `minimumplayers 1`
+сервер может удалить бота сразу после входа human-клиента.
+
 ## Кеш AAS
 
 `base2.aas` уже содержит готовый lump reachability, поэтому при co-op старте
@@ -162,13 +166,21 @@ python .\tools\q2_client_handshake.py `
 | Follow-style | `protocol-client-309` | 100 move-пакетов; 31 human snapshot; бот записал 26 кадров `following` и 5 `regroup` |
 | Retreat-style | `harness-retreat-402` | 60 move-пакетов с backward/strafe/yaw/attack/jump; 31 human snapshot; 31 `regroup` |
 | Co-op combat probe | `coop-combat-509` | настоящий co-op `base2`; 41 монстр; 360 move-пакетов stationary-spin/attack; human получил урон от монстров; botlib записал выбор целей `entity=45/306/293/374` |
+| Co-op combat with bot fire | `coop-combat-531` | `minimumplayers 2`; 200 move-пакетов; 99 human snapshots; 13 bot Blaster launches/shots; 2 target acquisitions; 10 damage живому monster entity `302` |
 
 Первые две строки — исторические transport/input прогоны; они были выполнены
-в deathmatch и не являются доказательством боевой кооперации. Последняя строка
-уже выполнена в правильном co-op режиме: карта содержит монстров, игрок
-реально получает входящий урон, а AI выбирает наблюдаемые monster entities.
-При этом bot-side `shot/damage` по монстру и acceptance baseline `N >= 20`
+в deathmatch и не являются доказательством боевой кооперации. Две последние
+строки выполнены в правильном co-op режиме. `coop-combat-531` дополнительно
+доказывает bot-side запуск Blaster и попадание по живому monster entity.
+Acceptance baseline `N >= 20`, rescue/kill-steal/cover и статистические пороги
 ещё не подтверждены.
+
+Для записи projectile/shot/damage hooks в combat-команде нужен
+`+set coopbot_log 2`; при обычном `coopbot_log 1` базовые снапшоты остаются,
+но подробная боевая телеметрия не пишется.
+
+Отчёт `coop-combat-531` сохранён в
+`artifacts/coop-combat-531-report.json`.
 
 Поворот, strafe, прыжок и произвольная временная последовательность клавиш
 пока не вынесены в CLI. Их следующий шаг — расширение того же usercmd-потока,

@@ -1892,6 +1892,26 @@ void PutClientInServer (edict_t *ent)
 	VectorCopy (maxs, ent->maxs);
 	VectorClear (ent->velocity);
 
+#ifdef BOT
+	/*
+	 * Bots can arrive here through BotStarted after a level transition without
+	 * the normal network-client persistent-weapon initialization.  Keep the
+	 * guaranteed co-op starter weapon usable before the botlib can select it;
+	 * otherwise the selector only leaves Blaster in newweapon while the active
+	 * weapon remains NULL and Think_Weapon has nothing to run.
+	 */
+	if (botglobals.botstates[index].active && client->pers.weapon == NULL)
+	{
+		gitem_t *starter_weapon = FindItem("Blaster");
+		if (starter_weapon != NULL)
+		{
+			client->pers.weapon = starter_weapon;
+			client->pers.selected_item = ITEM_INDEX(starter_weapon);
+			client->pers.inventory[client->pers.selected_item] = 1;
+		}
+	}
+#endif //BOT
+
 	// clear playerstate values
 	memset (&ent->client->ps, 0, sizeof(client->ps));
 

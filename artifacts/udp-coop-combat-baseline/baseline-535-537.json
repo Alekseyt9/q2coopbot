@@ -1,0 +1,35 @@
+[
+  {
+    "episode": "coop-combat-535",
+    "seed": 535,
+    "port": 27955,
+    "harness_exit": 0,
+    "report_exit": 2,
+    "human_marker_seen": true,
+    "bot_shots": 9,
+    "bot_monster_damage_events": 0,
+    "bot_monster_damage_total": 0.0
+  },
+  {
+    "episode": "coop-combat-536",
+    "seed": 536,
+    "port": 27956,
+    "harness_exit": 0,
+    "report_exit": 2,
+    "human_marker_seen": true,
+    "bot_shots": 10,
+    "bot_monster_damage_events": 0,
+    "bot_monster_damage_total": 0.0
+  },
+  {
+    "episode": "coop-combat-537",
+    "seed": 537,
+    "port": 27957,
+    "harness_exit": 0,
+    "report_exit": 0,
+    "human_marker_seen": true,
+    "bot_shots": 8,
+    "bot_monster_damage_events": 1,
+    "bot_monster_damage_total": 10.0
+  }
+]

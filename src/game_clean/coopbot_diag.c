@@ -510,7 +510,8 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 		"player_origin=(%.1f %.1f %.1f) bot_origin=(%.1f %.1f %.1f) "
 		"distance_to_player=%.1f target=%d target_class=\"%s\" "
 		"target_health=%d target_visible=%d visible_enemies=%d "
-		"input_flags=0x%x speed=%.1f",
+		"input_flags=0x%x speed=%.1f weaponstate=%d gunframe=%d "
+		"gunindex=%d newweapon=\"%s\"",
 		client, CoopBotDiag_Name(bot), state,
 		CoopBotDiag_EntityNumber(player),
 		player_is_human,
@@ -521,7 +522,12 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 		distance_to_player,
 		CoopBotDiag_EntityNumber(target), CoopBotDiag_Classname(target),
 		target != NULL ? target->health : 0, target_visible,
-		visible_enemies, input->actionflags, input->speed);
+		visible_enemies, input->actionflags, input->speed,
+		bot->client->weaponstate, bot->client->ps.gunframe,
+		bot->client->ps.gunindex,
+		bot->client->newweapon != NULL &&
+			bot->client->newweapon->pickup_name != NULL
+			? bot->client->newweapon->pickup_name : "<none>");
 }
 
 //===========================================================================

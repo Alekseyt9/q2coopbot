@@ -1555,7 +1555,7 @@ bot reacquires the player instead of settling on the lower level
 failed elevator traversal is logged as a stuck/path failure, not as idle follow
 ```
 
-### UDP harness evidence — 2026-09-21
+### UDP harness evidence — 2026-09-22
 
 Графический клиент для этих проверок заменён реальным UDP-клиентом из
 `tools/q2_client_handshake.py`: он проходит `getchallenge -> connect -> new ->
@@ -1568,12 +1568,14 @@ coop 1
 deathmatch 0
 ```
 
-В `base2` harness-прогон `coop-combat-509` подтвердил `monsters=41`,
-наблюдение групп монстров, входящий урон живому player entity, выбор целей
-ботом в botlib (`entity=45`, `306`, `293`, `374`) и последующий regroup через
-elevator path. Это ещё probe, а не acceptance: bot-side попадание по монстру,
-rescue/kill-steal/cover и baseline `N >= 20` требуют отдельных повторяемых
-сценариев.
+В `base2` harness-прогон `coop-combat-531` подтвердил `monsters=41`,
+реальный human player entity, входящий урон от монстров, выбор целей ботом
+(`target_acquired` для monster entities `309` и `307`), 13 bot-side Blaster
+launches/shots и попадание по живому monster entity `302` на 10 damage.
+Использовались `coop 1`, `deathmatch 0`, `minimumplayers 2` и
+`coopbot_log 2`; последний нужен для записи projectile/shot/damage hooks.
+Полный acceptance baseline `N >= 20`, rescue/kill-steal/cover и отдельные
+статистические пороги ещё требуют повторяемой серии.
 
 ---
 
