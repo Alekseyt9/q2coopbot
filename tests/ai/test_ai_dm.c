@@ -14,6 +14,7 @@
 #include "botlib/common/l_libvar.h"
 #include "botlib/ai/goal_move_orchestrator.h"
 #include "botlib/interface/bot_state.h"
+#include "botlib/interface/botlib_interface.h"
 #include "q2bridge/botlib.h"
 
 #include "shared/q_shared.h"
@@ -157,6 +158,20 @@ static vec3_t g_dm_entity_visible_eye;
 static vec3_t g_dm_entity_visible_viewangles;
 static float g_dm_entity_visible_field_of_view;
 static int g_dm_entity_visible_target;
+static botlib_import_table_t g_dm_imports;
+
+/*
+=============
+BotInterface_GetImportTable
+
+Provides the empty import bridge required by the production libvar object
+linked into this focused DM fixture.
+=============
+*/
+const botlib_import_table_t *BotInterface_GetImportTable(void)
+{
+	return &g_dm_imports;
+}
 
 /*
 =============
@@ -793,16 +808,6 @@ float Characteristic_BFloat(const bot_character_t *character,
 
 /*
 =============
-LibVarSetNotModified
-=============
-*/
-void LibVarSetNotModified(const char *var_name)
-{
-	(void)var_name;
-}
-
-/*
-=============
 AI_GoalState_GetAvoidList
 =============
 */
@@ -902,6 +907,10 @@ static int dm_test_setup(void)
 	g_dm_characteristics[DM_CHARACTERISTIC_ATTACK_SKILL] = 1.0f;
 	g_dm_characteristics[DM_CHARACTERISTIC_REACTION_TIME] = 0.3f;
 	g_dm_characteristic_last_character = NULL;
+	LibVarSet("coop", "0");
+	LibVarSet("coopbot_burst_control", "0");
+	LibVarSet("coopbot_burst_shots", "4");
+	LibVarSet("coopbot_burst_pause", "0.25");
 	dm_move_capture_reset();
 	memset(&g_dm_weapon_info, 0, sizeof(g_dm_weapon_info));
 	g_dm_weapon_available = false;
@@ -1157,6 +1166,66 @@ static void test_dm_ready_attack_has_no_generic_cooldown(void)
 	ai_dm_metrics_t metrics;
 	AI_DMState_GetMetrics(dm_state, &metrics);
 	DM_ASSERT_FLOAT_CLOSE(metrics.last_attack_time, 3.05f, 0.0001f);
+
+	AI_DMState_Destroy(dm_state);
+}
+
+/*
+=============
+test_dm_coop_burst_control
+
+Pins the opt-in companion burst/pause cycle while leaving the default retail
+per-frame automatic-fire behavior covered by the preceding test.
+=============
+*/
+static void test_dm_coop_burst_control(void)
+{
+	const int client = 0;
+	LibVarSet("coop", "1");
+	LibVarSet("coopbot_burst_control", "1");
+	LibVarSet("coopbot_burst_shots", "2");
+	LibVarSet("coopbot_burst_pause", "0.25");
+	g_dm_characteristics[DM_CHARACTERISTIC_REACTION_TIME] = 0.0f;
+
+	ai_dm_state_t *dm_state = AI_DMState_Create(client);
+	DM_ASSERT(dm_state != NULL);
+
+	bot_client_state_t client_state;
+	dm_prepare_client_state(&client_state, client);
+	client_state.current_weapon = 3;
+	client_state.weapon_state = 1;
+	g_dm_weapon_available = true;
+	strcpy(g_dm_weapon_info.name, "Machinegun");
+	g_dm_trace_result.fraction = 1.0f;
+	g_dm_trace_result.ent = 2;
+
+	ai_dm_enemy_info_t enemy;
+	vec3_t enemy_origin = {128.0f, 0.0f, 0.0f};
+	dm_prepare_enemy(&enemy, 2, enemy_origin, 128.0f, 1.0f);
+
+	bot_input_t base = {0};
+	DM_ASSERT(EA_ResetClient(client) == BLERR_NOERROR);
+	DM_ASSERT(EA_SubmitInput(client, &base) == BLERR_NOERROR);
+
+	AI_DMState_Update(dm_state, &client_state, NULL, &enemy, NULL, 1.0f);
+	bot_input_t command = dm_consume_input(client, 0.1f);
+	DM_ASSERT((command.actionflags & ACTION_ATTACK) != 0);
+
+	AI_DMState_Update(dm_state, &client_state, NULL, &enemy, NULL, 1.1f);
+	command = dm_consume_input(client, 0.1f);
+	DM_ASSERT((command.actionflags & ACTION_ATTACK) != 0);
+
+	AI_DMState_Update(dm_state, &client_state, NULL, &enemy, NULL, 1.2f);
+	command = dm_consume_input(client, 0.1f);
+	DM_ASSERT((command.actionflags & ACTION_ATTACK) == 0);
+
+	AI_DMState_Update(dm_state, &client_state, NULL, &enemy, NULL, 1.4f);
+	command = dm_consume_input(client, 0.1f);
+	DM_ASSERT((command.actionflags & ACTION_ATTACK) == 0);
+
+	AI_DMState_Update(dm_state, &client_state, NULL, &enemy, NULL, 1.5f);
+	command = dm_consume_input(client, 0.1f);
+	DM_ASSERT((command.actionflags & ACTION_ATTACK) != 0);
 
 	AI_DMState_Destroy(dm_state);
 }
@@ -3289,6 +3358,7 @@ int main(void)
 		{"reaction_delay", dm_test_setup, test_dm_reaction_delay_gates_attack, dm_test_teardown},
 		{"damage_reaction_delay", dm_test_setup, test_dm_damage_exposure_keeps_reaction_delay, dm_test_teardown},
 		{"attack_no_cooldown", dm_test_setup, test_dm_ready_attack_has_no_generic_cooldown, dm_test_teardown},
+		{"coop_burst_control", dm_test_setup, test_dm_coop_burst_control, dm_test_teardown},
 		{"attack_skill_distance", dm_test_setup, test_dm_low_skill_attack_distance_bands, dm_test_teardown},
 		{"attack_body_origin", dm_test_setup, test_dm_attack_move_uses_body_origin_not_eye_position, dm_test_teardown},
 		{"attack_skill_four_tenths", dm_test_setup, test_dm_attack_skill_four_tenths_enters_strafe, dm_test_teardown},

@@ -66,6 +66,12 @@ def read_botlib_events(stream: TextIO) -> Counter[str]:
     for line in stream:
         for match in BOTLIB_EVENT_RE.finditer(line):
             events[match.group("event")] += 1
+        if "coopbot_path_failure" in line:
+            # A botlib route failure is the lower-level equivalent of the
+            # game-side stuck event and must not be reported as idle follow.
+            events["stuck"] += 1
+            if re.search(r"\bphase=regroup\b", line):
+                events["regroup_path_failure"] += 1
         if "coopbot_regroup" in line and re.search(r"\btraveltype=11\b", line):
             events["elevator_regroup"] += 1
     return events
@@ -290,6 +296,16 @@ def main() -> int:
         action="store_true",
         help="fail unless botlib logged a regroup frame using TRAVEL_ELEVATOR",
     )
+    parser.add_argument(
+        "--require-regroup-path-failure",
+        action="store_true",
+        help="fail unless botlib logged a failed regroup/path traversal",
+    )
+    parser.add_argument(
+        "--require-regroup-complete",
+        action="store_true",
+        help="fail unless botlib logged regroup completion",
+    )
     parser.add_argument("-o", "--output", help="write summary JSON to this path")
     args = parser.parse_args()
 
@@ -331,7 +347,26 @@ def main() -> int:
             "no coopbot_regroup frame used TRAVEL_ELEVATOR"
         )
 
-    if args.require_elevator_edge or args.require_elevator_regroup:
+    if (
+        args.require_regroup_path_failure
+        and botlib_events.get("regroup_path_failure", 0) < 1
+    ):
+        validation_errors.append(
+            "no failed regroup/path traversal was recorded by botlib"
+        )
+
+    if (
+        args.require_regroup_complete
+        and botlib_events.get("regroup_complete", 0) < 1
+    ):
+        validation_errors.append("no completed coop regroup was recorded by botlib")
+
+    if (
+        args.require_elevator_edge
+        or args.require_elevator_regroup
+        or args.require_regroup_path_failure
+        or args.require_regroup_complete
+    ):
         result_object["validation"] = {
             "ok": not validation_errors,
             "errors": validation_errors,

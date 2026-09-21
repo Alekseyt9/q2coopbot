@@ -7,13 +7,13 @@
 extern "C" {
 #endif
 
-#ifndef PATH_MAX
-#define PATH_MAX 4096
+#ifndef TEST_ASSET_PATH_MAX
+#define TEST_ASSET_PATH_MAX 4096
 #endif
 
 typedef struct asset_env_s {
-    char asset_root[PATH_MAX];
-    char previous_cwd[PATH_MAX];
+    char asset_root[TEST_ASSET_PATH_MAX];
+    char previous_cwd[TEST_ASSET_PATH_MAX];
     bool have_previous_cwd;
     bool created_syn;
     bool created_match;

@@ -116,6 +116,10 @@ struct ai_dm_state_s
 	vec3_t viewanglespeed;
 	vec3_t aim_target;
 	bool attack_latched;
+	int coop_burst_enemy;
+	int coop_burst_weapon;
+	int coop_burst_shots;
+	float coop_burst_pause_until;
 };
 
 static ai_dm_state_t ai_retail_dm_states[MAX_CLIENTS + 1];
@@ -182,6 +186,165 @@ static int AI_DMStringCompare(const char *left, const char *right)
 		}
 	}
 	return 0;
+}
+
+/*
+=============
+AI_DMCoopBurstControlEnabled
+
+Checks the opt-in companion firing discipline without changing the retail
+deathmatch path when the coop overlay is disabled.
+=============
+*/
+static bool AI_DMCoopBurstControlEnabled(void)
+{
+	float coop = LibVarGetValue("coop");
+	float burst_control = LibVarGetValue("coopbot_burst_control");
+	return (coop < 0.0f || coop > 0.0f) &&
+		(burst_control < 0.0f || burst_control > 0.0f);
+}
+
+/*
+=============
+AI_DMWeaponUsesCoopBursts
+
+Limits the companion burst overlay to automatic weapons. Fire-on-release
+weapons retain their retail latch semantics and are never split by this
+overlay.
+=============
+*/
+static bool AI_DMWeaponUsesCoopBursts(const bot_weapon_info_t *weapon)
+{
+	if (weapon == NULL || (weapon->flags & BOT_WEAPON_FIRERELEASED) != 0)
+	{
+		return false;
+	}
+
+	return AI_DMStringCompare(weapon->name, "Blaster") == 0 ||
+		AI_DMStringCompare(weapon->name, "Machinegun") == 0 ||
+		AI_DMStringCompare(weapon->name, "Chaingun") == 0 ||
+		AI_DMStringCompare(weapon->name, "HyperBlaster") == 0;
+}
+
+/*
+=============
+AI_DMResetCoopBurst
+
+Drops the short-term firing state when combat ownership changes.
+=============
+*/
+static void AI_DMResetCoopBurst(ai_dm_state_t *state)
+{
+	if (state == NULL)
+	{
+		return;
+	}
+
+	state->coop_burst_enemy = 0;
+	state->coop_burst_weapon = 0;
+	state->coop_burst_shots = 0;
+	state->coop_burst_pause_until = 0.0f;
+}
+
+/*
+=============
+AI_DMCoopBurstWeaponId
+
+Returns a stable weapon identity for the overlay, including focused test and
+host states that do not populate the parsed weapon row number.
+=============
+*/
+static int AI_DMCoopBurstWeaponId(const bot_client_state_t *client_state,
+	const bot_weapon_info_t *weapon)
+{
+	if (client_state != NULL && client_state->current_weapon > 0)
+	{
+		return client_state->current_weapon;
+	}
+	if (weapon != NULL && weapon->number > 0)
+	{
+		return weapon->number;
+	}
+	return 1;
+}
+
+/*
+=============
+AI_DMCoopBurstAllowsShot
+
+Implements the opt-in start-burst/hold/pause/re-aim cycle described by the
+companion plan. A false result consumes no attack action for this frame.
+=============
+*/
+static bool AI_DMCoopBurstAllowsShot(ai_dm_state_t *state,
+	const bot_client_state_t *client_state,
+	const bot_weapon_info_t *weapon,
+	int enemy,
+	float now)
+{
+	int weapon_id;
+	int burst_shots;
+
+	if (state == NULL || client_state == NULL ||
+		!AI_DMCoopBurstControlEnabled() ||
+		!AI_DMWeaponUsesCoopBursts(weapon))
+	{
+		if (state != NULL)
+		{
+			AI_DMResetCoopBurst(state);
+		}
+		return true;
+	}
+
+	weapon_id = AI_DMCoopBurstWeaponId(client_state, weapon);
+	if (state->coop_burst_enemy != enemy ||
+		state->coop_burst_weapon != weapon_id)
+	{
+		AI_DMResetCoopBurst(state);
+		state->coop_burst_enemy = enemy;
+		state->coop_burst_weapon = weapon_id;
+	}
+
+	if (now < state->coop_burst_pause_until)
+	{
+		return false;
+	}
+
+	burst_shots = (int)LibVarGetValue("coopbot_burst_shots");
+	if (burst_shots <= 0)
+	{
+		burst_shots = 4;
+	}
+	if (state->coop_burst_shots >= burst_shots)
+	{
+		float pause = LibVarGetValue("coopbot_burst_pause");
+		if (pause < 0.0f)
+		{
+			pause = 0.0f;
+		}
+		state->coop_burst_shots = 0;
+		state->coop_burst_pause_until = now + pause;
+		return false;
+	}
+
+	return true;
+}
+
+/*
+=============
+AI_DMCoopBurstRecordShot
+
+Advances the opt-in burst counter after a safe attack action was emitted.
+=============
+*/
+static void AI_DMCoopBurstRecordShot(ai_dm_state_t *state)
+{
+	if (state == NULL || !AI_DMCoopBurstControlEnabled())
+	{
+		return;
+	}
+
+	state->coop_burst_shots += 1;
 }
 
 /*
@@ -790,6 +953,15 @@ static bool AI_DMCheckAttack(ai_dm_state_t *state,
 		}
 	}
 
+	if (!AI_DMCoopBurstAllowsShot(state,
+		client_state,
+		weapon,
+		enemy->entity,
+		now))
+	{
+		return false;
+	}
+
 	bool attacked = false;
 	if ((weapon->flags & BOT_WEAPON_FIRERELEASED) == 0 ||
 		state->attack_latched)
@@ -797,6 +969,7 @@ static bool AI_DMCheckAttack(ai_dm_state_t *state,
 		EA_Attack(client_state->client_number);
 		state->last_attack_time = now;
 		state->firethrottleshoot_time = now;
+		AI_DMCoopBurstRecordShot(state);
 		attacked = true;
 	}
 	state->attack_latched = !state->attack_latched;
@@ -1251,6 +1424,7 @@ void AI_DMState_Reset(ai_dm_state_t *state)
 	VectorClear(state->viewanglespeed);
 	VectorClear(state->aim_target);
 	state->attack_latched = false;
+	AI_DMResetCoopBurst(state);
 	state->config_initialised = false;
 	AI_DMState_RefreshConfig(state);
 }
@@ -1731,6 +1905,7 @@ static void AI_DMState_UpdateInternal(ai_dm_state_t *state,
 	}
 	else
 	{
+		AI_DMResetCoopBurst(state);
 		if (state->enemy_visible)
 		{
 			state->enemy_visible = false;

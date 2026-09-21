@@ -1202,22 +1202,22 @@ static int setup_bot_interface(void **state)
     context->mock.table.DebugLineCreate = Mock_DebugLineCreate;
     context->mock.table.DebugLineDelete = Mock_DebugLineDelete;
     context->mock.table.DebugLineShow = Mock_DebugLineShow;
-    context->mock.table.AddCommand = Mock_AddCommand;
-    context->mock.table.RemoveCommand = Mock_RemoveCommand;
-    context->mock.table.CmdArgc = Mock_CmdArgc;
-    context->mock.table.CmdArgv = Mock_CmdArgv;
+	context->mock.table.AddCommand = Mock_AddCommand;
+	context->mock.table.RemoveCommand = Mock_RemoveCommand;
+	context->mock.table.CmdArgc = Mock_CmdArgc;
+	context->mock.table.CmdArgv = Mock_CmdArgv;
 
-    LibVar_Init();
-    context->libvar_initialised = true;
+	LibVar_Init();
+	context->libvar_initialised = true;
 
-    if (!asset_env_initialise(&context->assets))
-    {
+	if (!asset_env_initialise(&context->assets))
+	{
         asset_env_cleanup(&context->assets);
         free(context);
-        cmocka_skip();
-    }
+		cmocka_skip();
+	}
 
-    char weapon_config_path[PATH_MAX];
+	char weapon_config_path[PATH_MAX];
     int written = snprintf(weapon_config_path,
                            sizeof(weapon_config_path),
                            "%s/weapons.c",
@@ -1236,9 +1236,9 @@ static int setup_bot_interface(void **state)
     LibVarSet("weaponconfig", "weapons.c");
     LibVarSet("max_weaponinfo", "64");
     LibVarSet("max_projectileinfo", "64");
-    LibVarSet("itemconfig", "items.c");
+	LibVarSet("itemconfig", "items.c");
 
-    g_active_mock = &context->mock;
+	g_active_mock = &context->mock;
 	context->api = GetBotAPIEx(&context->mock.table,
 		sizeof(context->mock.table));
     assert_non_null(context->api);
@@ -6308,6 +6308,124 @@ static void test_bot_interface_mover_parity(void **state)
 
 /*
 =============
+test_coop_hard_leash_uses_elevator_regroup
+
+The coop companion must treat a vertical separation as a regroup request even
+when the player is inside the configured distance leash. The AAS route is an
+elevator reach, so BotAI must wait for the platform and clear the regroup goal
+once the bot reaches the player's area.
+=============
+*/
+static void test_coop_hard_leash_uses_elevator_regroup(void **state)
+{
+	bot_interface_test_context_t *context =
+		(bot_interface_test_context_t *)*state;
+	bot_mover_fixture_t fixture;
+
+	Mock_Reset(&context->mock);
+	assert_int_equal(context->api->BotSetupLibrary(), BLERR_NOERROR);
+
+	memset(&fixture, 0, sizeof(fixture));
+	bot_mover_fixture_init(&fixture);
+	aasworld.maxClients = 2;
+
+	BotMove_MoverCatalogueReset();
+	bot_mover_catalogue_entry_t mover_entry = {
+		.modelnum = 8,
+		.lip = 0.0f,
+		.height = 0.0f,
+		.speed = 0.0f,
+		.spawnflags = 0,
+		.doortype = 0,
+		.kind = BOT_MOVER_KIND_FUNC_PLAT,
+	};
+	assert_true(BotMove_MoverCatalogueInsert(&mover_entry));
+	char model_name[] = "*8";
+	char *model_entries[] = {model_name};
+	assert_true(BotMove_MoverCatalogueFinalize(model_entries,
+		ARRAY_LEN(model_entries)));
+
+	fixture.reachability[1].traveltype = TRAVEL_ELEVATOR;
+	fixture.reachability[1].facenum = mover_entry.modelnum;
+	AAS_InitTravelFlagFromType();
+	assert_int_equal(AAS_PrepareReachability(), BLERR_NOERROR);
+
+	bot_updateentity_t mover_update;
+	memset(&mover_update, 0, sizeof(mover_update));
+	VectorSet(mover_update.origin, 64.0f, 0.0f, 16.0f);
+	VectorSet(mover_update.old_origin, 64.0f, 0.0f, 16.0f);
+	VectorSet(mover_update.mins, -32.0f, -32.0f, -16.0f);
+	VectorSet(mover_update.maxs, 32.0f, 32.0f, 16.0f);
+	mover_update.solid = SOLID_BSP;
+	mover_update.modelindex = mover_entry.modelnum + 1;
+	assert_int_equal(context->api->BotUpdateEntity(3, &mover_update),
+		BLERR_NOERROR);
+
+	bot_settings_t settings;
+	memset(&settings, 0, sizeof(settings));
+	snprintf(settings.characterfile, sizeof(settings.characterfile),
+		"bots/babe_c.c");
+	snprintf(settings.charactername, sizeof(settings.charactername), "babe");
+	assert_true(context->api->BotSetupClient(1, &settings));
+	bot_client_state_t *bot = BotState_Get(1);
+	assert_non_null(bot);
+	bot->enter_game_time = -1000.0f;
+
+	LibVarSet("coop", "1");
+	LibVarSet("coopbot_leash", "1");
+	LibVarSet("coopbot_hard_leash", "64");
+	LibVarSet("coopbot_elevator_wait_timeout", "15");
+	LibVarSet("coopbot_log", "0");
+
+	bot_updateentity_t player_entity;
+	memset(&player_entity, 0, sizeof(player_entity));
+	VectorSet(player_entity.origin, 128.0f, 0.0f, 32.0f);
+	VectorSet(player_entity.old_origin, 128.0f, 0.0f, 32.0f);
+	VectorSet(player_entity.mins, -16.0f, -16.0f, -24.0f);
+	VectorSet(player_entity.maxs, 16.0f, 16.0f, 32.0f);
+	player_entity.solid = SOLID_BBOX;
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+
+	bot_updateclient_t update;
+	memset(&update, 0, sizeof(update));
+	VectorClear(update.origin);
+	update.pm_flags = PMF_ON_GROUND;
+	update.stats[STAT_HEALTH] = 100;
+	for (int i = 0; i < MAX_ITEMS; ++i)
+	{
+		update.inventory[i] = 1;
+	}
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.1f), BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+
+	assert_true(bot->coop_player_goal_valid);
+	assert_true(bot->has_move_result);
+	assert_int_equal(bot->last_move_result.type, RESULTTYPE_ELEVATORUP);
+	assert_true((bot->last_move_result.flags & MOVERESULT_WAITING) != 0);
+
+	VectorSet(update.origin, 128.0f, 0.0f, 32.0f);
+	assert_int_equal(context->api->BotUpdateClient(1, &update),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotStartFrame(0.2f), BLERR_NOERROR);
+	assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+		BLERR_NOERROR);
+	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+	assert_false(bot->coop_player_goal_valid);
+
+	context->api->BotShutdownClient(1);
+	context->api->BotShutdownLibrary();
+	bot_mover_fixture_shutdown(&fixture);
+	LibVarSet("coop", "0");
+	LibVarSet("coopbot_leash", "0");
+}
+
+/*
+=============
 test_ai_battle_chase_preserves_mover_set_view
 
 Pins Battle Chase's `MOVERESULT_MOVEMENTVIEWSET` exit: a rocket-jump mover
@@ -7326,6 +7444,48 @@ static void test_battle_flag_retreat_and_chase_decisions(void **state)
 	bot_client_state_t snapshot = bot;
 	(void)BotAI_CarryingFlag(&bot);
 	(void)BotAI_Aggression(&bot);
+	(void)BotAI_WantsToRetreat(&bot);
+	(void)BotAI_WantsToChase(&bot);
+	assert_memory_equal(&bot, &snapshot, sizeof(bot));
+}
+
+/*
+=============
+test_coop_danger_retreat_overlay
+
+Pins the opt-in coop danger override: critical health blocks chase even when
+the retail weapon/aggression gates would otherwise continue the fight, while
+the disabled overlay preserves the retail decision.
+=============
+*/
+static void test_coop_danger_retreat_overlay(void **state)
+{
+	(void)state;
+	bot_client_state_t bot;
+	memset(&bot, 0, sizeof(bot));
+	int *inventory = bot.last_client_update.inventory;
+
+	LibVarSet("coop", "1");
+	LibVarSet("ctf", "0");
+	LibVarSet("coopbot_danger_retreat", "1");
+	LibVarSet("coopbot_danger_threshold", "0.65");
+	LibVarSet("coopbot_danger_critical_health", "25");
+	bot.combat.current_enemy = 2;
+	inventory[RETAIL_INVENTORY_HEALTH] = 20;
+	inventory[RETAIL_INVENTORY_SUPERSHOTGUN] = 1;
+	inventory[RETAIL_INVENTORY_SHELLS] = 21;
+
+	assert_int_equal(BotAI_WantsToRetreat(&bot), qtrue);
+	assert_int_equal(BotAI_WantsToChase(&bot), qfalse);
+
+	inventory[RETAIL_INVENTORY_HEALTH] = 100;
+	inventory[RETAIL_INVENTORY_ARMORBODY] = 100;
+	assert_int_equal(BotAI_WantsToRetreat(&bot), qfalse);
+	assert_int_equal(BotAI_WantsToChase(&bot), qtrue);
+
+	LibVarSet("coopbot_danger_retreat", "0");
+	bot.combat.current_enemy = 0;
+	bot_client_state_t snapshot = bot;
 	(void)BotAI_WantsToRetreat(&bot);
 	(void)BotAI_WantsToChase(&bot);
 	assert_memory_equal(&bot, &snapshot, sizeof(bot));
@@ -12068,8 +12228,11 @@ int main(void)
 							setup_bot_interface,
 							teardown_bot_interface),
 		cmocka_unit_test_setup_teardown(test_battle_flag_retreat_and_chase_decisions,
-							setup_bot_interface,
-							teardown_bot_interface),
+												setup_bot_interface,
+												teardown_bot_interface),
+		cmocka_unit_test_setup_teardown(test_coop_danger_retreat_overlay,
+												setup_bot_interface,
+												teardown_bot_interface),
 		cmocka_unit_test_setup_teardown(test_battle_aggression_retail_gate_boundaries,
 							setup_bot_interface,
 							teardown_bot_interface),
@@ -12271,6 +12434,10 @@ int main(void)
 							setup_bot_interface,
 							teardown_bot_interface),
 		cmocka_unit_test_setup_teardown(
+			test_coop_hard_leash_uses_elevator_regroup,
+			setup_bot_interface,
+			teardown_bot_interface),
+		cmocka_unit_test_setup_teardown(
 			test_ai_battle_chase_preserves_mover_set_view,
 			setup_bot_interface,
 			teardown_bot_interface),
@@ -12304,6 +12471,12 @@ int main(void)
 							setup_bot_interface,
 							teardown_bot_interface),
 	};
+
+	const char *test_filter = getenv("CMOCKA_TEST_FILTER");
+	if (test_filter != NULL && test_filter[0] != '\0')
+	{
+		cmocka_set_test_filter(test_filter);
+	}
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
 }

@@ -140,11 +140,33 @@ The profile enables:
 - `coopbot_metrics_interval 10` — report interval in seconds;
 - `coopbot_slow_ai_ms 100` — warning threshold for a slow bot AI call.
 - `coopbot_leash 1` — enables coop regroup toward the player, including
-  independent elevator traversal;
+  independent elevator traversal; this is the default in coop, and can be
+  set to `0` to disable it explicitly;
 - `coopbot_soft_leash 384` and `coopbot_hard_leash 768` — distance thresholds
   for discouraging new encounters and forcing regroup;
+- `coopbot_new_group_guard 1` — blocks non-urgent distant new encounters;
+  `coopbot_enemy_group_radius 384` keeps nearby members of an active fight
+  eligible.
+- `coopbot_target_hysteresis 1` — avoids replacing a current enemy for a
+  marginally better candidate; `coopbot_target_switch_ratio 1.25` controls
+  the required utility improvement.
+- `coopbot_burst_control 1` — enables short bursts for automatic coop
+  weapons; `coopbot_burst_shots 4` and `coopbot_burst_pause 0.25` control
+  burst length and the re-aim pause.
+- `coopbot_danger_retreat 1` — enables the coop danger score; threshold
+  defaults to `coopbot_danger_threshold 0.65`, with critical health at
+  `coopbot_danger_critical_health 25`.
+- `coopbot_basic_cover 1` — enables the P1 short-step cover fallback: when
+  danger is high and the current enemy is visible, the bot tries a reachable
+  backward or lateral step that breaks line of sight.
 - `coopbot_elevator_wait_timeout 15` — resets a stuck elevator route after
   fifteen seconds of waiting.
+- `coopbot_personal_space 1` — enables the opt-in close-range companion
+  separation overlay; `coopbot_personal_space_radius 96` sets its radius.
+- `coopbot_fireline_avoid 1` — lets the bot step sideways when it blocks the
+  player's visible line to the bot's current enemy; radius defaults to 128.
+- `coopbot_doorway_avoid 1` — lets the bot give way when the moving player
+  crosses into its AAS area through a narrow passage; radius defaults to 160.
 - `coopbot_map_model 1` — emits the initialized AAS area/reachability graph,
   elevator edges, and BSP control entities (`func_plat`, doors, buttons,
   triggers, and targets) once per map.
@@ -171,7 +193,12 @@ python tools/coopbot_event_report.py coopbot_debug_events.jsonl \
 
 After a real two-client separation run, add
 `--require-elevator-regroup`; it requires a regroup frame whose selected
-travel type is `TRAVEL_ELEVATOR`.
+travel type is `TRAVEL_ELEVATOR`. A failed regroup emits
+`coopbot_elevator_failed` plus `coopbot_path_failure phase=regroup`, so the
+report distinguishes a failed elevator/path traversal from idle follow. The
+negative-path check is available as `--require-regroup-path-failure`; successful
+reacquisition emits `coopbot_regroup_complete` and can be required with
+`--require-regroup-complete`.
 
 For a useful test sample, start one bot on a known map, play until it gets
 stuck or fails to fight, then save both logs together with the map name and

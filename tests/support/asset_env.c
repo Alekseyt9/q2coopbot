@@ -81,7 +81,7 @@ static bool copy_file(const char *src, const char *dst)
 
 static bool ensure_asset_bridge(asset_env_t *env, const char *filename, bool *created_flag)
 {
-    char destination[PATH_MAX];
+    char destination[TEST_ASSET_PATH_MAX];
     snprintf(destination, sizeof(destination), "%s/bots/%s", env->asset_root, filename);
 
     struct stat info;
@@ -90,7 +90,7 @@ static bool ensure_asset_bridge(asset_env_t *env, const char *filename, bool *cr
         return true;
     }
 
-    char source[PATH_MAX];
+    char source[TEST_ASSET_PATH_MAX];
     snprintf(source, sizeof(source), "%s/%s", env->asset_root, filename);
     if (stat(source, &info) != 0)
     {
@@ -146,7 +146,7 @@ bool asset_env_initialise(asset_env_t *env)
 		return false;
 	}
 
-    char character_path[PATH_MAX];
+	char character_path[TEST_ASSET_PATH_MAX];
     snprintf(character_path, sizeof(character_path), "%s/bots/babe_c.c", env->asset_root);
     FILE *probe = fopen(character_path, "rb");
     if (probe == NULL)
@@ -202,7 +202,7 @@ void asset_env_cleanup(asset_env_t *env)
 
     if (env->created_syn)
     {
-        char path[PATH_MAX];
+        char path[TEST_ASSET_PATH_MAX];
         snprintf(path, sizeof(path), "%s/bots/syn.c", env->asset_root);
         unlink(path);
         env->created_syn = false;
@@ -210,7 +210,7 @@ void asset_env_cleanup(asset_env_t *env)
 
     if (env->created_match)
     {
-        char path[PATH_MAX];
+        char path[TEST_ASSET_PATH_MAX];
         snprintf(path, sizeof(path), "%s/bots/match.c", env->asset_root);
         unlink(path);
         env->created_match = false;
@@ -218,7 +218,7 @@ void asset_env_cleanup(asset_env_t *env)
 
     if (env->created_rchat)
     {
-        char path[PATH_MAX];
+        char path[TEST_ASSET_PATH_MAX];
         snprintf(path, sizeof(path), "%s/bots/rchat.c", env->asset_root);
         unlink(path);
         env->created_rchat = false;

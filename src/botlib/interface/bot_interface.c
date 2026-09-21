@@ -55,7 +55,8 @@ static int BotAI_CoopPlayerEntity(const bot_client_state_t *state,
 	vec3_t origin);
 static bool BotAI_CoopRejectNewGroup(const bot_client_state_t *state,
 	const aas_entityinfo_t *candidate,
-	int health_decrease);
+	int health_decrease,
+	bool active_group);
 
 
 static bot_import_extended_t g_botImportStorage;
@@ -473,7 +474,8 @@ clustering; the latter still needs runtime event/group data.
 */
 static bool BotAI_CoopRejectNewGroup(const bot_client_state_t *state,
 	const aas_entityinfo_t *candidate,
-	int health_decrease)
+	int health_decrease,
+	bool active_group)
 {
 	vec3_t player_origin;
 	vec3_t direction;
@@ -486,7 +488,7 @@ static bool BotAI_CoopRejectNewGroup(const bot_client_state_t *state,
 	{
 		return false;
 	}
-	if (health_decrease || BotAI_EntityIsShooting(candidate))
+	if (health_decrease || active_group || BotAI_EntityIsShooting(candidate))
 	{
 		return false;
 	}
@@ -515,6 +517,69 @@ static bool BotAI_CoopRejectNewGroup(const bot_client_state_t *state,
 			state->client_number, candidate->number, distance, soft_leash);
 	}
 	return true;
+}
+
+/*
+=============
+BotAI_CoopCandidateInActiveGroup
+
+Treats a visible monster near another visible shooting monster as part of the
+current encounter. This is the first runtime enemy-group approximation: it
+does not invent persistent map groups, but it prevents the soft-leash guard
+from rejecting a nearby member of an already active fight.
+=============
+*/
+static bool BotAI_CoopCandidateInActiveGroup(
+	const aas_entityinfo_t *candidate,
+	const int *visible_entities,
+	int visible_count)
+{
+	float group_radius;
+	int index;
+
+	if (candidate == NULL || visible_entities == NULL ||
+		visible_count <= 0 || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_new_group_guard") == 0.0f)
+	{
+		return false;
+	}
+	if (BotAI_EntityIsShooting(candidate))
+	{
+		return true;
+	}
+
+	group_radius = LibVarGetValue("coopbot_enemy_group_radius");
+	if (group_radius <= 0.0f)
+	{
+		group_radius = 384.0f;
+	}
+	for (index = 0; index < visible_count; ++index)
+	{
+		aas_entityinfo_t other;
+		vec3_t direction;
+		float distance;
+
+		if (visible_entities[index] <= 0 ||
+			visible_entities[index] == candidate->number)
+		{
+			continue;
+		}
+		memset(&other, 0, sizeof(other));
+		AAS_EntityInfo(visible_entities[index], &other);
+		if (BotAI_EntityIsDead(&other) ||
+			!BotAI_EntityIsShooting(&other))
+		{
+			continue;
+		}
+		VectorSubtract(candidate->origin, other.origin, direction);
+		distance = sqrtf(DotProduct(direction, direction));
+		if (distance <= group_radius)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 /*
@@ -630,6 +695,129 @@ static int BotAI_AcceptEnemy(bot_client_state_t *state,
 
 /*
 =============
+BotAI_CoopTargetUtility
+
+Returns the first coop target utility approximation: proximity is the base,
+while a shooting monster and membership in an active group increase urgency.
+The value is intentionally local to the coop overlay and does not alter the
+retail enemy scan when target hysteresis is disabled.
+=============
+*/
+static float BotAI_CoopTargetUtility(const bot_client_state_t *state,
+	const aas_entityinfo_t *candidate,
+	float distance,
+	bool active_group)
+{
+	float utility;
+
+	if (state == NULL || candidate == NULL)
+	{
+		return 0.0f;
+	}
+
+	utility = 1.0f / (distance + 64.0f);
+	if (BotAI_EntityIsShooting(candidate))
+	{
+		utility += 0.02f;
+	}
+	if (active_group)
+	{
+		utility += 0.01f;
+	}
+	if (candidate->number == state->combat.current_enemy)
+	{
+		utility += 0.01f;
+	}
+	return utility;
+}
+
+/*
+=============
+BotAI_CoopTargetSwitchAllowed
+
+Applies target hysteresis only when a coop scan is trying to replace an
+existing enemy. Immediate threats always interrupt; otherwise the candidate
+must beat the retained target utility by the configured ratio.
+=============
+*/
+static bool BotAI_CoopTargetSwitchAllowed(const bot_client_state_t *state,
+	const aas_entityinfo_t *candidate,
+	float distance,
+	bool active_group,
+	int health_decrease)
+{
+	aas_entityinfo_t current_info;
+	float current_distance;
+	float candidate_utility;
+	float current_utility;
+	float switch_ratio;
+	vec3_t direction;
+
+	if (state == NULL || candidate == NULL || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_target_hysteresis") == 0.0f ||
+		state->combat.current_enemy <= 0 ||
+		candidate->number == state->combat.current_enemy)
+	{
+		return true;
+	}
+	if (health_decrease || BotAI_EntityIsShooting(candidate))
+	{
+		return true;
+	}
+
+	memset(&current_info, 0, sizeof(current_info));
+	AAS_EntityInfo(state->combat.current_enemy, &current_info);
+	if (!current_info.valid || BotAI_EntityIsDead(&current_info))
+	{
+		return true;
+	}
+
+	VectorSubtract(current_info.origin,
+		state->last_client_update.origin,
+		direction);
+	current_distance = sqrtf(DotProduct(direction, direction));
+	if (current_distance <= 0.0f)
+	{
+		VectorSubtract(state->combat.last_enemy_origin,
+			state->last_client_update.origin,
+			direction);
+		current_distance = sqrtf(DotProduct(direction, direction));
+	}
+	candidate_utility = BotAI_CoopTargetUtility(state,
+		candidate,
+		distance,
+		active_group);
+	current_utility = BotAI_CoopTargetUtility(state,
+		&current_info,
+		current_distance,
+		false);
+	switch_ratio = LibVarGetValue("coopbot_target_switch_ratio");
+	if (switch_ratio <= 1.0f)
+	{
+		switch_ratio = 1.25f;
+	}
+	if (candidate_utility <= current_utility * switch_ratio)
+	{
+		if (LibVarGetValue("coopbot_log") >= 2.0f)
+		{
+			BotLib_LogWriteTimeStamped(
+				"coopbot_target_switch_blocked client=%d current=%d candidate=%d "
+				"current_utility=%.5f candidate_utility=%.5f ratio=%.2f",
+				state->client_number,
+				state->combat.current_enemy,
+				candidate->number,
+				current_utility,
+				candidate_utility,
+				switch_ratio);
+		}
+		return false;
+	}
+
+	return true;
+}
+
+/*
+=============
 BotAI_FindEnemy
 
 Reconstructs retail sub_10023970's ascending visible-client scan, exact
@@ -650,8 +838,22 @@ int BotAI_FindEnemy(bot_client_state_t *state, ai_dm_enemy_info_t *enemy)
 		1);
 	int current_health = state->last_client_update.inventory[
 		BOT_BATTLE_INVENTORY_HEALTH];
-	int health_decrease = state->combat.last_known_health > current_health;
+	int health_decrease = state->combat.last_health_valid &&
+		state->combat.last_known_health > current_health;
+	if (health_decrease)
+	{
+		state->combat.last_damage_amount =
+			state->combat.last_known_health - current_health;
+		state->combat.last_damage_time = AAS_Time();
+		state->combat.took_damage = true;
+	}
+	else if (state->combat.took_damage &&
+		AAS_Time() - state->combat.last_damage_time > 2.0f)
+	{
+		state->combat.took_damage = false;
+	}
 	state->combat.last_known_health = current_health;
+	state->combat.last_health_valid = true;
 	vec3_t eye;
 	BotInterface_ClientEyePosition(state, eye);
 	vec3_t viewangles;
@@ -670,6 +872,7 @@ int BotAI_FindEnemy(bot_client_state_t *state, ai_dm_enemy_info_t *enemy)
 	for (int index = 0; index < visible_count; ++index)
 	{
 		aas_entityinfo_t entity_info;
+		bool active_group;
 		AAS_EntityInfo(visible_entities[index], &entity_info);
 		if (BotAI_EntityIsDead(&entity_info) ||
 			entity_info.number == state->entity_number ||
@@ -700,13 +903,27 @@ int BotAI_FindEnemy(bot_client_state_t *state, ai_dm_enemy_info_t *enemy)
 		{
 			continue;
 		}
-		if (BotAI_CoopRejectNewGroup(state, &entity_info, health_decrease))
+		active_group = BotAI_CoopCandidateInActiveGroup(&entity_info,
+			visible_entities,
+			visible_count);
+		if (BotAI_CoopRejectNewGroup(state,
+			&entity_info,
+			health_decrease,
+			active_group))
 		{
 			continue;
 		}
 
 		if (health_decrease && !(distance > 300.0f))
 		{
+			if (!BotAI_CoopTargetSwitchAllowed(state,
+				&entity_info,
+				distance,
+				active_group,
+				health_decrease))
+			{
+				continue;
+			}
 			return BotAI_AcceptEnemy(state,
 				&entity_info,
 				distance,
@@ -721,6 +938,14 @@ int BotAI_FindEnemy(bot_client_state_t *state, ai_dm_enemy_info_t *enemy)
 		}
 		if (!(distance > 300.0f) || BotAI_EntityIsShooting(&entity_info))
 		{
+			if (!BotAI_CoopTargetSwitchAllowed(state,
+				&entity_info,
+				distance,
+				active_group,
+				health_decrease))
+			{
+				continue;
+			}
 			return BotAI_AcceptEnemy(state,
 				&entity_info,
 				distance,
@@ -739,6 +964,14 @@ int BotAI_FindEnemy(bot_client_state_t *state, ai_dm_enemy_info_t *enemy)
 			160.0f,
 			bot_angles))
 		{
+			if (!BotAI_CoopTargetSwitchAllowed(state,
+				&entity_info,
+				distance,
+				active_group,
+				health_decrease))
+			{
+				continue;
+			}
 			return BotAI_AcceptEnemy(state,
 				&entity_info,
 				distance,
@@ -750,6 +983,14 @@ int BotAI_FindEnemy(bot_client_state_t *state, ai_dm_enemy_info_t *enemy)
 		BotAI_UpdateEnemyBattleInventory(state, entity_info.number);
 		if (!BotAI_WantsToRetreat(state))
 		{
+			if (!BotAI_CoopTargetSwitchAllowed(state,
+				&entity_info,
+				distance,
+				active_group,
+				health_decrease))
+			{
+				continue;
+			}
 			return BotAI_AcceptEnemy(state,
 				&entity_info,
 				distance,
@@ -1341,6 +1582,190 @@ float BotAI_Aggression(const bot_client_state_t *state)
 
 /*
 =============
+BotAI_CoopDangerScore
+
+Builds the opt-in companion danger estimate from survivability, recent
+incoming damage, visible enemy pressure, and separation from the player.
+The retail aggression result remains authoritative until the coop overlay is
+enabled.
+=============
+*/
+static float BotAI_CoopDangerScore(const bot_client_state_t *state)
+{
+	const int *inventory;
+	float score = 0.0f;
+	float health_score;
+	float armor_score;
+	float now;
+	float critical_health;
+	int health;
+	int armor;
+
+	if (state == NULL || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_danger_retreat") == 0.0f)
+	{
+		return 0.0f;
+	}
+	if (state->combat.current_enemy <= 0)
+	{
+		return 0.0f;
+	}
+
+	inventory = state->last_client_update.inventory;
+	if (inventory[BOT_BATTLE_USING_INVULNERABILITY] != 0)
+	{
+		return 0.0f;
+	}
+
+	health = inventory[BOT_BATTLE_INVENTORY_HEALTH];
+	if (health <= 0)
+	{
+		return 1.0f;
+	}
+	critical_health = LibVarGetValue("coopbot_danger_critical_health");
+	if (critical_health <= 0.0f)
+	{
+		critical_health = 25.0f;
+	}
+	if (health <= critical_health)
+	{
+		return 1.0f;
+	}
+
+	health_score = health < 70 ? (70.0f - (float)health) / 70.0f : 0.0f;
+	armor = inventory[BOT_BATTLE_INVENTORY_ARMORBODY] +
+		inventory[BOT_BATTLE_INVENTORY_ARMORCOMBAT] +
+		inventory[BOT_BATTLE_INVENTORY_ARMORJACKET];
+	armor_score = armor < 80 ? (80.0f - (float)armor) / 80.0f : 0.0f;
+	score += fminf(fmaxf(health_score, 0.0f), 1.0f) * 0.35f;
+	score += fminf(fmaxf(armor_score, 0.0f), 1.0f) * 0.15f;
+
+	now = AAS_Time();
+	if (state->combat.took_damage &&
+		now - state->combat.last_damage_time <= 2.0f)
+	{
+		float damage_score = (float)state->combat.last_damage_amount / 50.0f;
+		score += fminf(fmaxf(damage_score, 0.0f), 1.0f) * 0.20f;
+	}
+
+	if (aasworld.loaded && aasworld.entities != NULL)
+	{
+		vec3_t eye;
+		vec3_t viewangles;
+		int visible_entities[16];
+		int visible_count;
+		int enemy_count = 0;
+		int shooting_count = 0;
+
+		BotInterface_ClientEyePosition(state, eye);
+		VectorClear(viewangles);
+		visible_count = AAS_VisibleEntities(state->entity_number,
+			eye,
+			viewangles,
+			360.0f,
+			16,
+			visible_entities);
+		for (int index = 0; index < visible_count; ++index)
+		{
+			aas_entityinfo_t entity_info;
+
+			AAS_EntityInfo(visible_entities[index], &entity_info);
+			if (BotAI_EntityIsDead(&entity_info) ||
+				entity_info.number <= aasworld.maxClients ||
+				entity_info.number == state->entity_number)
+			{
+				continue;
+			}
+			enemy_count += 1;
+			if (BotAI_EntityIsShooting(&entity_info))
+			{
+				shooting_count += 1;
+			}
+		}
+
+		float enemy_pressure = (float)enemy_count / 4.0f;
+		score += fminf(enemy_pressure, 1.0f) * 0.25f;
+		score += fminf((float)shooting_count, 1.0f) * 0.10f;
+	}
+
+	if (aasworld.initialized && aasworld.entities != NULL)
+	{
+		aas_entityinfo_t enemy_info;
+		memset(&enemy_info, 0, sizeof(enemy_info));
+		AAS_EntityInfo(state->combat.current_enemy, &enemy_info);
+		if (!BotAI_EntityIsDead(&enemy_info))
+		{
+			vec3_t direction;
+			VectorSubtract(enemy_info.origin,
+				state->last_client_update.origin,
+				direction);
+			float distance = sqrtf(DotProduct(direction, direction));
+			if (distance < 256.0f)
+			{
+				score += (256.0f - distance) / 256.0f * 0.10f;
+			}
+			if (BotAI_EntityIsShooting(&enemy_info))
+			{
+				score += 0.10f;
+			}
+		}
+	}
+
+	if (aasworld.initialized && aasworld.entities != NULL)
+	{
+		vec3_t player_origin;
+		int player_entity = BotAI_CoopPlayerEntity(state, player_origin);
+		if (player_entity >= 0)
+		{
+			vec3_t direction;
+			float soft_leash = LibVarGetValue("coopbot_soft_leash");
+			float hard_leash = LibVarGetValue("coopbot_hard_leash");
+			VectorSubtract(state->last_client_update.origin,
+				player_origin,
+				direction);
+			float distance = sqrtf(DotProduct(direction, direction));
+			if (hard_leash <= soft_leash)
+			{
+				hard_leash = soft_leash + 1.0f;
+			}
+			if (distance > soft_leash)
+			{
+				score += fminf((distance - soft_leash) /
+					(hard_leash - soft_leash), 1.0f) * 0.15f;
+			}
+		}
+	}
+
+	return fminf(fmaxf(score, 0.0f), 1.0f);
+}
+
+/*
+=============
+BotAI_CoopDangerRequiresRetreat
+
+Applies the configured danger threshold and preserves the critical-health
+override as a hard safety boundary for the companion overlay.
+=============
+*/
+static bool BotAI_CoopDangerRequiresRetreat(const bot_client_state_t *state)
+{
+	float threshold;
+
+	if (state == NULL || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_danger_retreat") == 0.0f)
+	{
+		return false;
+	}
+	threshold = LibVarGetValue("coopbot_danger_threshold");
+	if (threshold <= 0.0f)
+	{
+		threshold = 0.65f;
+	}
+	return BotAI_CoopDangerScore(state) >= threshold;
+}
+
+/*
+=============
 BotAI_WantsToRetreat
 
 Reconstructs retail sub_100228c0's flag, get-flag LTG, and strict aggression
@@ -1362,6 +1787,10 @@ int BotAI_WantsToRetreat(const bot_client_state_t *state)
 	{
 		return qtrue;
 	}
+	if (BotAI_CoopDangerRequiresRetreat(state))
+	{
+		return qtrue;
+	}
 
 	return BotAI_Aggression(state) < 50.0f;
 }
@@ -1377,6 +1806,10 @@ additional flag and LTG special cases introduced by the Quake III successor.
 int BotAI_WantsToChase(const bot_client_state_t *state)
 {
 	if (state == NULL)
+	{
+		return qfalse;
+	}
+	if (BotAI_CoopDangerRequiresRetreat(state))
 	{
 		return qfalse;
 	}
@@ -9492,6 +9925,43 @@ static int BotAI_CoopPlayerEntity(const bot_client_state_t *state,
 
 /*
 =============
+BotAI_CoopResultUsesElevator
+
+BotMoveToGoal copies the reach travel type before calling BotTravel_Elevator,
+but the returned elementary mover result can clear that field. Preserve the
+semantic elevator check through the result type and retained reach as well so
+coop wait/timeout/retry logic observes the actual mover route.
+=============
+*/
+static bool BotAI_CoopResultUsesElevator(const bot_client_state_t *state,
+	const bot_moveresult_t *result)
+{
+	bot_movestate_t *move_state;
+
+	if (result != NULL &&
+		(((result->traveltype & TRAVELTYPE_MASK) == TRAVEL_ELEVATOR) ||
+		 result->type == RESULTTYPE_ELEVATORUP))
+	{
+		return true;
+	}
+	if (state == NULL || state->move_handle <= 0 ||
+		aasworld.reachability == NULL)
+	{
+		return false;
+	}
+
+	move_state = BotMoveStateFromHandle(state->move_handle);
+	if (move_state == NULL || move_state->lastreachnum <= 0 ||
+		move_state->lastreachnum >= aasworld.numReachability)
+	{
+		return false;
+	}
+	return (aasworld.reachability[move_state->lastreachnum].traveltype &
+		TRAVELTYPE_MASK) == TRAVEL_ELEVATOR;
+}
+
+/*
+=============
 BotAI_ApplyCoopHardLeash
 
 The companion leash is an opt-in coop overlay. When the bot exceeds the hard
@@ -9508,12 +9978,17 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 	vec3_t direction;
 	float hard_leash;
 	float distance;
+	float vertical_separation;
 	int player_entity;
 	int player_area;
+	int bot_area;
 	int current_player_area;
 	float elevator_wait_timeout;
 	bot_goal_t goal;
 	bot_moveresult_t result;
+	bool elevator_result;
+	bool needs_regroup;
+	int logged_traveltype;
 	int status;
 
 	if (state == NULL || input == NULL || !BotAI_CoopMode() ||
@@ -9531,12 +10006,35 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 	VectorSubtract(player_origin, state->last_client_update.origin, direction);
 	distance = sqrtf(DotProduct(direction, direction));
 	hard_leash = LibVarGetValue("coopbot_hard_leash");
-	if (hard_leash <= 0.0f || distance <= hard_leash)
+	current_player_area = AAS_PointAreaNum(player_origin);
+	bot_area = AAS_PointAreaNum(state->last_client_update.origin);
+	vertical_separation = fabsf(player_origin[2] -
+		state->last_client_update.origin[2]);
+	/* A nearby player on another vertical AAS layer still requires regroup. */
+	needs_regroup = hard_leash > 0.0f &&
+		(distance > hard_leash ||
+			(bot_area > 0 && current_player_area > 0 &&
+				bot_area != current_player_area &&
+				vertical_separation >= 64.0f));
+	if (!needs_regroup)
 	{
+		if (state->coop_player_goal_valid)
+		{
+			if (LibVarGetValue("coopbot_log") >= 1.0f)
+			{
+				BotLib_LogWriteTimeStamped(
+					"coopbot_regroup_complete client=%d player=%d "
+					"distance=%.1f vertical=%.1f bot_area=%d player_area=%d",
+					state->client_number, player_entity, distance,
+					vertical_separation, bot_area, current_player_area);
+			}
+			state->coop_player_goal_valid = false;
+			state->coop_elevator_wait_started = 0.0f;
+			state->coop_elevator_wait_area = 0;
+		}
 		return false;
 	}
 
-	current_player_area = AAS_PointAreaNum(player_origin);
 	/* A destination area may be terminal and have no outgoing reachability. */
 	if (current_player_area > 0)
 	{
@@ -9568,12 +10066,14 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 		state->move_handle,
 		&goal,
 		BotAI_LongTermGoalTravelFlags(state));
+	elevator_result = BotAI_CoopResultUsesElevator(state, &result);
+	logged_traveltype = elevator_result ? TRAVEL_ELEVATOR : result.traveltype;
 	elevator_wait_timeout = LibVarGetValue("coopbot_elevator_wait_timeout");
 	if (elevator_wait_timeout <= 0.0f)
 	{
 		elevator_wait_timeout = 15.0f;
 	}
-	if (result.traveltype == TRAVEL_ELEVATOR &&
+	if (elevator_result &&
 		(result.flags & MOVERESULT_WAITING) != 0)
 	{
 		if (state->coop_elevator_wait_area != player_area ||
@@ -9603,7 +10103,7 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 		state->coop_elevator_wait_started = 0.0f;
 		state->coop_elevator_wait_area = 0;
 	}
-	if (result.traveltype == TRAVEL_ELEVATOR &&
+	if (elevator_result &&
 		(result.failure || result.blocked))
 	{
 		/*
@@ -9654,20 +10154,22 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 	{
 		BotLib_LogWriteTimeStamped(
 			"coopbot_regroup client=%d player=%d distance=%.1f hard_leash=%.1f "
-			"current_area=%d goal_area=%d failure=%d traveltype=%d "
+			"vertical=%.1f bot_area=%d current_area=%d goal_area=%d "
+			"failure=%d traveltype=%d elevator=%d "
 			"mover_type=%d flags=0x%x blocked=%d blockentity=%d",
 			state->client_number, player_entity, distance, hard_leash,
-			current_player_area, player_area, result.failure, result.traveltype,
+			vertical_separation, bot_area, current_player_area, player_area,
+			result.failure, logged_traveltype, elevator_result,
 			result.type, result.flags,
 			result.blocked, result.blockentity);
-		if (result.traveltype == TRAVEL_ELEVATOR &&
+		if (elevator_result &&
 			(result.flags & MOVERESULT_WAITING) != 0)
 		{
 			BotLib_LogWriteTimeStamped(
 				"coopbot_elevator_wait client=%d player=%d distance=%.1f",
 				state->client_number, player_entity, distance);
 		}
-		if (result.traveltype == TRAVEL_ELEVATOR &&
+		if (elevator_result &&
 			(result.failure || result.blocked))
 		{
 			BotLib_LogWriteTimeStamped(
@@ -9675,6 +10177,671 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 				state->client_number, player_entity, result.failure,
 				result.blocked, result.blockentity);
 		}
+	}
+	if ((result.failure || result.blocked) &&
+		LibVarGetValue("coopbot_log") >= 1.0f)
+	{
+		/*
+		 * Keep a failed regroup distinct from an ordinary idle/follow
+		 * frame. Scenario 11 consumes this event when a platform is
+		 * absent, busy, or the selected route cannot be completed.
+		 */
+		BotLib_LogWriteTimeStamped(
+			"coopbot_path_failure phase=regroup client=%d player=%d "
+			"failure=%d blocked=%d elevator=%d traveltype=%d "
+			"goal_area=%d blockentity=%d",
+			state->client_number, player_entity, result.failure,
+			result.blocked, elevator_result, logged_traveltype,
+			player_area, result.blockentity);
+	}
+	return true;
+}
+
+/*
+=============
+BotAI_ApplyCoopDirectionalMove
+
+Submit one short, collision-checked lateral move for a coop overlay. The
+reverse direction is tried when the first side is blocked, keeping avoidance
+from turning a narrow corridor into a permanent stop.
+=============
+*/
+static bool BotAI_ApplyCoopDirectionalMove(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input,
+	const vec3_t direction,
+	bool preserve_actions)
+{
+	vec3_t move_direction;
+	vec3_t candidate;
+	vec3_t mins = {-16.0f, -16.0f, -24.0f};
+	vec3_t maxs = {16.0f, 16.0f, 32.0f};
+	bsp_trace_t trace;
+	float length;
+	bool moved;
+	int status;
+
+	if (state == NULL || input == NULL || direction == NULL)
+	{
+		return false;
+	}
+
+	VectorCopy(direction, move_direction);
+	move_direction[2] = 0.0f;
+	length = sqrtf(DotProduct(move_direction, move_direction));
+	if (length <= 0.1f)
+	{
+		return false;
+	}
+	VectorScale(move_direction, 1.0f / length, move_direction);
+	VectorMA(state->last_client_update.origin,
+		48.0f,
+		move_direction,
+		candidate);
+	trace = AAS_Trace(state->last_client_update.origin,
+		mins,
+		maxs,
+		candidate,
+		state->entity_number,
+		MASK_SOLID);
+	if (trace.startsolid || trace.fraction < 0.75f)
+	{
+		VectorScale(move_direction, -1.0f, move_direction);
+		VectorMA(state->last_client_update.origin,
+			48.0f,
+			move_direction,
+			candidate);
+		trace = AAS_Trace(state->last_client_update.origin,
+			mins,
+			maxs,
+			candidate,
+			state->entity_number,
+			MASK_SOLID);
+		if (trace.startsolid || trace.fraction < 0.75f)
+		{
+			return false;
+		}
+	}
+
+	moved = BotMoveInDirectionHandle(state->move_handle,
+		move_direction,
+		300.0f,
+		MOVE_WALK) != 0;
+	if (!moved)
+	{
+		VectorScale(move_direction, -1.0f, move_direction);
+		moved = BotMoveInDirectionHandle(state->move_handle,
+			move_direction,
+			300.0f,
+			MOVE_WALK) != 0;
+	}
+	if (!moved)
+	{
+		return false;
+	}
+
+	status = EA_GetInput(state->client_number, thinktime, input);
+	if (status != BLERR_NOERROR)
+	{
+		return false;
+	}
+	if (!preserve_actions)
+	{
+		input->actionflags = 0;
+	}
+	input->thinktime = thinktime;
+	return EA_SubmitInput(state->client_number, input) == BLERR_NOERROR;
+}
+
+/*
+=============
+BotAI_ApplyCoopCoverMove
+
+Submit one strict cover step. Unlike the generic avoidance move, this helper
+does not reverse direction when the requested side is blocked: reversing a
+cover step could move the companion toward the enemy and make the danger
+overlay counterproductive.
+=============
+*/
+static bool BotAI_ApplyCoopCoverMove(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input,
+	const vec3_t direction,
+	bool preserve_actions)
+{
+	vec3_t move_direction;
+	vec3_t candidate;
+	vec3_t mins = {-16.0f, -16.0f, -24.0f};
+	vec3_t maxs = {16.0f, 16.0f, 32.0f};
+	bsp_trace_t trace;
+	float length;
+	int status;
+
+	if (state == NULL || input == NULL || direction == NULL)
+	{
+		return false;
+	}
+
+	VectorCopy(direction, move_direction);
+	move_direction[2] = 0.0f;
+	length = sqrtf(DotProduct(move_direction, move_direction));
+	if (length <= 0.1f)
+	{
+		return false;
+	}
+	VectorScale(move_direction, 1.0f / length, move_direction);
+	VectorMA(state->last_client_update.origin,
+		96.0f,
+		move_direction,
+		candidate);
+	trace = AAS_Trace(state->last_client_update.origin,
+		mins,
+		maxs,
+		candidate,
+		state->entity_number,
+		MASK_SOLID);
+	if (trace.startsolid || trace.fraction < 0.9f)
+	{
+		return false;
+	}
+	if (AAS_PointAreaNum(candidate) <= 0)
+	{
+		return false;
+	}
+	if (!BotMoveInDirectionHandle(state->move_handle,
+		move_direction,
+		300.0f,
+		MOVE_WALK))
+	{
+		return false;
+	}
+
+	status = EA_GetInput(state->client_number, thinktime, input);
+	if (status != BLERR_NOERROR)
+	{
+		return false;
+	}
+	if (!preserve_actions)
+	{
+		input->actionflags = 0;
+	}
+	input->thinktime = thinktime;
+	return EA_SubmitInput(state->client_number, input) == BLERR_NOERROR;
+}
+
+/*
+=============
+BotAI_ApplyCoopBasicCover
+
+Adds the P1 survival fallback: if the companion is in danger and has a clear
+shot on the current enemy, prefer a short reachable step that puts solid
+geometry between them. This is deliberately local and deterministic; the
+full cover-position utility belongs to the later cooperative-role stages.
+=============
+*/
+static bool BotAI_ApplyCoopBasicCover(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input)
+{
+	vec3_t enemy_delta;
+	vec3_t away;
+	vec3_t left;
+	vec3_t right;
+	vec3_t bot_eye;
+	vec3_t candidate_eye;
+	vec3_t candidates[3];
+	aas_entityinfo_t enemy_info;
+	float horizontal_length;
+	int candidate_index;
+
+	if (state == NULL || input == NULL || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_basic_cover") == 0.0f ||
+		state->combat.current_enemy <= aasworld.maxClients ||
+		!BotAI_CoopDangerRequiresRetreat(state) ||
+		!aasworld.initialized || !aasworld.loaded ||
+		aasworld.entities == NULL)
+	{
+		return false;
+	}
+
+	memset(&enemy_info, 0, sizeof(enemy_info));
+	AAS_EntityInfo(state->combat.current_enemy, &enemy_info);
+	if (!enemy_info.valid || BotAI_EntityIsDead(&enemy_info))
+	{
+		return false;
+	}
+
+	BotInterface_ClientEyePosition(state, bot_eye);
+	if (!BotInterface_HasLineOfSight(bot_eye,
+		enemy_info.origin,
+		state->entity_number,
+		state->combat.current_enemy))
+	{
+		return false;
+	}
+
+	VectorSubtract(state->last_client_update.origin,
+		enemy_info.origin,
+		enemy_delta);
+	enemy_delta[2] = 0.0f;
+	horizontal_length = sqrtf(DotProduct(enemy_delta, enemy_delta));
+	if (horizontal_length <= 1.0f)
+	{
+		return false;
+	}
+	VectorScale(enemy_delta, 1.0f / horizontal_length, away);
+	left[0] = -away[1];
+	left[1] = away[0];
+	left[2] = 0.0f;
+	VectorScale(left, -1.0f, right);
+	VectorCopy(away, candidates[0]);
+	VectorCopy(left, candidates[1]);
+	VectorCopy(right, candidates[2]);
+
+	for (candidate_index = 0; candidate_index < 3; ++candidate_index)
+	{
+		vec3_t candidate_origin;
+
+		VectorMA(state->last_client_update.origin,
+			96.0f,
+			candidates[candidate_index],
+			candidate_origin);
+		VectorCopy(candidate_origin, candidate_eye);
+		candidate_eye[2] += state->last_client_update.viewoffset[2];
+		if (BotInterface_HasLineOfSight(candidate_eye,
+			enemy_info.origin,
+			state->entity_number,
+			state->combat.current_enemy))
+		{
+			continue;
+		}
+		if (!BotAI_ApplyCoopCoverMove(state,
+			thinktime,
+			input,
+			candidates[candidate_index],
+			true))
+		{
+			continue;
+		}
+
+		if (LibVarGetValue("coopbot_log") >= 2.0f)
+		{
+			BotLib_LogWriteTimeStamped(
+				"coopbot_cover client=%d enemy=%d danger=%.2f direction=%d",
+				state->client_number,
+				state->combat.current_enemy,
+				BotAI_CoopDangerScore(state),
+				candidate_index);
+		}
+		return true;
+	}
+
+	return false;
+}
+
+/*
+=============
+BotAI_ApplyCoopFirelineAvoidance
+
+Moves the bot sideways when its current enemy is visible in the player's
+forward line and the bot occupies the short player-to-enemy segment. This is
+an opt-in coop overlay; it does not replace combat or hard regroup movement.
+=============
+*/
+static bool BotAI_ApplyCoopFirelineAvoidance(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input)
+{
+	vec3_t player_origin;
+	vec3_t enemy_direction;
+	vec3_t bot_offset;
+	vec3_t closest;
+	vec3_t lateral;
+	vec3_t right;
+	aas_entityinfo_t player_info;
+	aas_entityinfo_t enemy_info;
+	float enemy_length;
+	float bot_length;
+	float projection;
+	float lateral_distance;
+	float radius;
+	float yaw;
+	int player_entity;
+	int side;
+
+	if (state == NULL || input == NULL || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_fireline_avoid") == 0.0f ||
+		state->combat.current_enemy <= aasworld.maxClients)
+	{
+		return false;
+	}
+
+	player_entity = BotAI_CoopPlayerEntity(state, player_origin);
+	if (player_entity < 0)
+	{
+		return false;
+	}
+	memset(&player_info, 0, sizeof(player_info));
+	memset(&enemy_info, 0, sizeof(enemy_info));
+	AAS_EntityInfo(player_entity, &player_info);
+	AAS_EntityInfo(state->combat.current_enemy, &enemy_info);
+	if (!player_info.valid || !enemy_info.valid)
+	{
+		return false;
+	}
+
+	VectorSubtract(enemy_info.origin, player_origin, enemy_direction);
+	enemy_direction[2] = 0.0f;
+	enemy_length = sqrtf(DotProduct(enemy_direction, enemy_direction));
+	if (enemy_length <= 1.0f)
+	{
+		return false;
+	}
+	VectorScale(enemy_direction, 1.0f / enemy_length, enemy_direction);
+
+	VectorSubtract(state->last_client_update.origin,
+		player_origin,
+		bot_offset);
+	bot_offset[2] = 0.0f;
+	bot_length = sqrtf(DotProduct(bot_offset, bot_offset));
+	if (bot_length <= 1.0f)
+	{
+		return false;
+	}
+	projection = DotProduct(bot_offset, enemy_direction) / enemy_length;
+	radius = LibVarGetValue("coopbot_fireline_radius");
+	if (radius <= 0.0f)
+	{
+		radius = 128.0f;
+	}
+	if (projection <= 0.05f || projection >= 0.95f ||
+		bot_length > radius)
+	{
+		return false;
+	}
+
+	VectorMA(player_origin, projection * enemy_length, enemy_direction, closest);
+	VectorSubtract(state->last_client_update.origin, closest, lateral);
+	lateral[2] = 0.0f;
+	lateral_distance = sqrtf(DotProduct(lateral, lateral));
+	if (lateral_distance >= 48.0f)
+	{
+		return false;
+	}
+
+	if (!AAS_EntityVisible(player_entity,
+		player_origin,
+		player_info.angles,
+		70.0f,
+		state->combat.current_enemy))
+	{
+		return false;
+	}
+
+	yaw = player_info.angles[YAW] * ((float)M_PI / 180.0f);
+	right[0] = -sinf(yaw);
+	right[1] = cosf(yaw);
+	right[2] = 0.0f;
+	if (lateral_distance > 1.0f)
+	{
+		side = DotProduct(lateral, right) >= 0.0f ? 1 : -1;
+		VectorScale(right, (float)side, lateral);
+	}
+	else
+	{
+		VectorCopy(right, lateral);
+	}
+
+	if (!BotAI_ApplyCoopDirectionalMove(state,
+		thinktime,
+		input,
+		lateral,
+		true))
+	{
+		return false;
+	}
+	if (LibVarGetValue("coopbot_log") >= 2.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"coopbot_fireline_avoid client=%d player=%d enemy=%d distance=%.1f "
+			"lateral=%.1f",
+			state->client_number,
+			player_entity,
+			state->combat.current_enemy,
+			bot_length,
+			lateral_distance);
+	}
+	return true;
+}
+
+/*
+=============
+BotAI_ApplyCoopDoorwayAvoidance
+
+Detects the narrow doorway case from live AAS areas and the player's recent
+movement vector. When the player is crossing into the bot's area and the bot
+occupies the short forward corridor, the bot gives way laterally.
+=============
+*/
+static bool BotAI_ApplyCoopDoorwayAvoidance(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input)
+{
+	vec3_t player_origin;
+	vec3_t player_delta;
+	vec3_t movement;
+	vec3_t relative;
+	vec3_t lateral;
+	vec3_t right;
+	aas_entityinfo_t player_info;
+	float movement_length;
+	float forward_distance;
+	float lateral_distance;
+	float radius;
+	float yaw;
+	int player_entity;
+	int player_area;
+	int bot_area;
+	int side;
+
+	if (state == NULL || input == NULL || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_doorway_avoid") == 0.0f ||
+		state->combat.current_enemy > 0)
+	{
+		return false;
+	}
+
+	player_entity = BotAI_CoopPlayerEntity(state, player_origin);
+	if (player_entity < 0)
+	{
+		return false;
+	}
+	memset(&player_info, 0, sizeof(player_info));
+	AAS_EntityInfo(player_entity, &player_info);
+	if (!player_info.valid)
+	{
+		return false;
+	}
+
+	player_area = AAS_PointAreaNum(player_origin);
+	bot_area = AAS_PointAreaNum(state->last_client_update.origin);
+	if (player_area <= 0 || bot_area <= 0 || player_area == bot_area)
+	{
+		return false;
+	}
+
+	VectorSubtract(player_origin, player_info.lastvisorigin, player_delta);
+	player_delta[2] = 0.0f;
+	movement_length = sqrtf(DotProduct(player_delta, player_delta));
+	if (movement_length <= 2.0f)
+	{
+		return false;
+	}
+	VectorScale(player_delta, 1.0f / movement_length, movement);
+
+	VectorSubtract(state->last_client_update.origin,
+		player_origin,
+		relative);
+	relative[2] = 0.0f;
+	forward_distance = DotProduct(relative, movement);
+	lateral[0] = relative[0] - movement[0] * forward_distance;
+	lateral[1] = relative[1] - movement[1] * forward_distance;
+	lateral[2] = 0.0f;
+	lateral_distance = sqrtf(DotProduct(lateral, lateral));
+	radius = LibVarGetValue("coopbot_doorway_radius");
+	if (radius <= 0.0f)
+	{
+		radius = 160.0f;
+	}
+	if (forward_distance < 24.0f || forward_distance > radius ||
+		lateral_distance >= 64.0f)
+	{
+		return false;
+	}
+
+	yaw = player_info.angles[YAW] * ((float)M_PI / 180.0f);
+	right[0] = -sinf(yaw);
+	right[1] = cosf(yaw);
+	right[2] = 0.0f;
+	if (lateral_distance > 1.0f)
+	{
+		side = DotProduct(lateral, right) >= 0.0f ? 1 : -1;
+		VectorScale(right, (float)side, lateral);
+	}
+	else
+	{
+		VectorCopy(right, lateral);
+	}
+
+	if (!BotAI_ApplyCoopDirectionalMove(state,
+		thinktime,
+		input,
+		lateral,
+		false))
+	{
+		return false;
+	}
+	if (LibVarGetValue("coopbot_log") >= 2.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"coopbot_doorway_avoid client=%d player=%d player_area=%d "
+			"bot_area=%d forward=%.1f lateral=%.1f",
+			state->client_number,
+			player_entity,
+			player_area,
+			bot_area,
+			forward_distance,
+			lateral_distance);
+	}
+	return true;
+}
+
+/*
+=============
+BotAI_ApplyCoopPersonalSpace
+
+Keeps an idle companion out of the player's immediate path. When the player
+is looking at the bot, the lateral escape direction is preferred so the bot
+does not stand in the crosshair; elsewhere it backs away from the player.
+The overlay is opt-in and runs only after the hard leash, so a vertical
+regroup or elevator route always has priority.
+=============
+*/
+static bool BotAI_ApplyCoopPersonalSpace(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input)
+{
+	vec3_t player_origin;
+	vec3_t direction;
+	vec3_t relative;
+	vec3_t forward;
+	vec3_t right;
+	aas_entityinfo_t player_info;
+	float radius;
+	float horizontal_distance;
+	float forward_dot;
+	float right_dot;
+	float yaw;
+	int player_entity;
+	int side;
+
+	if (state == NULL || input == NULL || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_personal_space") == 0.0f ||
+		state->combat.current_enemy > 0)
+	{
+		return false;
+	}
+
+	player_entity = BotAI_CoopPlayerEntity(state, player_origin);
+	if (player_entity < 0)
+	{
+		return false;
+	}
+
+	memset(&player_info, 0, sizeof(player_info));
+	AAS_EntityInfo(player_entity, &player_info);
+	if (!player_info.valid)
+	{
+		return false;
+	}
+
+	VectorSubtract(state->last_client_update.origin, player_origin, relative);
+	relative[2] = 0.0f;
+	horizontal_distance = sqrtf(DotProduct(relative, relative));
+	radius = LibVarGetValue("coopbot_personal_space_radius");
+	if (radius <= 0.0f || horizontal_distance >= radius ||
+		fabsf(state->last_client_update.origin[2] - player_origin[2]) >= 64.0f)
+	{
+		return false;
+	}
+
+	yaw = player_info.angles[YAW] * ((float)M_PI / 180.0f);
+	forward[0] = cosf(yaw);
+	forward[1] = sinf(yaw);
+	forward[2] = 0.0f;
+	right[0] = -forward[1];
+	right[1] = forward[0];
+	right[2] = 0.0f;
+	if (horizontal_distance > 0.1f)
+	{
+		VectorScale(relative, 1.0f / horizontal_distance, relative);
+	}
+	else
+	{
+		VectorCopy(right, relative);
+	}
+	forward_dot = DotProduct(relative, forward);
+	right_dot = DotProduct(relative, right);
+	if (forward_dot > 0.35f)
+	{
+		/* Leave the player's forward cone by moving farther toward one side. */
+		side = right_dot >= 0.0f ? 1 : -1;
+		VectorScale(right, (float)side, direction);
+	}
+	else if (horizontal_distance > 0.1f)
+	{
+		VectorCopy(relative, direction);
+	}
+	else
+	{
+		VectorCopy(right, direction);
+	}
+
+	if (!BotAI_ApplyCoopDirectionalMove(state,
+		thinktime,
+		input,
+		direction,
+		false))
+	{
+		return false;
+	}
+	if (LibVarGetValue("coopbot_log") >= 2.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"coopbot_personal_space client=%d player=%d distance=%.1f radius=%.1f "
+			"forward=%.2f lateral=%.2f",
+			state->client_number, player_entity, horizontal_distance, radius,
+			forward_dot, right_dot);
 	}
 	return true;
 }
@@ -9806,6 +10973,24 @@ static int BotAI_Think(bot_client_state_t *state, float thinktime)
 
 	if (frame.work == BOT_AI_FRAME_WORK_STAND)
 	{
+		bot_input_t coop_input;
+		int stand_status;
+
+		memset(&coop_input, 0, sizeof(coop_input));
+		coop_input.thinktime = thinktime;
+		VectorCopy(state->last_client_update.viewangles, coop_input.viewangles);
+		if (BotAI_ApplyCoopHardLeash(state, thinktime, &coop_input))
+		{
+			BotAI_ConfigureBattleCombat(state);
+			AI_DMState_ChangeViewAngles(state->dm_state, state, thinktime);
+			BotState_EmitPendingClientCommands(state);
+			stand_status = EA_EndRegular(state->client_number, thinktime);
+			if (stand_status == BLERR_NOERROR)
+			{
+				state->client_update_valid = false;
+			}
+			return stand_status;
+		}
 		return BotAI_RunStand(state, thinktime);
 	}
 
@@ -9928,7 +11113,13 @@ static int BotAI_Think(bot_client_state_t *state, float thinktime)
 		}
 	}
 
-	(void)BotAI_ApplyCoopHardLeash(state, thinktime, &input);
+	if (!BotAI_ApplyCoopHardLeash(state, thinktime, &input) &&
+		!BotAI_ApplyCoopFirelineAvoidance(state, thinktime, &input) &&
+		!BotAI_ApplyCoopDoorwayAvoidance(state, thinktime, &input) &&
+		!BotAI_ApplyCoopBasicCover(state, thinktime, &input))
+	{
+		(void)BotAI_ApplyCoopPersonalSpace(state, thinktime, &input);
+	}
 
 	BotState_EmitPendingClientCommands(state);
 

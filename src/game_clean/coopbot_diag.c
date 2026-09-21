@@ -641,7 +641,7 @@ void CoopBotDiag_Init(void)
 	coopbot_diag.jsonl_enabled = gi.cvar("coopbot_jsonl", "1", 0);
 	coopbot_diag.episode_id_override = gi.cvar("coopbot_episode_id", "", 0);
 	coopbot_diag.seed = gi.cvar("coopbot_seed", "0", 0);
-	coopbot_diag.leash_enabled = gi.cvar("coopbot_leash", "0", 0);
+	coopbot_diag.leash_enabled = gi.cvar("coopbot_leash", "1", 0);
 	coopbot_diag.soft_leash = gi.cvar("coopbot_soft_leash", "384", 0);
 	coopbot_diag.hard_leash = gi.cvar("coopbot_hard_leash", "768", 0);
 	if (coopbot_diag.seed != NULL && coopbot_diag.seed->string != NULL &&
