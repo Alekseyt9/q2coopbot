@@ -19,6 +19,8 @@
 #include "bot_interface.h"
 #include "bot_interface_assets.h"
 #include "bot_interface_combat.h"
+#include "bot_interface_console.h"
+#include "bot_interface_coop_state.h"
 #include "bot_interface_runtime.h"
 #include "bot_state.h"
 
@@ -154,6 +156,590 @@ void BotAI_UpdateBattleInventory(bot_client_state_t *state)
 	}
 }
 
+/*
+=============
+BotAI_UpdateEnemyBattleInventory
+
+Reconstructs retail sub_10021290: enemy displacement, Quake II weapon byte,
+and the three observed effect flags are projected into battle inventory.
+=============
+*/
+int BotAI_UpdateEnemyBattleInventory(bot_client_state_t *state,
+	int enemy_entity)
+{
+	if (state == NULL)
+	{
+		return qfalse;
+	}
+
+	aas_entityinfo_t entity_info;
+	AAS_EntityInfo(enemy_entity, &entity_info);
+
+	vec3_t displacement;
+	VectorSubtract(entity_info.origin,
+		state->last_client_update.origin,
+		displacement);
+	int *inventory = state->last_client_update.inventory;
+	inventory[BOT_BATTLE_ENEMY_HEIGHT] = (int)displacement[2];
+	displacement[2] = 0.0f;
+	double horizontal_square =
+		(double)displacement[0] * (double)displacement[0] +
+		(double)displacement[1] * (double)displacement[1];
+	inventory[BOT_BATTLE_ENEMY_HORIZONTAL_DIST] =
+		(int)sqrt(horizontal_square);
+
+	memset(&inventory[BOT_BATTLE_ENEMY_BLASTER],
+		0,
+		12U * sizeof(inventory[0]));
+
+	int weapon = (entity_info.skinnum >> 8) & 0xff;
+	switch (weapon)
+	{
+		case 1:
+			inventory[BOT_BATTLE_ENEMY_BLASTER] = 1;
+			break;
+		case 2:
+			inventory[BOT_BATTLE_ENEMY_SHOTGUN] = 1;
+			break;
+		case 3:
+			inventory[BOT_BATTLE_ENEMY_SUPERSHOTGUN] = 1;
+			break;
+		case 4:
+			inventory[BOT_BATTLE_ENEMY_MACHINEGUN] = 1;
+			break;
+		case 5:
+			inventory[BOT_BATTLE_ENEMY_CHAINGUN] = 1;
+			break;
+		case 6:
+			inventory[BOT_BATTLE_ENEMY_GRENADES] = 1;
+			break;
+		case 7:
+			inventory[BOT_BATTLE_ENEMY_GRENADELAUNCHER] = 1;
+			break;
+		case 8:
+			inventory[BOT_BATTLE_ENEMY_ROCKETLAUNCHER] = 1;
+			break;
+		case 9:
+			inventory[BOT_BATTLE_ENEMY_HYPERBLASTER] = 1;
+			break;
+		case 10:
+			inventory[BOT_BATTLE_ENEMY_RAILGUN] = 1;
+			break;
+		case 11:
+			inventory[BOT_BATTLE_ENEMY_BFG10K] = 1;
+			break;
+		case 12:
+			inventory[BOT_BATTLE_ENEMY_GRAPPLE] = 1;
+			break;
+		default:
+			break;
+	}
+
+	inventory[BOT_BATTLE_ENEMY_INVULNERABILITY] =
+		(entity_info.effects & EF_PENT) != 0;
+	inventory[BOT_BATTLE_ENEMY_QUAD] =
+		(entity_info.effects & EF_QUAD) != 0;
+	inventory[BOT_BATTLE_ENEMY_POWERSCREEN] =
+		(entity_info.effects & EF_POWERSCREEN) != 0;
+	return qtrue;
+}
+
+/*
+=============
+BotAI_UseItems
+
+Reconstructs retail sub_10021500's four independent item-use branches and
+their exact Silencer, liquid/Rebreather, Power Shield, Power Screen order.
+=============
+*/
+void BotAI_UseItems(const bot_client_state_t *state)
+{
+	if (state == NULL)
+	{
+		return;
+	}
+
+	const int *inventory = state->last_client_update.inventory;
+	if (inventory[BOT_BATTLE_INVENTORY_SILENCER] > 0)
+	{
+		EA_UseItem(state->client_number, "Silencer");
+	}
+
+	vec3_t eye;
+	BotInterface_ClientEyePosition(state, eye);
+	if ((Q2_PointContents(eye) & 0x38) != 0 &&
+		inventory[BOT_BATTLE_USING_REBREATHER] == 0 &&
+		inventory[BOT_BATTLE_INVENTORY_REBREATHER] > 0)
+	{
+		EA_UseItem(state->client_number, "Rebreather");
+	}
+
+	if (inventory[BOT_BATTLE_USING_POWERSHIELD] == 0 &&
+		inventory[BOT_BATTLE_INVENTORY_POWERSHIELD] > 0)
+	{
+		EA_UseItem(state->client_number, "Power Shield");
+	}
+
+	if (inventory[BOT_BATTLE_USING_POWERSCREEN] == 0 &&
+		inventory[BOT_BATTLE_INVENTORY_POWERSCREEN] > 0)
+	{
+		EA_UseItem(state->client_number, "Power Screen");
+	}
+}
+
+/*
+=============
+BotAI_BattleUseItems
+
+Reconstructs retail sub_100215e0's Quad-first early return and subsequent
+Invulnerability fallback over raw battle-inventory slots.
+=============
+*/
+void BotAI_BattleUseItems(const bot_client_state_t *state)
+{
+	if (state == NULL)
+	{
+		return;
+	}
+
+	const int *inventory = state->last_client_update.inventory;
+	if (inventory[BOT_BATTLE_USING_QUAD] == 0 &&
+		inventory[BOT_BATTLE_INVENTORY_QUAD] > 0)
+	{
+		EA_UseItem(state->client_number, "Quad Damage");
+		return;
+	}
+
+	if (inventory[BOT_BATTLE_USING_INVULNERABILITY] == 0 &&
+		inventory[BOT_BATTLE_INVENTORY_INVULNERABILITY] > 0)
+	{
+		EA_UseItem(state->client_number, "Invulnerability");
+	}
+}
+
+/*
+=============
+BotAI_CarryingFlag
+
+Reconstructs retail sub_10021650, including the ordered-nonzero CTF gate and
+the distinct flag-one/flag-two return values.
+=============
+*/
+int BotAI_CarryingFlag(const bot_client_state_t *state)
+{
+	if (state == NULL)
+	{
+		return 0;
+	}
+
+	float ctf = LibVarGetValue("ctf");
+	if (ctf == 0.0f || isnan(ctf))
+	{
+		return 0;
+	}
+
+	const int *inventory = state->last_client_update.inventory;
+	if (inventory[BOT_BATTLE_INVENTORY_FLAG1] > 0)
+	{
+		return 1;
+	}
+	if (inventory[BOT_BATTLE_INVENTORY_FLAG2] > 0)
+	{
+		return 2;
+	}
+
+	return 0;
+}
+
+/*
+=============
+BotAI_Aggression
+
+Reconstructs retail sub_100226c0's ordered powerup, height, health, armor,
+weapon, and ammunition gates over the battle inventory.
+=============
+*/
+float BotAI_Aggression(const bot_client_state_t *state)
+{
+	if (state == NULL)
+	{
+		return 0.0f;
+	}
+
+	const int *inventory = state->last_client_update.inventory;
+	if (inventory[BOT_BATTLE_USING_INVULNERABILITY] != 0)
+	{
+		return 100.0f;
+	}
+
+	if (inventory[BOT_BATTLE_ENEMY_INVULNERABILITY] != 0)
+	{
+		return 0.0f;
+	}
+	if (inventory[BOT_BATTLE_ENEMY_QUAD] != 0 &&
+		inventory[BOT_BATTLE_USING_QUAD] == 0)
+	{
+		return 0.0f;
+	}
+	if (inventory[BOT_BATTLE_ENEMY_POWERSCREEN] != 0 &&
+		(inventory[BOT_BATTLE_USING_POWERSCREEN] == 0 ||
+		inventory[BOT_BATTLE_INVENTORY_CELLS] < 50))
+	{
+		return 0.0f;
+	}
+
+	if (inventory[BOT_BATTLE_ENEMY_HEIGHT] > 200)
+	{
+		return 0.0f;
+	}
+
+	int health = inventory[BOT_BATTLE_INVENTORY_HEALTH];
+	if (health < 40)
+	{
+		return 0.0f;
+	}
+	if (health < 70 &&
+		inventory[BOT_BATTLE_INVENTORY_ARMORBODY] < 40 &&
+		inventory[BOT_BATTLE_INVENTORY_ARMORCOMBAT] < 50 &&
+		inventory[BOT_BATTLE_INVENTORY_ARMORJACKET] < 60)
+	{
+		return 0.0f;
+	}
+
+	if (inventory[BOT_BATTLE_INVENTORY_BFG10K] > 0 &&
+		inventory[BOT_BATTLE_INVENTORY_CELLS] > 50)
+	{
+		return 100.0f;
+	}
+	if (inventory[BOT_BATTLE_INVENTORY_RAILGUN] > 0 &&
+		inventory[BOT_BATTLE_INVENTORY_SLUGS] > 5)
+	{
+		return 100.0f;
+	}
+	if (inventory[BOT_BATTLE_INVENTORY_HYPERBLASTER] > 0 &&
+		inventory[BOT_BATTLE_INVENTORY_CELLS] > 50)
+	{
+		return 100.0f;
+	}
+	if (inventory[BOT_BATTLE_INVENTORY_ROCKETLAUNCHER] > 0 &&
+		inventory[BOT_BATTLE_INVENTORY_ROCKETS] > 5)
+	{
+		return 100.0f;
+	}
+	if (inventory[BOT_BATTLE_INVENTORY_GRENADELAUNCHER] > 0 &&
+		inventory[BOT_BATTLE_INVENTORY_GRENADES] > 10)
+	{
+		return 100.0f;
+	}
+	if (inventory[BOT_BATTLE_INVENTORY_CHAINGUN] > 0 &&
+		inventory[BOT_BATTLE_INVENTORY_BULLETS] > 100)
+	{
+		return 100.0f;
+	}
+	if (inventory[BOT_BATTLE_INVENTORY_MACHINEGUN] > 0 &&
+		inventory[BOT_BATTLE_INVENTORY_BULLETS] > 75)
+	{
+		return 100.0f;
+	}
+	if (inventory[BOT_BATTLE_INVENTORY_SUPERSHOTGUN] > 0 &&
+		inventory[BOT_BATTLE_INVENTORY_SHELLS] > 20)
+	{
+		return 100.0f;
+	}
+
+	return 0.0f;
+}
+
+/*
+=============
+BotAI_CoopDangerScore
+
+Builds the opt-in companion danger estimate from survivability, recent
+incoming damage, visible enemy pressure, and separation from the player.
+The retail aggression result remains authoritative until the coop overlay is
+enabled.
+=============
+*/
+float BotAI_CoopDangerScore(const bot_client_state_t *state)
+{
+	const int *inventory;
+	float score = 0.0f;
+	float health_score;
+	float armor_score;
+	float now;
+	float critical_health;
+	int health;
+	int armor;
+
+	if (state == NULL || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_danger_retreat") == 0.0f)
+	{
+		return 0.0f;
+	}
+	if (state->combat.current_enemy <= 0)
+	{
+		return 0.0f;
+	}
+
+	inventory = state->last_client_update.inventory;
+	if (inventory[BOT_BATTLE_USING_INVULNERABILITY] != 0)
+	{
+		return 0.0f;
+	}
+
+	health = inventory[BOT_BATTLE_INVENTORY_HEALTH];
+	if (health <= 0)
+	{
+		return 1.0f;
+	}
+	critical_health = LibVarGetValue("coopbot_danger_critical_health");
+	if (critical_health <= 0.0f)
+	{
+		critical_health = 25.0f;
+	}
+	if (health <= critical_health)
+	{
+		return 1.0f;
+	}
+
+	health_score = health < 70 ? (70.0f - (float)health) / 70.0f : 0.0f;
+	armor = inventory[BOT_BATTLE_INVENTORY_ARMORBODY] +
+		inventory[BOT_BATTLE_INVENTORY_ARMORCOMBAT] +
+		inventory[BOT_BATTLE_INVENTORY_ARMORJACKET];
+	armor_score = armor < 80 ? (80.0f - (float)armor) / 80.0f : 0.0f;
+	score += fminf(fmaxf(health_score, 0.0f), 1.0f) * 0.35f;
+	score += fminf(fmaxf(armor_score, 0.0f), 1.0f) * 0.15f;
+
+	now = AAS_Time();
+	if (state->combat.took_damage &&
+		now - state->combat.last_damage_time <= 2.0f)
+	{
+		float damage_score = (float)state->combat.last_damage_amount / 50.0f;
+		score += fminf(fmaxf(damage_score, 0.0f), 1.0f) * 0.20f;
+	}
+
+	if (aasworld.loaded && aasworld.entities != NULL)
+	{
+		vec3_t eye;
+		vec3_t viewangles;
+		int visible_entities[16];
+		int visible_count;
+		int enemy_count = 0;
+		int shooting_count = 0;
+
+		BotInterface_ClientEyePosition(state, eye);
+		VectorClear(viewangles);
+		visible_count = AAS_VisibleEntities(state->entity_number,
+			eye,
+			viewangles,
+			360.0f,
+			16,
+			visible_entities);
+		for (int index = 0; index < visible_count; ++index)
+		{
+			aas_entityinfo_t entity_info;
+
+			AAS_EntityInfo(visible_entities[index], &entity_info);
+			if (BotAI_EntityIsDead(&entity_info) ||
+				entity_info.number <= aasworld.maxClients ||
+				entity_info.number == state->entity_number)
+			{
+				continue;
+			}
+			enemy_count += 1;
+			if (BotAI_EntityIsShooting(&entity_info))
+			{
+				shooting_count += 1;
+			}
+		}
+
+		float enemy_pressure = (float)enemy_count / 4.0f;
+		score += fminf(enemy_pressure, 1.0f) * 0.25f;
+		score += fminf((float)shooting_count, 1.0f) * 0.10f;
+	}
+
+	if (aasworld.initialized && aasworld.entities != NULL)
+	{
+		aas_entityinfo_t enemy_info;
+		memset(&enemy_info, 0, sizeof(enemy_info));
+		AAS_EntityInfo(state->combat.current_enemy, &enemy_info);
+		if (!BotAI_EntityIsDead(&enemy_info))
+		{
+			vec3_t direction;
+			VectorSubtract(enemy_info.origin,
+				state->last_client_update.origin,
+				direction);
+			float distance = sqrtf(DotProduct(direction, direction));
+			if (distance < 256.0f)
+			{
+				score += (256.0f - distance) / 256.0f * 0.10f;
+			}
+			if (BotAI_EntityIsShooting(&enemy_info))
+			{
+				score += 0.10f;
+			}
+		}
+	}
+
+	if (aasworld.initialized && aasworld.entities != NULL)
+	{
+		vec3_t player_origin;
+		int player_entity = BotAI_CoopPlayerEntity(state, player_origin);
+		if (player_entity >= 0)
+		{
+			vec3_t direction;
+			float soft_leash = LibVarGetValue("coopbot_soft_leash");
+			float hard_leash = LibVarGetValue("coopbot_hard_leash");
+			VectorSubtract(state->last_client_update.origin,
+				player_origin,
+				direction);
+			float distance = sqrtf(DotProduct(direction, direction));
+			if (hard_leash <= soft_leash)
+			{
+				hard_leash = soft_leash + 1.0f;
+			}
+			if (distance > soft_leash)
+			{
+				score += fminf((distance - soft_leash) /
+					(hard_leash - soft_leash), 1.0f) * 0.15f;
+			}
+		}
+	}
+
+	return fminf(fmaxf(score, 0.0f), 1.0f);
+}
+
+/*
+=============
+BotAI_CoopDangerRequiresRetreat
+
+Applies the configured danger threshold and preserves the critical-health
+override as a hard safety boundary for the companion overlay.
+=============
+*/
+bool BotAI_CoopDangerRequiresRetreat(const bot_client_state_t *state)
+{
+	float threshold;
+
+	if (state == NULL || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_danger_retreat") == 0.0f)
+	{
+		return false;
+	}
+	threshold = LibVarGetValue("coopbot_danger_threshold");
+	if (threshold <= 0.0f)
+	{
+		threshold = 0.65f;
+	}
+	return BotAI_CoopDangerScore(state) >= threshold;
+}
+
+/*
+=============
+BotAI_WantsToRetreat
+
+Reconstructs retail sub_100228c0's flag, get-flag LTG, and strict aggression
+threshold gates.
+=============
+*/
+int BotAI_WantsToRetreat(const bot_client_state_t *state)
+{
+	if (state == NULL)
+	{
+		return qfalse;
+	}
+
+	if (BotAI_CarryingFlag(state) != 0)
+	{
+		return qtrue;
+	}
+	if (state->ltg_type == BOT_LTG_GET_FLAG)
+	{
+		return qtrue;
+	}
+	if (BotAI_CoopDangerRequiresRetreat(state))
+	{
+		return qtrue;
+	}
+
+	return BotAI_Aggression(state) < 50.0f;
+}
+
+/*
+=============
+BotAI_WantsToChase
+
+Reconstructs retail sub_10022930's strict aggression threshold without the
+additional flag and LTG special cases introduced by the Quake III successor.
+=============
+*/
+int BotAI_WantsToChase(const bot_client_state_t *state)
+{
+	if (state == NULL)
+	{
+		return qfalse;
+	}
+	if (BotAI_CoopDangerRequiresRetreat(state))
+	{
+		return qfalse;
+	}
+
+	return BotAI_Aggression(state) > 50.0f;
+}
+
+/*
+=============
+BotAI_CanAndWantsToRocketJump
+
+Reconstructs retail sub_10022990's ordered rocket, powerup, survivability,
+and weapon-jumping characteristic gates over the raw battle inventory.
+=============
+*/
+int BotAI_CanAndWantsToRocketJump(const bot_client_state_t *state)
+{
+	if (state == NULL)
+	{
+		return qfalse;
+	}
+
+	const int *inventory = state->last_client_update.inventory;
+	if (inventory[BOT_BATTLE_INVENTORY_ROCKETLAUNCHER] <= 0)
+	{
+		return qfalse;
+	}
+	if (inventory[BOT_BATTLE_INVENTORY_ROCKETS] < 3)
+	{
+		return qfalse;
+	}
+	if (inventory[BOT_BATTLE_USING_QUAD] != 0)
+	{
+		return qfalse;
+	}
+
+	if (inventory[BOT_BATTLE_USING_INVULNERABILITY] != 0)
+	{
+		return qtrue;
+	}
+
+	int health = inventory[BOT_BATTLE_INVENTORY_HEALTH];
+	if (health < 60)
+	{
+		return qfalse;
+	}
+	if (health < 90 &&
+		inventory[BOT_BATTLE_INVENTORY_ARMORBODY] < 40 &&
+		inventory[BOT_BATTLE_INVENTORY_ARMORCOMBAT] < 50 &&
+		inventory[BOT_BATTLE_INVENTORY_ARMORJACKET] < 60)
+	{
+		return qfalse;
+	}
+
+	float weapon_jumping = Characteristic_BFloat(state->character,
+		CHARACTERISTIC_WEAPONJUMPING,
+		0.0f,
+		1.0f);
+	return weapon_jumping >= 0.5f;
+}
 void BotAI_InitEnemyInfo(ai_dm_enemy_info_t *info)
 {
     if (info == NULL)
@@ -580,6 +1166,7 @@ static int BotAI_AcceptEnemy(bot_client_state_t *state,
 	ai_dm_enemy_info_t *enemy)
 {
 	float now = AAS_Time();
+	int previous_enemy = state != NULL ? state->combat.current_enemy : 0;
 	if (enemy != NULL)
 	{
 		enemy->valid = true;
@@ -611,6 +1198,19 @@ static int BotAI_AcceptEnemy(bot_client_state_t *state,
 			state->client_number,
 			BotState_ClientName(state->client_number),
 			entity_info->number, distance, field_of_view, health_decrease);
+		if (BotAI_CoopMode() && previous_enemy != entity_info->number)
+		{
+			BotLib_LogWriteTimeStamped(
+				"coopbot_decision client=%d decision=TARGET_SELECT target=%d "
+				"current_target=%d player_intent=%s confidence=%.2f reason=%s",
+				state->client_number,
+				entity_info->number,
+				previous_enemy,
+				BotAI_CoopPlayerIntentName(state->coop_player_intent),
+				state->coop_player_intent_confidence,
+				health_decrease ? "damaged" :
+				BotAI_EntityIsShooting(entity_info) ? "threat" : "scan");
+		}
 	}
 	return qtrue;
 }
@@ -762,6 +1362,16 @@ static bool BotAI_CoopTargetSwitchAllowed(const bot_client_state_t *state,
 				candidate->number,
 				current_utility,
 				candidate_utility,
+				switch_ratio);
+			BotLib_LogWriteTimeStamped(
+				"coopbot_decision client=%d decision=TARGET_YIELD target=%d "
+				"current_target=%d candidate_utility=%.5f "
+				"current_utility=%.5f ratio=%.2f reason=hysteresis_block",
+				state->client_number,
+				candidate->number,
+				state->combat.current_enemy,
+				candidate_utility,
+				current_utility,
 				switch_ratio);
 		}
 		return false;

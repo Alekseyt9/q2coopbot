@@ -7455,6 +7455,7 @@ static void test_coop_objective_wait_releases_after_player_arrival(void **state)
 
 	assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
 	assert_int_equal(bot->coop_control_phase, BOT_COOP_CONTROL_COMPLETE);
+	assert_true(bot->coop_control_route_confirmed);
 	assert_int_equal(bot->coop_control_entity, 50);
 	assert_int_equal(bot->coop_control_goal_area, 2);
 
@@ -7472,6 +7473,7 @@ static void test_coop_objective_wait_releases_after_player_arrival(void **state)
 	assert_int_equal(bot->coop_control_phase, BOT_COOP_CONTROL_NONE);
 	assert_int_equal(bot->coop_control_entity, 0);
 	assert_int_equal(bot->coop_control_goal_area, 0);
+	assert_false(bot->coop_control_route_confirmed);
 
 	context->api->BotShutdownClient(1);
 	context->api->BotShutdownLibrary();

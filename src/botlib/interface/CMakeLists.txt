@@ -14,6 +14,7 @@ add_library(botlib_interface STATIC
     bot_interface_elevator.c
     bot_interface_exports.c
     bot_interface_import.c
+    bot_interface_goal.c
     bot_interface_lifecycle.c
     bot_interface_runtime.c
     bot_interface_map.c
@@ -40,6 +41,7 @@ register_botlib_sources(
         bot_interface_elevator.c
         bot_interface_exports.c
         bot_interface_import.c
+        bot_interface_goal.c
         bot_interface_lifecycle.c
         bot_interface_runtime.c
         bot_interface_map.c

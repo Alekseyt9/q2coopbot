@@ -1105,6 +1105,14 @@ bool BotAI_ApplyCoopRolePositioning(bot_client_state_t *state,
 			BotAI_CoopRoleName(state->coop_role),
 			lateral_distance,
 			projection);
+		BotLib_LogWriteTimeStamped(
+			"coopbot_decision client=%d decision=ACTION_SELECT action=POSITION "
+			"target=%d role=%s player_intent=%s confidence=%.2f reason=role_position",
+			state->client_number,
+			state->combat.current_enemy,
+			BotAI_CoopRoleName(state->coop_role),
+			BotAI_CoopPlayerIntentName(state->coop_player_intent),
+			state->coop_player_intent_confidence);
 	}
 	return true;
 }
@@ -1187,6 +1195,14 @@ bool BotAI_ApplyCoopRescuePositioning(bot_client_state_t *state,
 			distance,
 			state->coop_player_health,
 			state->coop_player_max_health);
+		BotLib_LogWriteTimeStamped(
+			"coopbot_decision client=%d decision=ACTION_SELECT action=RESCUE "
+			"target=%d role=%s player_intent=%s confidence=%.2f reason=player_critical",
+			state->client_number,
+			player_entity,
+			BotAI_CoopRoleName(state->coop_role),
+			BotAI_CoopPlayerIntentName(state->coop_player_intent),
+			state->coop_player_intent_confidence);
 	}
 	return true;
 }

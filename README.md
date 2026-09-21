@@ -162,6 +162,9 @@ The profile enables:
 - `coopbot_roles 1` — enables temporary role modifiers and the bounded
   initiative budget; roles are logged as `coopbot_role` and currently cover
   `FOLLOWER`, `SUPPORT`, `ANCHOR`, `COVER`, `VANGUARD`, and `REGROUP`.
+  Significant role changes also emit `coopbot_decision` records with the
+  current AI node, player intent, initiative budget, target, confidence, and
+  the selected reason, so a role transition can be reconstructed after play.
   `COVER`/`SUPPORT` also make a bounded lateral step when the bot occupies the
   player's direct line to its current enemy; `coopbot_role_position_interval`
   and `coopbot_role_position_radius` limit that positioning overlay.
@@ -246,6 +249,11 @@ The profile enables:
   control graph is cached for the loaded map and reused by the blocker-driven
   Objective HTN, so activation does not depend on reparsing a changing entity
   snapshot every frame.
+  `coopbot_map_region` records a coarse room/sector segmentation derived from
+  AAS clusters, including area count and aggregate bounds; portal areas remain
+  boundary data rather than being assigned to both neighboring regions. The
+  report tool can derive the same region records from `coopbot_map_area` lines
+  when an older runtime logger does not emit the aggregate records directly.
 
 Log levels are cumulative: `0` disables CoopBot logs, `1` keeps lifecycle,
 error, and slow-AI messages, `2` adds input and botlib target/node events, and
@@ -277,18 +285,28 @@ report distinguishes a failed elevator/path traversal from idle follow. The
 `coopbot_elevator_boarded` and `coopbot_elevator_reacquired` records distinguish
 boarding/travel from returning to the player's level; the latter can be required
 with `--require-elevator-reacquired`.
+`--require-vertical-elevator-edge` additionally requires the map model to show
+different endpoint heights, which catches a missing or degenerate vertical
+route before a runtime two-client test.
 objective phases are also counted as `objective_regroup_approach`,
 `objective_regroup_wait_elevator`, `objective_regroup_travel_elevator`,
 `objective_regroup_retry`, and `objective_regroup_reacquire`. The
 map-control objective emits `objective_open_path_navigate_control`,
-`objective_open_path_wait_for_player`, `objective_open_path_complete`, and
+`objective_open_path_activate`, `objective_open_path_wait_for_player`,
+`objective_open_path_player_reacquired`, `objective_open_path_complete`, and
 `objective_open_path_return_to_path`, and `objective_open_path_retry` when the
-corresponding phases occur;
+corresponding phases occur. `ACTIVATE` means the bot physically reached the
+resolved control; `PLAYER_REACQUIRED` is the runtime confirmation used before
+the objective is released. `ROUTE_CONFIRMED` is advisory AAS evidence that a
+route from the bot's current area to the player's area exists after activation;
+an unknown or transient player area is not treated as a failure.
 `changelevel_gate_wait_for_player` and `changelevel_gate_release` record the
 cooperative transition gate, which prevents a bot from touching a
 changelevel-trigger volume while the player is still behind.
-`--require-open-path-complete` turns the completed control objective into a
-report gate. `--require-safe-area` requires at least one remembered no-enemy
+`--require-open-path-activation` requires reaching and activating the resolved
+control; `--require-open-path-route` requires the advisory AAS route probe;
+`--require-open-path-complete` additionally turns the completed
+control objective into a report gate. `--require-safe-area` requires at least one remembered no-enemy
 position. `--require-map-transition` requires at least one extracted
 changelevel record in the map model. The
 runtime activation check is separate: `--require-runtime-map-transition`
@@ -297,12 +315,24 @@ changelevel trigger actually fired during the run. The
 negative-path check is available as `--require-regroup-path-failure`; successful
 reacquisition emits `coopbot_regroup_complete` and can be required with
 `--require-regroup-complete`.
+The repeatable `--require-decision` gate accepts `role_select`, `target_select`,
+`target_yield`, or `action_select`, so a baseline can require evidence that a
+specific decision family occurred rather than treating map startup as a
+successful companion run.
+Each `episode_start` summary also retains its configured seed. After collecting
+per-run reports, `tools/coopbot_baseline.py --min-runs 20 report-*.json`
+checks that every report contains an episode seed and produces a machine-readable
+aggregate; it deliberately fails until the requested number of real runs exists.
 
 When `--botlib-log` is supplied, `botlib_log.map_model` also includes the
 concrete elevator edges, their source/destination AAS areas and bounds, BSP
 control records, extracted map transitions, resolved control links, and
-unresolved targets. This makes a map-level diagnosis inspectable without
-guessing from bot movement alone.
+unresolved targets, plus coarse AAS-cluster regions and `region_connectors`
+that identify elevator endpoint areas, clusters, and vertical displacement.
+An AAS cluster is not assumed to be an individual floor: the endpoint heights
+are retained because a real elevator can connect two levels inside one cluster.
+This makes a map-level diagnosis inspectable without guessing from bot
+movement alone.
 
 For a useful test sample, start one bot on a known map, play until it gets
 stuck or fails to fight, then save both logs together with the map name and

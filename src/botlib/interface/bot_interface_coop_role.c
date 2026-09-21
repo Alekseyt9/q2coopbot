@@ -34,6 +34,43 @@ const char *BotAI_CoopRoleName(bot_coop_role_t role)
 }
 
 /*
+=============
+BotAI_CoopNodeName
+
+Keep decision records readable without exposing the internal node enum as the
+only explanation of a cooperative role transition.
+=============
+*/
+static const char *BotAI_CoopNodeName(bot_ai_node_t node)
+{
+	switch (node)
+	{
+		case BOT_AI_NODE_SEEK_LTG:
+			return "seek_ltg";
+		case BOT_AI_NODE_STAND:
+			return "stand";
+		case BOT_AI_NODE_ACTIVATE_ENTITY:
+			return "activate_entity";
+		case BOT_AI_NODE_SEEK_NBG:
+			return "seek_nbg";
+		case BOT_AI_NODE_BATTLE_FIGHT:
+			return "battle_fight";
+		case BOT_AI_NODE_BATTLE_CHASE:
+			return "battle_chase";
+		case BOT_AI_NODE_BATTLE_RETREAT:
+			return "battle_retreat";
+		case BOT_AI_NODE_BATTLE_NBG:
+			return "battle_nbg";
+		case BOT_AI_NODE_OBSERVER:
+			return "observer";
+		case BOT_AI_NODE_INTERMISSION:
+			return "intermission";
+		default:
+			return "unknown";
+	}
+}
+
+/*
 ===============
 BotAI_UpdateCoopJointRetreat
 
@@ -233,6 +270,7 @@ void BotAI_UpdateCoopRole(bot_client_state_t *state)
 	float vertical;
 	float hard_leash;
 	vec3_t direction;
+	const char *decision_reason = "fallback_follow";
 	int player_entity;
 	int player_area;
 	int bot_area;
@@ -279,18 +317,21 @@ void BotAI_UpdateCoopRole(bot_client_state_t *state)
 		role = BOT_COOP_ROLE_REGROUP;
 		budget = 0.0f;
 		confidence = 1.0f;
+		decision_reason = "hard_leash";
 	}
 	else if (BotAI_CoopPlayerNeedsRescue(state))
 	{
 		role = BOT_COOP_ROLE_RESCUER;
 		budget = 0.85f;
 		confidence = 0.90f;
+		decision_reason = "player_critical";
 	}
 	else if (state->coop_joint_retreat_active)
 	{
 		role = BOT_COOP_ROLE_COVER;
 		budget = 0.75f;
 		confidence = 0.90f;
+		decision_reason = "joint_retreat";
 	}
 	else if (BotAI_CoopIntentIsConfident(state,
 		BOT_COOP_INTENT_RETREAT))
@@ -298,6 +339,7 @@ void BotAI_UpdateCoopRole(bot_client_state_t *state)
 		role = BOT_COOP_ROLE_COVER;
 		budget = 0.75f;
 		confidence = state->coop_player_intent_confidence;
+		decision_reason = "player_retreat";
 	}
 	else if (BotAI_CoopIntentIsConfident(state,
 		BOT_COOP_INTENT_ENGAGE_TARGET))
@@ -305,6 +347,7 @@ void BotAI_UpdateCoopRole(bot_client_state_t *state)
 		role = BOT_COOP_ROLE_SUPPORT;
 		budget = 0.35f;
 		confidence = state->coop_player_intent_confidence;
+		decision_reason = "player_engage";
 	}
 	else if (BotAI_CoopIntentIsConfident(state,
 		BOT_COOP_INTENT_ADVANCE) ||
@@ -316,6 +359,8 @@ void BotAI_UpdateCoopRole(bot_client_state_t *state)
 			? 0.20f
 			: 0.15f;
 		confidence = state->coop_player_intent_confidence;
+		decision_reason = state->coop_player_intent == BOT_COOP_INTENT_ADVANCE
+			? "player_advance" : "player_explore";
 	}
 	else if (BotAI_CoopIntentIsConfident(state,
 		BOT_COOP_INTENT_HOLD))
@@ -323,18 +368,21 @@ void BotAI_UpdateCoopRole(bot_client_state_t *state)
 		role = BOT_COOP_ROLE_ANCHOR;
 		budget = 0.45f;
 		confidence = state->coop_player_intent_confidence;
+		decision_reason = "player_hold";
 	}
 	else if (state->coop_player_intent == BOT_COOP_INTENT_SEARCH)
 	{
 		role = BOT_COOP_ROLE_SUPPORT;
 		budget = 0.25f;
 		confidence = state->coop_player_intent_confidence;
+		decision_reason = "player_search";
 	}
 	else
 	{
 		role = BOT_COOP_ROLE_FOLLOWER;
 		budget = 0.10f;
 		confidence = state->coop_player_intent_confidence;
+		decision_reason = "fallback_follow";
 	}
 
 	/* Adapt only the soft role choice; regroup, rescue and other safety gates
@@ -410,6 +458,19 @@ void BotAI_UpdateCoopRole(bot_client_state_t *state)
 			budget,
 			distance,
 			BotAI_CoopPlayerIntentName(state->coop_player_intent));
+		BotLib_LogWriteTimeStamped(
+			"coopbot_decision client=%d decision=ROLE_SELECT node=%s "
+			"role=%s player_intent=%s initiative_budget=%.2f "
+			"current_target=%d confidence=%.2f distance=%.1f reason=%s",
+			state->client_number,
+			BotAI_CoopNodeName(state->ai_node),
+			BotAI_CoopRoleName(role),
+			BotAI_CoopPlayerIntentName(state->coop_player_intent),
+			budget,
+			state->combat.current_enemy,
+			confidence,
+			distance,
+			decision_reason);
 		if (role == BOT_COOP_ROLE_REGROUP)
 		{
 			BotLib_LogWriteTimeStamped(
@@ -424,4 +485,3 @@ void BotAI_UpdateCoopRole(bot_client_state_t *state)
 		}
 	}
 }
-
