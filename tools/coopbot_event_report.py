@@ -234,6 +234,24 @@ def read_botlib_map_model(stream: TextIO) -> dict | None:
         if geometry is not None:
             for field in ("origin", "model_origin", "mins", "maxs"):
                 control[field] = geometry[field]
+    if not map_transitions:
+        # Some Quake II BSP entity lumps omit the target's `map` epair while
+        # retaining the full trigger -> target_changelevel graph. Treat that
+        # graph as a static transition record instead of reporting a false
+        # missing-transition failure.
+        for link in control_links:
+            if link.get("destination") not in {
+                "target_changelevel",
+                "trigger_changelevel",
+            }:
+                continue
+            map_transitions.append({
+                "class": link.get("destination", ""),
+                "map": "",
+                "message": "",
+                "target": link.get("target", ""),
+                "source": "control_link",
+            })
     model["area_records"] = area_records
     model["edge_records"] = edge_records
     model["elevator_edge_records"] = len(elevator_edges)
@@ -446,6 +464,11 @@ def main() -> int:
         help="fail unless botlib logged a regroup frame using TRAVEL_ELEVATOR",
     )
     parser.add_argument(
+        "--require-elevator-reacquired",
+        action="store_true",
+        help="fail unless botlib logged successful elevator reacquisition",
+    )
+    parser.add_argument(
         "--require-regroup-path-failure",
         action="store_true",
         help="fail unless botlib logged a failed regroup/path traversal",
@@ -527,6 +550,14 @@ def main() -> int:
         )
 
     if (
+        args.require_elevator_reacquired
+        and botlib_events.get("elevator_reacquired", 0) < 1
+    ):
+        validation_errors.append(
+            "no successful elevator reacquisition was recorded by botlib"
+        )
+
+    if (
         args.require_regroup_path_failure
         and botlib_events.get("regroup_path_failure", 0) < 1
     ):
@@ -575,6 +606,7 @@ def main() -> int:
     if (
         args.require_elevator_edge
         or args.require_elevator_regroup
+        or args.require_elevator_reacquired
         or args.require_regroup_path_failure
         or args.require_regroup_complete
         or args.require_player_area_transition

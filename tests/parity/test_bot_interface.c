@@ -6355,13 +6355,21 @@ static void test_coop_hard_leash_uses_elevator_regroup(void **state)
 
 		fixture.reachability[1].traveltype = TRAVEL_ELEVATOR;
 		fixture.reachability[1].facenum = mover_entry.modelnum;
+		/* Keep the two AAS samples on separate vertical floors.  The player
+		 * remains on the upper floor while the bot must board independently. */
+		VectorSet(fixture.areas[1].mins, -64.0f, -64.0f, 0.0f);
+		VectorSet(fixture.areas[1].maxs, 64.0f, 64.0f, 64.0f);
+		VectorSet(fixture.areas[2].mins, -64.0f, -64.0f, 128.0f);
+		VectorSet(fixture.areas[2].maxs, 192.0f, 64.0f, 192.0f);
+		VectorSet(fixture.reachability[1].start, 0.0f, 0.0f, 32.0f);
+		VectorSet(fixture.reachability[1].end, 0.0f, 0.0f, 160.0f);
 		AAS_InitTravelFlagFromType();
 		assert_int_equal(AAS_PrepareReachability(), BLERR_NOERROR);
 
 		bot_updateentity_t mover_update;
 		memset(&mover_update, 0, sizeof(mover_update));
-		VectorSet(mover_update.origin, 64.0f, 0.0f, 16.0f);
-		VectorSet(mover_update.old_origin, 64.0f, 0.0f, 16.0f);
+		VectorSet(mover_update.origin, 64.0f, 0.0f, 64.0f);
+		VectorSet(mover_update.old_origin, 64.0f, 0.0f, 64.0f);
 		VectorSet(mover_update.mins, -32.0f, -32.0f, -16.0f);
 		VectorSet(mover_update.maxs, 32.0f, 32.0f, 16.0f);
 		mover_update.solid = SOLID_BSP;
@@ -6389,8 +6397,8 @@ static void test_coop_hard_leash_uses_elevator_regroup(void **state)
 
 		bot_updateentity_t player_entity;
 		memset(&player_entity, 0, sizeof(player_entity));
-		VectorSet(player_entity.origin, 128.0f, 0.0f, 32.0f);
-		VectorSet(player_entity.old_origin, 128.0f, 0.0f, 32.0f);
+		VectorSet(player_entity.origin, 0.0f, 0.0f, 160.0f);
+		VectorSet(player_entity.old_origin, 0.0f, 0.0f, 160.0f);
 		VectorSet(player_entity.mins, -16.0f, -16.0f, -24.0f);
 		VectorSet(player_entity.maxs, 16.0f, 16.0f, 32.0f);
 		player_entity.solid = SOLID_BBOX;
@@ -6421,10 +6429,30 @@ static void test_coop_hard_leash_uses_elevator_regroup(void **state)
 			BOT_COOP_OBJECTIVE_WAIT_ELEVATOR);
 		assert_int_equal(bot->coop_objective_goal_area, 2);
 
-		VectorSet(update.origin, 128.0f, 0.0f, 32.0f);
+		/* The player does not move again.  Once the platform reaches the
+		 * lower floor, the bot must leave WAIT_ELEVATOR and continue its own
+		 * route toward the upper floor. */
+		VectorSet(mover_update.origin, 64.0f, 0.0f, -128.0f);
+		VectorCopy(mover_update.origin, mover_update.old_origin);
+		assert_int_equal(context->api->BotUpdateEntity(3, &mover_update),
+			BLERR_NOERROR);
 		assert_int_equal(context->api->BotUpdateClient(1, &update),
 			BLERR_NOERROR);
 		assert_int_equal(context->api->BotStartFrame(0.2f), BLERR_NOERROR);
+		assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
+			BLERR_NOERROR);
+		assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);
+		assert_true(bot->coop_player_goal_valid);
+		assert_int_equal(bot->coop_objective_phase,
+			BOT_COOP_OBJECTIVE_TRAVEL_ELEVATOR);
+		assert_true((bot->last_move_result.flags & MOVERESULT_WAITING) == 0);
+
+		/* Simulate the engine carrying the bot to the target level.  The
+		 * player remains at the same upper-floor origin throughout. */
+		VectorSet(update.origin, 0.0f, 0.0f, 160.0f);
+		assert_int_equal(context->api->BotUpdateClient(1, &update),
+			BLERR_NOERROR);
+		assert_int_equal(context->api->BotStartFrame(0.3f), BLERR_NOERROR);
 		assert_int_equal(context->api->BotUpdateEntity(1, &player_entity),
 			BLERR_NOERROR);
 		assert_int_equal(context->api->BotAI(1, 0.05f), BLERR_NOERROR);

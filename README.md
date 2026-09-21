@@ -274,6 +274,9 @@ travel type is `TRAVEL_ELEVATOR` and evidence that both participants changed
 AAS areas. A failed regroup emits
 `coopbot_elevator_failed` plus `coopbot_path_failure phase=regroup`, so the
 report distinguishes a failed elevator/path traversal from idle follow. The
+`coopbot_elevator_boarded` and `coopbot_elevator_reacquired` records distinguish
+boarding/travel from returning to the player's level; the latter can be required
+with `--require-elevator-reacquired`.
 objective phases are also counted as `objective_regroup_approach`,
 `objective_regroup_wait_elevator`, `objective_regroup_travel_elevator`,
 `objective_regroup_retry`, and `objective_regroup_reacquire`. The

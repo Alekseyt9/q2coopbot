@@ -558,6 +558,13 @@ void BotLib_BotStartFrame(float time)
 	{
 		//set the dmflags
 		lib->funcs.BotLibVarSet("dmflags", dmflags->string);
+		/* coopbot_map_model may be enabled by a config after the game DLL
+		 * has been initialised; keep the diagnostic libvar in sync. */
+		cvar_t *map_model = gi.cvar("coopbot_map_model", "0", 0);
+		if (map_model != NULL)
+		{
+			lib->funcs.BotLibVarSet("coopbot_map_model", map_model->string);
+		}
 		//start the server frame
 		lib->funcs.BotStartFrame(time);
 	} //end for

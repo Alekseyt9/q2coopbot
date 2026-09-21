@@ -12067,7 +12067,9 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 	bot_moveresult_t result;
 	bool elevator_result;
 	bool elevator_travel_timeout_hit;
+	bool was_elevator_waiting;
 	bool needs_regroup;
+	bot_coop_objective_phase_t previous_phase;
 	int logged_traveltype;
 	int status;
 
@@ -12111,10 +12113,21 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 				vertical_separation >= 64.0f) ||
 			(current_player_area <= 0 && known_player_area > 0 &&
 				vertical_separation >= 64.0f));
+	previous_phase = state->coop_objective_phase;
 	if (!needs_regroup)
 	{
 		if (state->coop_player_goal_valid)
 		{
+			if ((previous_phase == BOT_COOP_OBJECTIVE_WAIT_ELEVATOR ||
+				previous_phase == BOT_COOP_OBJECTIVE_TRAVEL_ELEVATOR) &&
+				LibVarGetValue("coopbot_log") >= 1.0f)
+			{
+				BotLib_LogWriteTimeStamped(
+					"coopbot_elevator_reacquired client=%d player=%d "
+					"phase=ARRIVED bot_area=%d player_area=%d distance=%.1f",
+					state->client_number, player_entity, bot_area,
+					current_player_area, distance);
+			}
 			BotAI_CoopSetObjectivePhase(state,
 				BOT_COOP_OBJECTIVE_REACQUIRE,
 				player_entity,
@@ -12189,6 +12202,8 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 		&goal,
 		BotAI_LongTermGoalTravelFlags(state));
 	elevator_result = BotAI_CoopResultUsesElevator(state, &result);
+	was_elevator_waiting = state->coop_objective_phase ==
+		BOT_COOP_OBJECTIVE_WAIT_ELEVATOR;
 	logged_traveltype = elevator_result ? TRAVEL_ELEVATOR : result.traveltype;
 	elevator_wait_timeout = LibVarGetValue("coopbot_elevator_wait_timeout");
 	if (elevator_wait_timeout <= 0.0f)
@@ -12240,6 +12255,14 @@ static bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 	{
 		if (elevator_result && !result.failure && !result.blocked)
 		{
+			if (was_elevator_waiting &&
+				LibVarGetValue("coopbot_log") >= 1.0f)
+			{
+				BotLib_LogWriteTimeStamped(
+					"coopbot_elevator_boarded client=%d player=%d "
+					"phase=TRAVEL goal_area=%d",
+					state->client_number, player_entity, player_area);
+			}
 			BotAI_CoopSetObjectivePhase(state,
 				BOT_COOP_OBJECTIVE_TRAVEL_ELEVATOR,
 				player_entity,
