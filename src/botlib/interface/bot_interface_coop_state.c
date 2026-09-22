@@ -486,6 +486,17 @@ void BotAI_UpdateCoopPlayerIntent(bot_client_state_t *state)
 		state->coop_player_focus_entity = player_focus_entity;
 		state->coop_player_focus_confidence = 0.85f;
 		state->coop_player_focus_time = AAS_Time();
+		if (LibVarGetValue("coopbot_log") >= 2.0f)
+		{
+			BotLib_LogWriteTimeStamped(
+				"coopbot_player_focus client=%d player=%d target=%d "
+				"distance=%.1f confidence=%.2f",
+				state->client_number,
+				player_entity,
+				player_focus_entity,
+				player_focus_distance,
+				state->coop_player_focus_confidence);
+		}
 	}
 	else if (state->coop_player_focus_entity > 0)
 	{

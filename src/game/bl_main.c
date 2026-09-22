@@ -312,6 +312,20 @@ qboolean BotStarted(edict_t *bot)
 		bot->inuse = false;
 		//the Quake2 server calls this function for real clients
 		ClientBegin(bot);
+		if (botglobals.botstates[DF_ENTCLIENT(bot)].coop_persistent_valid)
+		{
+			bot_state_t *state = &botglobals.botstates[DF_ENTCLIENT(bot)];
+			bot->client->pers = state->coop_persistent;
+			bot->client->pers.health = state->coop_health;
+			bot->client->pers.max_health = state->coop_max_health;
+			bot->health = state->coop_health;
+			bot->max_health = state->coop_max_health;
+			bot->client->ammo_index = state->coop_ammo_index;
+			bot->client->newweapon = bot->client->pers.weapon;
+			if (bot->client->pers.weapon != NULL)
+				bot->client->ps.gunindex = gi.modelindex(
+					bot->client->pers.weapon->view_model);
+		}
 		//
 		bot->flags |= FL_BOT;
 		//the bot has started

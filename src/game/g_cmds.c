@@ -5,6 +5,7 @@
 #include "bl_cmd.h"
 #include "bl_main.h"
 #include "bl_redirgi.h"
+#include "coopbot_diag.h"
 #endif //BOT
 
 #ifdef OBSERVER
@@ -1360,6 +1361,96 @@ void ClientCommand (edict_t *ent)
 		Cmd_Kill_f (ent);
 	else if (Q_stricmp (cmd, "putaway") == 0)
 		Cmd_PutAway_f (ent);
+#ifdef BOT
+	else if (Q_stricmp(cmd, "coopbot_test_changelevel") == 0)
+	{
+		char map[MAX_QPATH];
+		const char *requested = gi.argv(1);
+		if (coopbot_test_mode == NULL || coopbot_test_mode->value == 0.0f)
+		{
+			gi.dprintf("coopbot_test_changelevel ignored: coopbot_test_mode=0\n");
+			return;
+		}
+
+		if (requested == NULL || requested[0] == '\0' ||
+			(Q_stricmp(requested, "base1") != 0 &&
+			 Q_stricmp(requested, "base2") != 0))
+		{
+			gi.cprintf(ent, PRINT_HIGH,
+				"coopbot_test_changelevel accepts base1 or base2 only.\n");
+			return;
+		}
+		strncpy(map, requested, sizeof(map) - 1);
+		map[sizeof(map) - 1] = '\0';
+		{
+			edict_t *target = CreateTargetChangeLevel(map);
+			gi.dprintf("coopbot_test_changelevel accepted: %s\n", map);
+			use_target_changelevel(target, ent, ent);
+		}
+	}
+	else if (Q_stricmp(cmd, "coopbot_test_state") == 0)
+	{
+		int i;
+		int health;
+		int armor;
+		int ammo;
+		gitem_t *armor_item;
+		gitem_t *ammo_item;
+		gitem_t *weapon_item;
+
+		if (coopbot_test_mode == NULL || coopbot_test_mode->value == 0.0f)
+		{
+			gi.dprintf("coopbot_test_state ignored: coopbot_test_mode=0\n");
+			return;
+		}
+		health = atoi(gi.argv(1));
+		armor = atoi(gi.argv(2));
+		ammo = atoi(gi.argv(3));
+		if (health <= 0 || armor < 0 || ammo < 0)
+		{
+			gi.cprintf(ent, PRINT_HIGH,
+				"coopbot_test_state accepts positive health and non-negative armor/ammo.\n");
+			return;
+		}
+		armor_item = FindItem("Body Armor");
+		ammo_item = FindItem("Bullets");
+		weapon_item = FindItem("Machinegun");
+		for (i = 0; i < maxclients->value; ++i)
+		{
+			edict_t *bot = g_edicts + i + 1;
+			if (!bot->inuse || bot->client == NULL ||
+				(bot->flags & FL_BOT) == 0)
+				continue;
+			bot->health = health;
+			bot->max_health = 100;
+			bot->flags |= FL_GODMODE;
+			if (armor_item != NULL)
+				bot->client->pers.inventory[ITEM_INDEX(armor_item)] = armor;
+			bot->client->ps.stats[STAT_ARMOR] = armor;
+			if (ammo_item != NULL)
+			{
+				bot->client->ammo_index = ITEM_INDEX(ammo_item);
+				bot->client->pers.inventory[bot->client->ammo_index] = ammo;
+			}
+			if (weapon_item != NULL)
+			{
+				bot->client->pers.inventory[ITEM_INDEX(weapon_item)] = 1;
+				bot->client->pers.weapon = weapon_item;
+				bot->client->newweapon = weapon_item;
+				bot->client->ps.gunindex = gi.modelindex(weapon_item->view_model);
+			}
+			if (botglobals.botstates != NULL)
+			{
+				botglobals.botstates[i].coop_persistent = bot->client->pers;
+				botglobals.botstates[i].coop_health = bot->health;
+				botglobals.botstates[i].coop_max_health = bot->max_health;
+				botglobals.botstates[i].coop_ammo_index = bot->client->ammo_index;
+				botglobals.botstates[i].coop_persistent_valid = true;
+			}
+		}
+		CoopBotDiag_RecordBotStateMarker("udp_test_state");
+	}
+#endif
 	else if (Q_stricmp (cmd, "wave") == 0)
 		Cmd_Wave_f (ent);
 	else if (Q_stricmp(cmd, "playerlist") == 0)

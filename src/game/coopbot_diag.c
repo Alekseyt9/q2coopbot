@@ -390,6 +390,9 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 	int visible_enemies;
 	int target_entity;
 	int player_is_human;
+	int bot_armor = 0;
+	int bot_ammo_index = 0;
+	int bot_ammo = 0;
 	const char *state = "idle";
 	int client;
 
@@ -431,6 +434,13 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 	}
 
 	client = CoopBotDiag_ClientNumber(bot);
+	if (bot->client != NULL)
+	{
+		bot_armor = bot->client->ps.stats[STAT_ARMOR];
+		bot_ammo_index = bot->client->ammo_index;
+		if (bot_ammo_index >= 0 && bot_ammo_index < MAX_ITEMS)
+			bot_ammo = bot->client->pers.inventory[bot_ammo_index];
+	}
 	visible_enemies = CoopBotDiag_VisibleMonsters(bot);
 	if (client >= 0 && client < COOPBOT_DIAG_MAX_CLIENTS)
 	{
@@ -511,8 +521,10 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 		"player_origin=(%.1f %.1f %.1f) bot_origin=(%.1f %.1f %.1f) "
 		"distance_to_player=%.1f target=%d target_class=\"%s\" "
 		"target_health=%d target_visible=%d visible_enemies=%d "
-		"input_flags=0x%x speed=%.1f weaponstate=%d gunframe=%d "
-		"gunindex=%d weapon=\"%s\" newweapon=\"%s\"",
+		"input_flags=0x%x speed=%.1f bot_health=%d bot_max_health=%d "
+		"bot_armor=%d bot_ammo_index=%d bot_ammo=%d "
+		"weaponstate=%d gunframe=%d gunindex=%d weapon=\"%s\" "
+		"newweapon=\"%s\"",
 		client, CoopBotDiag_Name(bot), state,
 		CoopBotDiag_EntityNumber(player),
 		player_is_human,
@@ -528,6 +540,7 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 		CoopBotDiag_EntityNumber(target), CoopBotDiag_Classname(target),
 		target != NULL ? target->health : 0, target_visible,
 		visible_enemies, input->actionflags, input->speed,
+		bot->health, bot->max_health, bot_armor, bot_ammo_index, bot_ammo,
 		bot->client->weaponstate, bot->client->ps.gunframe,
 		bot->client->ps.gunindex,
 		bot->client->pers.weapon != NULL &&
@@ -536,6 +549,36 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 		bot->client->newweapon != NULL &&
 			bot->client->newweapon->pickup_name != NULL
 			? bot->client->newweapon->pickup_name : "<none>");
+}
+
+void CoopBotDiag_RecordBotStateMarker(const char *reason)
+{
+	int client;
+
+	for (client = 0; client < game.maxclients; ++client)
+	{
+		edict_t *bot = &g_edicts[client + 1];
+		int ammo_index = 0;
+		int ammo = 0;
+		int armor = 0;
+
+		if (!bot->inuse || bot->client == NULL || (bot->flags & FL_BOT) == 0)
+			continue;
+		armor = bot->client->ps.stats[STAT_ARMOR];
+		ammo_index = bot->client->ammo_index;
+		if (ammo_index >= 0 && ammo_index < MAX_ITEMS)
+			ammo = bot->client->pers.inventory[ammo_index];
+		CoopBotDiag_Log(1,
+			"bot_state_marker reason=\"%s\" client=%d name=\"%s\" "
+			"bot_health=%d bot_max_health=%d bot_armor=%d "
+			"bot_ammo_index=%d bot_ammo=%d weapon=\"%s\"",
+			reason != NULL ? reason : "<unknown>", client,
+			CoopBotDiag_Name(bot), bot->health, bot->max_health, armor,
+			ammo_index, ammo,
+			bot->client->pers.weapon != NULL &&
+				bot->client->pers.weapon->pickup_name != NULL
+				? bot->client->pers.weapon->pickup_name : "<none>");
+	}
 }
 
 //===========================================================================

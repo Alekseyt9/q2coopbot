@@ -768,6 +768,9 @@ extern	cvar_t	*bob_pitch;
 extern	cvar_t	*bob_roll;
 
 extern	cvar_t	*sv_cheats;
+#ifdef BOT
+extern	cvar_t	*coopbot_test_mode;
+#endif
 extern	cvar_t	*maxclients;
 extern	cvar_t	*maxspectators;
 
@@ -791,6 +794,7 @@ extern	cvar_t	*randomrespawn;
 
 #ifdef BOT
 extern int paused;
+extern qboolean coopbot_preserve_persistent;
 #endif //BOT
 
 // this is for the count of monsters
@@ -1051,6 +1055,8 @@ edict_t	*PlayerTrail_LastSpot (void);
 //
 void respawn (edict_t *ent);
 void BeginIntermission (edict_t *targ);
+edict_t *CreateTargetChangeLevel(char *map);
+void use_target_changelevel(edict_t *self, edict_t *other, edict_t *activator);
 void PutClientInServer (edict_t *ent);
 void InitClientPersistant (gclient_t *client);
 void InitClientResp (gclient_t *client);

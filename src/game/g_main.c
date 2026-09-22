@@ -23,6 +23,7 @@ int	meansOfDeath;
 
 #ifdef BOT
 int paused;
+qboolean coopbot_preserve_persistent;
 #endif //BOT
 
 #ifdef AQ2
@@ -70,6 +71,9 @@ cvar_t	*bob_pitch;
 cvar_t	*bob_roll;
 
 cvar_t	*sv_cheats;
+#ifdef BOT
+cvar_t	*coopbot_test_mode;
+#endif
 
 cvar_t	*flood_msgs;
 cvar_t	*flood_persecond;

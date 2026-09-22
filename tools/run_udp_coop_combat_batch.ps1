@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('combat', 'follow', 'retreat', 'phase-retreat', 'rescue', 'cover')]
+    [ValidateSet('combat', 'follow', 'retreat', 'phase-retreat', 'rescue', 'cover', 'kill-steal', 'lost-los', 'transition')]
     [string]$Scenario = 'combat',
     [int]$FirstSeed = 532,
     [int]$Count = 20,
@@ -44,6 +44,8 @@ $phaseArgs = @()
 $harnessDuration = $MoveSeconds + 2
 $rescueMode = $false
 $roleMode = $false
+$killStealMode = $false
+$transitionMode = $false
 switch ($Scenario) {
     'combat' {
         $attack = $true
@@ -85,6 +87,32 @@ switch ($Scenario) {
         $harnessDuration = 18
         $roleMode = $true
     }
+    'kill-steal' {
+        $phaseArgs = @(
+            '--phase', '4:400:0:0:1:0',
+            '--phase', '8:0:0:0:1:0',
+            '--phase', '4:-200:100:25:1:0'
+        )
+        $harnessDuration = 18
+        $killStealMode = $true
+    }
+    'lost-los' {
+        $phaseArgs = @(
+            '--phase', '4:400:0:0:1:0',
+            '--phase', '4:0:0:180:1:0',
+            '--phase', '8:-400:200:0:0:0'
+        )
+        $harnessDuration = 18
+    }
+    'transition' {
+        $phaseArgs = @(
+            '--phase', '3:0:0:0:0:0',
+            '--phase', '3:400:0:0:0:0'
+        )
+        $harnessDuration = 16
+        $transitionMode = $true
+        $StartupDelayMs = 500
+    }
 }
 
 for ($offset = 0; $offset -lt $Count; $offset++) {
@@ -107,7 +135,6 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
         '+set', 'minimumplayers', '2',
         '+set', 'coopbot_log', '2',
         '+set', 'port', "$runPort",
-        '+set', 'logfile', '2',
         '+set', 'botlib', 'libgladiator_x64.dll',
         '+set', 'coopbot_seed', "$seed",
         '+set', 'coopbot_episode_id', $episode,
@@ -124,6 +151,21 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
             '+set', 'coopbot_roles', '1',
             '+set', 'coopbot_player_intent', '1',
             '+set', 'coopbot_joint_retreat', '1'
+        ) + $serverArgs
+    }
+    elseif ($killStealMode) {
+        # Controlled probe: make the yield threshold observable on base2;
+        # the game default remains 192 and is covered by the separate probe.
+        $serverArgs = @(
+            '+set', 'coopbot_player_intent', '1',
+            '+set', 'coopbot_shared_focus', '1',
+            '+set', 'coopbot_kill_steal_control', '1',
+            '+set', 'coopbot_kill_steal_radius', '64'
+        ) + $serverArgs
+    }
+    elseif ($transitionMode) {
+        $serverArgs = @(
+            '+set', 'coopbot_test_mode', '1'
         ) + $serverArgs
     }
 
@@ -147,6 +189,12 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
             '--require-human-marker'
         )
         $harnessArgs += @('--server-command', 'use blaster')
+        if ($transitionMode) {
+            $harnessArgs += @(
+                '--server-command-at', '4.9:coopbot_test_state 73 50 37',
+                '--server-command-at', '5:coopbot_test_changelevel base1'
+            )
+        }
         if ($rescueMode) {
             $harnessArgs += @('--server-command', 'give health 20')
         }
@@ -197,6 +245,18 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
     }
     if ($Scenario -eq 'cover') {
         $reportArgs += @('--require-role', 'COVER')
+    }
+    if ($Scenario -eq 'kill-steal') {
+        $reportArgs += '--require-kill-steal-yield'
+    }
+    if ($Scenario -eq 'lost-los') {
+        $reportArgs += '--require-target-lost'
+    }
+    if ($Scenario -eq 'transition') {
+        $reportArgs += @(
+            '--require-runtime-map-transition',
+            '--require-bot-state-persistence'
+        )
     }
     & python @reportArgs
     $reportExit = $LASTEXITCODE

@@ -587,6 +587,71 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
             "stuck": stuck_events,
             "map_transitions": map_transition_events,
         },
+        "bot_state_persistence": bot_state_persistence(records),
+    }
+
+
+def bot_state_persistence(records: Iterable[dict]) -> dict:
+    """Compare an explicit test marker with the first bot snapshot after transition."""
+    markers: dict[int, dict[str, object]] = {}
+    comparisons: list[dict[str, object]] = []
+    transition_seen = False
+
+    for record in records:
+        event = record.get("event")
+        fields = message_fields(record.get("message"))
+        if event == "bot_state_marker":
+            client = integer(fields.get("client"), -1)
+            if client >= 0:
+                markers[client] = {
+                    "client": client,
+                    "health": integer(fields.get("bot_health")),
+                    "max_health": integer(fields.get("bot_max_health")),
+                    "armor": integer(fields.get("bot_armor")),
+                    "ammo_index": integer(fields.get("bot_ammo_index")),
+                    "ammo": integer(fields.get("bot_ammo")),
+                    "weapon": fields.get("weapon", ""),
+                }
+        elif event == "map_transition":
+            transition_seen = True
+        elif event == "bot_snapshot" and transition_seen:
+            client = integer(fields.get("client"), -1)
+            marker = markers.get(client)
+            if marker is None or any(
+                comparison["client"] == client for comparison in comparisons
+            ):
+                continue
+            snapshot = {
+                "client": client,
+                "health": integer(fields.get("bot_health")),
+                "max_health": integer(fields.get("bot_max_health")),
+                "armor": integer(fields.get("bot_armor")),
+                "ammo_index": integer(fields.get("bot_ammo_index")),
+                "ammo": integer(fields.get("bot_ammo")),
+                "weapon": fields.get("weapon", ""),
+            }
+            fields_to_compare = (
+                "health", "max_health", "armor", "ammo_index", "ammo", "weapon"
+            )
+            matching = all(
+                marker[field] == snapshot[field] for field in fields_to_compare
+            )
+            comparisons.append({
+                "client": client,
+                "marker": marker,
+                "first_post_transition": snapshot,
+                "matching": matching,
+            })
+
+    return {
+        "marker_count": len(markers),
+        "comparisons": comparisons,
+        "matching_clients": sum(
+            1 for comparison in comparisons if comparison["matching"]
+        ),
+        "ok": bool(markers) and bool(comparisons) and all(
+            comparison["matching"] for comparison in comparisons
+        ),
     }
 
 
@@ -701,6 +766,16 @@ def main() -> int:
         help="fail unless botlib logged a player rescue position",
     )
     parser.add_argument(
+        "--require-kill-steal-yield",
+        action="store_true",
+        help="fail unless botlib logged yielding a player-focused target",
+    )
+    parser.add_argument(
+        "--require-target-lost",
+        action="store_true",
+        help="fail unless runtime telemetry recorded a lost target",
+    )
+    parser.add_argument(
         "--require-role",
         action="append",
         choices=("REGROUP", "RESCUER", "COVER", "SUPPORT", "FOLLOWER", "VANGUARD", "ANCHOR"),
@@ -740,6 +815,11 @@ def main() -> int:
         "--require-runtime-map-transition",
         action="store_true",
         help="fail unless runtime JSONL recorded a map transition",
+    )
+    parser.add_argument(
+        "--require-bot-state-persistence",
+        action="store_true",
+        help="fail unless marked bot health/armor/ammo/weapon match after transition",
     )
     parser.add_argument(
         "--require-safe-area",
@@ -875,6 +955,17 @@ def main() -> int:
             "no coopbot_rescue_position frame was recorded by botlib"
         )
 
+    if (
+        args.require_kill_steal_yield
+        and botlib_events.get("kill_steal_yield", 0) < 1
+    ):
+        validation_errors.append(
+            "no coopbot_kill_steal_yield frame was recorded by botlib"
+        )
+
+    if args.require_target_lost and result_object["telemetry"]["coop"]["target_lost"] < 1:
+        validation_errors.append("no target_lost frame was recorded")
+
     for role in args.require_role or []:
         if botlib_events.get(f"role_{role.lower()}", 0) < 1:
             validation_errors.append(
@@ -935,6 +1026,13 @@ def main() -> int:
     if args.require_runtime_map_transition and result_object["telemetry"]["coop"]["map_transitions"] < 1:
         validation_errors.append("no runtime map transition was recorded")
 
+    if args.require_bot_state_persistence:
+        persistence = result_object["telemetry"]["bot_state_persistence"]
+        if not persistence["ok"]:
+            validation_errors.append(
+                "marked bot health/armor/ammo/weapon did not persist across transition"
+            )
+
     if (
         args.require_elevator_edge
         or args.require_vertical_elevator_edge
@@ -944,6 +1042,8 @@ def main() -> int:
         or args.require_regroup_complete
         or args.require_regroup
         or args.require_rescue
+        or args.require_kill_steal_yield
+        or args.require_target_lost
         or args.require_role
         or args.require_player_area_transition
         or args.require_bot_area_transition
@@ -954,6 +1054,7 @@ def main() -> int:
         or args.require_decision
         or args.require_map_transition
         or args.require_runtime_map_transition
+        or args.require_bot_state_persistence
         or args.require_human_player
         or args.require_bot_shot
         or args.require_bot_monster_damage

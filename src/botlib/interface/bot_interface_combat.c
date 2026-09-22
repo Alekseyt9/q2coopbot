@@ -1295,7 +1295,22 @@ static bool BotAI_CoopYieldPlayerFocus(const bot_client_state_t *state,
 	{
 		radius = 192.0f;
 	}
-	return distance > radius;
+	if (distance > radius)
+	{
+		if (LibVarGetValue("coopbot_log") >= 2.0f)
+		{
+			BotLib_LogWriteTimeStamped(
+				"coopbot_kill_steal_yield client=%d candidate=%d "
+				"distance=%.1f radius=%.1f focus=%d",
+				state->client_number,
+				candidate->number,
+				distance,
+				radius,
+				state->coop_player_focus_entity);
+		}
+		return true;
+	}
+	return false;
 }
 
 /*

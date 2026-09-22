@@ -25,3 +25,6 @@ NUL.obj
 /artifacts/udp-cover-baseline
 /artifacts/udp-phase-retreat-baseline
 /artifacts/udp-rescue-baseline
+/artifacts/udp-kill-steal-baseline
+/artifacts/udp-lost-los-baseline
+/artifacts/udp-transition-baseline

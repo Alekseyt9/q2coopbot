@@ -9,6 +9,7 @@ void CoopBotDiag_BotAIStart(edict_t *bot);
 void CoopBotDiag_BotAIEnd(edict_t *bot, int status);
 void CoopBotDiag_RecordInput(edict_t *bot, const bot_input_t *input);
 void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input);
+void CoopBotDiag_RecordBotStateMarker(const char *reason);
 void CoopBotDiag_RecordPlayerContact(edict_t *first,
 	edict_t *second,
 	const trace_t *trace);

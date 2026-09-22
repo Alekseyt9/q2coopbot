@@ -193,6 +193,7 @@ edict_t *BotCreate(char *userinfo, bot_library_t *lib)
 {
 	edict_t *ent;
 	bot_state_t *bs;
+	qboolean connected;
 
 	//spawn a client entity
 	ent = G_SpawnClient();
@@ -205,7 +206,10 @@ edict_t *BotCreate(char *userinfo, bot_library_t *lib)
 	//NOTE: set entity inuse flag to false because the bot isn't spawned
 	//			from a savegame
 	ent->inuse = false;
-	if (!ClientConnect(ent, userinfo))
+	coopbot_preserve_persistent = true;
+	connected = ClientConnect(ent, userinfo);
+	coopbot_preserve_persistent = false;
+	if (!connected)
 	{
 		//free the client edict
 		G_FreeClientEdict(ent);
@@ -336,6 +340,12 @@ void BotSpawn(void)
 			cl_ent->inuse = true;
 			//set the bot flag
 			cl_ent->flags |= FL_BOT;
+			if (botglobals.botstates[i].coop_persistent_valid)
+			{
+				cl_ent->client->pers = botglobals.botstates[i].coop_persistent;
+				cl_ent->client->pers.health = botglobals.botstates[i].coop_health;
+				cl_ent->client->pers.max_health = botglobals.botstates[i].coop_max_health;
+			}
 			//set user info because Quake2 likes to remove it for fake clients
 			ClientUserinfoChanged(cl_ent, cl_ent->client->pers.userinfo);
 		} //end if

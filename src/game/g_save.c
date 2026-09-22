@@ -208,6 +208,10 @@ void InitGame (void)
 
 	// noset vars
 	dedicated = gi.cvar ("dedicated", "0", CVAR_NOSET);
+#ifdef BOT
+	/* Explicitly opt-in UDP transition test hook; inert in normal games. */
+	coopbot_test_mode = gi.cvar ("coopbot_test_mode", "0", 0);
+#endif
 
 	// latched vars
 	sv_cheats = gi.cvar ("cheats", "0", CVAR_SERVERINFO|CVAR_LATCH);

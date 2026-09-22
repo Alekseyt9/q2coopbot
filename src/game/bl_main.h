@@ -38,6 +38,11 @@ typedef struct bot_state_s
 	qboolean active;					//true if a bot is active for this client
 	qboolean started;					//true if the bot has started
 	bot_library_t *library;			//used library by the bot
+	qboolean coop_persistent_valid;
+	client_persistant_t coop_persistent;
+	int coop_health;
+	int coop_max_health;
+	int coop_ammo_index;
 } bot_state_t;
 
 //bot globals

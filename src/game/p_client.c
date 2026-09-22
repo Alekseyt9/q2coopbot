@@ -1245,7 +1245,25 @@ void SaveClientData (void)
 		game.clients[i].pers.max_health = ent->max_health;
 		game.clients[i].pers.savedFlags = (ent->flags & (FL_GODMODE|FL_NOTARGET|FL_POWER_ARMOR));
 		if (coop->value)
+		{
 			game.clients[i].pers.score = ent->client->resp.score;
+#ifdef BOT
+			/* Coop bots are recreated after a level change. Keep the
+			 * persistent inventory/weapon copy in sync before that respawn. */
+			if (ent->flags & FL_BOT)
+			{
+				game.clients[i].resp.coop_respawn = game.clients[i].pers;
+				if (botglobals.botstates != NULL)
+				{
+					botglobals.botstates[i].coop_persistent = game.clients[i].pers;
+					botglobals.botstates[i].coop_health = ent->health;
+					botglobals.botstates[i].coop_max_health = ent->max_health;
+					botglobals.botstates[i].coop_ammo_index = ent->client->ammo_index;
+					botglobals.botstates[i].coop_persistent_valid = true;
+				}
+			}
+#endif //BOT
+		}
 	}
 }
 
@@ -2297,7 +2315,10 @@ qboolean ClientConnect (edict_t *ent, char *userinfo)
 		ent->client->resp.ctf_team = -1;
 #endif //ZOID
 		InitClientResp (ent->client);
-		if (!game.autosaved || !ent->client->pers.weapon)
+		if ((!game.autosaved || !ent->client->pers.weapon) &&
+			!(coopbot_preserve_persistent &&
+				ent->client->pers.health > 0 &&
+				ent->client->pers.weapon != NULL))
 			InitClientPersistant (ent->client);
 	}
 

@@ -172,16 +172,20 @@ python .\tools\q2_client_handshake.py `
 | Co-op retreat baseline | `coop-retreat-660..679` | 20/20 UDP+human gate; 227 bot-owned shots; max distance 759.7; 0 stuck/regroup |
 | Co-op phase retreat baseline | `coop-phase-retreat-740..759` | 20/20 UDP+human gate; 12/20 per-episode botlib logs contain `coopbot_regroup`; 295 bot-owned shots; 20 bot damage events / 842 damage; max distance 761.5 |
 | Co-op cover baseline | `coop-cover-920..939` | 20/20 UDP+human gate; 20/20 strict `role=COVER`; 756 player-intent events; 104 cover-role events; max distance 678.1 |
-| Co-op rescue probe | `coop-rescue-830` | `give health 20` дошла до живого игрока (`player_health=20`); rescue role/position не зафиксированы до смерти бота |
+| Co-op rescue baseline | `coop-rescue-850..869` | 20/20 strict `rescue_position`; 97 rescue-position events; 48 `role=RESCUER`; 20/20 UDP+human gate; 12/20 map transitions требуют отдельного persistence-теста |
+| Co-op kill-steal default probe | `coop-kill-steal-980..986` | 7/7 UDP+human gate и player-focus telemetry; 0 `kill_steal_yield` при default radius 192 |
+| Co-op kill-steal controlled probe | `coop-kill-steal-990..1009` | 20/20 UDP+human gate; 6/20 эпизодов и 20 `kill_steal_yield` events при controlled radius 64; default acceptance не закрыт |
+| Co-op lost-LOS probe | `coop-lost-los-1015` + `1020..1039` | 21/21 UDP+human gate; 1/21 `target_lost`; 0 map transitions; acceptance не закрыт |
 
 Первые две строки — исторические transport/input прогоны; они были выполнены
-в deathmatch и не являются доказательством боевой кооперации. Две последние
-строки выполнены в правильном co-op режиме. `coop-combat-531` дополнительно
+в deathmatch и не являются доказательством боевой кооперации. Все строки с
+`Co-op` выполнены в правильном co-op режиме. `coop-combat-531` дополнительно
 доказывает bot-side запуск Blaster и попадание по живому monster entity.
 Acceptance baseline `N >= 20` частично подтверждён: cover закрыт отдельной
-строгой серией, phase-retreat подтверждает regroup в 12/20 seed. Rescue и
-kill-steal всё ещё не подтверждены; transport/input проверен без foreground
-окон.
+строгой серией, rescue закрыт в 20/20 seed, phase-retreat подтверждает
+regroup в 12/20 seed. Kill-steal, end-level persistence и полные
+cooperative-level статистические пороги всё ещё не подтверждены; transport/
+input проверен без foreground окон.
 
 Для записи projectile/shot/damage hooks в combat-команде нужен
 `+set coopbot_log 2`; при обычном `coopbot_log 1` базовые снапшоты остаются,
@@ -214,7 +218,11 @@ Start-Process pwsh.exe -WindowStyle Hidden -ArgumentList @(
 hold+attack через repeatable `--phase` usercmds; `-Scenario rescue` включает
 `coopbot_roles/rescue` и оставляет игрока под monster pressure, требуя
 `coopbot_rescue_position`; `-Scenario cover` включает cooperative roles и
-требует отдельный `role=COVER` в botlib-log. На каждый эпизод создаётся новый
+требует отдельный `role=COVER` в botlib-log; `-Scenario kill-steal` включает
+player intent/shared focus/kill-steal control и требует `kill_steal_yield` в
+botlib-log; batch-сценарий kill-steal намеренно задаёт controlled
+`coopbot_kill_steal_radius=64`, тогда как default `192` проверяется отдельной
+серией. На каждый эпизод создаётся новый
 co-op server с `minimumplayers 2`; повторно использовать тот же `episode_id`
 в общем JSONL не следует — для чистой статистики нужен новый диапазон seed.
 
@@ -241,9 +249,19 @@ python .\tools\coopbot_event_report.py `
   --require-bot-monster-damage
 ```
 
+Для kill-steal используется дополнительный botlib gate:
+
+```powershell
+python .\tools\coopbot_event_report.py `
+  'F:\src\quake2\q2coopbot-runtime-bot\coopbot_debug_events.jsonl' `
+  --episode-id coop-kill-steal-980 `
+  --botlib-log '.\artifacts\udp-kill-steal-baseline\coop-kill-steal-980-botlib.log' `
+  --require-human-player --require-kill-steal-yield
+```
+
 Поворот, strafe, прыжок, attack и повторяемая многофазная временная
 последовательность уже вынесены в CLI и batch-режим. Следующий уровень —
-map-aware waypoint/conditional timeline для гарантированного rescue,
+map-aware waypoint/conditional timeline для гарантированных LOS,
 kill-steal и end-level сценариев; для этого не требуется возвращаться к
 графическому окну.
 

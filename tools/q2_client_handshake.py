@@ -265,6 +265,20 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--server-command-delay",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
+        help="wait this long after begin before sending --server-command values",
+    )
+    parser.add_argument(
+        "--server-command-at",
+        action="append",
+        default=[],
+        metavar="SECONDS:COMMAND",
+        help="send one command at a relative time after begin; may be repeated",
+    )
+    parser.add_argument(
         "--move-forward",
         type=float,
         default=0.0,
@@ -310,6 +324,23 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
+    if args.server_command_delay < 0.0:
+        parser.error("--server-command-delay must be non-negative")
+    scheduled_commands: list[tuple[float, str]] = [
+        (args.server_command_delay, command) for command in args.server_command
+    ]
+    for specification in args.server_command_at:
+        separator = specification.find(":")
+        if separator <= 0 or separator == len(specification) - 1:
+            parser.error("--server-command-at must use SECONDS:COMMAND")
+        try:
+            command_time = float(specification[:separator])
+        except ValueError:
+            parser.error("--server-command-at seconds must be numeric")
+        if command_time < 0.0:
+            parser.error("--server-command-at seconds must be non-negative")
+        scheduled_commands.append((command_time, specification[separator + 1:]))
+    scheduled_commands.sort(key=lambda item: item[0])
 
     if args.port < 1 or args.port > 65535:
         parser.error("--port must be between 1 and 65535")
@@ -397,6 +428,7 @@ def main() -> int:
     new_sent = False
     begin_sent = False
     commands_sent = False
+    command_start_at: float | None = None
     move_packets = 0
     move_started: float | None = None
     next_move_at = 0.0
@@ -489,9 +521,18 @@ def main() -> int:
                 )
                 next_sequence += 1
                 begin_sent = True
+                command_start_at = time.monotonic()
 
-            if begin_sent and not commands_sent:
-                for command in args.server_command:
+            if (
+                begin_sent
+                and not commands_sent
+                and command_start_at is not None
+            ):
+                elapsed = time.monotonic() - command_start_at
+                due_count = 0
+                for command_time, command in scheduled_commands:
+                    if command_time > elapsed:
+                        break
                     _send_netchan_command(
                         sock,
                         address,
@@ -502,7 +543,10 @@ def main() -> int:
                         server_reliable,
                     )
                     next_sequence += 1
-                commands_sent = True
+                    due_count += 1
+                if due_count > 0:
+                    scheduled_commands = scheduled_commands[due_count:]
+                commands_sent = len(scheduled_commands) == 0
 
             if begin_sent and phases:
                 now = time.monotonic()

@@ -282,6 +282,8 @@ void use_target_changelevel (edict_t *self, edict_t *other, edict_t *activator)
 		game.serverflags &= ~(SFL_CROSS_TRIGGER_MASK);
 
 #ifdef BOT
+	/* Persist coop bot client data before the level transition wipes edicts. */
+	SaveClientData();
 	CoopBotDiag_RecordMapTransition(level.mapname, self->map);
 #endif
 
