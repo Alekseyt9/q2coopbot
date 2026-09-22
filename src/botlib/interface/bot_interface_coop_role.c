@@ -298,6 +298,11 @@ void BotAI_UpdateCoopRole(bot_client_state_t *state)
 		state->coop_role_confidence = 0.0f;
 		return;
 	}
+	/* Rescue is safety-critical and must not depend on the optional player
+	 * intent model being enabled.  The intent observer also refreshes this
+	 * telemetry, but roles are evaluated immediately afterwards and rescue
+	 * scenarios commonly run with coopbot_player_intent disabled. */
+	BotAI_UpdateCoopPlayerTelemetry(state, player_entity);
 
 	VectorSubtract(player_info.origin,
 		state->last_client_update.origin,

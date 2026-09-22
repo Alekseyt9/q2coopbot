@@ -16,6 +16,7 @@ import socket
 import struct
 import sys
 import time
+from typing import NamedTuple
 from pathlib import Path
 
 
@@ -30,6 +31,15 @@ CM_UP = 1 << 5
 CM_BUTTONS = 1 << 6
 CM_IMPULSE = 1 << 7
 BUTTON_ATTACK = 1
+
+
+class MovePhase(NamedTuple):
+    duration: float
+    forward_speed: int
+    side_speed: int
+    yaw_rate: float
+    attack: bool
+    jump: bool
 
 
 def _packet_text(packet: bytes) -> str:
@@ -290,6 +300,15 @@ def main() -> int:
         action="store_true",
         help="hold the jump/up input in --move-forward usercmds",
     )
+    parser.add_argument(
+        "--phase",
+        action="append",
+        metavar="SECONDS:FORWARD:SIDE:YAW:ATTACK:JUMP",
+        help=(
+            "append a real-time movement phase; ATTACK and JUMP are 0 or 1; "
+            "may be repeated to model advance/retreat/hold"
+        ),
+    )
     args = parser.parse_args()
 
     if args.port < 1 or args.port > 65535:
@@ -298,6 +317,55 @@ def main() -> int:
         parser.error("--duration must be positive")
     if args.move_forward < 0:
         parser.error("--move-forward must not be negative")
+    if args.phase and args.move_forward > 0:
+        parser.error("use either --move-forward or --phase, not both")
+
+    phases: list[MovePhase] = []
+    for raw_phase in args.phase or []:
+        parts = raw_phase.split(":")
+        if len(parts) != 6:
+            parser.error(
+                "--phase must be SECONDS:FORWARD:SIDE:YAW:ATTACK:JUMP"
+            )
+        try:
+            duration = float(parts[0])
+            forward_speed = int(parts[1])
+            side_speed = int(parts[2])
+            yaw_rate = float(parts[3])
+            attack = int(parts[4])
+            jump = int(parts[5])
+        except ValueError:
+            parser.error(f"invalid --phase value: {raw_phase}")
+        if duration <= 0:
+            parser.error("--phase duration must be positive")
+        if attack not in (0, 1) or jump not in (0, 1):
+            parser.error("--phase ATTACK and JUMP must be 0 or 1")
+        phases.append(
+            MovePhase(
+                duration,
+                forward_speed,
+                side_speed,
+                yaw_rate,
+                bool(attack),
+                bool(jump),
+            )
+        )
+    if not phases and args.move_forward > 0:
+        phases.append(
+            MovePhase(
+                args.move_forward,
+                args.forward_speed,
+                args.side_speed,
+                args.yaw_rate,
+                args.attack,
+                args.jump,
+            )
+        )
+    phase_duration = sum(phase.duration for phase in phases)
+    if phases and args.duration < phase_duration:
+        parser.error(
+            f"--duration ({args.duration}) must cover all phases ({phase_duration})"
+        )
 
     address = (args.host, args.port)
     qport = args.qport if args.qport is not None else random.randrange(1, 65536)
@@ -332,23 +400,13 @@ def main() -> int:
     move_packets = 0
     move_started: float | None = None
     next_move_at = 0.0
+    phase_index = 0
+    phase_yaw_degrees = 0.0
     check_table: bytes | None = None
     socket_error: str | None = None
     zero_cmd = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     previous_cmd = zero_cmd
-    move_cmd = (
-        0,
-        0,
-        0,
-        args.forward_speed,
-        args.side_speed,
-        200 if args.jump else 0,
-        BUTTON_ATTACK if args.attack else 0,
-        0,
-        50,
-        0,
-    )
-    if args.move_forward > 0:
+    if phases:
         try:
             check_table = _load_check_table()
         except RuntimeError as exc:
@@ -358,7 +416,7 @@ def main() -> int:
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.bind(("0.0.0.0", 0))
-        sock.settimeout(0.05 if args.move_forward > 0 else 0.25)
+        sock.settimeout(0.05 if phases else 0.25)
         sock.sendto(OOB + b"getchallenge\n", address)
 
         while time.monotonic() - started < args.duration:
@@ -446,24 +504,35 @@ def main() -> int:
                     next_sequence += 1
                 commands_sent = True
 
-            if begin_sent and args.move_forward > 0:
+            if begin_sent and phases:
                 now = time.monotonic()
                 if move_started is None:
                     move_started = now
                     next_move_at = now
-                if now - move_started < args.move_forward and check_table is not None:
+                movement_elapsed = now - move_started
+                if movement_elapsed < phase_duration and check_table is not None:
                     while now >= next_move_at:
-                        elapsed = now - (move_started or now)
-                        yaw = int(elapsed * args.yaw_rate * 65536.0 / 360.0)
+                        while (
+                            phase_index + 1 < len(phases)
+                            and movement_elapsed
+                            >= sum(phase.duration for phase in phases[: phase_index + 1])
+                        ):
+                            phase_index += 1
+                        phase = phases[phase_index]
+                        phase_elapsed = movement_elapsed - sum(
+                            item.duration for item in phases[:phase_index]
+                        )
+                        phase_yaw_degrees += phase.yaw_rate * 0.05
+                        yaw = int(phase_yaw_degrees * 65536.0 / 360.0)
                         yaw = ((yaw + 32768) % 65536) - 32768
                         current_cmd = (
                             0,
                             yaw,
                             0,
-                            move_cmd[3],
-                            move_cmd[4],
-                            move_cmd[5],
-                            move_cmd[6],
+                            phase.forward_speed,
+                            phase.side_speed,
+                            200 if phase.jump else 0,
+                            BUTTON_ATTACK if phase.attack else 0,
                             0,
                             50,
                             0,
@@ -493,9 +562,9 @@ def main() -> int:
                 human_marker, log_offset = _human_marker_seen(
                     args.event_log, log_offset, args.episode_id
                 )
-            movement_complete = args.move_forward <= 0 or (
+            movement_complete = not phases or (
                 move_started is not None
-                and time.monotonic() - move_started >= args.move_forward
+                and time.monotonic() - move_started >= phase_duration
             )
             if human_marker and args.require_human_marker and movement_complete:
                 break
@@ -519,6 +588,8 @@ def main() -> int:
         "begin_sent": begin_sent,
         "commands_sent": commands_sent,
         "move_packets": move_packets,
+        "phase_count": len(phases),
+        "phase_duration": phase_duration,
         "human_marker_seen": human_marker,
         "socket_error": socket_error,
         "responses": responses,

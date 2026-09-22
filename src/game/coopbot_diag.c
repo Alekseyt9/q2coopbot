@@ -505,8 +505,9 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 		coopbot_diag.clients[client].last_visible_enemies = visible_enemies;
 	}
 	CoopBotDiag_Log(2,
-		"bot_snapshot client=%d name=\"%s\" state=%s player=%d "
-		"player_is_human=%d "
+	"bot_snapshot client=%d name=\"%s\" state=%s player=%d "
+	"player_is_human=%d player_health=%d player_max_health=%d "
+	"player_damage_blood=%d "
 		"player_origin=(%.1f %.1f %.1f) bot_origin=(%.1f %.1f %.1f) "
 		"distance_to_player=%.1f target=%d target_class=\"%s\" "
 		"target_health=%d target_visible=%d visible_enemies=%d "
@@ -515,6 +516,10 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 		client, CoopBotDiag_Name(bot), state,
 		CoopBotDiag_EntityNumber(player),
 		player_is_human,
+		player != NULL ? player->health : 0,
+		player != NULL ? player->max_health : 0,
+		player != NULL && player->client != NULL
+			? player->client->damage_blood : 0,
 		player != NULL ? player->s.origin[0] : 0.0f,
 		player != NULL ? player->s.origin[1] : 0.0f,
 		player != NULL ? player->s.origin[2] : 0.0f,

@@ -1,11 +1,12 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('combat', 'follow', 'retreat')]
+    [ValidateSet('combat', 'follow', 'retreat', 'phase-retreat', 'rescue', 'cover')]
     [string]$Scenario = 'combat',
     [int]$FirstSeed = 532,
     [int]$Count = 20,
     [int]$Port = 27952,
     [int]$MoveSeconds = 10,
+    [int]$StartupDelayMs = 1800,
     [string]$RuntimeRoot = 'F:\src\quake2\q2coopbot-runtime-bot',
     [string]$RepoRoot = 'F:\src\quake2\q2coopbot-release'
 )
@@ -15,6 +16,7 @@ $q2ded = Join-Path $RuntimeRoot 'q2ded.exe'
 $client = Join-Path $RepoRoot 'tools\q2_client_handshake.py'
 $reporter = Join-Path $RepoRoot 'tools\coopbot_event_report.py'
 $eventLog = Join-Path $RuntimeRoot 'coopbot_debug_events.jsonl'
+$botlibLogSource = Join-Path $RuntimeRoot 'botlib.log'
 $artifactRoot = Join-Path $RepoRoot "artifacts\udp-$Scenario-baseline"
 
 if (-not (Test-Path -LiteralPath $q2ded)) {
@@ -38,6 +40,10 @@ $sideSpeed = 0
 $yawRate = 0
 $attack = $false
 $jump = $false
+$phaseArgs = @()
+$harnessDuration = $MoveSeconds + 2
+$rescueMode = $false
+$roleMode = $false
 switch ($Scenario) {
     'combat' {
         $attack = $true
@@ -52,6 +58,33 @@ switch ($Scenario) {
         $attack = $true
         $jump = $true
     }
+    'phase-retreat' {
+        $phaseArgs = @(
+            '--phase', '4:400:0:0:0:0',
+            '--phase', '6:-400:200:35:1:1',
+            '--phase', '4:0:0:0:1:0'
+        )
+        $harnessDuration = 16
+    }
+    'rescue' {
+        $phaseArgs = @(
+            '--phase', '3:400:0:0:0:0',
+            '--phase', '14:0:0:0:0:0',
+            '--phase', '3:-200:0:0:0:0'
+        )
+        $harnessDuration = 22
+        $rescueMode = $true
+        $StartupDelayMs = 500
+    }
+    'cover' {
+        $phaseArgs = @(
+            '--phase', '4:400:0:0:1:0',
+            '--phase', '8:-400:200:35:1:1',
+            '--phase', '4:0:0:0:1:0'
+        )
+        $harnessDuration = 18
+        $roleMode = $true
+    }
 }
 
 for ($offset = 0; $offset -lt $Count; $offset++) {
@@ -63,6 +96,7 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
     $harnessOutput = Join-Path $artifactRoot "$episode-harness.json"
     $harnessError = Join-Path $artifactRoot "$episode-harness.stderr.log"
     $reportOutput = Join-Path $artifactRoot "$episode-report.json"
+    $episodeBotlibLog = Join-Path $artifactRoot "$episode-botlib.log"
 
     $serverArgs = @(
         '+set', 'game', 'baseq2',
@@ -79,6 +113,19 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
         '+set', 'coopbot_episode_id', $episode,
         '+map', 'base2'
     )
+    if ($rescueMode) {
+        $serverArgs = @(
+            '+set', 'coopbot_roles', '1',
+            '+set', 'coopbot_rescue', '1'
+        ) + $serverArgs
+    }
+    elseif ($roleMode) {
+        $serverArgs = @(
+            '+set', 'coopbot_roles', '1',
+            '+set', 'coopbot_player_intent', '1',
+            '+set', 'coopbot_joint_retreat', '1'
+        ) + $serverArgs
+    }
 
     $server = $null
     $harnessExit = 99
@@ -88,24 +135,34 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
         $server = Start-Process -FilePath $q2ded -WorkingDirectory $RuntimeRoot `
             -ArgumentList $serverArgs -RedirectStandardOutput $serverStdout `
             -RedirectStandardError $serverStderr -WindowStyle Hidden -PassThru
-        Start-Sleep -Milliseconds 1800
+        Start-Sleep -Milliseconds $StartupDelayMs
 
         $harnessArgs = @(
             $client,
             '--port', "$runPort",
-            '--duration', ([string]($MoveSeconds + 2)),
+            '--duration', ([string]$harnessDuration),
             '--name', "CombatHuman$seed",
             '--event-log', $eventLog,
             '--episode-id', $episode,
-            '--require-human-marker',
-            '--server-command', 'use blaster',
-            '--move-forward', "$MoveSeconds",
-            '--forward-speed', "$moveForward",
-            '--side-speed', "$sideSpeed",
-            '--yaw-rate', "$yawRate"
+            '--require-human-marker'
         )
-        if ($attack) { $harnessArgs += '--attack' }
-        if ($jump) { $harnessArgs += '--jump' }
+        $harnessArgs += @('--server-command', 'use blaster')
+        if ($rescueMode) {
+            $harnessArgs += @('--server-command', 'give health 20')
+        }
+        if ($phaseArgs.Count -gt 0) {
+            $harnessArgs += $phaseArgs
+        }
+        else {
+            $harnessArgs += @(
+                '--move-forward', "$MoveSeconds",
+                '--forward-speed', "$moveForward",
+                '--side-speed', "$sideSpeed",
+                '--yaw-rate', "$yawRate"
+            )
+            if ($attack) { $harnessArgs += '--attack' }
+            if ($jump) { $harnessArgs += '--jump' }
+        }
         & python @harnessArgs 1> $harnessOutput 2> $harnessError
         $harnessExit = $LASTEXITCODE
     }
@@ -117,6 +174,9 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
                 Wait-Process -Id $server.Id -Timeout 5 -ErrorAction SilentlyContinue
             }
         }
+        if (Test-Path -LiteralPath $botlibLogSource) {
+            Copy-Item -LiteralPath $botlibLogSource -Destination $episodeBotlibLog -Force
+        }
     }
 
     $reportArgs = @(
@@ -125,6 +185,18 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
     )
     if ($Scenario -eq 'combat') {
         $reportArgs += '--require-bot-monster-damage'
+    }
+    if (Test-Path -LiteralPath $episodeBotlibLog) {
+        $reportArgs += @('--botlib-log', $episodeBotlibLog)
+    }
+    if ($Scenario -eq 'phase-retreat') {
+        $reportArgs += '--require-regroup'
+    }
+    if ($Scenario -eq 'rescue') {
+        $reportArgs += '--require-rescue'
+    }
+    if ($Scenario -eq 'cover') {
+        $reportArgs += @('--require-role', 'COVER')
     }
     & python @reportArgs
     $reportExit = $LASTEXITCODE

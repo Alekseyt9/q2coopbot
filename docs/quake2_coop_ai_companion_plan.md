@@ -1574,8 +1574,32 @@ deathmatch 0
 launches/shots и попадание по живому monster entity `302` на 10 damage.
 Использовались `coop 1`, `deathmatch 0`, `minimumplayers 2` и
 `coopbot_log 2`; последний нужен для записи projectile/shot/damage hooks.
-Полный acceptance baseline `N >= 20`, rescue/kill-steal/cover и отдельные
-статистические пороги ещё требуют повторяемой серии.
+Полный acceptance baseline `N >= 20` теперь частично собран; rescue и
+kill-steal остаются неподтверждёнными, а cover и regroup имеют отдельные
+строгие серии ниже.
+
+### UDP baseline series — 2026-09-22
+
+Через скрытый batch-раннер выполнены чистые серии с отдельными seed и
+`minimumplayers 2`:
+
+| Сценарий | Серия | Результат |
+| --- | --- | --- |
+| Combat | `coop-combat-538..557` | `20/20` UDP+human gate; `20/20` bot-owned fire; `6/20` эпизодов с подтверждённым bot damage по monster, всего `7` hit / `70` damage |
+| Follow-style | `coop-follow-600..619` | `20/20` UDP+human gate; `0` stuck/regroup; дистанция не вышла за текущий scripted leash, поэтому полноценный follow acceptance не закрыт |
+| Retreat-style | `coop-retreat-660..679` | `20/20` UDP+human gate; `227` bot-owned shots; максимум дистанции `759.7`; `0` stuck/regroup, поэтому принудительный rescue/regroup threshold ещё не закрыт |
+| Phase retreat / regroup | `coop-phase-retreat-740..759` | `20/20` UDP+human gate; `12/20` эпизодов с `coopbot_regroup` в per-episode botlib log; `295` bot-owned shots; `20` bot damage events / `842` damage; max distance `761.5` |
+| Cover role | `coop-cover-920..939` | `20/20` UDP+human gate; `20/20` эпизодов с `role=COVER`; `756` player-intent events; `274` bot-owned shots; `104` cover-role events; max distance `678.1` |
+| Rescue probe | `coop-rescue-830` | UDP-команда `give health 20` реально зафиксирована в `player_health=20`; `RESCUER`/`rescue_position` не появился до смерти бота, поэтому сценарий остаётся открытым |
+
+Артефакты серий лежат в `artifacts/udp-*-baseline/`; для phase-retreat и cover
+строгие reducer-gates читают отдельный botlib log каждого эпизода. Combat baseline
+подтверждает боевую возможность, но hit-rate зависит от геометрии и seed.
+Follow/retreat baseline подтверждает реальный поток usercmd и отсутствие
+transport-сбоев. Phase-retreat уже вызывает regroup, но не во всех seed;
+cover закрыт по факту выбора роли. Rescue всё ещё требует исправления
+приоритета/тайминга, а kill-steal, scripted waypoint и end-level persistence
+остаются отдельными пунктами плана.
 
 ---
 

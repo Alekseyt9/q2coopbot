@@ -167,13 +167,21 @@ python .\tools\q2_client_handshake.py `
 | Retreat-style | `harness-retreat-402` | 60 move-пакетов с backward/strafe/yaw/attack/jump; 31 human snapshot; 31 `regroup` |
 | Co-op combat probe | `coop-combat-509` | настоящий co-op `base2`; 41 монстр; 360 move-пакетов stationary-spin/attack; human получил урон от монстров; botlib записал выбор целей `entity=45/306/293/374` |
 | Co-op combat with bot fire | `coop-combat-531` | `minimumplayers 2`; 200 move-пакетов; 99 human snapshots; 13 bot Blaster launches/shots; 2 target acquisitions; 10 damage живому monster entity `302` |
+| Co-op combat baseline | `coop-combat-538..557` | 20/20 UDP+human gate; 20/20 bot-owned fire; 6/20 эпизодов с bot damage по monster; 7 hit / 70 damage |
+| Co-op follow baseline | `coop-follow-600..619` | 20/20 UDP+human gate; 0 stuck/regroup; scripted forward path не вышел за leash threshold |
+| Co-op retreat baseline | `coop-retreat-660..679` | 20/20 UDP+human gate; 227 bot-owned shots; max distance 759.7; 0 stuck/regroup |
+| Co-op phase retreat baseline | `coop-phase-retreat-740..759` | 20/20 UDP+human gate; 12/20 per-episode botlib logs contain `coopbot_regroup`; 295 bot-owned shots; 20 bot damage events / 842 damage; max distance 761.5 |
+| Co-op cover baseline | `coop-cover-920..939` | 20/20 UDP+human gate; 20/20 strict `role=COVER`; 756 player-intent events; 104 cover-role events; max distance 678.1 |
+| Co-op rescue probe | `coop-rescue-830` | `give health 20` дошла до живого игрока (`player_health=20`); rescue role/position не зафиксированы до смерти бота |
 
 Первые две строки — исторические transport/input прогоны; они были выполнены
 в deathmatch и не являются доказательством боевой кооперации. Две последние
 строки выполнены в правильном co-op режиме. `coop-combat-531` дополнительно
 доказывает bot-side запуск Blaster и попадание по живому monster entity.
-Acceptance baseline `N >= 20`, rescue/kill-steal/cover и статистические пороги
-ещё не подтверждены.
+Acceptance baseline `N >= 20` частично подтверждён: cover закрыт отдельной
+строгой серией, phase-retreat подтверждает regroup в 12/20 seed. Rescue и
+kill-steal всё ещё не подтверждены; transport/input проверен без foreground
+окон.
 
 Для записи projectile/shot/damage hooks в combat-команде нужен
 `+set coopbot_log 2`; при обычном `coopbot_log 1` базовые снапшоты остаются,
@@ -182,9 +190,62 @@ Acceptance baseline `N >= 20`, rescue/kill-steal/cover и статистичес
 Отчёт `coop-combat-531` сохранён в
 `artifacts/coop-combat-531-report.json`.
 
-Поворот, strafe, прыжок и произвольная временная последовательность клавиш
-пока не вынесены в CLI. Их следующий шаг — расширение того же usercmd-потока,
-а не возврат к графическому окну.
+## Повторяемые co-op серии
+
+Для baseline можно использовать скрытый batch-раннер. Он не открывает окно
+`q2ded`, не выводит его в foreground и сохраняет stdout/stderr каждого эпизода
+в `artifacts/udp-*-baseline/`:
+
+```powershell
+Start-Process pwsh.exe -WindowStyle Hidden -ArgumentList @(
+  '-NoProfile', '-ExecutionPolicy', 'Bypass',
+  '-File', '.\tools\run_udp_coop_combat_batch.ps1',
+  '-Scenario', 'retreat',
+  '-FirstSeed', '660', '-Count', '20',
+  '-Port', '28060', '-MoveSeconds', '10'
+) -RedirectStandardOutput '.\artifacts\udp-retreat-baseline\retreat-batch.stdout.log' `
+  -RedirectStandardError '.\artifacts\udp-retreat-baseline\retreat-batch.stderr.log'
+```
+
+`-Scenario combat` отправляет forward+attack и требует bot damage по monster;
+`-Scenario follow` отправляет forward без attack; `-Scenario retreat`
+отправляет backward+strafe+yaw+jump+attack; `-Scenario phase-retreat`
+отправляет фазу advance, затем backward+strafe+yaw+jump+attack и финальный
+hold+attack через repeatable `--phase` usercmds; `-Scenario rescue` включает
+`coopbot_roles/rescue` и оставляет игрока под monster pressure, требуя
+`coopbot_rescue_position`; `-Scenario cover` включает cooperative roles и
+требует отдельный `role=COVER` в botlib-log. На каждый эпизод создаётся новый
+co-op server с `minimumplayers 2`; повторно использовать тот же `episode_id`
+в общем JSONL не следует — для чистой статистики нужен новый диапазон seed.
+
+Пример многофазного живого клиента напрямую:
+
+```powershell
+python .\tools\q2_client_handshake.py `
+  --port 28100 --duration 16 --move-forward 0 `
+  --phase 4:400:0:0:0:0 `
+  --phase 6:-400:200:35:1:1 `
+  --phase 4:0:0:0:1:0 `
+  --event-log 'F:\src\quake2\q2coopbot-runtime-bot\coopbot_debug_events.jsonl' `
+  --episode-id coop-phase-retreat-700 --require-human-marker
+```
+
+Reducer различает общий combat telemetry и bot-owned показатели:
+
+```powershell
+python .\tools\coopbot_event_report.py `
+  'F:\src\quake2\q2coopbot-runtime-bot\coopbot_debug_events.jsonl' `
+  --episode-id coop-combat-531 `
+  --require-human-player `
+  --require-bot-shot `
+  --require-bot-monster-damage
+```
+
+Поворот, strafe, прыжок, attack и повторяемая многофазная временная
+последовательность уже вынесены в CLI и batch-режим. Следующий уровень —
+map-aware waypoint/conditional timeline для гарантированного rescue,
+kill-steal и end-level сценариев; для этого не требуется возвращаться к
+графическому окну.
 
 ## Проверка отчётом
 

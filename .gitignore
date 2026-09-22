@@ -22,3 +22,6 @@ NUL.obj
 !archive/**
 /artifacts/udp-follow-baseline
 /artifacts/udp-retreat-baseline
+/artifacts/udp-cover-baseline
+/artifacts/udp-phase-retreat-baseline
+/artifacts/udp-rescue-baseline

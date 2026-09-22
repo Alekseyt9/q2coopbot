@@ -18,6 +18,8 @@ int BotAI_CoopPlayerEntity(const bot_client_state_t *state, vec3_t origin);
 const char *BotAI_CoopPlayerIntentName(bot_coop_player_intent_t intent);
 bool BotAI_CoopIntentIsConfident(const bot_client_state_t *state,
 	bot_coop_player_intent_t intent);
+void BotAI_UpdateCoopPlayerTelemetry(bot_client_state_t *state,
+	int player_entity);
 bool BotAI_CoopPlayerNeedsRescue(const bot_client_state_t *state);
 void BotAI_UpdateCoopPlayerIntent(bot_client_state_t *state);
 void BotAI_UpdateCoopPlayerStyle(bot_client_state_t *state);

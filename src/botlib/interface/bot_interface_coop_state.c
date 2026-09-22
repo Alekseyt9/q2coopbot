@@ -164,7 +164,7 @@ through namespaced libvars, keeping the 20-pointer Gladiator ABI unchanged.
 Missing telemetry is not treated as zero health.
 =============
 */
-static void BotAI_UpdateCoopPlayerTelemetry(bot_client_state_t *state,
+void BotAI_UpdateCoopPlayerTelemetry(bot_client_state_t *state,
 	int player_entity)
 {
 	char variable_name[64];

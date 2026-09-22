@@ -141,6 +141,10 @@ def read_botlib_events(stream: TextIO) -> Counter[str]:
             reason = fields.get("reason", "unknown").lower()
             events[f"decision_{decision}"] += 1
             events[f"decision_reason_{reason}"] += 1
+        if "coopbot_role" in line:
+            fields = message_fields(line)
+            role = fields.get("role", "unknown").lower()
+            events[f"role_{role}"] += 1
         if "coopbot_regroup" in line and re.search(r"\btraveltype=11\b", line):
             events["elevator_regroup"] += 1
     return events
@@ -687,6 +691,22 @@ def main() -> int:
         help="fail unless botlib logged regroup completion",
     )
     parser.add_argument(
+        "--require-regroup",
+        action="store_true",
+        help="fail unless botlib logged a coopbot_regroup frame",
+    )
+    parser.add_argument(
+        "--require-rescue",
+        action="store_true",
+        help="fail unless botlib logged a player rescue position",
+    )
+    parser.add_argument(
+        "--require-role",
+        action="append",
+        choices=("REGROUP", "RESCUER", "COVER", "SUPPORT", "FOLLOWER", "VANGUARD", "ANCHOR"),
+        help="fail unless botlib selected the named cooperative role (repeatable)",
+    )
+    parser.add_argument(
         "--require-player-area-transition",
         action="store_true",
         help="fail unless botlib logged a player AAS-area transition",
@@ -847,6 +867,20 @@ def main() -> int:
     ):
         validation_errors.append("no completed coop regroup was recorded by botlib")
 
+    if args.require_regroup and botlib_events.get("regroup", 0) < 1:
+        validation_errors.append("no coopbot_regroup frame was recorded by botlib")
+
+    if args.require_rescue and botlib_events.get("rescue_position", 0) < 1:
+        validation_errors.append(
+            "no coopbot_rescue_position frame was recorded by botlib"
+        )
+
+    for role in args.require_role or []:
+        if botlib_events.get(f"role_{role.lower()}", 0) < 1:
+            validation_errors.append(
+                f"no coopbot_role {role} frame was recorded by botlib"
+            )
+
     if (
         args.require_player_area_transition
         and botlib_events.get("area_player_transition", 0) < 1
@@ -908,6 +942,9 @@ def main() -> int:
         or args.require_elevator_reacquired
         or args.require_regroup_path_failure
         or args.require_regroup_complete
+        or args.require_regroup
+        or args.require_rescue
+        or args.require_role
         or args.require_player_area_transition
         or args.require_bot_area_transition
         or args.require_open_path_route
