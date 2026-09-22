@@ -177,7 +177,9 @@ python .\tools\q2_client_handshake.py `
 | Co-op kill-steal default probe | `coop-kill-steal-980..986` | 7/7 UDP+human gate и player-focus telemetry; 0 `kill_steal_yield` при default radius 192 |
 | Co-op kill-steal controlled probe | `coop-kill-steal-990..1009` | 20/20 UDP+human gate; 6/20 эпизодов и 20 `kill_steal_yield` events при controlled radius 64; default acceptance не закрыт |
 | Co-op kill-steal default-radius fixture | `coop-kill-steal-default-fixture-1176..1195` | 20/20 strict UDP+human/report; 40 `kill_steal_yield` events при radius 192; 2306 player-focus events; live player focus на живом `monster_infantry` entity 306; bot separation 240 > 192; 287 bot shots и 99 monster-damage events / 990 damage |
-| Co-op lost-LOS probe | `coop-lost-los-1015` + `1020..1039` | 21/21 UDP+human gate; 1/21 `target_lost`; 0 map transitions; acceptance не закрыт |
+| Co-op kill-steal natural default probe | `coop-kill-steal-default-1312..1331` | 20/20 UDP+human gate; 134 player-focus events; 0 `kill_steal_yield` при штатном radius 192; natural acceptance не закрыт |
+| Co-op lost-LOS probe | `coop-lost-los-1292..1311` | 20/20 UDP+human gate; 16/20 strict `target_los_lost` (46 LOS-loss edges, 70 target acquisitions); `target_lost` отдельно не подменяется; естественный 20/20 acceptance не закрыт |
+| Co-op lost-LOS map fixture | `coop-lost-los-map-fixture-1272..1291` | 20/20 strict UDP+human/report; 60 `target_los_lost` edges, 80 target acquisitions; bot held on valid `base2` AAS area 445 and then moved to the initial sector; real UDP player remained connected |
 | Co-op elevator probe | `coop-elevator-1151` | 1/1 strict UDP+human; `coopbot_map_model` показывает 1 elevator и vertical edge 806 -> 751, delta 93.7; live `TRAVEL_ELEVATOR`/reacquire не зафиксирован |
 | Co-op elevator runtime fixture | `coop-elevator-fixture-1155` | 1/1 strict UDP+human; opt-in UDP fixture разместила bot в area 806 и human в area 751; botlib записал `coopbot_elevator_route`, `coopbot_elevator_reacquired` и `coopbot_regroup_complete`; это runtime-ветка, не доказательство прохождения карты обычным движением |
 | Co-op elevator player ride | `coop-elevator-player-1160` | 1/1 UDP+human; реальный UDP-игрок стартовал на нижней `func_plat` и через live server physics поднялся примерно с `z=-38` до `z=112`; отдельный gate проверяет вертикальный delta `>=64`; bot route fixture этим не подменяется |
@@ -191,10 +193,11 @@ Acceptance baseline `N >= 20` частично подтверждён: cover з�
 regroup в 12/20 seed, end-level persistence закрыт отдельной серией
 `coop-transition-1114..1133`, а default-radius kill-steal закрыт
 детерминированным live UDP fixture в 20/20 seed. Естественный uncontrolled
-default probe по-прежнему дал 0 yield, поэтому map-aware kill-steal,
-стабильный lost-LOS, elevator traversal и полные cooperative-level
-статистические пороги всё ещё не подтверждены; transport/input проверен без
-foreground окон.
+probe `coop-kill-steal-default-1312..1331` также дал 0 yield при 20/20
+живых UDP-подключениях, поэтому map-aware kill-steal, стабильный natural
+lost-LOS, elevator traversal и полные cooperative-level статистические
+пороги всё ещё не подтверждены; отдельный map fixture для LOS-механики
+закрыт в 20/20, transport/input проверен без foreground окон.
 
 Для записи projectile/shot/damage hooks в combat-команде нужен
 `+set coopbot_log 2`; при обычном `coopbot_log 1` базовые снапшоты остаются,
@@ -231,7 +234,10 @@ hold+attack через repeatable `--phase` usercmds; `-Scenario rescue` вкл�
 player intent/shared focus/kill-steal control и требует `kill_steal_yield` в
 botlib-log; batch-сценарий kill-steal намеренно задаёт controlled
 `coopbot_kill_steal_radius=64`, тогда как default `192` проверяется отдельной
-серией и deterministic fixture. Fixture через UDP-команды в
+серией и deterministic fixture. `-Scenario kill-steal-default` использует
+штатный радиус `192` и не задаёт позицию игрока или бота; серия
+`coop-kill-steal-default-1312..1331` зафиксировала `0/20` yield при `20/20`
+живых UDP-клиентах. Fixture через UDP-команды в
 `coopbot_test_mode` ставит живого игрока рядом с живым `monster_infantry`, а
 bot на 240 units; игрок всё равно создаётся обычным UDP handshake и держит
 real-time attack usercmds. На каждый эпизод создаётся новый
@@ -328,11 +334,37 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\run_udp_coop_combat_batch.
 подменяет естественный map-aware маршрут: позиции fixture задаются только
 opt-in UDP-командами при `coopbot_test_mode 1`.
 
+Natural default-radius probe запускается так:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\run_udp_coop_combat_batch.ps1 `
+  -Scenario kill-steal-default -FirstSeed 1312 -Count 20 -Port 28280
+```
+
+Он использует обычный co-op маршрут и real-time usercmd-поток UDP-клиента,
+без position/entity override. Отсутствие yield в этой серии — открытый
+map-aware acceptance item, а не ошибка подключения harness.
+
+Строгий LOS map fixture запускается так:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\run_udp_coop_combat_batch.ps1 `
+  -Scenario lost-los-map-fixture -FirstSeed 1272 -Count 20 -Port 28230
+```
+
+В нём UDP-игрок проходит handshake и отправляет real-time usercmds, а только
+бот удерживается на валидной AAS-точке `area=445` (`160 1896 -168`) до выбора
+живой цели; затем его переносят в другой известный сектор. Это доказывает
+LOS-механику, но не заменяет естественную навигацию бота по карте.
+
 Поворот, strafe, прыжок, attack и повторяемая многофазная временная
-последовательность уже вынесены в CLI и batch-режим. Следующий уровень —
-map-aware waypoint/conditional timeline для гарантированных LOS и естественного
-default-radius kill-steal; для этого не требуется возвращаться к графическому
-окну.
+последовательность уже вынесены в CLI и batch-режим. Для LOS reducer различает
+`target_lost` (цель исчезла) и `target_los_lost` (та же живая цель перестала
+быть видимой). Strict map fixture закрыт, но естественная серия `16/20`
+остаётся ниже acceptance; natural default-radius probe `1312..1331` дал
+`0/20` yield. Следующий уровень — conditional map-aware timeline для
+естественного lost-LOS и default-radius kill-steal. Для этого не требуется
+возвращаться к графическому окну.
 
 ## Проверка отчётом
 

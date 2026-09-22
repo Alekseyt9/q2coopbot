@@ -44,3 +44,10 @@ NUL.obj
 /artifacts/udp-elevator-player-probe-1160
 /artifacts/udp-elevator-player-probe-1161
 /artifacts/udp-kill-steal-default-long-1162
+/artifacts/udp-lost-los-fixture-baseline
+/artifacts/udp-lost-los-map-fixture-baseline
+/artifacts/udp-lost-los-stable-fixture-baseline
+/artifacts/udp-elevator-natural-route-baseline
+/artifacts/udp-elevator-route-probe-baseline
+/artifacts/udp-kill-steal-default-melee-baseline
+/artifacts/udp-kill-steal-default-timeline-baseline

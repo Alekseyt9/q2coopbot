@@ -1577,7 +1577,9 @@ launches/shots и попадание по живому monster entity `302` на
 Полный acceptance baseline `N >= 20` теперь частично собран; cover и rescue
 закрыты отдельными строгими сериями, controlled kill-steal подтверждён
 частично, а default-radius kill-steal дополнительно закрыт отдельным live UDP
-fixture в 20/20 seed.
+fixture в 20/20 seed. LOS-механика также закрыта map fixture в 20/20, но
+natural lost-LOS даёт только 16/20. Отдельная natural default-radius серия
+`1312..1331` подтвердила 20/20 живых UDP-клиентов, но дала 0 yield.
 
 ### UDP baseline series — 2026-09-22
 
@@ -1596,7 +1598,9 @@ fixture в 20/20 seed.
 | Kill-steal default probe | `coop-kill-steal-980..986` | `7/7` UDP+human gate; player-focus telemetry реально записана; `0` `kill_steal_yield` events при default radius `192`, поэтому default acceptance не закрыт |
 | Kill-steal controlled probe | `coop-kill-steal-990..1009` | `20/20` UDP+human gate; `6/20` эпизодов с `kill_steal_yield`; всего `20` yield events и `747` player-focus events при controlled radius `64` |
 | Kill-steal default-radius fixture | `coop-kill-steal-default-fixture-1176..1195` | `20/20` strict UDP+human/report; `40` `kill_steal_yield` events при штатном radius `192`; `2306` player-focus events на живом `monster_infantry` entity `306`; bot separation `240 > 192`; `287` bot shots; `99` monster-damage events / `990` damage |
-| Lost-LOS probe | `coop-lost-los-1015` + `1020..1039` | `21/21` UDP+human gate; `1/21` эпизодов с `target_lost`; `0` map transitions; scripted turn/retreat не даёт стабильного LOS break на `base2` |
+| Kill-steal natural default probe | `coop-kill-steal-default-1312..1331` | `20/20` UDP+human gate; `134` player-focus events; `0` `kill_steal_yield` при штатном radius `192`; natural acceptance не закрыт |
+| Lost-LOS probe | `coop-lost-los-1292..1311` | `20/20` UDP+human gate; `16/20` strict episodes с `target_los_lost`, всего `46` LOS-loss edges и `70` target acquisitions; `target_lost` отдельно не подменяется; естественный `20/20` LOS acceptance остаётся открытым |
+| Lost-LOS map fixture | `coop-lost-los-map-fixture-1272..1291` | `20/20` strict UDP+human/report; `60` `target_los_lost` edges и `80` target acquisitions; bot удерживался на валидной `base2` AAS area `445`, затем переводился в начальный сектор; реальный UDP player оставался подключённым |
 | Vertical/elevator probe | `coop-elevator-1151` | `1/1` strict UDP+human gate; AAS map model содержит `1` elevator и vertical edge `806 -> 751` с delta `93.7`; live route дал обычный regroup без `TRAVEL_ELEVATOR`/reacquire, поэтому acceptance остаётся открытым |
 | Elevator runtime fixture | `coop-elevator-fixture-1155` | `1/1` strict UDP+human gate; opt-in UDP fixture разместила bot в area `806` и human в area `751`; live botlib записал `coopbot_elevator_route`, `coopbot_elevator_reacquired` и `coopbot_regroup_complete`; обычное прохождение карты этим не закрыто |
 | Elevator player ride | `coop-elevator-player-1160` | `1/1` UDP+human; живой UDP-игрок через `clc_move` активировал нижнюю `func_plat` и поднялся примерно с `z=-38` до `z=112`; отдельный reducer gate подтверждает вертикальный delta `>=64`; bot traversal остаётся отдельным тестом |
@@ -1610,10 +1614,13 @@ cover и rescue закрыты по строгим role/position gates. Rescue �
 HP-телеметрия теперь обновляется независимо от optional player-intent model.
 Default-radius kill-steal закрыт deterministic live UDP fixture: player focus
 идёт на живой melee monster, а bot находится на 240 units при штатном радиусе
-192; естественный uncontrolled probe всё ещё дал 0 yield и требует map-aware
-timeline. End-level transition и проверяемая persistence закрыты отдельной
-strict UDP-серией; scripted waypoint для гарантированных LOS/позиционных
-маршрутов остаётся отдельным пунктом.
+192; естественная серия `1312..1331` тоже дала 0 yield при `20/20` живых
+UDP-клиентах и требует map-aware timeline. Для lost-LOS добавлен отдельный strict edge `target_los_lost`, но
+естественная серия `1292..1311` дала `16/20` эпизодов, поэтому нужна
+conditional timeline для стабильного natural acceptance; отдельный map fixture
+`1272..1291` закрыл саму LOS-механику в `20/20`. End-level transition и проверяемая persistence
+закрыты отдельной strict UDP-серией; scripted waypoint для гарантированных
+LOS/позиционных маршрутов остаётся отдельным пунктом.
 Runtime-ветка вертикального regroup дополнительно smoke-tested через
 `coop-elevator-fixture-1155`; полноценный map-aware путь живого игрока к лифту
 и прохождение карты остаются открытыми. Player-side ride на `func_plat`

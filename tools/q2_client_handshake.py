@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 import re
 import socket
@@ -39,6 +40,13 @@ class MovePhase(NamedTuple):
     side_speed: int
     yaw_rate: float
     attack: bool
+    jump: bool
+
+
+class Waypoint(NamedTuple):
+    x: float
+    y: float
+    z: float
     jump: bool
 
 
@@ -240,6 +248,43 @@ def _human_marker_seen(path: Path, offset: int, episode_id: str | None) -> tuple
     return False, offset
 
 
+def _human_origin(
+    path: Path,
+    offset: int,
+    episode_id: str | None,
+    previous: tuple[float, float, float] | None,
+) -> tuple[tuple[float, float, float] | None, int]:
+    """Read the newest live human origin without consuming a partial JSON line."""
+    origin = previous
+    try:
+        with path.open("rb") as stream:
+            stream.seek(offset)
+            for raw_line in stream:
+                if not raw_line.endswith(b"\n"):
+                    break
+                offset += len(raw_line)
+                try:
+                    record = json.loads(raw_line)
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                if episode_id and record.get("episode_id") != episode_id:
+                    continue
+                if record.get("event") != "bot_snapshot":
+                    continue
+                message = str(record.get("message", ""))
+                if "player_is_human=1" not in message:
+                    continue
+                match = re.search(
+                    r"player_origin=\((-?[0-9.]+)\s+(-?[0-9.]+)\s+(-?[0-9.]+)\)",
+                    message,
+                )
+                if match:
+                    origin = tuple(float(value) for value in match.groups())
+    except OSError:
+        pass
+    return origin, offset
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
@@ -323,6 +368,15 @@ def main() -> int:
             "may be repeated to model advance/retreat/hold"
         ),
     )
+    parser.add_argument(
+        "--waypoint",
+        action="append",
+        metavar="X:Y:Z[:JUMP]",
+        help=(
+            "closed-loop live route waypoint read from bot_snapshot player_origin; "
+            "JUMP is 0 or 1 and may be repeated"
+        ),
+    )
     args = parser.parse_args()
     if args.server_command_delay < 0.0:
         parser.error("--server-command-delay must be non-negative")
@@ -350,6 +404,10 @@ def main() -> int:
         parser.error("--move-forward must not be negative")
     if args.phase and args.move_forward > 0:
         parser.error("use either --move-forward or --phase, not both")
+    if args.waypoint and (args.phase or args.move_forward > 0):
+        parser.error("use either --waypoint or movement phases, not both")
+    if args.waypoint and args.event_log is None:
+        parser.error("--waypoint requires --event-log for live player telemetry")
 
     phases: list[MovePhase] = []
     for raw_phase in args.phase or []:
@@ -381,6 +439,19 @@ def main() -> int:
                 bool(jump),
             )
         )
+    waypoints: list[Waypoint] = []
+    for raw_waypoint in args.waypoint or []:
+        parts = raw_waypoint.split(":")
+        if len(parts) not in (3, 4):
+            parser.error("--waypoint must be X:Y:Z[:JUMP]")
+        try:
+            x, y, z = (float(value) for value in parts[:3])
+            jump = int(parts[3]) if len(parts) == 4 else 0
+        except ValueError:
+            parser.error(f"invalid --waypoint value: {raw_waypoint}")
+        if jump not in (0, 1):
+            parser.error("--waypoint JUMP must be 0 or 1")
+        waypoints.append(Waypoint(x, y, z, bool(jump)))
     if not phases and args.move_forward > 0:
         phases.append(
             MovePhase(
@@ -397,6 +468,8 @@ def main() -> int:
         parser.error(
             f"--duration ({args.duration}) must cover all phases ({phase_duration})"
         )
+    if waypoints and args.duration <= 0:
+        parser.error("--waypoint route requires a positive --duration")
 
     address = (args.host, args.port)
     qport = args.qport if args.qport is not None else random.randrange(1, 65536)
@@ -434,11 +507,14 @@ def main() -> int:
     next_move_at = 0.0
     phase_index = 0
     phase_yaw_degrees = 0.0
+    waypoint_index = 0
+    latest_human_origin: tuple[float, float, float] | None = None
+    origin_log_offset = log_offset
     check_table: bytes | None = None
     socket_error: str | None = None
     zero_cmd = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     previous_cmd = zero_cmd
-    if phases:
+    if phases or waypoints:
         try:
             check_table = _load_check_table()
         except RuntimeError as exc:
@@ -448,7 +524,7 @@ def main() -> int:
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.bind(("0.0.0.0", 0))
-        sock.settimeout(0.05 if phases else 0.25)
+        sock.settimeout(0.05 if phases or waypoints else 0.25)
         sock.sendto(OOB + b"getchallenge\n", address)
 
         while time.monotonic() - started < args.duration:
@@ -602,14 +678,86 @@ def main() -> int:
                         previous_cmd = current_cmd
                         next_move_at += 0.05
 
+            if begin_sent and waypoints and check_table is not None:
+                now = time.monotonic()
+                if move_started is None:
+                    move_started = now
+                    next_move_at = now
+                while now >= next_move_at:
+                    if latest_human_origin is not None:
+                        while waypoint_index < len(waypoints):
+                            waypoint = waypoints[waypoint_index]
+                            dx = waypoint.x - latest_human_origin[0]
+                            dy = waypoint.y - latest_human_origin[1]
+                            dz = waypoint.z - latest_human_origin[2]
+                            if math.hypot(dx, dy) > 56.0 or abs(dz) > 96.0:
+                                break
+                            waypoint_index += 1
+                        if waypoint_index < len(waypoints):
+                            waypoint = waypoints[waypoint_index]
+                            dx = waypoint.x - latest_human_origin[0]
+                            dy = waypoint.y - latest_human_origin[1]
+                            dz = waypoint.z - latest_human_origin[2]
+                            # The live spawn view points along -X; network yaw
+                            # 180 points along +X. Convert a world vector to
+                            # that calibrated Quake II angle convention.
+                            yaw_degrees = math.degrees(math.atan2(-dy, -dx)) % 360.0
+                            yaw = int(yaw_degrees * 65536.0 / 360.0)
+                            current_cmd = (
+                                0,
+                                ((yaw + 32768) % 65536) - 32768,
+                                0,
+                                400,
+                                0,
+                                200 if waypoint.jump or dz > 32.0 else 0,
+                                0,
+                                0,
+                                50,
+                                0,
+                            )
+                        else:
+                            current_cmd = previous_cmd[:3] + (0, 0, 0, 0, 0, 50, 0)
+                    else:
+                        current_cmd = previous_cmd[:3] + (0, 0, 0, 0, 0, 50, 0)
+                    payload = _move_payload(
+                        current_cmd,
+                        previous_cmd,
+                        next_sequence,
+                        check_table,
+                    )
+                    _send_netchan_payload(
+                        sock,
+                        address,
+                        next_sequence,
+                        qport,
+                        payload,
+                        server_sequence,
+                        server_reliable,
+                        reliable=False,
+                    )
+                    next_sequence += 1
+                    move_packets += 1
+                    previous_cmd = current_cmd
+                    next_move_at += 0.05
+
             if args.event_log:
                 human_marker, log_offset = _human_marker_seen(
                     args.event_log, log_offset, args.episode_id
                 )
-            movement_complete = not phases or (
-                move_started is not None
-                and time.monotonic() - move_started >= phase_duration
-            )
+                if waypoints:
+                    latest_human_origin, origin_log_offset = _human_origin(
+                        args.event_log,
+                        origin_log_offset,
+                        args.episode_id,
+                        latest_human_origin,
+                    )
+            if waypoints:
+                movement_complete = waypoint_index >= len(waypoints)
+            else:
+                movement_complete = not phases or (
+                    move_started is not None
+                    and time.monotonic() - move_started >= phase_duration
+                )
             if human_marker and args.require_human_marker and movement_complete:
                 break
             if client_connected and not args.require_human_marker and movement_complete:
@@ -634,6 +782,8 @@ def main() -> int:
         "move_packets": move_packets,
         "phase_count": len(phases),
         "phase_duration": phase_duration,
+        "waypoint_count": len(waypoints),
+        "waypoint_reached": waypoint_index,
         "human_marker_seen": human_marker,
         "socket_error": socket_error,
         "responses": responses,
