@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('combat', 'follow', 'retreat', 'phase-retreat', 'rescue', 'cover', 'kill-steal', 'lost-los', 'transition')]
+    [ValidateSet('combat', 'follow', 'retreat', 'phase-retreat', 'rescue', 'cover', 'kill-steal', 'lost-los', 'elevator', 'elevator-fixture', 'transition')]
     [string]$Scenario = 'combat',
     [int]$FirstSeed = 532,
     [int]$Count = 20,
@@ -45,6 +45,8 @@ $harnessDuration = $MoveSeconds + 2
 $rescueMode = $false
 $roleMode = $false
 $killStealMode = $false
+$elevatorMode = $false
+$elevatorFixtureMode = $false
 $transitionMode = $false
 switch ($Scenario) {
     'combat' {
@@ -103,6 +105,25 @@ switch ($Scenario) {
             '--phase', '8:-400:200:0:0:0'
         )
         $harnessDuration = 18
+    }
+    'elevator' {
+        $phaseArgs = @(
+            '--phase', '4:0:0:56:0:0',
+            '--phase', '20:400:0:0:0:0'
+        )
+        $harnessDuration = 26
+        $elevatorMode = $true
+        $StartupDelayMs = 500
+    }
+    'elevator-fixture' {
+        # Opt-in runtime fixture: place the bot at the lower elevator area and
+        # the UDP human at the upper area so the live regroup branch must use
+        # the detected TRAVEL_ELEVATOR edge.
+        $phaseArgs = @('--phase', '35:0:0:0:0:0')
+        $harnessDuration = 36
+        $elevatorMode = $true
+        $elevatorFixtureMode = $true
+        $StartupDelayMs = 500
     }
     'transition' {
         $phaseArgs = @(
@@ -163,9 +184,20 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
             '+set', 'coopbot_kill_steal_radius', '64'
         ) + $serverArgs
     }
+    if ($elevatorFixtureMode) {
+        $serverArgs = @(
+            '+set', 'coopbot_test_mode', '1',
+            '+set', 'coopbot_map_model', '1'
+        ) + $serverArgs
+    }
     elseif ($transitionMode) {
         $serverArgs = @(
             '+set', 'coopbot_test_mode', '1'
+        ) + $serverArgs
+    }
+    elseif ($elevatorMode) {
+        $serverArgs = @(
+            '+set', 'coopbot_map_model', '1'
         ) + $serverArgs
     }
 
@@ -193,6 +225,13 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
             $harnessArgs += @(
                 '--server-command-at', '4.9:coopbot_test_state 73 50 37',
                 '--server-command-at', '5:coopbot_test_changelevel base1'
+            )
+        }
+        if ($elevatorFixtureMode) {
+            $harnessArgs += @(
+                '--server-command-at', '1:coopbot_test_state 100 100 100',
+                '--server-command-at', '1.2:coopbot_test_bot_position -62 1408 -34',
+                '--server-command-at', '1.4:coopbot_test_player_position -4 1408 60'
             )
         }
         if ($rescueMode) {
@@ -251,6 +290,18 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
     }
     if ($Scenario -eq 'lost-los') {
         $reportArgs += '--require-target-lost'
+    }
+    if ($Scenario -eq 'elevator') {
+        $reportArgs += @('--require-elevator-edge', '--require-vertical-elevator-edge')
+    }
+    if ($Scenario -eq 'elevator-fixture') {
+        $reportArgs += @(
+            '--require-elevator-edge',
+            '--require-vertical-elevator-edge',
+            '--require-elevator-regroup',
+            '--require-elevator-reacquired',
+            '--require-regroup-complete'
+        )
     }
     if ($Scenario -eq 'transition') {
         $reportArgs += @(

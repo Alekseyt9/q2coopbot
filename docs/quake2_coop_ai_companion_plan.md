@@ -1575,8 +1575,8 @@ launches/shots и попадание по живому monster entity `302` на
 Использовались `coop 1`, `deathmatch 0`, `minimumplayers 2` и
 `coopbot_log 2`; последний нужен для записи projectile/shot/damage hooks.
 Полный acceptance baseline `N >= 20` теперь частично собран; cover и rescue
-закрыты отдельными строгими сериями, kill-steal остаётся неподтверждённым,
-а regroup подтверждён не во всех seed.
+закрыты отдельными строгими сериями, controlled kill-steal подтверждён
+частично, а default-radius kill-steal и regroup подтверждены не во всех seed.
 
 ### UDP baseline series — 2026-09-22
 
@@ -1591,9 +1591,12 @@ launches/shots и попадание по живому monster entity `302` на
 | Phase retreat / regroup | `coop-phase-retreat-740..759` | `20/20` UDP+human gate; `12/20` эпизодов с `coopbot_regroup` в per-episode botlib log; `295` bot-owned shots; `20` bot damage events / `842` damage; max distance `761.5` |
 | Cover role | `coop-cover-920..939` | `20/20` UDP+human gate; `20/20` эпизодов с `role=COVER`; `756` player-intent events; `274` bot-owned shots; `104` cover-role events; max distance `678.1` |
 | Rescue baseline | `coop-rescue-850..869` | `20/20` UDP+human gate и `20/20` strict `rescue_position`; всего `97` rescue-position events и `48` role-rescuer events; в `12/20` seed произошёл map transition, поэтому persistence/transition остаётся отдельным тестом |
+| End-level transition + persistence | `coop-transition-1114..1133` | `20/20` strict UDP+human gate; `20/20` штатный runtime `map_transition`; `20/20` точное совпадение bot health/max-health/armor/ammo index+count/weapon после перехода |
 | Kill-steal default probe | `coop-kill-steal-980..986` | `7/7` UDP+human gate; player-focus telemetry реально записана; `0` `kill_steal_yield` events при default radius `192`, поэтому default acceptance не закрыт |
 | Kill-steal controlled probe | `coop-kill-steal-990..1009` | `20/20` UDP+human gate; `6/20` эпизодов с `kill_steal_yield`; всего `20` yield events и `747` player-focus events при controlled radius `64` |
 | Lost-LOS probe | `coop-lost-los-1015` + `1020..1039` | `21/21` UDP+human gate; `1/21` эпизодов с `target_lost`; `0` map transitions; scripted turn/retreat не даёт стабильного LOS break на `base2` |
+| Vertical/elevator probe | `coop-elevator-1151` | `1/1` strict UDP+human gate; AAS map model содержит `1` elevator и vertical edge `806 -> 751` с delta `93.7`; live route дал обычный regroup без `TRAVEL_ELEVATOR`/reacquire, поэтому acceptance остаётся открытым |
+| Elevator runtime fixture | `coop-elevator-fixture-1155` | `1/1` strict UDP+human gate; opt-in UDP fixture разместила bot в area `806` и human в area `751`; live botlib записал `coopbot_elevator_route`, `coopbot_elevator_reacquired` и `coopbot_regroup_complete`; обычное прохождение карты этим не закрыто |
 
 Артефакты серий лежат в `artifacts/udp-*-baseline/`; для phase-retreat и cover
 строгие reducer-gates читают отдельный botlib log каждого эпизода. Combat baseline
@@ -1603,8 +1606,12 @@ transport-сбоев. Phase-retreat уже вызывает regroup, но не �
 cover и rescue закрыты по строгим role/position gates. Rescue был исправлен:
 HP-телеметрия теперь обновляется независимо от optional player-intent model.
 Kill-steal пока не закрыт на default radius: controlled probe подтверждает
-реальный механизм yield, но только в `6/20` seed. Scripted waypoint и
-end-level persistence остаются отдельными пунктами плана.
+реальный механизм yield, но только в `6/20` seed. End-level transition и
+проверяемая persistence закрыты отдельной strict UDP-серией; scripted waypoint
+для гарантированных LOS/позиционных маршрутов остаётся отдельным пунктом.
+Runtime-ветка вертикального regroup дополнительно smoke-tested через
+`coop-elevator-fixture-1155`; полноценный map-aware путь живого игрока к лифту
+и прохождение карты остаются открытыми.
 
 ---
 

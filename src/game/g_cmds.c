@@ -1450,6 +1450,78 @@ void ClientCommand (edict_t *ent)
 		}
 		CoopBotDiag_RecordBotStateMarker("udp_test_state");
 	}
+	else if (Q_stricmp(cmd, "coopbot_test_player_position") == 0)
+	{
+		vec3_t position;
+
+		if (coopbot_test_mode == NULL || coopbot_test_mode->value == 0.0f)
+		{
+			gi.dprintf("coopbot_test_player_position ignored: coopbot_test_mode=0\n");
+			return;
+		}
+		position[0] = (float)atof(gi.argv(1));
+		position[1] = (float)atof(gi.argv(2));
+		position[2] = (float)atof(gi.argv(3));
+		if (gi.argv(1)[0] == '\0' || gi.argv(2)[0] == '\0' ||
+			gi.argv(3)[0] == '\0')
+		{
+			gi.cprintf(ent, PRINT_HIGH,
+				"coopbot_test_player_position requires x y z.\n");
+			return;
+		}
+		gi.unlinkentity(ent);
+		VectorCopy(position, ent->s.origin);
+		VectorCopy(position, ent->s.old_origin);
+		VectorClear(ent->velocity);
+		ent->groundentity = NULL;
+		ent->client->ps.pmove.origin[0] = (short)(position[0] * 8.0f);
+		ent->client->ps.pmove.origin[1] = (short)(position[1] * 8.0f);
+		ent->client->ps.pmove.origin[2] = (short)(position[2] * 8.0f);
+		gi.linkentity(ent);
+		gi.dprintf("coopbot_test_player_position accepted: %.1f %.1f %.1f\n",
+			position[0], position[1], position[2]);
+	}
+	else if (Q_stricmp(cmd, "coopbot_test_bot_position") == 0)
+	{
+		int i;
+		vec3_t position;
+
+		if (coopbot_test_mode == NULL || coopbot_test_mode->value == 0.0f)
+		{
+			gi.dprintf("coopbot_test_bot_position ignored: coopbot_test_mode=0\n");
+			return;
+		}
+		position[0] = (float)atof(gi.argv(1));
+		position[1] = (float)atof(gi.argv(2));
+		position[2] = (float)atof(gi.argv(3));
+		if (gi.argv(1)[0] == '\0' || gi.argv(2)[0] == '\0' ||
+			gi.argv(3)[0] == '\0')
+		{
+			gi.cprintf(ent, PRINT_HIGH,
+				"coopbot_test_bot_position requires x y z.\n");
+			return;
+		}
+		for (i = 0; i < maxclients->value; ++i)
+		{
+			edict_t *bot = g_edicts + i + 1;
+			if (!bot->inuse || bot->client == NULL ||
+				(bot->flags & FL_BOT) == 0)
+				continue;
+			gi.unlinkentity(bot);
+			VectorCopy(position, bot->s.origin);
+			VectorCopy(position, bot->s.old_origin);
+			VectorClear(bot->velocity);
+			bot->groundentity = NULL;
+			bot->client->ps.pmove.origin[0] = (short)(position[0] * 8.0f);
+			bot->client->ps.pmove.origin[1] = (short)(position[1] * 8.0f);
+			bot->client->ps.pmove.origin[2] = (short)(position[2] * 8.0f);
+			gi.linkentity(bot);
+			gi.dprintf("coopbot_test_bot_position accepted: %.1f %.1f %.1f\n",
+				position[0], position[1], position[2]);
+			return;
+		}
+		gi.dprintf("coopbot_test_bot_position ignored: no bot\n");
+	}
 #endif
 	else if (Q_stricmp (cmd, "wave") == 0)
 		Cmd_Wave_f (ent);

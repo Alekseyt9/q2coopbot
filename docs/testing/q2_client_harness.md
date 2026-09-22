@@ -173,9 +173,12 @@ python .\tools\q2_client_handshake.py `
 | Co-op phase retreat baseline | `coop-phase-retreat-740..759` | 20/20 UDP+human gate; 12/20 per-episode botlib logs contain `coopbot_regroup`; 295 bot-owned shots; 20 bot damage events / 842 damage; max distance 761.5 |
 | Co-op cover baseline | `coop-cover-920..939` | 20/20 UDP+human gate; 20/20 strict `role=COVER`; 756 player-intent events; 104 cover-role events; max distance 678.1 |
 | Co-op rescue baseline | `coop-rescue-850..869` | 20/20 strict `rescue_position`; 97 rescue-position events; 48 `role=RESCUER`; 20/20 UDP+human gate; 12/20 map transitions требуют отдельного persistence-теста |
+| Co-op end-level transition + persistence | `coop-transition-1114..1133` | 20/20 strict UDP+human; 20/20 штатный runtime `map_transition`; 20/20 exact bot health/max-health/armor/ammo index+count/weapon match после карты |
 | Co-op kill-steal default probe | `coop-kill-steal-980..986` | 7/7 UDP+human gate и player-focus telemetry; 0 `kill_steal_yield` при default radius 192 |
 | Co-op kill-steal controlled probe | `coop-kill-steal-990..1009` | 20/20 UDP+human gate; 6/20 эпизодов и 20 `kill_steal_yield` events при controlled radius 64; default acceptance не закрыт |
 | Co-op lost-LOS probe | `coop-lost-los-1015` + `1020..1039` | 21/21 UDP+human gate; 1/21 `target_lost`; 0 map transitions; acceptance не закрыт |
+| Co-op elevator probe | `coop-elevator-1151` | 1/1 strict UDP+human; `coopbot_map_model` показывает 1 elevator и vertical edge 806 -> 751, delta 93.7; live `TRAVEL_ELEVATOR`/reacquire не зафиксирован |
+| Co-op elevator runtime fixture | `coop-elevator-fixture-1155` | 1/1 strict UDP+human; opt-in UDP fixture разместила bot в area 806 и human в area 751; botlib записал `coopbot_elevator_route`, `coopbot_elevator_reacquired` и `coopbot_regroup_complete`; это runtime-ветка, не доказательство прохождения карты обычным движением |
 
 Первые две строки — исторические transport/input прогоны; они были выполнены
 в deathmatch и не являются доказательством боевой кооперации. Все строки с
@@ -183,9 +186,10 @@ python .\tools\q2_client_handshake.py `
 доказывает bot-side запуск Blaster и попадание по живому monster entity.
 Acceptance baseline `N >= 20` частично подтверждён: cover закрыт отдельной
 строгой серией, rescue закрыт в 20/20 seed, phase-retreat подтверждает
-regroup в 12/20 seed. Kill-steal, end-level persistence и полные
-cooperative-level статистические пороги всё ещё не подтверждены; transport/
-input проверен без foreground окон.
+regroup в 12/20 seed, а end-level persistence закрыт отдельной серией
+`coop-transition-1114..1133`. Default-radius kill-steal, стабильный lost-LOS,
+elevator traversal и полные cooperative-level статистические пороги всё ещё
+не подтверждены; transport/input проверен без foreground окон.
 
 Для записи projectile/shot/damage hooks в combat-команде нужен
 `+set coopbot_log 2`; при обычном `coopbot_log 1` базовые снапшоты остаются,
@@ -226,6 +230,40 @@ botlib-log; batch-сценарий kill-steal намеренно задаёт co
 co-op server с `minimumplayers 2`; повторно использовать тот же `episode_id`
 в общем JSONL не следует — для чистой статистики нужен новый диапазон seed.
 
+`-Scenario transition` включает только для тестового прогона opt-in cvar
+`coopbot_test_mode 1`, отправляет через UDP сначала маркировку состояния бота,
+затем штатную команду перехода `base2 -> base1`, и требует
+`--require-runtime-map-transition --require-bot-state-persistence`. Проверяются
+`health`, `max_health`, `armor`, `ammo_index`, `ammo` и `weapon` до/после
+перехода. Production-путь по умолчанию этот hook не включает:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\run_udp_coop_combat_batch.ps1 `
+  -Scenario transition -FirstSeed 1114 -Count 20 -Port 28604
+```
+
+`-Scenario elevator` включает `coopbot_map_model 1`, идёт к вертикальному
+участку `base2` через real-time UDP phases и строго проверяет наличие
+вертикального `TRAVEL_ELEVATOR` edge в AAS. Это отдельный map/route probe;
+для полного runtime acceptance дополнительно нужны `WAIT_ELEVATOR` /
+`TRAVEL_ELEVATOR` / `reacquired` события.
+
+`-Scenario elevator-fixture` — отдельный opt-in runtime smoke test. Harness
+через UDP отправляет тестовые команды `coopbot_test_bot_position` и
+`coopbot_test_player_position`, ставит bot в нижнюю area `806`, human в верхнюю
+area `751` и требует `TRAVEL_ELEVATOR` route, reacquire и completed regroup.
+Команды доступны только при `coopbot_test_mode 1`; они не имитируют обычное
+прохождение карты и нужны для проверки live runtime-ветки без foreground окна:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\run_udp_coop_combat_batch.ps1 `
+  -Scenario elevator-fixture -FirstSeed 1155 -Count 1 -Port 27995
+```
+
+Для ручного timeline harness поддерживает `--server-command-at SECONDS:COMMAND`
+(repeatable) и общий `--server-command-delay SECONDS`; это позволяет отправлять
+серверные команды после `begin`, не подменяя real-time `clc_move` поток.
+
 Пример многофазного живого клиента напрямую:
 
 ```powershell
@@ -261,9 +299,8 @@ python .\tools\coopbot_event_report.py `
 
 Поворот, strafe, прыжок, attack и повторяемая многофазная временная
 последовательность уже вынесены в CLI и batch-режим. Следующий уровень —
-map-aware waypoint/conditional timeline для гарантированных LOS,
-kill-steal и end-level сценариев; для этого не требуется возвращаться к
-графическому окну.
+map-aware waypoint/conditional timeline для гарантированных LOS и default-radius
+kill-steal; для этого не требуется возвращаться к графическому окну.
 
 ## Проверка отчётом
 
@@ -302,6 +339,9 @@ if ($null -ne $owned -and $owned.ProcessName -eq 'q2ded') {
 - обработку real-time `clc_move` usercmds с forward movement и attack flag.
 
 Он не доказывает прохождение кооперативной кампании, качество прицеливания,
-полный keyboard/mouse control, elevator scenarios или acceptance baseline
-`N >= 20`.
-Эти пункты по-прежнему требуют отдельных scripted/runtime сценариев.
+полный keyboard/mouse control, обычное прохождение elevator scenarios,
+scripted waypoint coverage
+или полные cooperative-level acceptance thresholds.
+Runtime elevator branch отдельно smoke-tested через opt-in fixture, но
+полное перемещение к лифту и прохождение карты по-прежнему требуют отдельного
+map-aware scripted/runtime сценария.
