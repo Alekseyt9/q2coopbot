@@ -179,6 +179,7 @@ typedef struct bot_updateentity_s
 	int		event;			// impulse events -- muzzle flashes, footsteps, etc
 									// events only go out for a single frame, they
 									// are automatically cleared each frame
+	int		svflags;				// server-side classification flags
 } bot_updateentity_t;
 
 //bot library exported functions

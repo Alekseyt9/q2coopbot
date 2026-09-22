@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('combat', 'follow', 'retreat', 'phase-retreat', 'rescue', 'cover', 'kill-steal', 'lost-los', 'elevator', 'elevator-fixture', 'transition')]
+    [ValidateSet('combat', 'follow', 'retreat', 'phase-retreat', 'rescue', 'cover', 'kill-steal', 'kill-steal-default-fixture', 'lost-los', 'elevator', 'elevator-fixture', 'elevator-player', 'transition')]
     [string]$Scenario = 'combat',
     [int]$FirstSeed = 532,
     [int]$Count = 20,
@@ -45,8 +45,10 @@ $harnessDuration = $MoveSeconds + 2
 $rescueMode = $false
 $roleMode = $false
 $killStealMode = $false
+$killStealDefaultFixtureMode = $false
 $elevatorMode = $false
 $elevatorFixtureMode = $false
+$elevatorPlayerMode = $false
 $transitionMode = $false
 switch ($Scenario) {
     'combat' {
@@ -98,6 +100,19 @@ switch ($Scenario) {
         $harnessDuration = 18
         $killStealMode = $true
     }
+    'kill-steal-default-fixture' {
+        # Keep real UDP player attack/focus telemetry, while opt-in test
+        # commands place the live player and bot at deterministic valid points
+        # around a live melee monster beyond the stock 192-unit yield radius.
+        $phaseArgs = @(
+            '--phase', '4:0:0:0:1:0',
+            '--phase', '12:0:0:0:1:0'
+        )
+        $harnessDuration = 18
+        $killStealMode = $true
+        $killStealDefaultFixtureMode = $true
+        $StartupDelayMs = 500
+    }
     'lost-los' {
         $phaseArgs = @(
             '--phase', '4:400:0:0:1:0',
@@ -123,6 +138,15 @@ switch ($Scenario) {
         $harnessDuration = 36
         $elevatorMode = $true
         $elevatorFixtureMode = $true
+        $StartupDelayMs = 500
+    }
+    'elevator-player' {
+        # Opt-in real player-platform probe: the UDP human is placed on the
+        # lower platform and then held still while the live func_plat moves.
+        $phaseArgs = @('--phase', '7:0:0:0:0:0')
+        $harnessDuration = 9
+        $elevatorMode = $true
+        $elevatorPlayerMode = $true
         $StartupDelayMs = 500
     }
     'transition' {
@@ -161,6 +185,12 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
         '+set', 'coopbot_episode_id', $episode,
         '+map', 'base2'
     )
+    if ($killStealDefaultFixtureMode) {
+        # q2ded has a small argv limit; this opt-in fixture keeps the runtime
+        # default game directory instead of spending three argv slots on the
+        # explicit `game baseq2` pair.
+        $serverArgs = @($serverArgs[3..($serverArgs.Count - 1)])
+    }
     if ($rescueMode) {
         $serverArgs = @(
             '+set', 'coopbot_roles', '1',
@@ -175,16 +205,18 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
         ) + $serverArgs
     }
     elseif ($killStealMode) {
-        # Controlled probe: make the yield threshold observable on base2;
-        # the game default remains 192 and is covered by the separate probe.
+        $killStealRadius = if ($killStealDefaultFixtureMode) { '192' } else { '64' }
         $serverArgs = @(
             '+set', 'coopbot_player_intent', '1',
             '+set', 'coopbot_shared_focus', '1',
             '+set', 'coopbot_kill_steal_control', '1',
-            '+set', 'coopbot_kill_steal_radius', '64'
+            '+set', 'coopbot_kill_steal_radius', $killStealRadius
         ) + $serverArgs
     }
-    if ($elevatorFixtureMode) {
+    if ($killStealDefaultFixtureMode) {
+        $serverArgs = @('+set', 'coopbot_test_mode', '1') + $serverArgs
+    }
+    if ($elevatorFixtureMode -or $elevatorPlayerMode) {
         $serverArgs = @(
             '+set', 'coopbot_test_mode', '1',
             '+set', 'coopbot_map_model', '1'
@@ -233,6 +265,23 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
                 '--server-command-at', '1.2:coopbot_test_bot_position -62 1408 -34',
                 '--server-command-at', '1.4:coopbot_test_player_position -4 1408 60'
             )
+        }
+        if ($elevatorPlayerMode) {
+            $harnessArgs += @(
+                '--server-command-at', '1:coopbot_test_state 100 100 100',
+                '--server-command-at', '1.2:coopbot_test_bot_position -120 1408 20',
+                '--server-command-at', '1.4:coopbot_test_player_position -60 1408 20'
+            )
+        }
+        if ($killStealDefaultFixtureMode) {
+            $harnessArgs += @(
+                '--server-command-at', '1.2:coopbot_test_bot_position 160 1896 -168',
+                '--server-command-at', '1.4:coopbot_test_player_position -240 1896 -168',
+                '--server-command-at', '4.2:coopbot_test_bot_position 160 1896 -168'
+            )
+            foreach ($positionTime in @(4.6, 5.0, 5.4, 5.8, 6.2, 6.6, 7.0, 7.4, 7.8, 8.2, 8.6, 9.0, 9.4, 9.8, 10.2, 10.6, 11.0, 11.4, 11.8, 12.2, 12.6, 13.0, 13.4, 13.8, 14.2, 14.6, 15.0, 15.4, 15.8)) {
+                $harnessArgs += @('--server-command-at', "${positionTime}:coopbot_test_bot_position 160 1896 -168")
+            }
         }
         if ($rescueMode) {
             $harnessArgs += @('--server-command', 'give health 20')
@@ -285,11 +334,11 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
     if ($Scenario -eq 'cover') {
         $reportArgs += @('--require-role', 'COVER')
     }
-    if ($Scenario -eq 'kill-steal') {
+    if ($Scenario -eq 'kill-steal' -or $Scenario -eq 'kill-steal-default-fixture') {
         $reportArgs += '--require-kill-steal-yield'
     }
     if ($Scenario -eq 'lost-los') {
-        $reportArgs += '--require-target-lost'
+        $reportArgs += '--require-target-los-lost'
     }
     if ($Scenario -eq 'elevator') {
         $reportArgs += @('--require-elevator-edge', '--require-vertical-elevator-edge')
@@ -302,6 +351,9 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
             '--require-elevator-reacquired',
             '--require-regroup-complete'
         )
+    }
+    if ($Scenario -eq 'elevator-player') {
+        $reportArgs += '--require-player-vertical-transition'
     }
     if ($Scenario -eq 'transition') {
         $reportArgs += @(

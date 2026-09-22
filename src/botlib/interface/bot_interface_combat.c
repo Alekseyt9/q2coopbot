@@ -29,6 +29,8 @@
 #define BOT_BATTLE_POWER_ARMOR_GRACE 0.9
 #define BOT_CONSOLE_SKIN_TEAMS 0x40
 #define BOT_CONSOLE_MODEL_TEAMS 0x80
+#define BOT_SVF_DEADMONSTER 0x00000002
+#define BOT_SVF_MONSTER 0x00000004
 
 /*
 =============
@@ -882,11 +884,14 @@ int BotAI_EntityIsDead(const aas_entityinfo_t *entity_info)
 
 	if (LibVarGetValue("coop") != 0.0f)
 	{
-		/* Monsters are bbox entities. This excludes pickups, triggers and
-		 * brush movers from the coop enemy scan. */
+		/* Only live server-classified monsters belong in the coop enemy scan.
+		 * base2 contains a misc_deadsoldier bbox that otherwise looks like a
+		 * valid target when the host classification flags are lost. */
 		return entity_info->number < 1 ||
 			entity_info->modelindex <= 0 ||
 			entity_info->solid != SOLID_BBOX ||
+			(entity_info->svflags & BOT_SVF_MONSTER) == 0 ||
+			(entity_info->svflags & BOT_SVF_DEADMONSTER) != 0 ||
 			(entity_info->effects & (EF_GIB | EF_FLIES)) != 0;
 	}
 

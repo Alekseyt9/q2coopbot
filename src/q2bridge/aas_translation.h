@@ -94,6 +94,7 @@ typedef struct AASEntityFrame_s {
     int renderfx;
     int sound;
     int event_id;
+    int svflags;       ///< server-side monster/dead-monster classification.
     float last_update_time; ///< Absolute timestamp.
     float frame_delta;      ///< Time since the previous update.【F:dev_tools/gladiator.dll.bndb_hlil.txt†L10358-L10368】
     bool angles_dirty;      ///< true only when SOLID_BSP angles changed.

@@ -321,6 +321,7 @@ static void AAS_CopyEntityInfo(const aas_entity_t *entity, aas_entityinfo_t *inf
 	info->frame = entity->frame;
 	info->skinnum = entity->skinnum;
 	info->eventid = entity->eventid;
+	info->svflags = entity->svflags;
 	info->effects = entity->effects;
 	info->renderfx = entity->renderfx;
 	info->sound = entity->sound;
@@ -10474,7 +10475,8 @@ int AAS_UpdateEntity(int ent, const AASEntityFrame *state)
     entity->effects = state->effects;
     entity->renderfx = state->renderfx;
     entity->sound = state->sound;
-    entity->eventid = state->event_id;
+	entity->eventid = state->event_id;
+	entity->svflags = state->svflags;
 
     VectorCopy(state->angles, entity->angles);
     VectorCopy(state->origin, entity->origin);

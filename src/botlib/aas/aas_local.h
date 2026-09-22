@@ -206,6 +206,7 @@ typedef struct aas_entityinfo_s
 	int frame;
 	int skinnum;
 	int eventid;
+	int svflags;
 	int effects;
 	int renderfx;
 	int sound;
@@ -500,6 +501,7 @@ typedef struct aas_entity_s
     int renderfx;           /* offset 0x78 */
     int sound;              /* offset 0x7c */
     int eventid;            /* offset 0x80 */
+    int svflags;            /* host server classification flags */
 
     aas_link_t *areas;      /* offset 0x84 in original 32-bit build */
     bsp_link_t *leaves;     /* offset 0x88 in original 32-bit build */

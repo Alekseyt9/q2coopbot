@@ -182,6 +182,7 @@ static void CopyScalarFrameFields(const bot_updateentity_t *src, AASEntityFrame 
 	dst->frame = src->frame;
 	dst->effects = src->effects;
 	dst->renderfx = src->renderfx;
+	dst->svflags = src->svflags;
 }
 
 /*

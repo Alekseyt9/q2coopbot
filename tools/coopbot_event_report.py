@@ -450,11 +450,15 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
     encounter_events = 0
     target_acquired = 0
     target_lost = 0
+    target_los_lost = 0
     regroup_events = 0
     stuck_events = 0
     map_transition_events = 0
     human_player_samples = 0
     human_player_entities: set[int] = set()
+    player_z_samples: list[float] = []
+    player_max_contiguous_rise = 0.0
+    player_contiguous_rise = 0.0
 
     for record in records:
         fields = message_fields(record.get("message"))
@@ -474,6 +478,23 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
             if player_entity >= 0 and player_is_human == 1:
                 human_player_samples += 1
                 human_player_entities.add(player_entity)
+                player_origin = vector3(fields.get("player_origin"))
+                if player_origin is not None:
+                    if player_z_samples:
+                        previous_z = player_z_samples[-1]
+                        z_delta = player_origin[2] - previous_z
+                        # A large one-frame jump is a test-fixture placement,
+                        # not live platform motion.  Reset before measuring
+                        # the following real-time sequence.
+                        if z_delta > 64.0 or z_delta < -1.0:
+                            player_contiguous_rise = 0.0
+                        else:
+                            player_contiguous_rise += max(0.0, z_delta)
+                            player_max_contiguous_rise = max(
+                                player_max_contiguous_rise,
+                                player_contiguous_rise,
+                            )
+                    player_z_samples.append(player_origin[2])
             distance = number(fields.get("distance_to_player"))
             if distance is not None and distance >= 0.0:
                 snapshot_distances.append(distance)
@@ -529,6 +550,9 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
         if event == "target_lost":
             target_lost += 1
 
+        if event == "target_los_lost":
+            target_los_lost += 1
+
         if event == "regroup":
             regroup_events += 1
 
@@ -583,9 +607,21 @@ def telemetry_summary(records: Iterable[dict]) -> dict:
             "encounter_observed": encounter_events,
             "target_acquired": target_acquired,
             "target_lost": target_lost,
+            "target_los_lost": target_los_lost,
             "regroup": regroup_events,
             "stuck": stuck_events,
             "map_transitions": map_transition_events,
+            "player_vertical_position": {
+                "samples": len(player_z_samples),
+                "minimum": min(player_z_samples) if player_z_samples else None,
+                "maximum": max(player_z_samples) if player_z_samples else None,
+                "delta": (
+                    max(player_z_samples) - min(player_z_samples)
+                    if player_z_samples
+                    else None
+                ),
+                "maximum_contiguous_rise": player_max_contiguous_rise,
+            },
         },
         "bot_state_persistence": bot_state_persistence(records),
     }
@@ -756,6 +792,11 @@ def main() -> int:
         help="fail unless botlib logged regroup completion",
     )
     parser.add_argument(
+        "--require-player-vertical-transition",
+        action="store_true",
+        help="fail unless the human UDP player's live contiguous Z rise is at least 64 units",
+    )
+    parser.add_argument(
         "--require-regroup",
         action="store_true",
         help="fail unless botlib logged a coopbot_regroup frame",
@@ -774,6 +815,11 @@ def main() -> int:
         "--require-target-lost",
         action="store_true",
         help="fail unless runtime telemetry recorded a lost target",
+    )
+    parser.add_argument(
+        "--require-target-los-lost",
+        action="store_true",
+        help="fail unless runtime telemetry recorded a target losing line of sight",
     )
     parser.add_argument(
         "--require-role",
@@ -947,6 +993,15 @@ def main() -> int:
     ):
         validation_errors.append("no completed coop regroup was recorded by botlib")
 
+    if args.require_player_vertical_transition:
+        player_vertical = result_object["telemetry"]["coop"][
+            "player_vertical_position"
+        ]
+        if (player_vertical["maximum_contiguous_rise"] or 0.0) < 64.0:
+            validation_errors.append(
+                "human UDP player did not make a live vertical rise of at least 64 units"
+            )
+
     if args.require_regroup and botlib_events.get("regroup", 0) < 1:
         validation_errors.append("no coopbot_regroup frame was recorded by botlib")
 
@@ -965,6 +1020,12 @@ def main() -> int:
 
     if args.require_target_lost and result_object["telemetry"]["coop"]["target_lost"] < 1:
         validation_errors.append("no target_lost frame was recorded")
+
+    if (
+        args.require_target_los_lost
+        and result_object["telemetry"]["coop"]["target_los_lost"] < 1
+    ):
+        validation_errors.append("no target_los_lost frame was recorded")
 
     for role in args.require_role or []:
         if botlib_events.get(f"role_{role.lower()}", 0) < 1:
@@ -1040,10 +1101,12 @@ def main() -> int:
         or args.require_elevator_reacquired
         or args.require_regroup_path_failure
         or args.require_regroup_complete
+        or args.require_player_vertical_transition
         or args.require_regroup
         or args.require_rescue
         or args.require_kill_steal_yield
         or args.require_target_lost
+        or args.require_target_los_lost
         or args.require_role
         or args.require_player_area_transition
         or args.require_bot_area_transition

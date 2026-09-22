@@ -176,9 +176,11 @@ python .\tools\q2_client_handshake.py `
 | Co-op end-level transition + persistence | `coop-transition-1114..1133` | 20/20 strict UDP+human; 20/20 штатный runtime `map_transition`; 20/20 exact bot health/max-health/armor/ammo index+count/weapon match после карты |
 | Co-op kill-steal default probe | `coop-kill-steal-980..986` | 7/7 UDP+human gate и player-focus telemetry; 0 `kill_steal_yield` при default radius 192 |
 | Co-op kill-steal controlled probe | `coop-kill-steal-990..1009` | 20/20 UDP+human gate; 6/20 эпизодов и 20 `kill_steal_yield` events при controlled radius 64; default acceptance не закрыт |
+| Co-op kill-steal default-radius fixture | `coop-kill-steal-default-fixture-1176..1195` | 20/20 strict UDP+human/report; 40 `kill_steal_yield` events при radius 192; 2306 player-focus events; live player focus на живом `monster_infantry` entity 306; bot separation 240 > 192; 287 bot shots и 99 monster-damage events / 990 damage |
 | Co-op lost-LOS probe | `coop-lost-los-1015` + `1020..1039` | 21/21 UDP+human gate; 1/21 `target_lost`; 0 map transitions; acceptance не закрыт |
 | Co-op elevator probe | `coop-elevator-1151` | 1/1 strict UDP+human; `coopbot_map_model` показывает 1 elevator и vertical edge 806 -> 751, delta 93.7; live `TRAVEL_ELEVATOR`/reacquire не зафиксирован |
 | Co-op elevator runtime fixture | `coop-elevator-fixture-1155` | 1/1 strict UDP+human; opt-in UDP fixture разместила bot в area 806 и human в area 751; botlib записал `coopbot_elevator_route`, `coopbot_elevator_reacquired` и `coopbot_regroup_complete`; это runtime-ветка, не доказательство прохождения карты обычным движением |
+| Co-op elevator player ride | `coop-elevator-player-1160` | 1/1 UDP+human; реальный UDP-игрок стартовал на нижней `func_plat` и через live server physics поднялся примерно с `z=-38` до `z=112`; отдельный gate проверяет вертикальный delta `>=64`; bot route fixture этим не подменяется |
 
 Первые две строки — исторические transport/input прогоны; они были выполнены
 в deathmatch и не являются доказательством боевой кооперации. Все строки с
@@ -186,10 +188,13 @@ python .\tools\q2_client_handshake.py `
 доказывает bot-side запуск Blaster и попадание по живому monster entity.
 Acceptance baseline `N >= 20` частично подтверждён: cover закрыт отдельной
 строгой серией, rescue закрыт в 20/20 seed, phase-retreat подтверждает
-regroup в 12/20 seed, а end-level persistence закрыт отдельной серией
-`coop-transition-1114..1133`. Default-radius kill-steal, стабильный lost-LOS,
-elevator traversal и полные cooperative-level статистические пороги всё ещё
-не подтверждены; transport/input проверен без foreground окон.
+regroup в 12/20 seed, end-level persistence закрыт отдельной серией
+`coop-transition-1114..1133`, а default-radius kill-steal закрыт
+детерминированным live UDP fixture в 20/20 seed. Естественный uncontrolled
+default probe по-прежнему дал 0 yield, поэтому map-aware kill-steal,
+стабильный lost-LOS, elevator traversal и полные cooperative-level
+статистические пороги всё ещё не подтверждены; transport/input проверен без
+foreground окон.
 
 Для записи projectile/shot/damage hooks в combat-команде нужен
 `+set coopbot_log 2`; при обычном `coopbot_log 1` базовые снапшоты остаются,
@@ -226,7 +231,10 @@ hold+attack через repeatable `--phase` usercmds; `-Scenario rescue` вкл�
 player intent/shared focus/kill-steal control и требует `kill_steal_yield` в
 botlib-log; batch-сценарий kill-steal намеренно задаёт controlled
 `coopbot_kill_steal_radius=64`, тогда как default `192` проверяется отдельной
-серией. На каждый эпизод создаётся новый
+серией и deterministic fixture. Fixture через UDP-команды в
+`coopbot_test_mode` ставит живого игрока рядом с живым `monster_infantry`, а
+bot на 240 units; игрок всё равно создаётся обычным UDP handshake и держит
+real-time attack usercmds. На каждый эпизод создаётся новый
 co-op server с `minimumplayers 2`; повторно использовать тот же `episode_id`
 в общем JSONL не следует — для чистой статистики нужен новый диапазон seed.
 
@@ -258,6 +266,18 @@ area `751` и требует `TRAVEL_ELEVATOR` route, reacquire и completed reg
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\run_udp_coop_combat_batch.ps1 `
   -Scenario elevator-fixture -FirstSeed 1155 -Count 1 -Port 27995
+```
+
+`-Scenario elevator-player` проверяет именно движение живого UDP-игрока на
+нижней `func_plat`: тестовая команда только ставит игрока на нижнюю площадку,
+после чего `clc_move` идёт в real time, а reducer требует вертикальное
+перемещение позиции игрока не менее чем на 64 units. Bot и игрок при этом
+могут оказаться на одной движущейся платформе; это проверка player-side
+physics, а не полная проверка bot traversal:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\run_udp_coop_combat_batch.ps1 `
+  -Scenario elevator-player -FirstSeed 1160 -Count 1 -Port 28000
 ```
 
 Для ручного timeline harness поддерживает `--server-command-at SECONDS:COMMAND`
@@ -297,10 +317,22 @@ python .\tools\coopbot_event_report.py `
   --require-human-player --require-kill-steal-yield
 ```
 
+Default-radius fixture запускается так:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\run_udp_coop_combat_batch.ps1 `
+  -Scenario kill-steal-default-fixture -FirstSeed 1176 -Count 20 -Port 28026
+```
+
+Это закрывает live runtime-механику yield при штатном радиусе `192`, но не
+подменяет естественный map-aware маршрут: позиции fixture задаются только
+opt-in UDP-командами при `coopbot_test_mode 1`.
+
 Поворот, strafe, прыжок, attack и повторяемая многофазная временная
 последовательность уже вынесены в CLI и batch-режим. Следующий уровень —
-map-aware waypoint/conditional timeline для гарантированных LOS и default-radius
-kill-steal; для этого не требуется возвращаться к графическому окну.
+map-aware waypoint/conditional timeline для гарантированных LOS и естественного
+default-radius kill-steal; для этого не требуется возвращаться к графическому
+окну.
 
 ## Проверка отчётом
 
@@ -342,6 +374,7 @@ if ($null -ne $owned -and $owned.ProcessName -eq 'q2ded') {
 полный keyboard/mouse control, обычное прохождение elevator scenarios,
 scripted waypoint coverage
 или полные cooperative-level acceptance thresholds.
-Runtime elevator branch отдельно smoke-tested через opt-in fixture, но
+Runtime elevator branch отдельно smoke-tested через opt-in fixture, а live
+player ride подтверждён отдельным vertical-position gate, но
 полное перемещение к лифту и прохождение карты по-прежнему требуют отдельного
 map-aware scripted/runtime сценария.

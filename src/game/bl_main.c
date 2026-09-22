@@ -612,6 +612,7 @@ void BotLib_BotUpdateEntity(edict_t *ent)
 	bue.renderfx = ent->s.renderfx;
 	bue.sound = ent->s.sound;
 	bue.event = ent->s.event;
+	bue.svflags = ent->svflags;
 
 #ifdef TOURNEY
 	if (ent->item && (ent->item->flags & IT_RUNE))

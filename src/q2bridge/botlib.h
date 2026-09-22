@@ -221,6 +221,7 @@ typedef struct bot_updateentity_s {
     int    renderfx;
     int    sound;
     int    event;
+    int    svflags;
 } bot_updateentity_t;
 
 /*

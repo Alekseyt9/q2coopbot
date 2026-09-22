@@ -1576,7 +1576,8 @@ launches/shots и попадание по живому monster entity `302` на
 `coopbot_log 2`; последний нужен для записи projectile/shot/damage hooks.
 Полный acceptance baseline `N >= 20` теперь частично собран; cover и rescue
 закрыты отдельными строгими сериями, controlled kill-steal подтверждён
-частично, а default-radius kill-steal и regroup подтверждены не во всех seed.
+частично, а default-radius kill-steal дополнительно закрыт отдельным live UDP
+fixture в 20/20 seed.
 
 ### UDP baseline series — 2026-09-22
 
@@ -1594,9 +1595,11 @@ launches/shots и попадание по живому monster entity `302` на
 | End-level transition + persistence | `coop-transition-1114..1133` | `20/20` strict UDP+human gate; `20/20` штатный runtime `map_transition`; `20/20` точное совпадение bot health/max-health/armor/ammo index+count/weapon после перехода |
 | Kill-steal default probe | `coop-kill-steal-980..986` | `7/7` UDP+human gate; player-focus telemetry реально записана; `0` `kill_steal_yield` events при default radius `192`, поэтому default acceptance не закрыт |
 | Kill-steal controlled probe | `coop-kill-steal-990..1009` | `20/20` UDP+human gate; `6/20` эпизодов с `kill_steal_yield`; всего `20` yield events и `747` player-focus events при controlled radius `64` |
+| Kill-steal default-radius fixture | `coop-kill-steal-default-fixture-1176..1195` | `20/20` strict UDP+human/report; `40` `kill_steal_yield` events при штатном radius `192`; `2306` player-focus events на живом `monster_infantry` entity `306`; bot separation `240 > 192`; `287` bot shots; `99` monster-damage events / `990` damage |
 | Lost-LOS probe | `coop-lost-los-1015` + `1020..1039` | `21/21` UDP+human gate; `1/21` эпизодов с `target_lost`; `0` map transitions; scripted turn/retreat не даёт стабильного LOS break на `base2` |
 | Vertical/elevator probe | `coop-elevator-1151` | `1/1` strict UDP+human gate; AAS map model содержит `1` elevator и vertical edge `806 -> 751` с delta `93.7`; live route дал обычный regroup без `TRAVEL_ELEVATOR`/reacquire, поэтому acceptance остаётся открытым |
 | Elevator runtime fixture | `coop-elevator-fixture-1155` | `1/1` strict UDP+human gate; opt-in UDP fixture разместила bot в area `806` и human в area `751`; live botlib записал `coopbot_elevator_route`, `coopbot_elevator_reacquired` и `coopbot_regroup_complete`; обычное прохождение карты этим не закрыто |
+| Elevator player ride | `coop-elevator-player-1160` | `1/1` UDP+human; живой UDP-игрок через `clc_move` активировал нижнюю `func_plat` и поднялся примерно с `z=-38` до `z=112`; отдельный reducer gate подтверждает вертикальный delta `>=64`; bot traversal остаётся отдельным тестом |
 
 Артефакты серий лежат в `artifacts/udp-*-baseline/`; для phase-retreat и cover
 строгие reducer-gates читают отдельный botlib log каждого эпизода. Combat baseline
@@ -1605,13 +1608,16 @@ Follow/retreat baseline подтверждает реальный поток use
 transport-сбоев. Phase-retreat уже вызывает regroup, но не во всех seed;
 cover и rescue закрыты по строгим role/position gates. Rescue был исправлен:
 HP-телеметрия теперь обновляется независимо от optional player-intent model.
-Kill-steal пока не закрыт на default radius: controlled probe подтверждает
-реальный механизм yield, но только в `6/20` seed. End-level transition и
-проверяемая persistence закрыты отдельной strict UDP-серией; scripted waypoint
-для гарантированных LOS/позиционных маршрутов остаётся отдельным пунктом.
+Default-radius kill-steal закрыт deterministic live UDP fixture: player focus
+идёт на живой melee monster, а bot находится на 240 units при штатном радиусе
+192; естественный uncontrolled probe всё ещё дал 0 yield и требует map-aware
+timeline. End-level transition и проверяемая persistence закрыты отдельной
+strict UDP-серией; scripted waypoint для гарантированных LOS/позиционных
+маршрутов остаётся отдельным пунктом.
 Runtime-ветка вертикального regroup дополнительно smoke-tested через
 `coop-elevator-fixture-1155`; полноценный map-aware путь живого игрока к лифту
-и прохождение карты остаются открытыми.
+и прохождение карты остаются открытыми. Player-side ride на `func_plat`
+подтверждён отдельной UDP-серией `coop-elevator-player-1160`.
 
 ---
 

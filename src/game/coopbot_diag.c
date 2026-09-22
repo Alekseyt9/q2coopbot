@@ -25,6 +25,7 @@ typedef struct coopbot_diag_client_s
 	unsigned long long crouch_actions;
 	int last_actionflags;
 	int last_target_entity;
+	qboolean last_target_visible;
 	int last_visible_enemies;
 	vec3_t last_origin;
 	qboolean origin_valid;
@@ -504,7 +505,18 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 					client, coopbot_diag.clients[client].last_target_entity);
 			}
 			coopbot_diag.clients[client].last_target_entity = target_entity;
+			coopbot_diag.clients[client].last_target_visible = false;
 		}
+		if (target_entity >= 0 &&
+			coopbot_diag.clients[client].last_target_visible &&
+			!target_visible)
+		{
+			CoopBotDiag_Log(2,
+				"target_los_lost client=%d target=%d",
+				client, target_entity);
+		}
+		coopbot_diag.clients[client].last_target_visible =
+			target_entity >= 0 && target_visible;
 		if (coopbot_diag.clients[client].last_visible_enemies == 0 &&
 			visible_enemies > 0)
 		{
@@ -680,6 +692,7 @@ static void CoopBotDiag_ResetCounters(void)
 		coopbot_diag.clients[index].crouch_actions = 0;
 		coopbot_diag.clients[index].last_actionflags = 0;
 		coopbot_diag.clients[index].last_target_entity = -1;
+		coopbot_diag.clients[index].last_target_visible = false;
 		coopbot_diag.clients[index].last_visible_enemies = 0;
 		VectorClear(coopbot_diag.clients[index].last_origin);
 		coopbot_diag.clients[index].origin_valid = false;
