@@ -210,38 +210,40 @@ switch ($Scenario) {
         # area 806. The client follows it with ordinary UDP usercmds; no
         # coopbot_test_mode or position command is enabled.
         $waypointArgs = @(
-            '--waypoint', '758.4:2296.0:-188.8',
-            '--waypoint', '715.8:2297.1:-152.2:1',
-            '--waypoint', '696.0:2296.0:11.5:1',
-            '--waypoint', '643.4:2294.5:-118.4',
-            '--waypoint', '574.0:2525.7:-147.6',
-            '--waypoint', '472.9:2293.8:-195.3',
-            '--waypoint', '344.4:2400.0:-153.1',
-            '--waypoint', '315.7:2304.0:-150.8',
-            '--waypoint', '176.0:2304.0:-108.3:1',
-            '--waypoint', '63.5:2280.0:-80.6',
-            '--waypoint', '23.8:2359.9:-110.7',
-            '--waypoint', '-32.0:2301.8:-120.7',
-            '--waypoint', '-66.9:2304.0:-122.4',
-            '--waypoint', '-135.1:2297.3:-105.7',
-            '--waypoint', '-186.7:2005.7:-121.6',
-            '--waypoint', '-148.2:1800.1:-109.3',
-            '--waypoint', '-188.1:1922.8:-130.4',
-            '--waypoint', '-63.0:1853.2:-122.4',
-            '--waypoint', '-23.3:1861.0:-117.4',
-            '--waypoint', '56.0:1810.7:-135.7',
-            '--waypoint', '137.0:1855.8:-101.1:1',
-            '--waypoint', '208.0:1818.6:-134.4',
-            '--waypoint', '191.6:1669.2:-108.7',
-            '--waypoint', '283.0:1632.0:-108.0',
-            '--waypoint', '192.0:1600.0:-108.0',
-            '--waypoint', '182.7:1548.3:-22.8:1',
-            '--waypoint', '109.3:1365.7:-149.0',
-            '--waypoint', '16.8:1408.0:-114.4',
-            '--waypoint', '-4.0:1408.0:-124.8',
-            '--waypoint', '-32.3:1408.0:-139.9',
-            '--waypoint=-62.4:1408.0:-33.7:1',
-            '--waypoint=-3.2:1411.2:60.0:1'
+            '--waypoint', '758.4:2296.0:-232.0',
+            '--waypoint', '715.8:2297.1:-232.0',
+            '--waypoint', '696.0:2296.0:-232.0',
+            '--waypoint', '643.4:2294.5:-232.0',
+            '--waypoint', '574.0:2525.7:-232.0',
+            '--waypoint', '472.9:2293.8:-232.0',
+            '--waypoint', '344.4:2400.0:-232.0',
+            '--waypoint', '315.7:2304.0:-232.0',
+            '--waypoint', '176.0:2304.0:-221.3',
+            '--waypoint', '63.5:2280.0:-168.0',
+            '--waypoint', '23.8:2359.9:-168.0',
+            '--waypoint=-32.0:2301.8:-168.0',
+            '--waypoint=-66.9:2304.0:-168.0',
+            '--waypoint=-135.1:2297.3:-168.0',
+            '--waypoint=-186.7:2005.7:-168.0',
+            '--waypoint=-188.1:1922.8:-168.0',
+            '--waypoint=-148.2:1800.1:-168.0',
+            '--waypoint=-63.0:1853.2:-168.0',
+            '--waypoint=-23.3:1861.0:-168.0',
+            '--waypoint', '56.0:1810.7:-168.0',
+            '--waypoint', '137.0:1855.8:-168.0',
+            '--waypoint', '208.0:1818.6:-168.0',
+            '--waypoint', '191.6:1669.2:-168.0',
+            '--waypoint', '283.0:1632.0:-168.0',
+            '--waypoint', '192.0:1600.0:-168.0',
+            '--waypoint', '182.7:1548.3:-168.0',
+            '--waypoint', '109.3:1365.7:-168.0',
+            '--waypoint', '16.8:1408.0:-168.0',
+            '--waypoint=-4.0:1408.0:-168.0',
+            # Finish at the center of the lower platform trigger. Once the
+            # waypoint is reached, the harness sends zero movement and lets
+            # the live func_plat physics lift the human naturally.
+            '--waypoint=-32.3:1408.0:-176.0',
+            '--waypoint=-84.0:1408.0:-176.0'
         )
         $harnessDuration = 90
         $elevatorMode = $true
@@ -449,8 +451,31 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
         if ($rescueMode) {
             $harnessArgs += @('--server-command', 'give health 20')
         }
+        if ($Scenario -eq 'elevator-natural-route') {
+            # Keep the real UDP player alive while the closed-loop route and
+            # elevator regroup finish. These are ordinary server commands;
+            # no position/entity override is used.
+            $harnessArgs += @(
+                '--server-command-at', '0.5:god',
+                '--server-command-at', '0.5:notarget',
+                '--server-command-at', '0.5:give health 100',
+                '--server-command-at', '16:give health 100',
+                '--server-command-at', '32:give health 100',
+                '--server-command-at', '48:give health 100',
+                '--server-command-at', '64:give health 100',
+                '--server-command-at', '80:give health 100'
+            )
+        }
         if ($waypointArgs.Count -gt 0) {
             $harnessArgs += $waypointArgs
+            if ($Scenario -eq 'elevator-natural-route') {
+                $harnessArgs += @(
+                    '--post-move-duration', '20',
+                    '--waypoint-horizontal-tolerance', '16',
+                    '--waypoint-vertical-tolerance', '24',
+                    '--use'
+                )
+            }
         }
         elseif ($phaseArgs.Count -gt 0) {
             $harnessArgs += $phaseArgs

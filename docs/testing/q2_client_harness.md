@@ -159,6 +159,33 @@ python .\tools\q2_client_handshake.py `
 Если Windows возвращает UDP `WSAECONNRESET`, harness завершает транспортный
 цикл и сообщает его в JSON-поле `socket_error`, не выдавая traceback.
 
+Для map-aware проверки живого маршрута используется closed-loop режим
+`--waypoint X:Y:Z[:JUMP]`. Координаты читаются из свежих `bot_snapshot`
+событий (`player_is_human=1`), поэтому следующий usercmd вычисляется по
+фактической позиции игрока, а не по таймеру. `--use` удерживает `BUTTON_USE`,
+а `--post-move-duration` оставляет клиента подключённым после последней точки,
+чтобы AI успел обработать regroup:
+
+```powershell
+python .\tools\q2_client_handshake.py `
+  --port 28338 --duration 90 --name ElevatorHuman `
+  --event-log 'F:\src\quake2\q2coopbot-runtime-bot\coopbot_debug_events.jsonl' `
+  --episode-id coop-elevator-natural-route-1348 `
+  --require-human-marker --use --post-move-duration 20 `
+  --waypoint 758.4:2296:-232 `
+  --waypoint 715.8:2297:-232 `
+  --waypoint=-60:1408:-34:1 `
+  --waypoint=-48:1408:94:1
+```
+
+Отрицательное значение waypoint передавайте как `--waypoint=-X:Y:Z`, иначе
+старый Windows PowerShell может принять его за параметр. В прогоне
+`coop-elevator-natural-route-1348` UDP-клиент достиг `30/33` точек, а botlib
+записал реальный `TRAVEL_ELEVATOR`, `coopbot_elevator_route`,
+`coopbot_elevator_reacquired` и `coopbot_regroup_complete`. Это первый строгий
+natural-route успех; серия `1348..1353` пока нестабильна (`1/6` pass), поэтому
+полное elevator acceptance ещё не закрыто.
+
 ## Проверенные сценарии через UDP
 
 | Плановый сценарий | Episode | Что реально проверено |
@@ -183,6 +210,8 @@ python .\tools\q2_client_handshake.py `
 | Co-op elevator probe | `coop-elevator-1151` | 1/1 strict UDP+human; `coopbot_map_model` показывает 1 elevator и vertical edge 806 -> 751, delta 93.7; live `TRAVEL_ELEVATOR`/reacquire не зафиксирован |
 | Co-op elevator runtime fixture | `coop-elevator-fixture-1155` | 1/1 strict UDP+human; opt-in UDP fixture разместила bot в area 806 и human в area 751; botlib записал `coopbot_elevator_route`, `coopbot_elevator_reacquired` и `coopbot_regroup_complete`; это runtime-ветка, не доказательство прохождения карты обычным движением |
 | Co-op elevator player ride | `coop-elevator-player-1160` | 1/1 UDP+human; реальный UDP-игрок стартовал на нижней `func_plat` и через live server physics поднялся примерно с `z=-38` до `z=112`; отдельный gate проверяет вертикальный delta `>=64`; bot route fixture этим не подменяется |
+| Co-op live elevator route probe | `coop-elevator-natural-route-1348..1353` | 6/6 UDP+human; closed-loop waypoint client достиг `29-30/33` точек; `1348` записал `TRAVEL_ELEVATOR`/elevator route/reacquire/regroup-complete и прошёл strict report, остальные 5 seed — нет; natural acceptance остаётся нестабильным |
+| Co-op natural lost-LOS spot-check | `coop-lost-los-1354..1357` | 4/4 UDP+human; `3/4` strict episodes с `target_los_lost`, один seed не записал LOS-loss; это spot-check, не новый `20/20` baseline |
 
 Первые две строки — исторические transport/input прогоны; они были выполнены
 в deathmatch и не являются доказательством боевой кооперации. Все строки с
@@ -284,6 +313,18 @@ physics, а не полная проверка bot traversal:
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\run_udp_coop_combat_batch.ps1 `
   -Scenario elevator-player -FirstSeed 1160 -Count 1 -Port 28000
+```
+
+`-Scenario elevator-natural-route` использует тот же live UDP-клиент, но
+проходит map-aware closed-loop waypoint-маршрут к elevator-зоне без position
+override; в конце harness удерживает `BUTTON_USE` и остаётся подключённым ещё
+20 секунд. Периодические `give health 100` не дают бою случайно закончить
+natural probe смертью игрока. Первый строгий успех есть в seed `1348`, но
+стабильность `TRAVEL_ELEVATOR`/reacquire ещё нужно довести:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\run_udp_coop_combat_batch.ps1 `
+  -Scenario elevator-natural-route -FirstSeed 1348 -Count 6 -Port 28348
 ```
 
 Для ручного timeline harness поддерживает `--server-command-at SECONDS:COMMAND`
@@ -401,10 +442,12 @@ if ($null -ne $owned -and $owned.ProcessName -eq 'q2ded') {
 - создание и обработку реального non-bot player slot;
 - попадание server command и human marker в runtime telemetry.
 - обработку real-time `clc_move` usercmds с forward movement и attack flag.
+- closed-loop waypoint navigation по telemetry-позиции игрока, включая jump/use.
 
 Он не доказывает прохождение кооперативной кампании, качество прицеливания,
-полный keyboard/mouse control, обычное прохождение elevator scenarios,
-scripted waypoint coverage
+полный keyboard/mouse control или обычное прохождение elevator scenarios.
+Waypoint coverage теперь доступна как маршрутный инструмент, но сама по себе
+не доказывает успешный elevator traversal
 или полные cooperative-level acceptance thresholds.
 Runtime elevator branch отдельно smoke-tested через opt-in fixture, а live
 player ride подтверждён отдельным vertical-position gate, но

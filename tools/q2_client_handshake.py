@@ -32,6 +32,7 @@ CM_UP = 1 << 5
 CM_BUTTONS = 1 << 6
 CM_IMPULSE = 1 << 7
 BUTTON_ATTACK = 1
+BUTTON_USE = 2
 
 
 class MovePhase(NamedTuple):
@@ -360,6 +361,11 @@ def main() -> int:
         help="hold the jump/up input in --move-forward usercmds",
     )
     parser.add_argument(
+        "--use",
+        action="store_true",
+        help="hold the use button in movement usercmds",
+    )
+    parser.add_argument(
         "--phase",
         action="append",
         metavar="SECONDS:FORWARD:SIDE:YAW:ATTACK:JUMP",
@@ -376,6 +382,27 @@ def main() -> int:
             "closed-loop live route waypoint read from bot_snapshot player_origin; "
             "JUMP is 0 or 1 and may be repeated"
         ),
+    )
+    parser.add_argument(
+        "--post-move-duration",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
+        help="continue sending live usercmds after a route or phase completes",
+    )
+    parser.add_argument(
+        "--waypoint-horizontal-tolerance",
+        type=float,
+        default=56.0,
+        metavar="UNITS",
+        help="horizontal distance required to mark a waypoint reached",
+    )
+    parser.add_argument(
+        "--waypoint-vertical-tolerance",
+        type=float,
+        default=96.0,
+        metavar="UNITS",
+        help="vertical distance required to mark a waypoint reached",
     )
     args = parser.parse_args()
     if args.server_command_delay < 0.0:
@@ -400,6 +427,12 @@ def main() -> int:
         parser.error("--port must be between 1 and 65535")
     if args.duration <= 0:
         parser.error("--duration must be positive")
+    if args.post_move_duration < 0.0:
+        parser.error("--post-move-duration must be non-negative")
+    if args.waypoint_horizontal_tolerance <= 0.0:
+        parser.error("--waypoint-horizontal-tolerance must be positive")
+    if args.waypoint_vertical_tolerance <= 0.0:
+        parser.error("--waypoint-vertical-tolerance must be positive")
     if args.move_forward < 0:
         parser.error("--move-forward must not be negative")
     if args.phase and args.move_forward > 0:
@@ -508,6 +541,7 @@ def main() -> int:
     phase_index = 0
     phase_yaw_degrees = 0.0
     waypoint_index = 0
+    route_completed_at: float | None = None
     latest_human_origin: tuple[float, float, float] | None = None
     origin_log_offset = log_offset
     check_table: bytes | None = None
@@ -652,7 +686,8 @@ def main() -> int:
                             phase.forward_speed,
                             phase.side_speed,
                             200 if phase.jump else 0,
-                            BUTTON_ATTACK if phase.attack else 0,
+                            (BUTTON_ATTACK if phase.attack else 0)
+                            | (BUTTON_USE if args.use else 0),
                             0,
                             50,
                             0,
@@ -690,9 +725,15 @@ def main() -> int:
                             dx = waypoint.x - latest_human_origin[0]
                             dy = waypoint.y - latest_human_origin[1]
                             dz = waypoint.z - latest_human_origin[2]
-                            if math.hypot(dx, dy) > 56.0 or abs(dz) > 96.0:
+                            if (
+                                math.hypot(dx, dy)
+                                > args.waypoint_horizontal_tolerance
+                                or abs(dz) > args.waypoint_vertical_tolerance
+                            ):
                                 break
                             waypoint_index += 1
+                        if waypoint_index >= len(waypoints) and route_completed_at is None:
+                            route_completed_at = now
                         if waypoint_index < len(waypoints):
                             waypoint = waypoints[waypoint_index]
                             dx = waypoint.x - latest_human_origin[0]
@@ -710,7 +751,7 @@ def main() -> int:
                                 400,
                                 0,
                                 200 if waypoint.jump or dz > 32.0 else 0,
-                                0,
+                                BUTTON_USE if args.use else 0,
                                 0,
                                 50,
                                 0,
@@ -752,11 +793,16 @@ def main() -> int:
                         latest_human_origin,
                     )
             if waypoints:
-                movement_complete = waypoint_index >= len(waypoints)
+                movement_complete = (
+                    route_completed_at is not None
+                    and time.monotonic() - route_completed_at
+                    >= args.post_move_duration
+                )
             else:
                 movement_complete = not phases or (
                     move_started is not None
-                    and time.monotonic() - move_started >= phase_duration
+                    and time.monotonic() - move_started
+                    >= phase_duration + args.post_move_duration
                 )
             if human_marker and args.require_human_marker and movement_complete:
                 break
