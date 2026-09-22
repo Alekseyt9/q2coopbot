@@ -1,5 +1,75 @@
+#include <math.h>
+
 #include "botlib/aas/aas_local.h"
 #include "bot_interface_elevator.h"
+
+int BotInterface_CoopElevatorGoalArea(const vec3_t player_origin,
+	int sampled_area)
+{
+	vec3_t mins;
+	vec3_t maxs;
+	int areas[64];
+	int area_count;
+	int best_area;
+	float best_vertical_delta;
+	int area_index;
+
+	if (player_origin == NULL || sampled_area <= 0 ||
+		!aasworld.loaded || aasworld.reachability == NULL)
+	{
+		return sampled_area;
+	}
+
+	/*
+	 * AAS_PointAreaNum follows the BSP tree and can return the large lift
+	 * volume (base2 area 806) even when the player is standing on the upper
+	 * platform (area 751).  Use the live player bbox to retain the more
+	 * specific elevator destination area when it overlaps the sampled volume.
+	 */
+	VectorSet(mins, player_origin[0] - 16.0f,
+		player_origin[1] - 16.0f, player_origin[2] - 24.0f);
+	VectorSet(maxs, player_origin[0] + 16.0f,
+		player_origin[1] + 16.0f, player_origin[2] + 32.0f);
+	area_count = AAS_BBoxAreas(mins, maxs, areas,
+		(int)(sizeof(areas) / sizeof(areas[0])));
+	best_area = sampled_area;
+	best_vertical_delta = 0.0f;
+
+	for (area_index = 0; area_index < area_count; ++area_index)
+	{
+		int candidate = areas[area_index];
+		int reach;
+		aas_areainfo_t info;
+		float vertical_delta;
+
+		if (candidate <= 0 || candidate == sampled_area ||
+			!AAS_AreaInfo(candidate, &info) ||
+			(info.presencetype & PRESENCE_NORMAL) == 0)
+		{
+			continue;
+		}
+
+		for (reach = 1; reach < aasworld.numReachability; ++reach)
+		{
+			if ((aasworld.reachability[reach].traveltype &
+				TRAVELTYPE_MASK) != TRAVEL_ELEVATOR ||
+				aasworld.reachability[reach].areanum != candidate)
+			{
+				continue;
+			}
+			vertical_delta = fabsf(info.center[2] - player_origin[2]);
+			if (best_area == sampled_area ||
+				vertical_delta < best_vertical_delta)
+			{
+				best_area = candidate;
+				best_vertical_delta = vertical_delta;
+			}
+			break;
+		}
+	}
+
+	return best_area;
+}
 
 bool BotInterface_CoopResultUsesElevator(const bot_client_state_t *state,
 	const bot_moveresult_t *result)

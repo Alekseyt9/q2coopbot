@@ -1598,13 +1598,13 @@ natural lost-LOS даёт только 16/20. Отдельная natural default
 | Kill-steal default probe | `coop-kill-steal-980..986` | `7/7` UDP+human gate; player-focus telemetry реально записана; `0` `kill_steal_yield` events при default radius `192`, поэтому default acceptance не закрыт |
 | Kill-steal controlled probe | `coop-kill-steal-990..1009` | `20/20` UDP+human gate; `6/20` эпизодов с `kill_steal_yield`; всего `20` yield events и `747` player-focus events при controlled radius `64` |
 | Kill-steal default-radius fixture | `coop-kill-steal-default-fixture-1176..1195` | `20/20` strict UDP+human/report; `40` `kill_steal_yield` events при штатном radius `192`; `2306` player-focus events на живом `monster_infantry` entity `306`; bot separation `240 > 192`; `287` bot shots; `99` monster-damage events / `990` damage |
-| Kill-steal natural default probe | `coop-kill-steal-default-1312..1331` | `20/20` UDP+human gate; `134` player-focus events; `0` `kill_steal_yield` при штатном radius `192`; natural acceptance не закрыт |
+| Kill-steal natural default probe | `coop-kill-steal-default-1312..1331` (+ melee spot-check `1377..1380`) | `20/20` UDP+human gate; исходная natural default серия дала `134` player-focus и `0` yield; melee spot-check дал `2/4` strict yield (`1377/1378`), в `1379/1380` bot умер до yield; natural acceptance не закрыт |
 | Lost-LOS probe | `coop-lost-los-1292..1311` (+ spot-check `1354..1357`) | `20/20` UDP+human gate; исходно `16/20`, свежий spot-check `3/4` strict с `target_los_lost`; `target_lost` отдельно не подменяется; естественный `20/20` LOS acceptance остаётся открытым |
 | Lost-LOS map fixture | `coop-lost-los-map-fixture-1272..1291` | `20/20` strict UDP+human/report; `60` `target_los_lost` edges и `80` target acquisitions; bot удерживался на валидной `base2` AAS area `445`, затем переводился в начальный сектор; реальный UDP player оставался подключённым |
 | Vertical/elevator probe | `coop-elevator-1151` | `1/1` strict UDP+human gate; AAS map model содержит `1` elevator и vertical edge `806 -> 751` с delta `93.7`; live route дал обычный regroup без `TRAVEL_ELEVATOR`/reacquire, поэтому acceptance остаётся открытым |
 | Elevator runtime fixture | `coop-elevator-fixture-1155` | `1/1` strict UDP+human gate; opt-in UDP fixture разместила bot в area `806` и human в area `751`; live botlib записал `coopbot_elevator_route`, `coopbot_elevator_reacquired` и `coopbot_regroup_complete`; обычное прохождение карты этим не закрыто |
 | Elevator player ride | `coop-elevator-player-1160` | `1/1` UDP+human; живой UDP-игрок через `clc_move` активировал нижнюю `func_plat` и поднялся примерно с `z=-38` до `z=112`; отдельный reducer gate подтверждает вертикальный delta `>=64`; bot traversal остаётся отдельным тестом |
-| Live elevator route probe | `coop-elevator-natural-route-1348..1353` | `6/6` UDP+human; closed-loop waypoint client достиг `29-30/33` точек; seed `1348` записал `TRAVEL_ELEVATOR`, elevator route, reacquire и regroup-complete и прошёл strict report, остальные `5` seed — нет; natural acceptance остаётся нестабильным |
+| Live elevator route probe | `coop-elevator-natural-route-1348..1372` | `19/19` UDP+human; strict bot elevator acceptance прошёл в `2/19` seed (`1348`, `1358`); latest route revision достиг `31/33` и дал live player vertical rise в `1368/1369`, но bot не успел/не смог reacquire; health-guard не является position fixture; natural acceptance остаётся открытым |
 
 Артефакты серий лежат в `artifacts/udp-*-baseline/`; для phase-retreat и cover
 строгие reducer-gates читают отдельный botlib log каждого эпизода. Combat baseline
@@ -1625,9 +1625,11 @@ LOS/позиционных маршрутов остаётся отдельны�
 Runtime-ветка вертикального regroup дополнительно smoke-tested через
 `coop-elevator-fixture-1155`; полноценный map-aware путь живого игрока к лифту
 и прохождение карты остаются открытыми. Closed-loop UDP waypoint probe
-`coop-elevator-natural-route-1348..1353` уже дал первый natural
-`TRAVEL_ELEVATOR`/reacquire acceptance (`1348`), но серия нестабильна (`1/6`),
-поэтому нужен ещё один этап стабилизации маршрута и проверки ожидания платформы.
+`coop-elevator-natural-route-1348..1372` уже дал natural
+`TRAVEL_ELEVATOR`/reacquire acceptance в `2/19` seed (`1348`, `1358`).
+Текущая версия маршрута отдельно доказала live player ride в `1368/1369`,
+но bot-reacquire остаётся нестабильным; health guard меняет только живучесть
+bot/player и не задаёт координаты.
 Player-side ride на `func_plat` подтверждён отдельной UDP-серией
 `coop-elevator-player-1160`.
 

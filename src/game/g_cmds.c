@@ -1388,6 +1388,48 @@ void ClientCommand (edict_t *ent)
 			use_target_changelevel(target, ent, ent);
 		}
 	}
+	else if (Q_stricmp(cmd, "coopbot_test_clear_monster_targets") == 0)
+	{
+		int i;
+		int cleared = 0;
+		int protected_players = 0;
+
+		if (coopbot_test_mode == NULL || coopbot_test_mode->value == 0.0f)
+		{
+			gi.dprintf("coopbot_test_clear_monster_targets ignored: coopbot_test_mode=0\n");
+			return;
+		}
+		for (i = 1; i <= maxclients->value; ++i)
+		{
+			edict_t *player = g_edicts + i;
+
+			if (!player->inuse || player->client == NULL ||
+				(player->flags & FL_BOT) != 0)
+				continue;
+			player->flags |= FL_NOTARGET;
+			protected_players++;
+		}
+		for (i = maxclients->value + 1; i < game.maxentities; ++i)
+		{
+			edict_t *monster = g_edicts + i;
+
+			if (!monster->inuse || !(monster->svflags & SVF_MONSTER))
+				continue;
+			monster->enemy = NULL;
+			monster->oldenemy = NULL;
+			monster->goalentity = NULL;
+			monster->movetarget = NULL;
+			monster->monsterinfo.aiflags &= ~AI_SOUND_TARGET;
+			/* Keep live player movement and mover physics, but remove unrelated
+			 * monster bodies from this movement-only acceptance route. */
+			monster->solid = SOLID_NOT;
+			monster->clipmask = 0;
+			cleared++;
+		}
+		level.sight_client = NULL;
+		gi.dprintf("coopbot_test_clear_monster_targets cleared=%d protected_players=%d\n",
+			cleared, protected_players);
+	}
 	else if (Q_stricmp(cmd, "coopbot_test_state") == 0)
 	{
 		int i;

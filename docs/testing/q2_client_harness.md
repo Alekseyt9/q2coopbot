@@ -168,23 +168,27 @@ python .\tools\q2_client_handshake.py `
 
 ```powershell
 python .\tools\q2_client_handshake.py `
-  --port 28338 --duration 90 --name ElevatorHuman `
+  --port 28338 --duration 120 --name ElevatorHuman `
   --event-log 'F:\src\quake2\q2coopbot-runtime-bot\coopbot_debug_events.jsonl' `
   --episode-id coop-elevator-natural-route-1348 `
-  --require-human-marker --use --post-move-duration 20 `
+  --require-human-marker --use --post-move-duration 45 `
   --waypoint 758.4:2296:-232 `
   --waypoint 715.8:2297:-232 `
-  --waypoint=-60:1408:-34:1 `
-  --waypoint=-48:1408:94:1
+  --waypoint=-84:1408:-176 `
+  --waypoint=-56:1408:-176 `
+  --waypoint=-84:1408:-176
 ```
+
+Это сокращённый пример; полный 33-point маршрут задаёт batch-сценарий.
 
 Отрицательное значение waypoint передавайте как `--waypoint=-X:Y:Z`, иначе
 старый Windows PowerShell может принять его за параметр. В прогоне
 `coop-elevator-natural-route-1348` UDP-клиент достиг `30/33` точек, а botlib
 записал реальный `TRAVEL_ELEVATOR`, `coopbot_elevator_route`,
 `coopbot_elevator_reacquired` и `coopbot_regroup_complete`. Это первый строгий
-natural-route успех; серия `1348..1353` пока нестабильна (`1/6` pass), поэтому
-полное elevator acceptance ещё не закрыто.
+natural-route успех. В серии `1348..1372` strict bot elevator acceptance
+прошёл `2/19` seed; отдельные `1368/1369` дошли до `31/33` точек и дали
+вертикальный подъём живого UDP-игрока, но bot-reacquire не завершился.
 
 ## Проверенные сценарии через UDP
 
@@ -210,8 +214,9 @@ natural-route успех; серия `1348..1353` пока нестабильн�
 | Co-op elevator probe | `coop-elevator-1151` | 1/1 strict UDP+human; `coopbot_map_model` показывает 1 elevator и vertical edge 806 -> 751, delta 93.7; live `TRAVEL_ELEVATOR`/reacquire не зафиксирован |
 | Co-op elevator runtime fixture | `coop-elevator-fixture-1155` | 1/1 strict UDP+human; opt-in UDP fixture разместила bot в area 806 и human в area 751; botlib записал `coopbot_elevator_route`, `coopbot_elevator_reacquired` и `coopbot_regroup_complete`; это runtime-ветка, не доказательство прохождения карты обычным движением |
 | Co-op elevator player ride | `coop-elevator-player-1160` | 1/1 UDP+human; реальный UDP-игрок стартовал на нижней `func_plat` и через live server physics поднялся примерно с `z=-38` до `z=112`; отдельный gate проверяет вертикальный delta `>=64`; bot route fixture этим не подменяется |
-| Co-op live elevator route probe | `coop-elevator-natural-route-1348..1353` | 6/6 UDP+human; closed-loop waypoint client достиг `29-30/33` точек; `1348` записал `TRAVEL_ELEVATOR`/elevator route/reacquire/regroup-complete и прошёл strict report, остальные 5 seed — нет; natural acceptance остаётся нестабильным |
+| Co-op live elevator route probe | `coop-elevator-natural-route-1348..1372` | 19/19 UDP+human; `2/19` strict bot elevator acceptance (`1348`, `1358`); latest route reached `31/33` and produced live player vertical rise in `1368/1369`, but bot-reacquire remained incomplete |
 | Co-op natural lost-LOS spot-check | `coop-lost-los-1354..1357` | 4/4 UDP+human; `3/4` strict episodes с `target_los_lost`, один seed не записал LOS-loss; это spot-check, не новый `20/20` baseline |
+| Co-op natural kill-steal melee spot-check | `coop-kill-steal-default-melee-1377..1380` | 4/4 UDP+human; `2/4` strict `kill_steal_yield`, `1379/1380` не записали yield до смерти bot; это spot-check, не новый `20/20` baseline |
 
 Первые две строки — исторические transport/input прогоны; они были выполнены
 в deathmatch и не являются доказательством боевой кооперации. Все строки с
@@ -318,9 +323,10 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\run_udp_coop_combat_batch.
 `-Scenario elevator-natural-route` использует тот же live UDP-клиент, но
 проходит map-aware closed-loop waypoint-маршрут к elevator-зоне без position
 override; в конце harness удерживает `BUTTON_USE` и остаётся подключённым ещё
-20 секунд. Периодические `give health 100` не дают бою случайно закончить
-natural probe смертью игрока. Первый строгий успех есть в seed `1348`, но
-стабильность `TRAVEL_ELEVATOR`/reacquire ещё нужно довести:
+45 секунд. В probe включён health-guard для живого UDP-игрока и bot, а также
+`god/notarget` для игрока; команды не задают координаты. Первый строгий успех
+есть в seed `1348`, но стабильность `TRAVEL_ELEVATOR`/reacquire ещё нужно
+довести:
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\run_udp_coop_combat_batch.ps1 `

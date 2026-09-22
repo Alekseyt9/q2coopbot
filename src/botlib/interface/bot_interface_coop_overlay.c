@@ -31,6 +31,7 @@ bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 	float vertical_separation;
 	int player_entity;
 	int player_area;
+	int sampled_player_area;
 	int bot_area;
 	int current_player_area;
 	int known_player_area;
@@ -65,7 +66,9 @@ bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 	VectorSubtract(player_origin, state->last_client_update.origin, direction);
 	distance = sqrtf(DotProduct(direction, direction));
 	hard_leash = LibVarGetValue("coopbot_hard_leash");
-	current_player_area = AAS_PointAreaNum(player_origin);
+	sampled_player_area = AAS_PointAreaNum(player_origin);
+	current_player_area = BotInterface_CoopElevatorGoalArea(
+		player_origin, sampled_player_area);
 	bot_area = AAS_PointAreaNum(state->last_client_update.origin);
 	vertical_separation = fabsf(player_origin[2] -
 		state->last_client_update.origin[2]);

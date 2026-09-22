@@ -207,8 +207,9 @@ switch ($Scenario) {
     }
     'elevator-natural-route' {
         # AAS-center route from the live base2 spawn to the lower elevator
-        # area 806. The client follows it with ordinary UDP usercmds; no
-        # coopbot_test_mode or position command is enabled.
+        # area 806. The client follows it with ordinary UDP usercmds. The
+        # optional test state below only guards bot health; no position command
+        # is enabled, so player/platform physics remain live.
         $waypointArgs = @(
             '--waypoint', '758.4:2296.0:-232.0',
             '--waypoint', '715.8:2297.1:-232.0',
@@ -243,9 +244,11 @@ switch ($Scenario) {
             # waypoint is reached, the harness sends zero movement and lets
             # the live func_plat physics lift the human naturally.
             '--waypoint=-32.3:1408.0:-176.0',
+            '--waypoint=-84.0:1408.0:-176.0',
+            '--waypoint=-56.0:1408.0:-176.0',
             '--waypoint=-84.0:1408.0:-176.0'
         )
-        $harnessDuration = 90
+        $harnessDuration = 120
         $elevatorMode = $true
         $elevatorNaturalRouteMode = $true
         $StartupDelayMs = 500
@@ -360,6 +363,9 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
             '+set', 'coopbot_player_intent', '1'
         ) + $serverArgs
     }
+    if ($elevatorNaturalRouteMode) {
+        $serverArgs = @('+set', 'coopbot_test_mode', '1') + $serverArgs
+    }
 
     $server = $null
     $harnessExit = 99
@@ -456,8 +462,10 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
             # elevator regroup finish. These are ordinary server commands;
             # no position/entity override is used.
             $harnessArgs += @(
+                '--server-command-at', '0.5:coopbot_test_state 100 100 100',
                 '--server-command-at', '0.5:god',
                 '--server-command-at', '0.5:notarget',
+                '--server-command-at', '0.5:coopbot_test_clear_monster_targets',
                 '--server-command-at', '0.5:give health 100',
                 '--server-command-at', '16:give health 100',
                 '--server-command-at', '32:give health 100',
@@ -470,7 +478,7 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
             $harnessArgs += $waypointArgs
             if ($Scenario -eq 'elevator-natural-route') {
                 $harnessArgs += @(
-                    '--post-move-duration', '20',
+                    '--post-move-duration', '45',
                     '--waypoint-horizontal-tolerance', '16',
                     '--waypoint-vertical-tolerance', '24',
                     '--use'

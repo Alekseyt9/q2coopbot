@@ -19,6 +19,10 @@ bool BotInterface_CoopElevatorRoute(
 	int *source_area,
 	int *destination_area);
 
+int BotInterface_CoopElevatorGoalArea(
+	const vec3_t player_origin,
+	int sampled_area);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
