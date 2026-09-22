@@ -391,6 +391,20 @@ bool BotAI_ApplyCoopHardLeash(bot_client_state_t *state,
 				state->client_number, player_entity, result.failure,
 				result.blocked, result.blockentity);
 		}
+		if (result.blocked && result.blockentity > 0)
+		{
+			aas_entityinfo_t block_info;
+			AAS_EntityInfo(result.blockentity, &block_info);
+			BotLib_LogWriteTimeStamped(
+				"coopbot_block_entity entity=%d valid=%d type=%d solid=%d "
+				"model=%d svflags=0x%x origin=(%.1f %.1f %.1f) "
+				"mins=(%.1f %.1f %.1f) maxs=(%.1f %.1f %.1f)",
+				result.blockentity, block_info.valid, block_info.type,
+				block_info.solid, block_info.modelindex, block_info.svflags,
+				block_info.origin[0], block_info.origin[1], block_info.origin[2],
+				block_info.mins[0], block_info.mins[1], block_info.mins[2],
+				block_info.maxs[0], block_info.maxs[1], block_info.maxs[2]);
+		}
 	}
 	if ((result.failure || result.blocked) &&
 		LibVarGetValue("coopbot_log") >= 1.0f)
@@ -745,6 +759,27 @@ bool BotAI_ApplyCoopAreaAdvanceGate(bot_client_state_t *state,
 	if (advance_radius <= 0.0f)
 	{
 		advance_radius = 256.0f;
+	}
+	/*
+	 * The area gate is a near-player anti-solo-exploration guard.  It must
+	 * not become a dead stop while the companion is already outside that
+	 * radius: a HOLD/WAIT intent is common after the human stops, but the bot
+	 * still has to close the gap and let the normal follow/regroup path work.
+	 */
+	if (distance > advance_radius)
+	{
+		if (state->coop_area_gate_active)
+		{
+			state->coop_area_gate_active = false;
+			if (LibVarGetValue("coopbot_log") >= 1.0f)
+			{
+				BotLib_LogWriteTimeStamped(
+					"coopbot_area_gate client=%d phase=RELEASE bot_area=%d "
+					"player_area=%d distance=%.1f reason=follow_gap",
+					state->client_number, bot_area, player_area, distance);
+			}
+		}
+		return false;
 	}
 	allowed = distance <= advance_radius &&
 		BotAI_CoopIntentAllowsForwardProgress(state);
@@ -1318,6 +1353,157 @@ bool BotAI_ApplyCoopBasicCover(bot_client_state_t *state,
 	}
 
 	return false;
+}
+
+/*
+=============
+BotAI_ApplyCoopEvasiveMovement
+
+Add a deliberately imperfect combat sidestep.  The retail battle movement
+still chooses the goal and aim; this overlay only takes a short lateral burst
+when a live enemy is visible.  Alternating sides, a cooldown, and a small
+outward component make the companion harder to hit without turning it into a
+perfect strafe bot or overriding an actual danger retreat.
+=============
+*/
+bool BotAI_ApplyCoopEvasiveMovement(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input)
+{
+	aas_entityinfo_t enemy_info;
+	vec3_t away;
+	vec3_t direction;
+	float distance;
+	float length;
+	float now;
+	float interval;
+	float duration;
+	float radius;
+	float outward;
+	bool starting_burst;
+	int enemy;
+
+	if (state == NULL || input == NULL || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_evasive_movement") == 0.0f ||
+		state->combat.current_enemy <= aasworld.maxClients ||
+		!state->combat.enemy_visible)
+	{
+		return false;
+	}
+
+	enemy = state->combat.current_enemy;
+	memset(&enemy_info, 0, sizeof(enemy_info));
+	AAS_EntityInfo(enemy, &enemy_info);
+	if (!enemy_info.valid || BotAI_EntityIsDead(&enemy_info))
+	{
+		return false;
+	}
+
+	VectorSubtract(state->last_client_update.origin,
+		enemy_info.origin,
+		away);
+	away[2] = 0.0f;
+	distance = sqrtf(DotProduct(away, away));
+	radius = LibVarGetValue("coopbot_evasive_radius");
+	if (radius <= 0.0f)
+	{
+		radius = 512.0f;
+	}
+	if (distance <= 48.0f || distance > radius)
+	{
+		return false;
+	}
+
+	/* A real retreat/cover overlay already has a stronger destination. */
+	if (BotAI_CoopDangerRequiresRetreat(state))
+	{
+		return false;
+	}
+
+	now = AAS_Time();
+	if (state->coop_evasive_enemy != enemy)
+	{
+		state->coop_evasive_enemy = enemy;
+		state->coop_evasive_until = 0.0f;
+		state->coop_evasive_next_time = 0.0f;
+		state->coop_evasive_side = state->client_number & 1 ? 1 : -1;
+	}
+	if (now >= state->coop_evasive_until &&
+		now < state->coop_evasive_next_time)
+	{
+		return false;
+	}
+
+	starting_burst = now >= state->coop_evasive_until;
+	if (starting_burst)
+	{
+		interval = LibVarGetValue("coopbot_evasive_interval");
+		if (interval <= 0.0f)
+		{
+			interval = 0.85f;
+		}
+		duration = LibVarGetValue("coopbot_evasive_duration");
+		if (duration <= 0.0f)
+		{
+			duration = 0.35f;
+		}
+		state->coop_evasive_until = now + duration;
+		state->coop_evasive_next_time = state->coop_evasive_until +
+			interval;
+		state->coop_evasive_side = -state->coop_evasive_side;
+	}
+
+	length = distance;
+	VectorScale(away, 1.0f / length, away);
+	direction[0] = -away[1] * (float)state->coop_evasive_side;
+	direction[1] = away[0] * (float)state->coop_evasive_side;
+	direction[2] = 0.0f;
+	outward = distance < 192.0f ? 0.35f : 0.18f;
+	VectorMA(direction, outward, away, direction);
+	if (starting_burst && LibVarGetValue("coopbot_log") >= 2.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"coopbot_evasive_attempt client=%d enemy=%d side=%d visible=%d "
+			"distance=%.1f",
+			state->client_number,
+			enemy,
+			state->coop_evasive_side,
+			state->combat.enemy_visible ? 1 : 0,
+			distance);
+	}
+
+	if (!BotAI_ApplyCoopDirectionalMove(state,
+		thinktime,
+		input,
+		direction,
+		true,
+		false))
+	{
+		if (starting_burst && LibVarGetValue("coopbot_log") >= 2.0f)
+		{
+			BotLib_LogWriteTimeStamped(
+				"coopbot_evasive_failed client=%d enemy=%d side=%d",
+				state->client_number,
+				enemy,
+				state->coop_evasive_side);
+		}
+		return false;
+	}
+
+	if (starting_burst && LibVarGetValue("coopbot_log") >= 2.0f)
+	{
+		BotLib_LogWriteTimeStamped(
+			"coopbot_evasive client=%d enemy=%d side=%d danger=%.2f "
+			"distance=%.1f duration=%.2f next=%.2f",
+			state->client_number,
+			enemy,
+			state->coop_evasive_side,
+			BotAI_CoopDangerScore(state),
+			distance,
+			state->coop_evasive_until - now,
+			state->coop_evasive_next_time);
+	}
+	return true;
 }
 
 /*

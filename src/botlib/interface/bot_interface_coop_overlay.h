@@ -50,6 +50,9 @@ bool BotAI_ApplyCoopRescuePositioning(bot_client_state_t *state,
 bool BotAI_ApplyCoopBasicCover(bot_client_state_t *state,
 	float thinktime,
 	bot_input_t *input);
+bool BotAI_ApplyCoopEvasiveMovement(bot_client_state_t *state,
+	float thinktime,
+	bot_input_t *input);
 bool BotAI_ApplyCoopFirelineAvoidance(bot_client_state_t *state,
 	float thinktime,
 	bot_input_t *input);

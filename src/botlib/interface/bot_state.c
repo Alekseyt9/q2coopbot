@@ -356,6 +356,11 @@ static void BotState_FreeResources(bot_client_state_t *state)
 	state->coop_area_enemy_count = 0;
 	state->coop_area_combat_seen = false;
 	state->coop_area_gate_active = false;
+	state->coop_console_status_time = 0.0f;
+	state->coop_evasive_next_time = 0.0f;
+	state->coop_evasive_until = 0.0f;
+	state->coop_evasive_enemy = 0;
+	state->coop_evasive_side = 1;
 	state->coop_last_safe_area = 0;
 	VectorClear(state->coop_last_safe_origin);
 	state->coop_last_safe_time = 0.0f;

@@ -8,6 +8,41 @@
 #include "coopbot_diag.h"
 #endif //BOT
 
+#ifdef BOT
+void CoopBotTestSuppressMonsters (void)
+{
+	int i;
+
+	if (!coopbot_test_monsters_suppressed ||
+		coopbot_test_mode == NULL || coopbot_test_mode->value == 0.0f)
+		return;
+
+	for (i = maxclients->value + 1; i < game.maxentities; ++i)
+	{
+		edict_t *monster = g_edicts + i;
+
+		if (!monster->inuse || !(monster->svflags & SVF_MONSTER))
+			continue;
+		monster->enemy = NULL;
+		monster->oldenemy = NULL;
+		monster->goalentity = NULL;
+		monster->movetarget = NULL;
+		monster->monsterinfo.aiflags &= ~AI_SOUND_TARGET;
+		monster->svflags |= SVF_NOCLIENT;
+		monster->takedamage = DAMAGE_NO;
+		monster->health = 0;
+		monster->nextthink = 0;
+		gi.unlinkentity(monster);
+		monster->solid = SOLID_NOT;
+		monster->clipmask = 0;
+		VectorClear(monster->mins);
+		VectorClear(monster->maxs);
+		gi.linkentity(monster);
+		BotLib_BotUpdateEntity(monster);
+	}
+}
+#endif //BOT
+
 #ifdef OBSERVER
 #include "p_observer.h"
 #endif //OBSERVER
@@ -1420,13 +1455,25 @@ void ClientCommand (edict_t *ent)
 			monster->goalentity = NULL;
 			monster->movetarget = NULL;
 			monster->monsterinfo.aiflags &= ~AI_SOUND_TARGET;
+			monster->svflags |= SVF_NOCLIENT;
+			monster->takedamage = DAMAGE_NO;
+			monster->health = 0;
+			monster->nextthink = 0;
 			/* Keep live player movement and mover physics, but remove unrelated
 			 * monster bodies from this movement-only acceptance route. */
+			gi.unlinkentity(monster);
 			monster->solid = SOLID_NOT;
 			monster->clipmask = 0;
+			VectorClear(monster->mins);
+			VectorClear(monster->maxs);
+			gi.linkentity(monster);
+			/* Publish a bounds change immediately; AAS relinks entities only
+			 * when its translated frame reports dirty bounds/origin. */
+			BotLib_BotUpdateEntity(monster);
 			cleared++;
 		}
 		level.sight_client = NULL;
+		coopbot_test_monsters_suppressed = true;
 		gi.dprintf("coopbot_test_clear_monster_targets cleared=%d protected_players=%d\n",
 			cleared, protected_players);
 	}

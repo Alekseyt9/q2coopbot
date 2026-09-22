@@ -607,6 +607,20 @@ static void AI_DMAimAtEnemy(ai_dm_state_t *state,
 	{
 		aim_accuracy = 0.0001f;
 	}
+	if (LibVarGetValue("coop") != 0.0f)
+	{
+		float coop_accuracy = LibVarGetValue("coopbot_aim_accuracy");
+		if (coop_accuracy > 0.0f)
+		{
+			if (coop_accuracy > 1.0f)
+			{
+				coop_accuracy = 1.0f;
+			}
+			/* Keep coop aim useful even when the legacy character file leaves
+			 * characteristic 8 at zero, while retaining bounded shot error. */
+			aim_accuracy = coop_accuracy;
+		}
+	}
 	if (weapon != NULL &&
 		AI_DMStringCompare(weapon->name, "Rocket Launcher") == 0)
 	{
@@ -645,6 +659,15 @@ static void AI_DMAimAtEnemy(ai_dm_state_t *state,
 			 * VectorMA restore the unadjusted enemy height.
 			 */
 			vec3_t lead_direction;
+			float prediction = LibVarGetValue("coopbot_aim_prediction");
+			if (prediction <= 0.0f)
+			{
+				prediction = 0.80f;
+			}
+			if (prediction > 1.0f)
+			{
+				prediction = 1.0f;
+			}
 			VectorSubtract(enemy->origin,
 				client_state->last_client_update.origin,
 				lead_direction);
@@ -672,7 +695,12 @@ static void AI_DMAimAtEnemy(ai_dm_state_t *state,
 				enemy_speed = AI_DMVectorNormalise(lead_direction);
 			}
 
-			float lead_scale = (distance / weapon->speed) * enemy_speed;
+			float lead_scale = (distance / weapon->speed) * enemy_speed *
+				prediction;
+			if (lead_scale > 1.0f)
+			{
+				lead_scale = 1.0f;
+			}
 			best_origin[0] = enemy->origin[0] +
 				lead_direction[0] * lead_scale;
 			best_origin[1] = enemy->origin[1] +

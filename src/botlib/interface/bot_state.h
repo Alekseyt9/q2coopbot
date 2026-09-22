@@ -233,6 +233,8 @@ struct bot_client_state_s {
     bot_moveresult_t last_move_result;
     bool has_move_result;
 	/* Coop regroup memory keeps the last static player area while riding a mover. */
+	int coop_player_entity;
+	bool coop_player_dead;
 	int coop_player_area;
 	vec3_t coop_player_origin;
 	bool coop_player_goal_valid;
@@ -300,6 +302,13 @@ struct bot_client_state_s {
 	int coop_area_enemy_count;
 	bool coop_area_combat_seen;
 	bool coop_area_gate_active;
+	float coop_console_status_time;
+	/* Short, imperfect combat sidesteps keep a visible enemy from making the
+	 * companion a stationary target. */
+	float coop_evasive_next_time;
+	float coop_evasive_until;
+	int coop_evasive_enemy;
+	int coop_evasive_side;
 	int coop_last_safe_area;
 	vec3_t coop_last_safe_origin;
 	float coop_last_safe_time;

@@ -2436,6 +2436,19 @@ ClientBeginServerFrame(edict_t *ent)
 		/* wait for any button just going down */
 		if (level.time > client->respawn_time)
 		{
+			/*
+			 * Human coop clients respawn after pressing a button.  Fake
+			 * clients do not produce a local button transition while dead,
+			 * so keep them in the normal one-second death delay and respawn
+			 * them explicitly instead of waiting forever for input.
+			 */
+			if ((ent->flags & FL_BOT) && coop->value)
+			{
+				respawn(ent);
+				client->latched_buttons = 0;
+				return;
+			}
+
 			/* in deathmatch, only wait for attack button */
 			if (deathmatch->value)
 			{

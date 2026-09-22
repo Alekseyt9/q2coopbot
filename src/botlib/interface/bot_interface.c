@@ -1755,6 +1755,98 @@ static const char *BotAI_NodeSwitchName(int node)
 	return "";
 }
 
+static const char *BotAI_CoopActionName(bot_coop_action_t action)
+{
+	switch (action)
+	{
+	case BOT_COOP_ACTION_POSITION: return "POSITION";
+	case BOT_COOP_ACTION_RESCUE: return "RESCUE";
+	case BOT_COOP_ACTION_NONE:
+	default: return "NONE";
+	}
+}
+
+static const char *BotAI_CoopObjectivePhaseName(
+	bot_coop_objective_phase_t phase)
+{
+	switch (phase)
+	{
+	case BOT_COOP_OBJECTIVE_APPROACH: return "APPROACH";
+	case BOT_COOP_OBJECTIVE_WAIT_ELEVATOR: return "WAIT_ELEVATOR";
+	case BOT_COOP_OBJECTIVE_TRAVEL_ELEVATOR: return "TRAVEL_ELEVATOR";
+	case BOT_COOP_OBJECTIVE_RETRY: return "RETRY";
+	case BOT_COOP_OBJECTIVE_REACQUIRE: return "REACQUIRE";
+	case BOT_COOP_OBJECTIVE_NONE:
+	default: return "NONE";
+	}
+}
+
+static const char *BotAI_CoopControlPhaseName(
+	bot_coop_control_phase_t phase)
+{
+	switch (phase)
+	{
+	case BOT_COOP_CONTROL_NAVIGATE: return "NAVIGATE";
+	case BOT_COOP_CONTROL_WAIT_PLAYER: return "WAIT_PLAYER";
+	case BOT_COOP_CONTROL_COMPLETE: return "COMPLETE";
+	case BOT_COOP_CONTROL_RETURN_PATH: return "RETURN_PATH";
+	case BOT_COOP_CONTROL_RETRY: return "RETRY";
+	case BOT_COOP_CONTROL_NONE:
+	default: return "NONE";
+	}
+}
+
+static void BotAI_PrintCoopConsoleStatus(bot_client_state_t *state)
+{
+	vec3_t player_origin;
+	vec3_t delta;
+	float distance = -1.0f;
+	float now;
+	int player_entity;
+
+	if (state == NULL || !BotAI_CoopMode() ||
+		LibVarGetValue("coopbot_log") < 1.0f)
+	{
+		return;
+	}
+
+	now = AAS_Time();
+	if (now < state->coop_console_status_time)
+	{
+		return;
+	}
+	state->coop_console_status_time = now + 1.0f;
+
+	player_entity = BotAI_CoopPlayerEntity(state, player_origin);
+	if (player_entity > 0)
+	{
+		VectorSubtract(player_origin, state->last_client_update.origin, delta);
+		distance = sqrtf(DotProduct(delta, delta));
+	}
+
+	BotInterface_Printf(PRT_MESSAGE,
+		"[coopbot] status client=%d name=\"%s\" mode=\"%s\" "
+		"role=%s intent=%s action=%s objective=%s control=%s "
+		"target=%d visible=%d danger=%.2f player=%d distance=%.1f "
+		"area=%d/%d evasive=%.0f\n",
+		state->client_number,
+		BotState_ClientName(state->client_number),
+		BotAI_NodeSwitchName(state->ai_node),
+		BotAI_CoopRoleName(state->coop_role),
+		BotAI_CoopPlayerIntentName(state->coop_player_intent),
+		BotAI_CoopActionName(state->coop_action),
+		BotAI_CoopObjectivePhaseName(state->coop_objective_phase),
+		BotAI_CoopControlPhaseName(state->coop_control_phase),
+		state->combat.current_enemy,
+		state->combat.enemy_visible ? 1 : 0,
+		BotAI_CoopDangerScore(state),
+		player_entity,
+		distance,
+		state->coop_current_area,
+		state->coop_player_area,
+		LibVarGetValue("coopbot_evasive_movement"));
+}
+
 /*
 =============
 BotAI_ResetNodeSwitches
@@ -2605,7 +2697,11 @@ static void BotAI_SetBlockedAttack(bot_client_state_t *state,
 	result->ideal_viewangles[ROLL] *= 0.5f;
 	result->flags |= MOVERESULT_MOVEMENTVIEW;
 	EA_UseItem(state->client_number, "Blaster");
-	EA_Attack(state->client_number);
+	if (LibVarGetValue("coop") == 0.0f ||
+		LibVarGetValue("coopbot_noncombat_fire") != 0.0f)
+	{
+		EA_Attack(state->client_number);
+	}
 }
 
 /*
@@ -3665,6 +3761,7 @@ static int BotAI_Think(bot_client_state_t *state, float thinktime)
 	BotAI_UpdateCoopPlayerStyle(state);
 	BotAI_UpdateCoopJointRetreat(state);
 	BotAI_UpdateCoopRole(state);
+	BotAI_PrintCoopConsoleStatus(state);
 
 	/*
 	 * Retail BotDeathmatchAI runs the inventory pass (0x10028b15), the console
@@ -3914,7 +4011,8 @@ static int BotAI_Think(bot_client_state_t *state, float thinktime)
 		!BotAI_ApplyCoopRolePositioning(state, thinktime, &input) &&
 		!BotAI_ApplyCoopFirelineAvoidance(state, thinktime, &input) &&
 		!BotAI_ApplyCoopDoorwayAvoidance(state, thinktime, &input) &&
-		!BotAI_ApplyCoopBasicCover(state, thinktime, &input))
+		!BotAI_ApplyCoopBasicCover(state, thinktime, &input) &&
+		!BotAI_ApplyCoopEvasiveMovement(state, thinktime, &input))
 	{
 		(void)BotAI_ApplyCoopPersonalSpace(state, thinktime, &input);
 	}

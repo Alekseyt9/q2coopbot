@@ -9,6 +9,7 @@
 #include "botlib/ea/ea_local.h"
 #include "bot_interface_battle.h"
 #include "bot_interface_console.h"
+#include "bot_interface_coop_state.h"
 #include "bot_interface_lifecycle.h"
 #include "bot_state.h"
 
@@ -122,6 +123,7 @@ void BotAI_ResetRespawnState(bot_client_state_t *state)
 	{
 		AI_DMState_Reset(state->dm_state);
 	}
+	BotAI_ResetCoopPlayerState(state);
 
 	state->goal_snapshot_count = 0;
 	memset(state->goal_snapshot, 0, sizeof(state->goal_snapshot));

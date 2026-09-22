@@ -243,10 +243,13 @@ switch ($Scenario) {
             # Finish at the center of the lower platform trigger. Once the
             # waypoint is reached, the harness sends zero movement and lets
             # the live func_plat physics lift the human naturally.
-            '--waypoint=-32.3:1408.0:-176.0',
-            '--waypoint=-84.0:1408.0:-176.0',
-            '--waypoint=-56.0:1408.0:-176.0',
-            '--waypoint=-84.0:1408.0:-176.0'
+            '--waypoint=-84.0:1408.0:-168.0',
+            '--waypoint=-84.0:1408.0:-168.0',
+            # The live func_plat carries the player to the upper floor. Keep
+            # the next target at the upper-platform player origin so ordinary
+            # UDP usercmds do not pull the player off the moving brush.
+            '--waypoint=-84.0:1408.0:24.0',
+            '--waypoint=-84.0:1408.0:24.0'
         )
         $harnessDuration = 120
         $elevatorMode = $true
@@ -302,6 +305,10 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
         '+set', 'maxclients', '8',
         '+set', 'minimumplayers', '2',
         '+set', 'coopbot_log', '2',
+        '+set', 'coopbot_evasive_movement', '1',
+        '+set', 'coopbot_evasive_interval', '0.85',
+        '+set', 'coopbot_evasive_duration', '0.35',
+        '+set', 'coopbot_evasive_radius', '512',
         '+set', 'port', "$runPort",
         '+set', 'botlib', 'libgladiator_x64.dll',
         '+set', 'coopbot_seed', "$seed",
@@ -468,10 +475,15 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
                 '--server-command-at', '0.5:coopbot_test_clear_monster_targets',
                 '--server-command-at', '0.5:give health 100',
                 '--server-command-at', '16:give health 100',
+                '--server-command-at', '16:coopbot_test_clear_monster_targets',
                 '--server-command-at', '32:give health 100',
+                '--server-command-at', '32:coopbot_test_clear_monster_targets',
                 '--server-command-at', '48:give health 100',
+                '--server-command-at', '48:coopbot_test_clear_monster_targets',
                 '--server-command-at', '64:give health 100',
-                '--server-command-at', '80:give health 100'
+                '--server-command-at', '64:coopbot_test_clear_monster_targets',
+                '--server-command-at', '80:give health 100',
+                '--server-command-at', '80:coopbot_test_clear_monster_targets'
             )
         }
         if ($waypointArgs.Count -gt 0) {

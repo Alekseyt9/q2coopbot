@@ -88,6 +88,121 @@ int BotAI_CoopPlayerEntity(const bot_client_state_t *state,
 
 /*
 =============
+BotAI_ResetCoopPlayerState
+
+Drop all map-local follow, regroup, rescue, role, and focus state.  A coop
+player can keep the same client slot across death, so a new alive frame must
+not inherit the previous spawn's AAS area or objective route.
+=============
+*/
+void BotAI_ResetCoopPlayerState(bot_client_state_t *state)
+{
+	if (state == NULL)
+	{
+		return;
+	}
+
+	state->coop_player_entity = -1;
+	state->coop_player_dead = true;
+	state->coop_player_area = 0;
+	VectorClear(state->coop_player_origin);
+	state->coop_player_goal_valid = false;
+	state->coop_elevator_wait_started = 0.0f;
+	state->coop_elevator_wait_area = 0;
+	state->coop_elevator_travel_started = 0.0f;
+	state->coop_elevator_travel_area = 0;
+	state->coop_player_intent = BOT_COOP_INTENT_UNKNOWN;
+	state->coop_player_intent_confidence = 0.0f;
+	state->coop_player_intent_time = 0.0f;
+	VectorClear(state->coop_player_last_origin);
+	VectorClear(state->coop_player_last_velocity);
+	state->coop_player_last_yaw = 0.0f;
+	state->coop_player_last_threat_distance = 0.0f;
+	state->coop_player_last_area = 0;
+	state->coop_player_motion_valid = false;
+	state->coop_player_threat_valid = false;
+	state->coop_player_area_valid = false;
+	state->coop_player_focus_entity = 0;
+	state->coop_player_focus_confidence = 0.0f;
+	state->coop_player_focus_time = 0.0f;
+	state->coop_target_candidate_entity = 0;
+	state->coop_target_candidate_time = 0.0f;
+	state->coop_bot_last_area = 0;
+	state->coop_bot_area_valid = false;
+	state->coop_role = BOT_COOP_ROLE_FOLLOWER;
+	state->coop_initiative_budget = 0.0f;
+	state->coop_role_confidence = 0.0f;
+	state->coop_role_time = 0.0f;
+	state->coop_role_next_position_time = 0.0f;
+	state->coop_action = BOT_COOP_ACTION_NONE;
+	state->coop_action_started = 0.0f;
+	state->coop_action_until = 0.0f;
+	VectorClear(state->coop_action_direction);
+	state->coop_action_valid = false;
+	state->coop_objective_phase = BOT_COOP_OBJECTIVE_NONE;
+	state->coop_objective_started = 0.0f;
+	state->coop_objective_goal_area = 0;
+	state->coop_objective_retries = 0;
+	state->coop_control_phase = BOT_COOP_CONTROL_NONE;
+	state->coop_control_entity = 0;
+	state->coop_control_goal_area = 0;
+	state->coop_control_started = 0.0f;
+	state->coop_control_route_confirmed = false;
+	state->coop_changelevel_gate_active = false;
+	state->coop_changelevel_gate_model = 0;
+	state->coop_current_area = 0;
+	state->coop_area_state = BOT_COOP_AREA_UNKNOWN;
+	state->coop_area_enemy_count = 0;
+	state->coop_area_combat_seen = false;
+	state->coop_area_gate_active = false;
+	state->coop_console_status_time = 0.0f;
+	state->coop_evasive_next_time = 0.0f;
+	state->coop_evasive_until = 0.0f;
+	state->coop_evasive_enemy = 0;
+	state->coop_evasive_side = 1;
+	state->coop_last_safe_area = 0;
+	VectorClear(state->coop_last_safe_origin);
+	state->coop_last_safe_time = 0.0f;
+	state->coop_last_safe_valid = false;
+	state->coop_joint_retreat_until = 0.0f;
+	state->coop_joint_retreat_active = false;
+}
+
+static void BotAI_ObserveCoopPlayerLifecycle(bot_client_state_t *state,
+	int player_entity)
+{
+	bool player_dead;
+	bool player_changed;
+	bool player_revived;
+
+	if (state == NULL || player_entity <= 0)
+	{
+		return;
+	}
+
+	player_dead = state->coop_player_telemetry_valid &&
+		state->coop_player_health <= 0;
+	player_changed = state->coop_player_entity > 0 &&
+		state->coop_player_entity != player_entity;
+	player_revived = state->coop_player_entity == player_entity &&
+		state->coop_player_dead && !player_dead;
+	if (player_changed || player_revived)
+	{
+		BotAI_ResetCoopPlayerState(state);
+		if (LibVarGetValue("coopbot_log") >= 1.0f)
+		{
+			BotLib_LogWriteTimeStamped(
+				"coopbot_player_rebind client=%d player=%d reason=%s",
+				state->client_number, player_entity,
+				player_changed ? "entity_changed" : "respawn");
+		}
+	}
+	state->coop_player_entity = player_entity;
+	state->coop_player_dead = player_dead;
+}
+
+/*
+=============
 BotAI_CoopPlayerIntentName
 
 Keep the decision log readable without exposing enum values as an external
@@ -297,11 +412,11 @@ void BotAI_UpdateCoopPlayerIntent(bot_client_state_t *state)
 	bool retreating = false;
 	bool has_threat = false;
 
-	if (state == NULL || !BotAI_CoopMode() ||
-		LibVarGetValue("coopbot_player_intent") == 0.0f)
+	if (state == NULL || !BotAI_CoopMode())
 	{
 		if (state != NULL)
 		{
+			BotAI_ResetCoopPlayerState(state);
 			state->coop_player_intent = BOT_COOP_INTENT_UNKNOWN;
 			state->coop_player_intent_confidence = 0.0f;
 			state->coop_player_motion_valid = false;
@@ -319,6 +434,7 @@ void BotAI_UpdateCoopPlayerIntent(bot_client_state_t *state)
 	if (player_entity < 0 || !aasworld.initialized ||
 		aasworld.entities == NULL)
 	{
+		BotAI_ResetCoopPlayerState(state);
 		state->coop_player_intent = BOT_COOP_INTENT_UNKNOWN;
 		state->coop_player_intent_confidence = 0.0f;
 		state->coop_player_motion_valid = false;
@@ -330,6 +446,19 @@ void BotAI_UpdateCoopPlayerIntent(bot_client_state_t *state)
 		return;
 	}
 	BotAI_UpdateCoopPlayerTelemetry(state, player_entity);
+	BotAI_ObserveCoopPlayerLifecycle(state, player_entity);
+	if (LibVarGetValue("coopbot_player_intent") == 0.0f)
+	{
+		state->coop_player_intent = BOT_COOP_INTENT_UNKNOWN;
+		state->coop_player_intent_confidence = 0.0f;
+		state->coop_player_motion_valid = false;
+		state->coop_player_threat_valid = false;
+		state->coop_player_area_valid = false;
+		state->coop_player_focus_entity = 0;
+		state->coop_player_focus_confidence = 0.0f;
+		state->coop_player_focus_time = 0.0f;
+		return;
+	}
 
 	VectorSubtract(player_info.origin, player_info.old_origin, velocity);
 	VectorCopy(velocity, horizontal_velocity);

@@ -1684,7 +1684,11 @@ bot_moveresult_t BotTravel_RocketJump(bot_movestate_t *ms,
 		dir[2] = 0.0f;
 		BotMove_VectorNormalize(dir);
 		EA_Jump(ms->client);
-		EA_Attack(ms->client);
+		if (LibVarGetValue("coop") == 0.0f ||
+			LibVarGetValue("coopbot_noncombat_fire") != 0.0f)
+		{
+			EA_Attack(ms->client);
+		}
 		EA_Move(ms->client, dir, 800.0f);
 		ms->jumpreach = ms->lastreachnum;
 	}

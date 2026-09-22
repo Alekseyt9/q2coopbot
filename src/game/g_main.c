@@ -73,6 +73,7 @@ cvar_t	*bob_roll;
 cvar_t	*sv_cheats;
 #ifdef BOT
 cvar_t	*coopbot_test_mode;
+qboolean coopbot_test_monsters_suppressed;
 #endif
 
 cvar_t	*flood_msgs;
@@ -517,6 +518,10 @@ void G_RunFrame (void)
 	// choose a client for monsters to target this frame
 	AI_SetSightClient ();
 
+#ifdef BOT
+	CoopBotTestSuppressMonsters ();
+#endif
+
 	// exit intermissions
 
 	if (level.exitintermission)
@@ -568,6 +573,10 @@ void G_RunFrame (void)
 	}
 
 #ifdef BOT
+	/* Monster think functions may relink their bodies. Re-apply the opt-in
+	 * movement-test isolation before AAS and bot traces run. */
+	CoopBotTestSuppressMonsters ();
+
 	ent = &g_edicts[0];
 	for (i = 0; i < globals.num_edicts; i++, ent++)
 	{

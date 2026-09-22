@@ -421,6 +421,9 @@ int BotSetupLibrary(void)
 		}
 		LibVarSet(cached_name, cached_value);
 	}
+	/* The evasive coop mechanic is part of the active tactical profile.  Keep
+	 * it enabled when an older host/game DLL does not forward the new cvar. */
+	LibVarSet("coopbot_evasive_movement", "1");
 	CRC_ResetSourceChecksums();
 
 	/* Retail 0x10037c04 commits setup before its first libvar lookup. */

@@ -1061,6 +1061,12 @@ int BotInitLibrary(bot_library_t *lib)
 	lib->funcs.BotLibVarSet("coopbot_burst_shots", cvar->string);
 	cvar = gi.cvar("coopbot_burst_pause", "0.25", 0);
 	lib->funcs.BotLibVarSet("coopbot_burst_pause", cvar->string);
+	cvar = gi.cvar("coopbot_aim_accuracy", "0.84", 0);
+	lib->funcs.BotLibVarSet("coopbot_aim_accuracy", cvar->string);
+	cvar = gi.cvar("coopbot_aim_prediction", "0.80", 0);
+	lib->funcs.BotLibVarSet("coopbot_aim_prediction", cvar->string);
+	cvar = gi.cvar("coopbot_noncombat_fire", "0", 0);
+	lib->funcs.BotLibVarSet("coopbot_noncombat_fire", cvar->string);
 	cvar = gi.cvar("coopbot_danger_retreat", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_danger_retreat", cvar->string);
 	cvar = gi.cvar("coopbot_danger_threshold", "0.65", 0);
@@ -1069,6 +1075,17 @@ int BotInitLibrary(bot_library_t *lib)
 	lib->funcs.BotLibVarSet("coopbot_danger_critical_health", cvar->string);
 	cvar = gi.cvar("coopbot_basic_cover", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_basic_cover", cvar->string);
+	cvar = gi.cvar("coopbot_evasive_movement", "1", 0);
+	/* Keep the runtime combat profile enabled even when an older config has
+	 * no entry for this newly added mechanic. */
+	lib->funcs.BotLibVarSet("coopbot_evasive_movement",
+		cvar->value != 0.0f ? cvar->string : "1");
+	cvar = gi.cvar("coopbot_evasive_interval", "0.85", 0);
+	lib->funcs.BotLibVarSet("coopbot_evasive_interval", cvar->string);
+	cvar = gi.cvar("coopbot_evasive_duration", "0.35", 0);
+	lib->funcs.BotLibVarSet("coopbot_evasive_duration", cvar->string);
+	cvar = gi.cvar("coopbot_evasive_radius", "512", 0);
+	lib->funcs.BotLibVarSet("coopbot_evasive_radius", cvar->string);
 	cvar = gi.cvar("coopbot_safe_area_retreat", "0", 0);
 	lib->funcs.BotLibVarSet("coopbot_safe_area_retreat", cvar->string);
 	cvar = gi.cvar("coopbot_elevator_wait_timeout", "15", 0);

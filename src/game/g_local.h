@@ -770,6 +770,8 @@ extern	cvar_t	*bob_roll;
 extern	cvar_t	*sv_cheats;
 #ifdef BOT
 extern	cvar_t	*coopbot_test_mode;
+extern	qboolean coopbot_test_monsters_suppressed;
+void CoopBotTestSuppressMonsters (void);
 #endif
 extern	cvar_t	*maxclients;
 extern	cvar_t	*maxspectators;
