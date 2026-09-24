@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 
-from q2_packet_snapshot import PacketSnapshots
+from q2_packet_snapshot import Entity, Frame, PacketSnapshots
 
 
 def config(index, value):
@@ -55,6 +55,33 @@ class PacketSnapshotTests(unittest.TestCase):
         decoder = PacketSnapshots()
         decoder.parse(b"\x03\x02" + struct.pack("<hhhB", 800, -80, 16, 0))
         self.assertEqual(decoder.wall_impacts, [(100.0, -10.0, 2.0)])
+
+    def test_soldier_death_animation_is_not_an_enemy(self):
+        decoder = PacketSnapshots()
+        decoder.map_name = "base1"
+        decoder.player_number = 1
+        decoder.teammate_origin = (100.0, 0.0, 0.0)
+        decoder.config[30] = "4"
+        decoder.config[34] = "models/monsters/soldier/tris.md2"
+        state = Frame(1, (0.0, 0.0, 0.0), [0] * 32, 0,
+                      entities={5: Entity(5, 2, (16.0, 0.0, 0.0), 272)})
+        self.assertEqual(decoder.snapshot(state)["enemies"], [])
+        state.entities[5].frame = 271
+        self.assertEqual(decoder.snapshot(state)["enemies"][0]["id"], 5)
+
+    def test_new_map_resets_old_world_and_reports_reconnect(self):
+        decoder = PacketSnapshots()
+        decoder.map_name = "base1"
+        decoder.teammate_origin = (10.0, 0.0, 0.0)
+        decoder.config[33] = "maps/base1.bsp"
+        decoder.wall_impacts.append((1.0, 2.0, 3.0))
+        serverdata = (b"\x0c" + struct.pack("<iiB", 34, 8, 0)
+                      + b"baseq2\0" + struct.pack("<h", 0) + b"Outer Base 2\0")
+        decoder.parse(serverdata + b"\x0bchanging\n\0\x0breconnect\n\0")
+        self.assertIsNone(decoder.map_name)
+        self.assertIsNone(decoder.teammate_origin)
+        self.assertEqual(decoder.wall_impacts, [])
+        self.assertEqual(decoder.server_commands, ["changing", "reconnect"])
 
 
 if __name__ == "__main__":

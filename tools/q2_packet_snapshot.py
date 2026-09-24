@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 import re
 import struct
 
+DEATH_FRAMES = {"soldier": ((272, 474),),
+                "infantry": ((125, 178),)}
+
 
 class PacketError(ValueError):
     pass
@@ -214,6 +217,9 @@ class PacketSnapshots:
                 self.config.clear()
                 self.baselines.clear()
                 self.frames.clear()
+                self.map_name = None
+                self.teammate_origin = None
+                self.wall_impacts.clear()
                 reader.long()  # protocol
                 reader.long()  # spawncount
                 reader.byte()  # attractloop
@@ -320,8 +326,14 @@ class PacketSnapshots:
             distance = sum((a - b) ** 2 for a, b in zip(entity.origin, frame.origin))
             if "/monsters/" in path and distance < 1024 ** 2:
                 kind = path.split("/monsters/", 1)[1].split("/", 1)[0]
+                # Stock protocol does not expose monster health. The model
+                # animation still identifies corpses for these common foes.
+                if any(first <= entity.frame <= last
+                       for first, last in DEATH_FRAMES.get(kind, ())):
+                    continue
                 enemies.append({"id": entity.number, "class": f"monster_{kind}",
-                                "origin": entity.origin, "health": None,
+                                "origin": entity.origin, "frame": entity.frame,
+                                "health": None,
                                 "velocity": (0.0, 0.0, 0.0), "distance": distance})
             elif "/items/" in path and distance < 384 ** 2:
                 kind = "item_health" if "heal" in path else "item_" + path.split("/items/", 1)[1].split("/", 1)[0]

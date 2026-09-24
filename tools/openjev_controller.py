@@ -454,7 +454,7 @@ class OpenJevController:
                   horizontal_distance(player, self.attack_origin) < 12):
                 enemy = next((item for item in snapshot["enemies"]
                               if item["id"] == entity_id), None)
-                if enemy and horizontal_distance(player, enemy["origin"]) > 160:
+                if enemy:
                     self._block_target(entity_id, "no movement while attacking", now)
                     action = "follow"
         else:

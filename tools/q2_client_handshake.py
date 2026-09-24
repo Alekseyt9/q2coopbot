@@ -594,6 +594,10 @@ def main() -> int:
     decoder = PacketSnapshots() if args.udp_snapshot_log else None
     decoded_frames = 0
     seen_server_commands: set[str] = set()
+    last_reconnect_at = -1e9
+    last_diagnostic_at = 0.0
+    last_handshake_at = 0.0
+    last_handshake_command: str | None = None
     openjev = (OpenJevController(snapshot_path, args.episode_id, snapshot_offset,
                                 args.openjev_url, args.openjev_model,
                                 args.openjev_interval, args.openjev_timeout,
@@ -653,6 +657,19 @@ def main() -> int:
                     )
                     if packet_spawncount is not None:
                         spawncount = packet_spawncount
+                        print(f"UDP serverdata spawncount={spawncount}", flush=True)
+                        # The server's following stufftext can be lost during a
+                        # map transition.  The spawncount is enough to request
+                        # the first configstring batch without waiting for it.
+                        command = f"configstrings {spawncount} 0"
+                        _send_netchan_command(sock, address, next_sequence,
+                                              qport, command, server_sequence,
+                                              server_reliable)
+                        next_sequence += 1
+                        seen_server_commands.add(f"cmd {command}")
+                        last_handshake_command = command
+                        last_handshake_at = time.monotonic()
+                        print(f"UDP handshake: {command}", flush=True)
                     if decoder is not None:
                         try:
                             frames = decoder.parse(packet[8:])
@@ -675,6 +692,32 @@ def main() -> int:
                                     "time": snapshot["time"], "map": snapshot["map"],
                                     "snapshot": snapshot}, ensure_ascii=False) + "\n")
                         for requested in decoder.server_commands:
+                            if requested == "changing":
+                                begin_sent = False
+                                command_start_at = None
+                                move_started = None
+                                seen_server_commands.clear()
+                                print("UDP changing map", flush=True)
+                                continue
+                            if requested == "reconnect":
+                                now = time.monotonic()
+                                if now - last_reconnect_at < 1.0:
+                                    continue
+                                last_reconnect_at = now
+                                begin_sent = False
+                                command_start_at = None
+                                commands_sent = False
+                                move_started = None
+                                previous_cmd = zero_cmd
+                                seen_server_commands.clear()
+                                last_handshake_command = "new"
+                                last_handshake_at = now
+                                _send_netchan_command(sock, address, next_sequence,
+                                                      qport, "new", server_sequence,
+                                                      server_reliable)
+                                next_sequence += 1
+                                print("UDP reconnect: requested new map state", flush=True)
+                                continue
                             if requested in seen_server_commands:
                                 continue
                             seen_server_commands.add(requested)
@@ -689,6 +732,9 @@ def main() -> int:
                             _send_netchan_command(sock, address, next_sequence, qport,
                                                   command, server_sequence, server_reliable)
                             next_sequence += 1
+                            last_handshake_command = command
+                            last_handshake_at = time.monotonic()
+                            print(f"UDP handshake: {command}", flush=True)
 
             if challenge is not None and not client_connected:
                 if any("client_connect" in response for response in responses):
@@ -705,6 +751,21 @@ def main() -> int:
                         )
                         next_sequence += 1
                         new_sent = True
+                        last_handshake_command = "new"
+                        last_handshake_at = time.monotonic()
+
+            # Handshake string commands are sent in a single UDP packet.  If
+            # one packet disappears, the server waits and can time the bot out.
+            # The handshake commands are safe to repeat while not spawned.
+            if (client_connected and not begin_sent and
+                    last_handshake_command is not None and
+                    time.monotonic() - last_handshake_at >= 2.0):
+                _send_netchan_command(sock, address, next_sequence, qport,
+                                      last_handshake_command, server_sequence,
+                                      server_reliable)
+                next_sequence += 1
+                last_handshake_at = time.monotonic()
+                print(f"UDP handshake retry: {last_handshake_command}", flush=True)
 
             if decoder is None and new_sent and spawncount is not None and not begin_sent:
                 _send_netchan_command(
@@ -914,6 +975,17 @@ def main() -> int:
                     and time.monotonic() - move_started
                     >= phase_duration + args.post_move_duration
                 )
+            if decoder is not None and time.monotonic() - last_diagnostic_at >= 5.0:
+                last_diagnostic_at = time.monotonic()
+                latest_frame = decoder.frames.get(max(decoder.frames)) if decoder.frames else None
+                print("UDP state " + json.dumps({
+                    "map": decoder.map_name, "begun": begin_sent,
+                    "frames": decoded_frames, "last_frame": latest_frame.number if latest_frame else None,
+                    "origin": latest_frame.origin if latest_frame else None,
+                    "teammate": decoder.teammate_origin,
+                    "entities": len(latest_frame.entities) if latest_frame else 0,
+                    "errors": decoder.errors, "last_error": decoder.last_error,
+                }), flush=True)
             if human_marker and args.require_human_marker and movement_complete:
                 break
             if client_connected and not args.require_human_marker and movement_complete:
