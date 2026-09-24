@@ -41,6 +41,8 @@ typedef struct coopbot_diag_state_s
 	cvar_t *metrics_interval;
 	cvar_t *slow_ai_ms;
 	cvar_t *map_dump;
+	cvar_t *openjev_world;
+	cvar_t *openjev_player;
 	cvar_t *jsonl_enabled;
 	cvar_t *episode_id_override;
 	cvar_t *seed;
@@ -374,6 +376,155 @@ static int CoopBotDiag_VisibleMonsters(edict_t *bot)
 
 //===========================================================================
 //
+// Emit a bounded, live world observation for the external UDP test player.
+// Static map entities are not substituted for current monster/item state.
+//
+//===========================================================================
+static void CoopBotDiag_RecordOpenJevWorld(edict_t *player)
+{
+	edict_t *enemies[4] = {NULL, NULL, NULL, NULL};
+	edict_t *pickups[3] = {NULL, NULL, NULL};
+	float enemy_distances[4] = {1.0e30f, 1.0e30f, 1.0e30f, 1.0e30f};
+	float pickup_distances[3] = {1.0e30f, 1.0e30f, 1.0e30f};
+	int entity_number;
+	int index;
+
+	if (player == NULL || player->client == NULL ||
+		coopbot_diag.openjev_world == NULL ||
+		coopbot_diag.openjev_world->value == 0.0f)
+	{
+		return;
+	}
+
+	for (entity_number = game.maxclients + 1;
+		entity_number < globals.num_edicts; ++entity_number)
+	{
+		edict_t *candidate = &g_edicts[entity_number];
+		vec3_t delta;
+		float distance_squared;
+		qboolean is_enemy;
+		qboolean is_pickup;
+		edict_t **selected;
+		float *distances;
+		int limit;
+
+		if (!candidate->inuse)
+			continue;
+		is_enemy = (candidate->svflags & SVF_MONSTER) != 0 &&
+			candidate->deadflag == DEAD_NO && candidate->health > 0;
+		is_pickup = candidate->item != NULL &&
+			candidate->solid != SOLID_NOT && candidate->touch != NULL;
+		if (!is_enemy && !is_pickup)
+			continue;
+		VectorSubtract(candidate->s.origin, player->s.origin, delta);
+		distance_squared = DotProduct(delta, delta);
+		if (distance_squared > 1024.0f * 1024.0f)
+			continue;
+		if (is_enemy)
+		{
+			if (!visible(player, candidate))
+				continue;
+			selected = enemies;
+			distances = enemy_distances;
+			limit = 4;
+		}
+		else
+		{
+			if (distance_squared > 384.0f * 384.0f ||
+				fabsf(delta[2]) > 64.0f)
+				continue;
+			selected = pickups;
+			distances = pickup_distances;
+			limit = 3;
+		}
+		for (index = 0; index < limit; ++index)
+		{
+			int shift;
+			if (distance_squared >= distances[index])
+				continue;
+			for (shift = limit - 1; shift > index; --shift)
+			{
+				selected[shift] = selected[shift - 1];
+				distances[shift] = distances[shift - 1];
+			}
+			selected[index] = candidate;
+			distances[index] = distance_squared;
+			break;
+		}
+	}
+
+	for (index = 0; index < 4 && enemies[index] != NULL; ++index)
+	{
+		edict_t *enemy = enemies[index];
+		CoopBotDiag_Log(2,
+			"openjev_enemy id=%d class=\"%s\" health=%d "
+			"origin=(%.1f %.1f %.1f) velocity=(%.1f %.1f %.1f)",
+			CoopBotDiag_EntityNumber(enemy), CoopBotDiag_Classname(enemy),
+			enemy->health, enemy->s.origin[0], enemy->s.origin[1],
+			enemy->s.origin[2], enemy->velocity[0], enemy->velocity[1],
+			enemy->velocity[2]);
+	}
+	for (index = 0; index < 3 && pickups[index] != NULL; ++index)
+	{
+		edict_t *pickup = pickups[index];
+		CoopBotDiag_Log(2,
+			"openjev_pickup id=%d class=\"%s\" origin=(%.1f %.1f %.1f)",
+			CoopBotDiag_EntityNumber(pickup), CoopBotDiag_Classname(pickup),
+			pickup->s.origin[0], pickup->s.origin[1], pickup->s.origin[2]);
+	}
+}
+
+// Emit observations for the model-owned player without requiring a BotLib bot.
+void CoopBotDiag_RecordOpenJevPlayer(void)
+{
+	edict_t *player = NULL;
+	edict_t *teammate = NULL;
+	int client;
+	int ammo = 0;
+
+	if (coopbot_diag.openjev_world == NULL ||
+		coopbot_diag.openjev_world->value == 0.0f ||
+		coopbot_diag.openjev_player == NULL ||
+		coopbot_diag.openjev_player->string[0] == '\0')
+		return;
+
+	for (client = 0; client < game.maxclients; ++client)
+	{
+		edict_t *candidate = DF_CLIENTENT(client);
+		if (!candidate->inuse || candidate->client == NULL ||
+			(candidate->flags & FL_BOT) != 0)
+			continue;
+		if (strcmp(candidate->client->pers.netname,
+			coopbot_diag.openjev_player->string) == 0)
+			player = candidate;
+		else if (teammate == NULL)
+			teammate = candidate;
+	}
+	if (player == NULL)
+		return;
+	if (teammate == NULL)
+		teammate = player;
+	if (player->client->ammo_index > 0 &&
+		player->client->ammo_index < MAX_ITEMS)
+		ammo = player->client->pers.inventory[player->client->ammo_index];
+	CoopBotDiag_Log(2,
+		"openjev_snapshot player=%d player_is_human=1 player_health=%d "
+		"player_origin=(%.1f %.1f %.1f) bot_origin=(%.1f %.1f %.1f) "
+		"bot_health=%d player_armor=%d player_ammo=%d "
+		"player_weapon=\"%s\"",
+		CoopBotDiag_EntityNumber(player), player->health,
+		player->s.origin[0], player->s.origin[1], player->s.origin[2],
+		teammate->s.origin[0], teammate->s.origin[1],
+		teammate->s.origin[2], teammate->health,
+		player->client->ps.stats[STAT_ARMOR], ammo,
+		player->client->pers.weapon != NULL &&
+		player->client->pers.weapon->pickup_name != NULL
+			? player->client->pers.weapon->pickup_name : "<none>");
+	CoopBotDiag_RecordOpenJevWorld(player);
+}
+
+//===========================================================================
+//
 // Record the observable companion state at the input boundary. The state is
 // intentionally an inferred diagnostic label, not a new gameplay FSM.
 //
@@ -394,6 +545,7 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 	int bot_armor = 0;
 	int bot_ammo_index = 0;
 	int bot_ammo = 0;
+	int player_ammo = 0;
 	const char *state = "idle";
 	int client;
 
@@ -441,6 +593,12 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 		bot_ammo_index = bot->client->ammo_index;
 		if (bot_ammo_index >= 0 && bot_ammo_index < MAX_ITEMS)
 			bot_ammo = bot->client->pers.inventory[bot_ammo_index];
+	}
+	if (player != NULL && player->client != NULL &&
+		player->client->ammo_index > 0 &&
+		player->client->ammo_index < MAX_ITEMS)
+	{
+		player_ammo = player->client->pers.inventory[player->client->ammo_index];
 	}
 	visible_enemies = CoopBotDiag_VisibleMonsters(bot);
 	if (client >= 0 && client < COOPBOT_DIAG_MAX_CLIENTS)
@@ -536,7 +694,9 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 		"input_flags=0x%x speed=%.1f bot_health=%d bot_max_health=%d "
 		"bot_armor=%d bot_ammo_index=%d bot_ammo=%d "
 		"weaponstate=%d gunframe=%d gunindex=%d weapon=\"%s\" "
-		"newweapon=\"%s\"",
+		"newweapon=\"%s\" player_armor=%d player_ammo=%d "
+		"player_weapon=\"%s\" player_buttons=%d player_gunframe=%d "
+		"player_viewangles=(%.1f %.1f %.1f)",
 		client, CoopBotDiag_Name(bot), state,
 		CoopBotDiag_EntityNumber(player),
 		player_is_human,
@@ -560,7 +720,25 @@ void CoopBotDiag_RecordBotSnapshot(edict_t *bot, const bot_input_t *input)
 			? bot->client->pers.weapon->pickup_name : "<none>",
 		bot->client->newweapon != NULL &&
 			bot->client->newweapon->pickup_name != NULL
-			? bot->client->newweapon->pickup_name : "<none>");
+			? bot->client->newweapon->pickup_name : "<none>",
+		player != NULL && player->client != NULL
+			? player->client->ps.stats[STAT_ARMOR] : 0,
+		player_ammo,
+		player != NULL && player->client != NULL &&
+			player->client->pers.weapon != NULL &&
+			player->client->pers.weapon->pickup_name != NULL
+			? player->client->pers.weapon->pickup_name : "<none>",
+		player != NULL && player->client != NULL
+			? player->client->buttons : 0,
+		player != NULL && player->client != NULL
+			? player->client->ps.gunframe : 0,
+		player != NULL && player->client != NULL
+			? player->client->ps.viewangles[0] : 0.0f,
+		player != NULL && player->client != NULL
+			? player->client->ps.viewangles[1] : 0.0f,
+		player != NULL && player->client != NULL
+			? player->client->ps.viewangles[2] : 0.0f);
+	CoopBotDiag_RecordOpenJevWorld(player_is_human ? player : NULL);
 }
 
 void CoopBotDiag_RecordBotStateMarker(const char *reason)
@@ -712,6 +890,8 @@ void CoopBotDiag_Init(void)
 	coopbot_diag.metrics_interval = gi.cvar("coopbot_metrics_interval", "10", 0);
 	coopbot_diag.slow_ai_ms = gi.cvar("coopbot_slow_ai_ms", "100", 0);
 	coopbot_diag.map_dump = gi.cvar("coopbot_map_dump", "1", 0);
+	coopbot_diag.openjev_world = gi.cvar("coopbot_openjev_world", "0", 0);
+	coopbot_diag.openjev_player = gi.cvar("coopbot_openjev_player", "", 0);
 	coopbot_diag.jsonl_enabled = gi.cvar("coopbot_jsonl", "1", 0);
 	coopbot_diag.episode_id_override = gi.cvar("coopbot_episode_id", "", 0);
 	coopbot_diag.seed = gi.cvar("coopbot_seed", "0", 0);

@@ -20,35 +20,4 @@ NUL.obj
 # The preservation archive is deliberately tracked. This negation is a guard:
 # it keeps a future broad rule (*.zip, *.exe, ...) from swallowing it.
 !archive/**
-/artifacts/udp-follow-baseline
-/artifacts/udp-retreat-baseline
-/artifacts/udp-cover-baseline
-/artifacts/udp-phase-retreat-baseline
-/artifacts/udp-rescue-baseline
-/artifacts/udp-kill-steal-baseline
-/artifacts/udp-lost-los-baseline
-/artifacts/udp-elevator-baseline
-/artifacts/udp-elevator-probe-1150
-/artifacts/udp-base1-elevator-probe
-/artifacts/udp-elevator-fixture-*
-/artifacts/udp-elevator-player-*
-/artifacts/udp-kill-steal-default-long-*
-/artifacts/udp-kill-steal-default-fixture-*
-/artifacts/udp-lost-los-tune-*
-/artifacts/udp-kill-steal-default-baseline
-/artifacts/udp-kill-steal-default-turn-baseline
-/artifacts/udp-transition-baseline
-/artifacts/udp-elevator-player-probe-1157
-/artifacts/udp-elevator-player-probe-1158
-/artifacts/udp-elevator-player-probe-1159
-/artifacts/udp-elevator-player-probe-1160
-/artifacts/udp-elevator-player-probe-1161
-/artifacts/udp-kill-steal-default-long-1162
-/artifacts/udp-lost-los-fixture-baseline
-/artifacts/udp-lost-los-map-fixture-baseline
-/artifacts/udp-lost-los-stable-fixture-baseline
-/artifacts/udp-elevator-natural-route-baseline
-/artifacts/udp-elevator-route-probe-baseline
-/artifacts/udp-kill-steal-default-melee-baseline
-/artifacts/udp-kill-steal-default-timeline-baseline
-/artifacts/udp-combat-baseline
+/artifacts

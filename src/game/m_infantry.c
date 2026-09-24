@@ -154,8 +154,13 @@ mframe_t infantry_frames_run [] =
 };
 mmove_t infantry_move_run = {FRAME_run01, FRAME_run08, infantry_frames_run, NULL};
 
+void infantry_duck_up (edict_t *self);
+
 void infantry_run (edict_t *self)
 {
+	if (self->maxs[2] < 32)
+		infantry_duck_up (self);
+
 	if (self->monsterinfo.aiflags & AI_STAND_GROUND)
 		self->monsterinfo.currentmove = &infantry_move_stand;
 	else
@@ -207,6 +212,8 @@ void infantry_pain (edict_t *self, edict_t *other, float kick, int damage)
 	
 	if (skill->value == 3)
 		return;		// no pain anims in nightmare
+	if (self->maxs[2] < 32)
+		infantry_duck_up (self);
 
 	n = rand() % 2;
 	if (n == 0)
@@ -428,8 +435,10 @@ void infantry_duck_hold (edict_t *self)
 
 void infantry_duck_up (edict_t *self)
 {
+	if (self->maxs[2] >= 32)
+		return;
 	self->monsterinfo.aiflags &= ~AI_DUCKED;
-	self->maxs[2] += 32;
+	self->maxs[2] = 32;
 	self->takedamage = DAMAGE_AIM;
 	gi.linkentity (self);
 }
@@ -529,6 +538,9 @@ mmove_t infantry_move_attack2 = {FRAME_attak201, FRAME_attak208, infantry_frames
 
 void infantry_attack(edict_t *self)
 {
+	if (self->maxs[2] < 32)
+		infantry_duck_up (self);
+
 	if (range (self, self->enemy) == RANGE_MELEE)
 		self->monsterinfo.currentmove = &infantry_move_attack2;
 	else

@@ -275,6 +275,7 @@ void soldier_walk (edict_t *self)
 //
 
 void soldier_run (edict_t *self);
+void soldier_duck_up (edict_t *self);
 
 mframe_t soldier_frames_start_run [] =
 {
@@ -296,6 +297,9 @@ mmove_t soldier_move_run = {FRAME_run03, FRAME_run08, soldier_frames_run, NULL};
 
 void soldier_run (edict_t *self)
 {
+	if (self->maxs[2] < 32)
+		soldier_duck_up (self);
+
 	if (self->monsterinfo.aiflags & AI_STAND_GROUND)
 	{
 		self->monsterinfo.currentmove = &soldier_move_stand1;
@@ -414,12 +418,16 @@ void soldier_pain (edict_t *self, edict_t *other, float kick, int damage)
 
 	if (self->velocity[2] > 100)
 	{
+		if (self->maxs[2] < 32)
+			soldier_duck_up (self);
 		self->monsterinfo.currentmove = &soldier_move_pain4;
 		return;
 	}
 
 	if (skill->value == 3)
 		return;		// no pain anims in nightmare
+	if (self->maxs[2] < 32)
+		soldier_duck_up (self);
 
 	r = random();
 
@@ -625,8 +633,10 @@ void soldier_duck_down (edict_t *self)
 
 void soldier_duck_up (edict_t *self)
 {
+	if (self->maxs[2] >= 32)
+		return;
 	self->monsterinfo.aiflags &= ~AI_DUCKED;
-	self->maxs[2] += 32;
+	self->maxs[2] = 32;
 	self->takedamage = DAMAGE_AIM;
 	gi.linkentity (self);
 }
@@ -752,6 +762,9 @@ mmove_t soldier_move_attack6 = {FRAME_runs01, FRAME_runs14, soldier_frames_attac
 
 void soldier_attack(edict_t *self)
 {
+	if (self->maxs[2] < 32)
+		soldier_duck_up (self);
+
 	if (self->s.skinnum < 4)
 	{
 		if (random() < 0.5)
@@ -1479,6 +1492,7 @@ void soldierh_walk (edict_t *self)
 //
 
 void soldierh_run (edict_t *self);
+void soldierh_duck_up (edict_t *self);
 
 mframe_t soldierh_frames_start_run [] =
 {
@@ -1500,6 +1514,9 @@ mmove_t soldierh_move_run = {FRAME_run03, FRAME_run08, soldierh_frames_run, NULL
 
 void soldierh_run (edict_t *self)
 {
+	if (self->maxs[2] < 32)
+		soldierh_duck_up (self);
+
 	if (self->monsterinfo.aiflags & AI_STAND_GROUND)
 	{
 		self->monsterinfo.currentmove = &soldierh_move_stand1;
@@ -1617,12 +1634,16 @@ void soldierh_pain (edict_t *self, edict_t *other, float kick, int damage)
 
 	if (self->velocity[2] > 100)
 	{
+		if (self->maxs[2] < 32)
+			soldierh_duck_up (self);
 		self->monsterinfo.currentmove = &soldierh_move_pain4;
 		return;
 	}
 
 	if (skill->value == 3)
 		return;		// no pain anims in nightmare
+	if (self->maxs[2] < 32)
+		soldierh_duck_up (self);
 
 	r = random();
 
@@ -1937,8 +1958,10 @@ void soldierh_duck_down (edict_t *self)
 
 void soldierh_duck_up (edict_t *self)
 {
+	if (self->maxs[2] >= 32)
+		return;
 	self->monsterinfo.aiflags &= ~AI_DUCKED;
-	self->maxs[2] += 32;
+	self->maxs[2] = 32;
 	self->takedamage = DAMAGE_AIM;
 	gi.linkentity (self);
 }
@@ -2064,6 +2087,9 @@ mmove_t soldierh_move_attack6 = {FRAME_runs01, FRAME_runs14, soldierh_frames_att
 
 void soldierh_attack(edict_t *self)
 {
+	if (self->maxs[2] < 32)
+		soldierh_duck_up (self);
+
 	if (self->s.skinnum < 4)
 	{
 		if (random() < 0.5)

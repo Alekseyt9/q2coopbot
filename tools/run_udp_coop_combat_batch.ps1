@@ -7,6 +7,9 @@ param(
     [int]$Port = 27952,
     [int]$MoveSeconds = 10,
     [int]$StartupDelayMs = 1800,
+    [switch]$OpenJev,
+    [string]$OpenJevModel = 'hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0',
+    [string]$OpenJevUrl = 'http://127.0.0.1:11434',
     [string]$RuntimeRoot = 'F:\src\quake2\q2coopbot-runtime-bot',
     [string]$RepoRoot = 'F:\src\quake2\q2coopbot-release'
 )
@@ -15,9 +18,17 @@ $ErrorActionPreference = 'Stop'
 $q2ded = Join-Path $RuntimeRoot 'q2ded.exe'
 $client = Join-Path $RepoRoot 'tools\q2_client_handshake.py'
 $reporter = Join-Path $RepoRoot 'tools\coopbot_event_report.py'
+$pythonExe = if (Get-Command uv -ErrorAction SilentlyContinue) {
+    (uv python find 3.12).Trim()
+} else {
+    (Get-Command python -ErrorAction Stop).Source
+}
 $eventLog = Join-Path $RuntimeRoot 'coopbot_debug_events.jsonl'
 $botlibLogSource = Join-Path $RuntimeRoot 'botlib.log'
 $artifactRoot = Join-Path $RepoRoot "artifacts\udp-$Scenario-baseline"
+if ($OpenJev) {
+    $artifactRoot = Join-Path $RepoRoot "artifacts\udp-$Scenario-openjev"
+}
 
 if (-not (Test-Path -LiteralPath $q2ded)) {
     throw "q2ded is missing: $q2ded"
@@ -30,6 +41,20 @@ if (-not (Test-Path -LiteralPath $reporter)) {
 }
 if (Get-Process q2ded -ErrorAction SilentlyContinue) {
     throw 'q2ded is already running; stop the owned test server before starting a batch'
+}
+
+if ($OpenJev) {
+    $warmup = @{
+        model = $OpenJevModel
+        prompt = 'Shared state: ready. Return only the selected letter: A, B. Answer:'
+        stream = $false
+        think = $false
+        keep_alive = '10m'
+        options = @{ temperature = 0; num_predict = 1 }
+    } | ConvertTo-Json -Depth 4
+    Invoke-RestMethod -Uri "$($OpenJevUrl.TrimEnd('/'))/api/generate" `
+        -Method Post -ContentType 'application/json' -Body $warmup `
+        -TimeoutSec 120 | Out-Null
 }
 
 New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
@@ -305,16 +330,20 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
         '+set', 'maxclients', '8',
         '+set', 'minimumplayers', '2',
         '+set', 'coopbot_log', '2',
-        '+set', 'coopbot_evasive_movement', '1',
-        '+set', 'coopbot_evasive_interval', '0.85',
-        '+set', 'coopbot_evasive_duration', '0.35',
-        '+set', 'coopbot_evasive_radius', '512',
         '+set', 'port', "$runPort",
         '+set', 'botlib', 'libgladiator_x64.dll',
         '+set', 'coopbot_seed', "$seed",
         '+set', 'coopbot_episode_id', $episode,
         '+map', 'base2'
     )
+    if (-not $OpenJev) {
+        $serverArgs = @(
+            '+set', 'coopbot_evasive_movement', '1',
+            '+set', 'coopbot_evasive_interval', '0.85',
+            '+set', 'coopbot_evasive_duration', '0.35',
+            '+set', 'coopbot_evasive_radius', '512'
+        ) + $serverArgs
+    }
     if ($killStealDefaultFixtureMode) {
         # q2ded has a small argv limit; this opt-in fixture keeps the runtime
         # default game directory instead of spending three argv slots on the
@@ -372,6 +401,9 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
     }
     if ($elevatorNaturalRouteMode) {
         $serverArgs = @('+set', 'coopbot_test_mode', '1') + $serverArgs
+    }
+    if ($OpenJev) {
+        $serverArgs = @('+set', 'coopbot_openjev_world', '1') + $serverArgs
     }
 
     $server = $null
@@ -486,7 +518,15 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
                 '--server-command-at', '80:coopbot_test_clear_monster_targets'
             )
         }
-        if ($waypointArgs.Count -gt 0) {
+        if ($OpenJev) {
+            $harnessArgs += @(
+                '--openjev',
+                '--openjev-model', $OpenJevModel,
+                '--openjev-url', $OpenJevUrl,
+                '--openjev-trace', (Join-Path $artifactRoot "$episode-openjev.jsonl")
+            )
+        }
+        elseif ($waypointArgs.Count -gt 0) {
             $harnessArgs += $waypointArgs
             if ($Scenario -eq 'elevator-natural-route') {
                 $harnessArgs += @(
@@ -510,7 +550,7 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
             if ($attack) { $harnessArgs += '--attack' }
             if ($jump) { $harnessArgs += '--jump' }
         }
-        & python @harnessArgs 1> $harnessOutput 2> $harnessError
+        & $pythonExe @harnessArgs 1> $harnessOutput 2> $harnessError
         $harnessExit = $LASTEXITCODE
     }
     finally {
@@ -585,7 +625,7 @@ for ($offset = 0; $offset -lt $Count; $offset++) {
             '--require-bot-state-persistence'
         )
     }
-    & python @reportArgs
+    & $pythonExe @reportArgs
     $reportExit = $LASTEXITCODE
     if (Test-Path -LiteralPath $reportOutput) {
         $report = Get-Content -LiteralPath $reportOutput -Raw | ConvertFrom-Json -AsHashtable

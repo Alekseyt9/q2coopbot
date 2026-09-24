@@ -617,6 +617,7 @@ void G_RunFrame (void)
 	} //end for
 	//check if a minimum number of players should be in the game
 	CheckMinimumPlayers();
+	CoopBotDiag_RecordOpenJevPlayer();
 	CoopBotDiag_FrameEnd();
 #endif //BOT
 

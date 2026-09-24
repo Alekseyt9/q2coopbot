@@ -19,6 +19,10 @@ import sys
 import time
 from typing import NamedTuple
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from openjev_controller import MODEL as DEFAULT_OPENJEV_MODEL, OpenJevController
+from q2_packet_snapshot import PacketError, PacketSnapshots
 
 
 OOB = struct.pack("<I", 0xFFFFFFFF)
@@ -240,8 +244,9 @@ def _human_marker_seen(path: Path, offset: int, episode_id: str | None) -> tuple
                     continue
                 message = str(record.get("message", ""))
                 if (
-                    record.get("event") == "bot_snapshot"
-                    and "player_is_human=1" in message
+                    (record.get("event") in ("bot_snapshot", "openjev_snapshot")
+                     and "player_is_human=1" in message)
+                    or record.get("event") == "udp_snapshot"
                 ):
                     return True, offset
     except OSError:
@@ -270,7 +275,12 @@ def _human_origin(
                     continue
                 if episode_id and record.get("episode_id") != episode_id:
                     continue
-                if record.get("event") != "bot_snapshot":
+                if record.get("event") == "udp_snapshot":
+                    value = record.get("snapshot", {}).get("player_origin")
+                    if isinstance(value, list) and len(value) == 3:
+                        origin = tuple(float(part) for part in value)
+                    continue
+                if record.get("event") not in ("bot_snapshot", "openjev_snapshot"):
                     continue
                 message = str(record.get("message", ""))
                 if "player_is_human=1" not in message:
@@ -295,7 +305,16 @@ def main() -> int:
     parser.add_argument("--duration", type=float, default=8.0)
     parser.add_argument("--qport", type=int, help="client qport; random by default")
     parser.add_argument("--event-log", type=Path)
+    parser.add_argument("--udp-snapshot-log", type=Path,
+                        help="write world snapshots decoded from standard server UDP packets")
     parser.add_argument("--episode-id")
+    parser.add_argument("--openjev", action="store_true",
+                        help="let local Ollama OpenJev steer this UDP test player")
+    parser.add_argument("--openjev-model", default=DEFAULT_OPENJEV_MODEL)
+    parser.add_argument("--openjev-url", default="http://127.0.0.1:11434")
+    parser.add_argument("--openjev-interval", type=float, default=1.0)
+    parser.add_argument("--openjev-timeout", type=float, default=15.0)
+    parser.add_argument("--openjev-trace", type=Path)
     parser.add_argument(
         "--require-human-marker",
         action="store_true",
@@ -441,6 +460,17 @@ def main() -> int:
         parser.error("use either --waypoint or movement phases, not both")
     if args.waypoint and args.event_log is None:
         parser.error("--waypoint requires --event-log for live player telemetry")
+    if args.openjev and ((args.event_log is None and args.udp_snapshot_log is None)
+                         or args.phase or args.waypoint or args.move_forward > 0):
+        parser.error("--openjev requires a snapshot log and cannot be combined with movement phases or waypoints")
+    if args.openjev_interval <= 0 or args.openjev_timeout <= 0:
+        parser.error("OpenJev interval and timeout must be positive")
+    openjev_endpoint = urlsplit(args.openjev_url)
+    if args.openjev and (openjev_endpoint.scheme != "http"
+                         or openjev_endpoint.hostname != "127.0.0.1"
+                         or not openjev_endpoint.port
+                         or openjev_endpoint.path not in ("", "/")):
+        parser.error("--openjev-url must use local Ollama on 127.0.0.1")
 
     phases: list[MovePhase] = []
     for raw_phase in args.phase or []:
@@ -536,6 +566,7 @@ def main() -> int:
     commands_sent = False
     command_start_at: float | None = None
     move_packets = 0
+    openjev_attack_packets = 0
     move_started: float | None = None
     next_move_at = 0.0
     phase_index = 0
@@ -548,17 +579,26 @@ def main() -> int:
     socket_error: str | None = None
     zero_cmd = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     previous_cmd = zero_cmd
-    if phases or waypoints:
+    if phases or waypoints or args.openjev:
         try:
             check_table = _load_check_table()
         except RuntimeError as exc:
             parser.error(str(exc))
     next_sequence = 1
     started = time.monotonic()
+    snapshot_path = args.udp_snapshot_log or args.event_log
+    snapshot_offset = snapshot_path.stat().st_size if snapshot_path and snapshot_path.exists() else 0
+    decoder = PacketSnapshots() if args.udp_snapshot_log else None
+    decoded_frames = 0
+    seen_server_commands: set[str] = set()
+    openjev = (OpenJevController(snapshot_path, args.episode_id, snapshot_offset,
+                                args.openjev_url, args.openjev_model,
+                                args.openjev_interval, args.openjev_timeout,
+                                args.openjev_trace) if args.openjev else None)
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.bind(("0.0.0.0", 0))
-        sock.settimeout(0.05 if phases or waypoints else 0.25)
+        sock.settimeout(0.05 if phases or waypoints or openjev else 0.25)
         sock.sendto(OOB + b"getchallenge\n", address)
 
         while time.monotonic() - started < args.duration:
@@ -602,6 +642,40 @@ def main() -> int:
                     )
                     if packet_spawncount is not None:
                         spawncount = packet_spawncount
+                    if decoder is not None:
+                        try:
+                            frames = decoder.parse(packet[8:])
+                        except (PacketError, ValueError) as exc:
+                            decoder.errors += 1
+                            decoder.last_error = str(exc)
+                            frames = []
+                        for frame in frames:
+                            snapshot = decoder.snapshot(frame)
+                            if snapshot is None:
+                                continue
+                            decoded_frames += 1
+                            human_marker = True
+                            latest_human_origin = tuple(snapshot["player_origin"])
+                            with args.udp_snapshot_log.open("a", encoding="utf-8") as stream:
+                                stream.write(json.dumps({"event": "udp_snapshot",
+                                    "episode_id": args.episode_id,
+                                    "time": snapshot["time"], "map": snapshot["map"],
+                                    "snapshot": snapshot}, ensure_ascii=False) + "\n")
+                        for requested in decoder.server_commands:
+                            if requested in seen_server_commands:
+                                continue
+                            seen_server_commands.add(requested)
+                            if requested.startswith("cmd configstrings ") or requested.startswith("cmd baselines "):
+                                command = requested[4:]
+                            elif requested.startswith("precache "):
+                                command = "begin " + requested.split()[1]
+                                begin_sent = True
+                                command_start_at = time.monotonic()
+                            else:
+                                continue
+                            _send_netchan_command(sock, address, next_sequence, qport,
+                                                  command, server_sequence, server_reliable)
+                            next_sequence += 1
 
             if challenge is not None and not client_connected:
                 if any("client_connect" in response for response in responses):
@@ -619,7 +693,7 @@ def main() -> int:
                         next_sequence += 1
                         new_sent = True
 
-            if new_sent and spawncount is not None and not begin_sent:
+            if decoder is None and new_sent and spawncount is not None and not begin_sent:
                 _send_netchan_command(
                     sock,
                     address,
@@ -781,10 +855,31 @@ def main() -> int:
                     previous_cmd = current_cmd
                     next_move_at += 0.05
 
+            if begin_sent and openjev is not None and check_table is not None:
+                now = time.monotonic()
+                if move_started is None:
+                    move_started = now
+                    next_move_at = now
+                openjev.tick()
+                while now >= next_move_at:
+                    current_cmd = openjev.command(previous_cmd[1], args.use)
+                    payload = _move_payload(current_cmd, previous_cmd,
+                                            next_sequence, check_table)
+                    _send_netchan_payload(sock, address, next_sequence, qport,
+                                          payload, server_sequence, server_reliable,
+                                          reliable=False)
+                    next_sequence += 1
+                    move_packets += 1
+                    if current_cmd[6] & BUTTON_ATTACK:
+                        openjev_attack_packets += 1
+                    previous_cmd = current_cmd
+                    next_move_at += 0.05
+
             if args.event_log:
-                human_marker, log_offset = _human_marker_seen(
+                log_marker, log_offset = _human_marker_seen(
                     args.event_log, log_offset, args.episode_id
                 )
+                human_marker = human_marker or log_marker
                 if waypoints:
                     latest_human_origin, origin_log_offset = _human_origin(
                         args.event_log,
@@ -792,7 +887,9 @@ def main() -> int:
                         args.episode_id,
                         latest_human_origin,
                     )
-            if waypoints:
+            if openjev or decoder is not None:
+                movement_complete = False
+            elif waypoints:
                 movement_complete = (
                     route_completed_at is not None
                     and time.monotonic() - route_completed_at
@@ -814,6 +911,8 @@ def main() -> int:
     # episode rather than a race with the logger's last write.
     if args.event_log and not human_marker:
         human_marker, _ = _human_marker_seen(args.event_log, 0, args.episode_id)
+    if openjev:
+        openjev.close()
 
     result = {
         "host": args.host,
@@ -822,6 +921,13 @@ def main() -> int:
         "challenge_received": challenge is not None,
         "client_connect_received": client_connected,
         "netchan_packets": netchan_packets,
+        "decoded_frames": decoded_frames,
+        "udp_decode_errors": decoder.errors if decoder else 0,
+        "udp_decode_last_error": decoder.last_error if decoder else None,
+        "udp_configstrings": len(decoder.config) if decoder else 0,
+        "udp_map": decoder.map_name if decoder else None,
+        "udp_player_number": decoder.player_number if decoder else None,
+        "udp_parsed_frames": len(decoder.frames) if decoder else 0,
         "spawncount": spawncount,
         "begin_sent": begin_sent,
         "commands_sent": commands_sent,
@@ -831,14 +937,19 @@ def main() -> int:
         "waypoint_count": len(waypoints),
         "waypoint_reached": waypoint_index,
         "human_marker_seen": human_marker,
+        "openjev_model": args.openjev_model if openjev else None,
+        "openjev_decisions": openjev.decisions if openjev else 0,
+        "openjev_attack_packets": openjev_attack_packets,
+        "openjev_last_action": openjev.action if openjev else None,
+        "openjev_errors": openjev.errors if openjev else [],
         "socket_error": socket_error,
         "responses": responses,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
 
     if args.require_human_marker:
-        return 0 if human_marker else 2
-    return 0 if client_connected else 2
+        return 0 if human_marker and (not openjev or openjev.decisions > 0) else 2
+    return 0 if client_connected and (not openjev or openjev.decisions > 0) else 2
 
 
 if __name__ == "__main__":
