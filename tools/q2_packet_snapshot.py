@@ -60,6 +60,7 @@ class Frame:
     origin: tuple[float, float, float]
     stats: list[int]
     gun: int
+    delta_angles: tuple[int, int, int] = (0, 0, 0)
     entities: dict[int, Entity] = field(default_factory=dict)
 
 
@@ -76,6 +77,7 @@ class PacketSnapshots:
         self.errors = 0
         self.last_error: str | None = None
         self.server_commands: list[str] = []
+        self.wall_impacts: list[tuple[float, float, float]] = []
 
     @staticmethod
     def _bits(reader: Reader) -> tuple[int, int]:
@@ -128,11 +130,12 @@ class PacketSnapshots:
             reader.take(2)
         return Entity(number, model, tuple(origin), frame)
 
-    def _playerstate(self, reader: Reader, old: Frame | None) -> tuple[tuple[float, float, float], list[int], int]:
+    def _playerstate(self, reader: Reader, old: Frame | None) -> tuple[tuple[float, float, float], list[int], int, tuple[int, int, int]]:
         flags = reader.ushort()
         origin = list(old.origin if old else (0.0, 0.0, 0.0))
         stats = list(old.stats if old else [0] * 32)
         gun = old.gun if old else 0
+        delta_angles = old.delta_angles if old else (0, 0, 0)
         if flags & 1:
             reader.byte()
         if flags & 2:
@@ -146,7 +149,7 @@ class PacketSnapshots:
         if flags & 32:
             reader.take(2)
         if flags & 64:
-            reader.take(6)
+            delta_angles = tuple(reader.short() for _ in range(3))
         if flags & 128:
             reader.take(3)
         if flags & 256:
@@ -167,7 +170,7 @@ class PacketSnapshots:
         for index in range(32):
             if statbits & (1 << index):
                 stats[index] = reader.short()
-        return tuple(origin), stats, gun
+        return tuple(origin), stats, gun, delta_angles
 
     def _frame(self, reader: Reader) -> Frame:
         number, delta = reader.long(), reader.long()
@@ -178,7 +181,7 @@ class PacketSnapshots:
         reader.take(reader.byte())  # areabits
         if reader.byte() != 17:
             raise PacketError("frame has no playerinfo")
-        origin, stats, gun = self._playerstate(reader, old)
+        origin, stats, gun, delta_angles = self._playerstate(reader, old)
         if reader.byte() != 18:
             raise PacketError("frame has no packetentities")
         entities = dict(old.entities) if old else {}
@@ -192,7 +195,7 @@ class PacketSnapshots:
                 entities[entity_number] = self._entity(reader, entity_number, bits,
                     entities.get(entity_number) if old and entity_number in old.entities
                     else self.baselines.get(entity_number))
-        frame = Frame(number, origin, stats, gun, entities)
+        frame = Frame(number, origin, stats, gun, delta_angles, entities)
         self.frames[number] = frame
         for previous in tuple(self.frames):
             if number - previous > 16:
@@ -237,6 +240,32 @@ class PacketSnapshots:
                 reader.string()
             elif opcode in (1, 2):
                 reader.take(3)
+            elif opcode == 3:  # svc_temp_entity
+                effect = reader.byte()
+                if effect in (0, 1, 2, 4):  # gunshot, blood, blaster, shotgun
+                    position = tuple(reader.short() / 8 for _ in range(3))
+                    reader.byte()  # compressed normal
+                    if effect == 2:
+                        self.wall_impacts.append(position)
+                else:
+                    # Other effects have different layouts. Seek a complete
+                    # frame rather than guessing and corrupting entity state.
+                    self.errors += 1
+                    self.last_error = f"unsupported temp entity {effect}"
+                    for start in range(reader.pos, len(payload)):
+                        if payload[start] != 20:
+                            continue
+                        probe = Reader(payload)
+                        probe.pos = start + 1
+                        try:
+                            frame = self._frame(probe)
+                        except PacketError:
+                            continue
+                        found.append(frame)
+                        reader.pos = probe.pos
+                        break
+                    else:
+                        break
             elif opcode == 9:
                 flags = reader.byte()
                 reader.byte()
@@ -306,4 +335,5 @@ class PacketSnapshots:
                 "bot_origin": self.teammate_origin, "player_health": frame.stats[1],
                 "player_armor": frame.stats[5], "player_ammo": frame.stats[3],
                 "player_weapon": weapon, "enemies": enemies[:4],
-                "pickups": pickups[:3], "time": frame.number / 10.0}
+                "pickups": pickups[:3], "time": frame.number / 10.0,
+                "delta_angles": frame.delta_angles}

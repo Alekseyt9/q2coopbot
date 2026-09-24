@@ -32,7 +32,8 @@ class PacketSnapshotTests(unittest.TestCase):
                       + config(36, "models/weapons/v_blast/tris.md2"))
         stats = (1 << 1) | (1 << 3) | (1 << 5)
         frame = (b"\x14" + struct.pack("<iiBB", 10, -1, 0, 0) + b"\x11"
-                 + struct.pack("<HhhhB", 0x1002, 800, -160, 192, 4)
+                 + struct.pack("<HhhhhhhB", 0x1042, 800, -160, 192,
+                               0, 8192, 0, 4)
                  + struct.pack("<Ihhh", stats, 83, 0, 25) + b"\x12"
                  + entity(2, 255, (32, -16, 24))
                  + entity(5, 2, (90, 0, 24))
@@ -45,9 +46,15 @@ class PacketSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot["bot_origin"], (32.0, -16.0, 24.0))
         self.assertEqual(snapshot["player_health"], 83)
         self.assertEqual(snapshot["player_weapon"], "Blaster")
+        self.assertEqual(snapshot["delta_angles"], (0, 8192, 0))
         self.assertEqual(snapshot["enemies"][0]["class"], "monster_soldier")
         self.assertIsNone(snapshot["enemies"][0]["health"])
         self.assertEqual(snapshot["pickups"][0]["class"], "item_health")
+
+    def test_blaster_wall_impact_is_decoded_before_frame(self):
+        decoder = PacketSnapshots()
+        decoder.parse(b"\x03\x02" + struct.pack("<hhhB", 800, -80, 16, 0))
+        self.assertEqual(decoder.wall_impacts, [(100.0, -10.0, 2.0)])
 
 
 if __name__ == "__main__":

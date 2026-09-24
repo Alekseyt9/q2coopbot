@@ -303,6 +303,8 @@ def main() -> int:
     parser.add_argument("--protocol", type=int, default=34)
     parser.add_argument("--name", default="CoopHarness")
     parser.add_argument("--duration", type=float, default=8.0)
+    parser.add_argument("--stop-file", type=Path,
+                        help="gracefully disconnect when this file appears")
     parser.add_argument("--qport", type=int, help="client qport; random by default")
     parser.add_argument("--event-log", type=Path)
     parser.add_argument("--udp-snapshot-log", type=Path,
@@ -577,6 +579,7 @@ def main() -> int:
     origin_log_offset = log_offset
     check_table: bytes | None = None
     socket_error: str | None = None
+    stopped_by_control_file = False
     zero_cmd = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     previous_cmd = zero_cmd
     if phases or waypoints or args.openjev:
@@ -602,6 +605,14 @@ def main() -> int:
         sock.sendto(OOB + b"getchallenge\n", address)
 
         while time.monotonic() - started < args.duration:
+            if args.stop_file is not None and args.stop_file.exists():
+                if client_connected:
+                    _send_netchan_command(sock, address, next_sequence, qport,
+                                          "disconnect", server_sequence,
+                                          server_reliable)
+                    next_sequence += 1
+                stopped_by_control_file = True
+                break
             try:
                 packet, source = sock.recvfrom(65535)
             except socket.timeout:
@@ -653,6 +664,8 @@ def main() -> int:
                             snapshot = decoder.snapshot(frame)
                             if snapshot is None:
                                 continue
+                            snapshot["wall_impacts"] = decoder.wall_impacts[:]
+                            decoder.wall_impacts.clear()
                             decoded_frames += 1
                             human_marker = True
                             latest_human_origin = tuple(snapshot["player_origin"])
@@ -943,6 +956,7 @@ def main() -> int:
         "openjev_last_action": openjev.action if openjev else None,
         "openjev_errors": openjev.errors if openjev else [],
         "socket_error": socket_error,
+        "stopped_by_control_file": stopped_by_control_file,
         "responses": responses,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))

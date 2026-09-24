@@ -122,6 +122,37 @@ class StrategyTests(unittest.TestCase):
         finally:
             controller.close()
 
+    def test_distant_network_enemy_is_not_an_attack_choice(self):
+        enemy = {"id": 31, "class": "monster_soldier",
+                 "origin": (500.0, 0.0, 0.0), "health": None}
+        self.assertNotIn("attack:31", [choice for choice, _ in
+                                     candidates(world(enemies=[enemy]))])
+
+    def test_healthy_companion_engages_nearby_threat(self):
+        enemy = {"id": 31, "class": "monster_soldier",
+                 "origin": (220.0, 0.0, 0.0), "health": None}
+        snapshot = world(enemies=[enemy])
+        self.assertEqual([choice for choice, _ in candidates(snapshot)],
+                         ["attack:31"])
+        snapshot["blocked_targets"] = [31]
+        self.assertEqual([choice for choice, _ in candidates(snapshot)],
+                         ["follow", "hold"])
+
+    def test_wall_impact_blocks_attack_and_follows_human(self):
+        controller = OpenJevController(BASE1_AAS.parents[2] / "coopbot_debug_events.jsonl",
+                                       None, 0, "http://127.0.0.1:11434", "unused", 1, 1)
+        try:
+            enemy = {"id": 31, "class": "monster_soldier",
+                     "origin": (250.0, 0.0, 0.0), "health": None}
+            snapshot = world(enemies=[enemy], human_pos=(0.0, 100.0, 0.0))
+            snapshot["wall_impacts"] = [(100.0, 0.0, 0.0)]
+            controller.action = "attack:31"
+            controller._observe_wall_impacts(snapshot, __import__("time").monotonic())
+            self.assertEqual(controller.action, "follow")
+            self.assertIn(31, controller.blocked_targets)
+        finally:
+            controller.close()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -220,11 +220,18 @@ class StrategicMemory:
 
 
 def candidates(snapshot: dict, goal: str = "advance") -> list[tuple[str, str]]:
+    player = snapshot["player_origin"]
+    blocked = set(snapshot.get("blocked_targets", []))
+    attackable = [enemy for enemy in snapshot.get("enemies", [])
+                  if enemy["id"] not in blocked
+                  and horizontal_distance(player, enemy["origin"]) <= 320]
+    nearby_threats = [enemy for enemy in attackable
+                      if horizontal_distance(player, enemy["origin"]) <= 256]
     if goal == "wait":
         weapon = (snapshot.get("player_weapon") or "").lower()
         defense = [(f"attack:{enemy['id']}",
                     f"defend against visible {enemy['class']} {enemy['id']}")
-                   for enemy in snapshot.get("enemies", [])[:3]]
+                   for enemy in attackable[:3]]
         if snapshot.get("player_health", 0) <= 25 or not (
                 snapshot.get("player_ammo", 0) > 0 or "blaster" in weapon):
             defense = []
@@ -237,11 +244,19 @@ def candidates(snapshot: dict, goal: str = "advance") -> list[tuple[str, str]]:
                                f"move to nearby health pickup {pickup['id']}"))
                 break
     weapon = (snapshot.get("player_weapon") or "").lower()
+    armed = snapshot.get("player_ammo", 0) > 0 or "blaster" in weapon
+    teammate_near = horizontal_distance(player, snapshot["bot_origin"]) <= 320
+    if (snapshot.get("player_health", 0) >= 40 and armed and teammate_near
+            and nearby_threats):
+        return [(f"attack:{enemy['id']}",
+                 f"protect the teammate by attacking nearby {enemy['class']} "
+                 f"{enemy['id']}; switch target if a wall blocks shots")
+                for enemy in nearby_threats[:3]]
     if snapshot.get("player_health", 0) > 25 and (
-            snapshot.get("player_ammo", 0) > 0 or "blaster" in weapon):
-        for enemy in snapshot.get("enemies", [])[:3]:
+            armed):
+        for enemy in attackable[:3]:
             result.append((f"attack:{enemy['id']}",
-                           f"aim, fire and strafe against visible {enemy['class']} "
+                           f"aim, fire and strafe against nearby {enemy['class']} "
                            f"{enemy['id']} with {enemy.get('health') or 'unknown'} health"))
     if snapshot.get("enemies") and snapshot.get("player_health", 0) < 35:
         result.append(("retreat", "move away from the nearest visible enemy"))
@@ -267,13 +282,13 @@ def choose_action(url: str, model: str, snapshot: dict,
         f"position {snapshot['player_origin']}. "
         f"Human teammate health {snapshot.get('bot_health') if snapshot.get('bot_health') is not None else 'unknown'}, "
         f"position {snapshot['bot_origin']}. "
-        f"Visible enemies: {json.dumps(snapshot.get('enemies', []))}. "
+        f"Enemies in network visibility area (may be behind walls): {json.dumps(snapshot.get('enemies', []))}. "
         f"Nearby active pickups: {json.dumps(snapshot.get('pickups', []))}. "
         "Coordinates are current observations, not a navigable route."
     )
     task = {
         "primitive": "choice",
-        "instructions": "You are the fast tactical system. Follow the persistent strategic goal. Protect the human teammate, attack only a currently visible enemy, seek health when hurt, and stay nearby. Do not replace the strategic goal with a momentary observation.",
+        "instructions": "You are the fast tactical system. Follow the persistent strategic goal. Protect the human teammate, attack only a nearby enemy offered as an attack option, seek health when hurt, and stay nearby. Network visibility does not prove a clear shot. Do not replace the strategic goal with a momentary observation.",
         "criteria": [
             {"label": chr(65 + index), "description": description}
             for index, (_, description) in enumerate(choices)
@@ -326,13 +341,57 @@ class OpenJevController:
         self.last_motion_at = 0.0
         self.detour_until = 0.0
         self.detour_side = 200
+        self.blocked_targets: dict[int, float] = {}
+        self.attack_started_at = 0.0
+        self.attack_origin: tuple[float, float, float] | None = None
+        self.attack_target: int | None = None
+
+    def _block_target(self, entity_id: int, reason: str, now: float) -> None:
+        self.blocked_targets[entity_id] = now + 8.0
+        self.action = "follow"
+        self.next_decision_at = now
+        self._trace({"event": "attack_blocked", "target": entity_id,
+                     "reason": reason})
+
+    def _observe_wall_impacts(self, snapshot: dict, now: float) -> None:
+        if not self.action.startswith("attack:"):
+            return
+        try:
+            entity_id = int(self.action.split(":", 1)[1])
+        except ValueError:
+            return
+        enemy = next((item for item in snapshot.get("enemies", [])
+                      if item["id"] == entity_id), None)
+        if enemy is None:
+            return
+        start, end = snapshot["player_origin"], enemy["origin"]
+        vector = tuple(end[i] - start[i] for i in range(3))
+        length2 = sum(axis * axis for axis in vector)
+        if length2 < 1:
+            return
+        for impact in snapshot.get("wall_impacts", []):
+            direction = tuple(impact[i] - start[i] for i in range(3))
+            fraction = sum(direction[i] * vector[i] for i in range(3)) / length2
+            if not 0.05 < fraction < 0.9:
+                continue
+            miss = math.sqrt(sum((direction[i] - fraction * vector[i]) ** 2
+                                 for i in range(3)))
+            if miss < 64:
+                self._block_target(entity_id, "shot hit world before target", now)
+                break
 
     def tick(self) -> None:
         snapshot, self.offset = read_latest_snapshot(
             self.path, self.offset, self.episode_id, self.snapshot)
         if snapshot is not None:
+            now = time.monotonic()
+            self._observe_wall_impacts(snapshot, now)
+            self.blocked_targets = {entity_id: until
+                                    for entity_id, until in self.blocked_targets.items()
+                                    if until > now}
+            snapshot["blocked_targets"] = list(self.blocked_targets)
             self.snapshot = snapshot
-            self.snapshot_at = time.monotonic()
+            self.snapshot_at = now
             for change in self.memory.observe(snapshot, self.snapshot_at):
                 self._trace(change)
                 if change["event"] == "goal_started":
@@ -345,7 +404,9 @@ class OpenJevController:
                     self._trace({"event": "stale_tactical_decision",
                                  "discarded_action": action})
                 else:
-                    self.action = action
+                    self.action = ("follow" if action.startswith("attack:") and
+                                   int(action.split(":", 1)[1]) in self.blocked_targets
+                                   else action)
                 self._trace({"action": self.action, "latency_s": latency,
                              "raw": raw, "candidates": choices,
                              "strategy": self.memory.context(time.monotonic()),
@@ -375,6 +436,29 @@ class OpenJevController:
             return (0, previous_yaw, 0, 0, 0, 0, 1, 0, 50, 0)
         player = snapshot["player_origin"]
         action, _, raw_id = self.action.partition(":")
+        if action == "attack" and (int(raw_id) in self.blocked_targets or
+                                   not any(str(enemy["id"]) == raw_id and
+                                           horizontal_distance(player, enemy["origin"]) <= 320
+                                           for enemy in snapshot["enemies"])):
+            self.action = "follow"
+            action = "follow"
+        now = time.monotonic()
+        if action == "attack":
+            entity_id = int(raw_id)
+            if entity_id != self.attack_target:
+                self.attack_target = entity_id
+                self.attack_origin = player
+                self.attack_started_at = now
+            elif (self.attack_origin is not None and
+                  now - self.attack_started_at > 2.0 and
+                  horizontal_distance(player, self.attack_origin) < 12):
+                enemy = next((item for item in snapshot["enemies"]
+                              if item["id"] == entity_id), None)
+                if enemy and horizontal_distance(player, enemy["origin"]) > 160:
+                    self._block_target(entity_id, "no movement while attacking", now)
+                    action = "follow"
+        else:
+            self.attack_target = None
         if action == "attack":
             weapon = (snapshot.get("player_weapon") or "").lower()
             if (snapshot.get("player_health", 0) <= 25 or
@@ -405,13 +489,20 @@ class OpenJevController:
             goal, travel_type = self._navigation_goal(player, goal, snapshot)
         dx, dy = goal[0] - player[0], goal[1] - player[1]
         horizontal = math.hypot(dx, dy)
-        yaw = int((math.degrees(math.atan2(-dy, -dx)) % 360) * 65536 / 360)
+        delta_angles = snapshot.get("delta_angles")
+        if delta_angles is not None:
+            yaw = int(math.degrees(math.atan2(dy, dx)) * 65536 / 360) - delta_angles[1]
+        else:
+            yaw = int((math.degrees(math.atan2(-dy, -dx)) % 360) * 65536 / 360)
         yaw = ((yaw + 32768) % 65536) - 32768
         if action == "attack":
             dz = goal[2] + 24 - (player[2] + 22)
-            pitch = int((-math.degrees(math.atan2(dz, max(horizontal, 1))) % 360) * 65536 / 360)
+            pitch = int(-math.degrees(math.atan2(dz, max(horizontal, 1))) * 65536 / 360)
+            if delta_angles is not None:
+                pitch -= delta_angles[0]
             pitch = ((pitch + 32768) % 65536) - 32768
-            return (pitch, yaw, 0, 0, 120, 0, 1, 0, 50, 0)
+            forward = 180 if horizontal > 128 else 0
+            return (pitch, yaw, 0, forward, 100, 0, 1, 0, 50, 0)
         side = self.detour_side if time.monotonic() < self.detour_until else 0
         up = 200 if travel_type in JUMP_TYPES and goal[2] - player[2] > 12 else 0
         return (0, yaw, 0, 400, side, up, 2 if use else 0, 0, 50, 0)
