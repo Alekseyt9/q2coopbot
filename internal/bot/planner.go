@@ -20,6 +20,7 @@ type World struct {
 	Navigation     string            `json:"navigation"`
 	GeometryStatus string            `json:"geometry_status"`
 	Goal           string            `json:"goal"`
+	SearchTarget   *quake.Vec3       `json:"search_target,omitempty"`
 	Strategy       *StrategyDecision `json:"strategy,omitempty"`
 	Tactic         *TacticalDecision `json:"tactic,omitempty"`
 	Route          []quake.Waypoint  `json:"route,omitempty"`
@@ -29,34 +30,41 @@ type World struct {
 	Updated        time.Time         `json:"updated"`
 }
 type Planner struct {
-	Nav            *quake.Navigator
-	AASDir         string
-	GameClock      bool
-	TestNoAAS      bool
-	TestNoBSP      bool
-	TestPartialBSP bool
-	TestHideDoor53 bool
-	button         *buttonTask
-	buttonCooldown int
-	World          World
-	lastSelf       quake.Vec3
-	lastProgress   time.Time
-	routeAt        time.Time
-	target         quake.Vec3
-	route          []quake.Waypoint
-	routeIndex     int
-	routeKnown     bool
-	routeOK        bool
-	lastObserved   quake.Vec3
-	observed       bool
-	detourUntil    time.Time
-	detourSide     int16
-	failures       int
-	goalPoint      quake.Vec3
-	hasGoal        bool
-	decision       *StrategyDecision
-	tactic         *TacticalDecision
-	elevator       *elevatorRide
+	Nav                   *quake.Navigator
+	AASDir                string
+	GameClock             bool
+	TestNoAAS             bool
+	TestNoBSP             bool
+	TestPartialBSP        bool
+	TestHideDoor53        bool
+	button                *buttonTask
+	buttonCooldown        int
+	World                 World
+	lastSelf              quake.Vec3
+	lastProgress          time.Time
+	routeAt               time.Time
+	target                quake.Vec3
+	route                 []quake.Waypoint
+	routeIndex            int
+	routeKnown            bool
+	routeOK               bool
+	lastObserved          quake.Vec3
+	observed              bool
+	detourUntil           time.Time
+	detourSide            int16
+	failures              int
+	goalPoint             quake.Vec3
+	hasGoal               bool
+	decision              *StrategyDecision
+	tactic                *TacticalDecision
+	elevator              *elevatorRide
+	probeTarget           *quake.Vec3
+	probeAttempted        bool
+	probeProgressFrame    int
+	probeLastSelf         quake.Vec3
+	lastSeenSelf          quake.Vec3
+	lastSeenSelfKnown     bool
+	searchApproachStarted bool
 }
 
 // setTestGroundEdgeGoal bypasses route selection only for the live edge fixture.
@@ -154,6 +162,11 @@ func (p *Planner) setMap(name, root string) {
 	p.routeIndex = 0
 	p.routeKnown = false
 	p.elevator = nil
+	p.probeTarget = nil
+	p.probeAttempted = false
+	p.probeProgressFrame = 0
+	p.lastSeenSelfKnown = false
+	p.searchApproachStarted = false
 	p.observed = false
 	p.lastProgress = time.Time{}
 	p.detourUntil = time.Time{}
@@ -249,25 +262,39 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	} else {
 		p.World.Tactic = nil
 	}
+	previousGoal := p.World.Goal
 	p.World.Goal = "wait_for_teammate"
+	p.World.SearchTarget = nil
 	p.World.Route = nil
 	p.World.Elevator = ""
 	p.hasGoal = false
 	searching := false
 	if s.Teammate == nil {
 		p.elevator = nil
-		if s.LastTeammate == nil || s.TeammateAgeFrames == nil || *s.TeammateAgeFrames <= 0 ||
-			*s.TeammateAgeFrames > 40 || p.World.GeometryStatus != "ready" || p.Nav == nil ||
-			s.Health <= 0 || !s.OnGround || quake.Horizontal(s.Self, *s.LastTeammate) <= 64 ||
-			quake.Horizontal(s.Self, *s.LastTeammate) > 512 || math.Abs(s.Self[2]-(*s.LastTeammate)[2]) > 80 {
+		searchGoal, searchKind, ok := p.hiddenTeammateGoal(s)
+		if !ok {
+			p.routeKnown = false
 			return
 		}
 		searching = true
+		p.World.Goal = searchKind
+		p.World.SearchTarget = &searchGoal
+		if previousGoal != searchKind {
+			p.routeKnown = false
+		}
+	} else {
+		p.probeTarget = nil
+		p.probeAttempted = false
+		p.searchApproachStarted = false
+		p.lastSeenSelf = s.Self
+		p.lastSeenSelfKnown = true
+		if previousGoal == "search_last_seen" || previousGoal == "probe_last_seen" || previousGoal == "wait_for_teammate" {
+			p.routeKnown = false
+		}
 	}
 	goal := quake.Vec3{}
 	if searching {
-		goal = *s.LastTeammate
-		p.World.Goal = "search_last_seen"
+		goal = *p.World.SearchTarget
 	} else {
 		goal = *s.Teammate
 	}
@@ -348,22 +375,12 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.route, p.routeOK = p.Nav.Route(s.Self, goal)
 		p.routeKnown = true
 	}
-	if p.routeOK {
-		if searching {
-			travel, at := 0.0, s.Self
-			for _, wp := range p.route {
-				if wp.Jump || wp.Kind == 11 || wp.ElevatorPhase != "" {
-					p.routeOK = false
-					break
-				}
-				travel += quake.Horizontal(at, wp.Position)
-				at = wp.Position
-			}
-			travel += quake.Horizontal(at, goal)
-			if travel > 640 {
-				p.routeOK = false
-			}
+	if p.routeOK && searching {
+		maxTravel := 640.0
+		if p.World.Goal == "probe_last_seen" {
+			maxTravel = 320
 		}
+		_, p.routeOK = safeSearchRoute(p.route, s.Self, goal, maxTravel)
 	}
 	if p.routeOK {
 		for p.routeIndex < len(p.route) && p.route[p.routeIndex].Kind != 11 && quake.Horizontal(s.Self, p.route[p.routeIndex].Position) <= 10 && math.Abs(s.Self[2]-p.route[p.routeIndex].Position[2]) <= 64 {
@@ -450,7 +467,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 			enemy = &s.Enemies[i]
 		}
 	}
-	if p.World.Goal != "search_last_seen" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && tactic != "follow" && tactic != "recover" && enemy != nil && best < 650 && (s.Ammo > 0 || strings.Contains(strings.ToLower(s.Weapon), "blast")) && enemy.ClearShot != nil && *enemy.ClearShot {
+	if p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && tactic != "follow" && tactic != "recover" && enemy != nil && best < 650 && (s.Ammo > 0 || strings.Contains(strings.ToLower(s.Weapon), "blast")) && enemy.ClearShot != nil && *enemy.ClearShot {
 		from, to := s.Self, enemy.Origin
 		from[2] += 22
 		to[2] += 22
@@ -469,7 +486,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		}
 		return cmd
 	}
-	if p.World.Goal != "follow_teammate" && p.World.Goal != "recover_health" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && p.World.Goal != "search_last_seen" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
+	if p.World.Goal != "follow_teammate" && p.World.Goal != "recover_health" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
 		if p.World.Command.LimitReason == "" {
 			p.World.Command.LimitReason = "no_movement_goal"
 		}
@@ -514,6 +531,8 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		probeStep := 40.0
 		if p.World.Goal == "touch_button" {
 			probeStep = 8
+		} else if p.World.Goal == "probe_last_seen" {
+			probeStep = 16
 		}
 		if hazard := p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, probeStep); hazard != "" {
 			p.World.Command.MoveSource = "none"
@@ -538,6 +557,8 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 	speed := 400.0
 	if p.World.Goal == "touch_button" {
 		speed = 80
+	} else if p.World.Goal == "probe_last_seen" {
+		speed = 160
 	}
 	cmd = worldMove(cmd, s, dx, dy, speed, cmd.Buttons != 0)
 	if cmd.Buttons == 0 {

@@ -27,6 +27,7 @@ param(
     [switch]$ButtonAutoTrial,
     [switch]$TeammateMemoryTrial,
     [switch]$TeammateSearchTrial,
+    [switch]$ReacquireTeammate,
     [string]$BSPFailureTrial = '',
     [string]$OutputRoot = ''
 )
@@ -92,6 +93,7 @@ if ($TeammateSearchTrial -and ($Map -ne 'base1' -or $TransitionMap -ne 'base2' -
     $TeammateMemoryTrial -or $BSPFailureTrial)) {
     throw '-TeammateSearchTrial requires at least 70 frames, synchronized base1 to base2 transition and no other gameplay trial.'
 }
+if ($ReacquireTeammate -and -not $TeammateSearchTrial) { throw '-ReacquireTeammate requires -TeammateSearchTrial.' }
 if ($BSPFailureTrial -and ($BSPFailureTrial -notin @('unavailable', 'incomplete') -or
     $Map -ne 'base1' -or $TransitionMap -or -not $SynchronizedStart -or
     $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $ObservationGapTrial -or
@@ -210,6 +212,10 @@ foreach ($scale in $Timescales) {
             $humanConfig.test.teleport = '320,1940,-144'
             $humanConfig.test.teleport_after = '194,2080,-144'
             $humanConfig.test.teleport_after_frames = 3
+            if ($ReacquireTeammate) {
+                $humanConfig.test.teleport_return = '400,1840,-144'
+                $humanConfig.test.teleport_return_after_frames = 15
+            }
         }
         if ($CombatMoveTrial -or $FriendlyFireTrial) {
             $humanConfig.test.spawn_map = 'base1'
@@ -373,14 +379,33 @@ foreach ($scale in $Timescales) {
         $memoryUnexpectedLastPosition = 0
         $searchFrames = 0
         $searchMoveFrames = 0
+        $searchFireFrames = 0
         $searchStartX = $null
         $searchMaxX = [double]::NegativeInfinity
         $searchWaitAfter = 0
         $searchWaitAtPoint = 0
         $searchWaitMoveFrames = 0
+        $probeFrames = 0
+        $probeMoveFrames = 0
+        $probeFireFrames = 0
+        $probeTarget = $null
+        $probeTargetChanges = 0
+        $searchReacquiredFrames = 0
+        $reacquiredFollowMoveFrames = 0
+        $probeAfterReacquire = 0
+        $probeCompletedFrames = 0
+        $soundEvents = 0
+        $soundExplicitPositions = 0
+        $soundEntityOnly = 0
         foreach ($line in Get-Content -LiteralPath $tracePath) {
             $entry = $line | ConvertFrom-Json
             $sent["$($entry.spawncount):$($entry.client_sequence)"] = $entry.sent_command
+            foreach ($sound in @($entry.sounds)) {
+                if ($null -eq $sound) { continue }
+                $soundEvents++
+                if ($null -ne $sound.position) { $soundExplicitPositions++ }
+                elseif ($sound.entity -gt 0) { $soundEntityOnly++ }
+            }
             if ($null -ne $entry.teammate) { $teammateSeenInTrace = $true }
             if ($TransitionMap -and $entry.map -eq $TransitionMap -and $null -ne $entry.teammate) {
                 $teammateSeenAfterTransition = $true
@@ -406,12 +431,25 @@ foreach ($scale in $Timescales) {
                     if ($null -eq $searchStartX) { $searchStartX = [double]$entry.self[0] }
                     $searchMaxX = [math]::Max($searchMaxX, [double]$entry.self[0])
                     if ($entry.sent_command.Forward -ne 0 -or $entry.sent_command.Side -ne 0) { $searchMoveFrames++ }
+                    if ($entry.sent_command.Buttons -ne 0) { $searchFireFrames++ }
+                }
+                if ($entry.goal -eq 'probe_last_seen') {
+                    $probeFrames++
+                    if ($entry.sent_command.Forward -ne 0 -or $entry.sent_command.Side -ne 0) { $probeMoveFrames++ }
+                    if ($entry.sent_command.Buttons -ne 0) { $probeFireFrames++ }
+                    $target = @([double]$entry.search_target[0], [double]$entry.search_target[1], [double]$entry.search_target[2])
+                    if ($null -eq $probeTarget) { $probeTarget = $target }
+                    elseif ([math]::Abs($target[0] - $probeTarget[0]) -gt 1 -or
+                            [math]::Abs($target[1] - $probeTarget[1]) -gt 1) { $probeTargetChanges++ }
                 }
                 if ($entry.teammate_age_frames -gt 40 -and $entry.goal -eq 'wait_for_teammate' -and
                     $entry.sent_command.Forward -eq 0 -and $entry.sent_command.Side -eq 0 -and $entry.sent_command.Up -eq 0) {
                     $searchWaitAfter++
                 }
                 if ($entry.goal -eq 'wait_for_teammate') {
+                    if ($probeFrames -gt 0 -and $null -ne $probeTarget -and $entry.teammate_age_frames -le 40 -and
+                        [math]::Sqrt([math]::Pow($entry.self[0] - $probeTarget[0], 2) +
+                                     [math]::Pow($entry.self[1] - $probeTarget[1], 2)) -le 16) { $probeCompletedFrames++ }
                     if ($entry.teammate_age_frames -le 40 -and
                         [math]::Sqrt([math]::Pow($entry.self[0] - $entry.last_teammate[0], 2) +
                                      [math]::Pow($entry.self[1] - $entry.last_teammate[1], 2)) -le 64) { $searchWaitAtPoint++ }
@@ -419,6 +457,13 @@ foreach ($scale in $Timescales) {
                         $entry.sent_command.Up -ne 0) { $searchWaitMoveFrames++ }
                 }
             }
+            if ($TeammateSearchTrial -and $entry.map -eq 'base2' -and $probeFrames -gt 0 -and
+                $null -ne $entry.teammate -and $entry.teammate_age_frames -eq 0) {
+                $searchReacquiredFrames++
+                if ($entry.goal -eq 'follow_teammate' -and
+                    ($entry.sent_command.Forward -ne 0 -or $entry.sent_command.Side -ne 0)) { $reacquiredFollowMoveFrames++ }
+            }
+            if ($searchReacquiredFrames -gt 0 -and $entry.goal -eq 'probe_last_seen') { $probeAfterReacquire++ }
             if ($entry.map -and ($observedMaps.Count -eq 0 -or $observedMaps[$observedMaps.Count - 1] -cne $entry.map)) {
                 $observedMaps.Add($entry.map)
             }
@@ -565,11 +610,14 @@ foreach ($scale in $Timescales) {
         }
         $humanAtTop = $false
         $memoryHumanBehindWall = $false
+        $memoryHumanReturned = $false
         if (($TeammateMemoryTrial -or $TeammateSearchTrial) -and (Test-Path -LiteralPath $humanTracePath)) {
             foreach ($line in Get-Content -LiteralPath $humanTracePath) {
                 $entry = $line | ConvertFrom-Json
                 if ($entry.map -eq 'base2' -and [math]::Abs($entry.self[0] - 194) -lt 16 -and
-                    [math]::Abs($entry.self[1] - 2080) -lt 16) { $memoryHumanBehindWall = $true; break }
+                    [math]::Abs($entry.self[1] - 2080) -lt 16) { $memoryHumanBehindWall = $true }
+                if ($entry.map -eq 'base2' -and [math]::Abs($entry.self[0] - 400) -lt 16 -and
+                    [math]::Abs($entry.self[1] - 1840) -lt 16) { $memoryHumanReturned = $true }
             }
         }
         if ($ElevatorTrial -and (Test-Path -LiteralPath $humanTracePath)) {
@@ -686,11 +734,19 @@ foreach ($scale in $Timescales) {
             memory_hidden_wait_frames = $memoryHiddenWaitFrames; memory_unexpected_last_position = $memoryUnexpectedLastPosition
             memory_human_behind_wall = $memoryHumanBehindWall
             teammate_search_trial = [bool]$TeammateSearchTrial
-            search_frames = $searchFrames; search_move_frames = $searchMoveFrames
+            search_frames = $searchFrames; search_move_frames = $searchMoveFrames; search_fire_frames = $searchFireFrames
             search_start_x = $searchStartX
             search_max_x = $(if ($searchMaxX -ne [double]::NegativeInfinity) { $searchMaxX } else { $null })
             search_wait_after = $searchWaitAfter
             search_wait_at_point = $searchWaitAtPoint; search_wait_move_frames = $searchWaitMoveFrames
+            probe_frames = $probeFrames; probe_move_frames = $probeMoveFrames; probe_fire_frames = $probeFireFrames
+            probe_target = $probeTarget; probe_target_changes = $probeTargetChanges
+            search_reacquired_frames = $searchReacquiredFrames
+            probe_completed_frames = $probeCompletedFrames
+            sound_events = $soundEvents; sound_explicit_positions = $soundExplicitPositions; sound_entity_only = $soundEntityOnly
+            reacquire_teammate = [bool]$ReacquireTeammate
+            memory_human_returned = $memoryHumanReturned
+            reacquired_follow_move_frames = $reacquiredFollowMoveFrames; probe_after_reacquire = $probeAfterReacquire
             sent_commands = $sent.Count; applied_new_commands = $newCommands.Count
             matched_applied_commands = $matchedSequences.Count; trace_jsonl = $tracePath
             bot_config_json = $botConfigPath; human_config_json = $humanConfigPath
@@ -798,9 +854,15 @@ if ($TeammateMemoryTrial -and @($results | Where-Object {
     throw "Teammate visibility and last-seen memory trial failed: $summary"
 }
 if ($TeammateSearchTrial -and @($results | Where-Object {
-    -not $_.memory_human_behind_wall -or $_.search_frames -lt 2 -or $_.search_move_frames -lt 2 -or
-    $null -eq $_.search_start_x -or $null -eq $_.search_max_x -or $_.search_max_x - $_.search_start_x -lt 20 -or
-    $_.search_wait_after -lt 5 -or $_.search_wait_at_point -lt 3 -or $_.search_wait_move_frames -ne 0
+    -not $_.memory_human_behind_wall -or $_.search_frames -lt 1 -or $_.search_move_frames -lt 1 -or $_.search_fire_frames -ne 0 -or
+    $null -eq $_.search_start_x -or $null -eq $_.search_max_x -or
+    $_.probe_frames -lt 2 -or $_.probe_move_frames -lt 2 -or $_.probe_fire_frames -ne 0 -or
+    $null -eq $_.probe_target -or $_.probe_target_changes -ne 0 -or $_.probe_completed_frames -lt 1 -or
+    $(if ($ReacquireTeammate) {
+        -not $_.memory_human_returned -or $_.search_reacquired_frames -lt 3 -or
+        $_.reacquired_follow_move_frames -lt 1 -or $_.probe_after_reacquire -ne 0
+    } else { $_.search_wait_after -lt 5 -or $_.search_reacquired_frames -ne 0 }) -or
+    $_.search_wait_move_frames -ne 0
 }).Count -gt 0) {
     throw "Teammate last-seen search trial failed: $summary"
 }

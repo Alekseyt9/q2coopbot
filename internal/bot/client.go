@@ -19,79 +19,84 @@ import (
 )
 
 type Client struct {
-	conn                      *net.UDPConn
-	address                   *net.UDPAddr
-	seq, serverSeq            uint32
-	serverReliable            uint32
-	qport                     uint16
-	challenge                 int
-	connected, begun          bool
-	spawncount                int
-	lastHandshake             string
-	handshakeAt               time.Time
-	decoder                   *quake.Decoder
-	planner                   *Planner
-	root                      string
-	previous                  quake.UserCmd
-	nextMove                  time.Time
-	lastFrame                 time.Time
-	framePaced                bool
-	gameFrames                int
-	frameReady                bool
-	latestFrame               int
-	firstMoveFrame            int
-	lastMoveFrame             int
-	firstMoveAt               time.Time
-	frameGaps                 int
-	suppressedFrames          int
-	frames, moves             int
-	attacks                   int
-	worldFile                 string
-	traceFile                 *os.File
-	stopFile                  string
-	name                      string
-	idle                      bool
-	testChangeMap             string
-	testChangeAfter           int
-	testRconPassword          string
-	testChangeSent            bool
-	testChangeAt              time.Time
-	testChangeTimedOut        bool
-	testTeleportMap           string
-	testTeleportPosition      quake.Vec3
-	testTeleportSent          bool
-	testTeleportSentFrame     int
-	testTeleportAfterPosition quake.Vec3
-	testTeleportAfterFrames   int
-	testTeleportAfterSent     bool
-	testSpawnMap              string
-	testSpawnClass            string
-	testSpawnPosition         quake.Vec3
-	testSpawnSent             bool
-	testGapStart              int
-	testGapFrames             int
-	testLineCross             bool
-	testHoldPosition          bool
-	testGroundEdgeProbe       bool
-	testDoorProbe             bool
-	testDoorPassProbe         bool
-	testButtonProbe           bool
-	testButtonAutoGoal        bool
-	testDoorPassStarted       bool
-	testLineEntered           bool
-	testLineLeft              bool
-	lastObservedMap           string
-	mapChanges                int
-	beginPending              string
-	beginAt                   time.Time
-	reconnected               bool
-	exitOnReconnect           bool
-	stopOnReconnect           bool
-	strategist                *Strategist
-	tactician                 *Tactician
-	seenCommands              map[string]bool
-	duration                  time.Duration
-	start                     time.Time
+	conn                          *net.UDPConn
+	address                       *net.UDPAddr
+	seq, serverSeq                uint32
+	serverReliable                uint32
+	qport                         uint16
+	challenge                     int
+	connected, begun              bool
+	spawncount                    int
+	lastHandshake                 string
+	handshakeAt                   time.Time
+	decoder                       *quake.Decoder
+	pendingSounds                 []quake.SoundEvent
+	planner                       *Planner
+	root                          string
+	previous                      quake.UserCmd
+	nextMove                      time.Time
+	lastFrame                     time.Time
+	framePaced                    bool
+	gameFrames                    int
+	frameReady                    bool
+	latestFrame                   int
+	firstMoveFrame                int
+	lastMoveFrame                 int
+	firstMoveAt                   time.Time
+	frameGaps                     int
+	suppressedFrames              int
+	frames, moves                 int
+	attacks                       int
+	worldFile                     string
+	traceFile                     *os.File
+	stopFile                      string
+	name                          string
+	idle                          bool
+	testChangeMap                 string
+	testChangeAfter               int
+	testRconPassword              string
+	testChangeSent                bool
+	testChangeAt                  time.Time
+	testChangeTimedOut            bool
+	testTeleportMap               string
+	testTeleportPosition          quake.Vec3
+	testTeleportSent              bool
+	testTeleportSentFrame         int
+	testTeleportAfterPosition     quake.Vec3
+	testTeleportAfterFrames       int
+	testTeleportAfterSent         bool
+	testTeleportAfterSentFrame    int
+	testTeleportReturnPosition    quake.Vec3
+	testTeleportReturnAfterFrames int
+	testTeleportReturnSent        bool
+	testSpawnMap                  string
+	testSpawnClass                string
+	testSpawnPosition             quake.Vec3
+	testSpawnSent                 bool
+	testGapStart                  int
+	testGapFrames                 int
+	testLineCross                 bool
+	testHoldPosition              bool
+	testGroundEdgeProbe           bool
+	testDoorProbe                 bool
+	testDoorPassProbe             bool
+	testButtonProbe               bool
+	testButtonAutoGoal            bool
+	testDoorPassStarted           bool
+	testLineEntered               bool
+	testLineLeft                  bool
+	lastObservedMap               string
+	mapChanges                    int
+	beginPending                  string
+	beginAt                       time.Time
+	reconnected                   bool
+	exitOnReconnect               bool
+	stopOnReconnect               bool
+	strategist                    *Strategist
+	tactician                     *Tactician
+	seenCommands                  map[string]bool
+	duration                      time.Duration
+	start                         time.Time
 }
 
 func (c *Client) sendRaw(data []byte) error { _, e := c.conn.WriteToUDP(data, c.address); return e }
@@ -138,6 +143,7 @@ func (c *Client) reconnect() error {
 	c.serverReliable = 0
 	c.previous = quake.UserCmd{}
 	c.decoder = quake.NewDecoder()
+	c.pendingSounds = nil
 	c.seenCommands = map[string]bool{}
 	c.lastHandshake = ""
 	c.handshakeAt = time.Now()
@@ -182,6 +188,7 @@ func (c *Client) handle(packet []byte) {
 		c.decoder.LastError = e.Error()
 	}
 	if c.decoder.ServerdataSeen {
+		c.pendingSounds = nil
 		c.spawncount = c.decoder.Spawncount
 		c.begun = false
 		c.frameReady = false
@@ -194,6 +201,7 @@ func (c *Client) handle(packet []byte) {
 		c.seenCommands["cmd "+command] = true
 		_ = c.command(command)
 	}
+	c.pendingSounds = append(c.pendingSounds, c.decoder.Sounds...)
 	for _, f := range frames {
 		c.frames++
 		c.suppressedFrames += int(f.Suppressed)
@@ -203,6 +211,10 @@ func (c *Client) handle(packet []byte) {
 			c.frameReady = true
 		}
 		s := c.decoder.Snapshot(f)
+		if len(c.pendingSounds) > 0 {
+			s.Sounds = c.pendingSounds
+			c.pendingSounds = nil
+		}
 		if c.testButtonAutoGoal && c.testTeleportSent && s.Map == "base2" {
 			goal := quake.Vec3{194, 2080, -168}
 			s.Teammate = &goal
@@ -354,7 +366,18 @@ func (c *Client) run(ctx context.Context) error {
 				return err
 			}
 			c.testTeleportAfterSent = true
+			c.testTeleportAfterSentFrame = c.latestFrame
 			log.Printf("scenario second test teleport map=%s target=%v", c.testTeleportMap, p)
+			continue
+		}
+		if c.begun && c.testTeleportAfterSent && !c.testTeleportReturnSent && c.testTeleportReturnAfterFrames > 0 &&
+			c.planner.World.Map == c.testTeleportMap && c.frameReady && c.latestFrame-c.testTeleportAfterSentFrame >= c.testTeleportReturnAfterFrames {
+			p := c.testTeleportReturnPosition
+			if err := c.command(fmt.Sprintf("teleport %g %g %g", p[0], p[1], p[2])); err != nil {
+				return err
+			}
+			c.testTeleportReturnSent = true
+			log.Printf("scenario return test teleport map=%s target=%v", c.testTeleportMap, p)
 			continue
 		}
 		if c.begun && c.testSpawnMap != "" && !c.testSpawnSent && c.planner.World.Map == c.testSpawnMap && c.frameReady {
@@ -456,28 +479,30 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			if c.traceFile != nil && c.framePaced {
 				entry := struct {
-					Map               string          `json:"map"`
-					Spawncount        int             `json:"spawncount"`
-					EpisodeFrame      int             `json:"episode_frame"`
-					Frame             int             `json:"frame"`
-					ObservationFrame  int             `json:"observation_frame"`
-					ObservationAgeMS  int64           `json:"observation_age_ms"`
-					RelativeFrame     int             `json:"relative_frame"`
-					ClientSequence    uint32          `json:"client_sequence"`
-					Self              quake.Vec3      `json:"self"`
-					Teammate          *quake.Vec3     `json:"teammate,omitempty"`
-					LastTeammate      *quake.Vec3     `json:"last_teammate,omitempty"`
-					TeammateAgeFrames *int            `json:"teammate_age_frames,omitempty"`
-					Health            int16           `json:"health"`
-					OnGround          bool            `json:"on_ground"`
-					Goal              string          `json:"goal"`
-					Navigation        string          `json:"navigation"`
-					GeometryStatus    string          `json:"geometry_status"`
-					Elevator          string          `json:"elevator,omitempty"`
-					Movers            []quake.Mover   `json:"movers,omitempty"`
-					Enemies           []quake.Object  `json:"enemies,omitempty"`
-					Arbitration       CommandDecision `json:"arbitration"`
-					Command           quake.UserCmd   `json:"sent_command"`
+					Map               string             `json:"map"`
+					Spawncount        int                `json:"spawncount"`
+					EpisodeFrame      int                `json:"episode_frame"`
+					Frame             int                `json:"frame"`
+					ObservationFrame  int                `json:"observation_frame"`
+					ObservationAgeMS  int64              `json:"observation_age_ms"`
+					RelativeFrame     int                `json:"relative_frame"`
+					ClientSequence    uint32             `json:"client_sequence"`
+					Self              quake.Vec3         `json:"self"`
+					Teammate          *quake.Vec3        `json:"teammate,omitempty"`
+					LastTeammate      *quake.Vec3        `json:"last_teammate,omitempty"`
+					TeammateAgeFrames *int               `json:"teammate_age_frames,omitempty"`
+					Health            int16              `json:"health"`
+					OnGround          bool               `json:"on_ground"`
+					Goal              string             `json:"goal"`
+					SearchTarget      *quake.Vec3        `json:"search_target,omitempty"`
+					Navigation        string             `json:"navigation"`
+					GeometryStatus    string             `json:"geometry_status"`
+					Elevator          string             `json:"elevator,omitempty"`
+					Movers            []quake.Mover      `json:"movers,omitempty"`
+					Sounds            []quake.SoundEvent `json:"sounds,omitempty"`
+					Enemies           []quake.Object     `json:"enemies,omitempty"`
+					Arbitration       CommandDecision    `json:"arbitration"`
+					Command           quake.UserCmd      `json:"sent_command"`
 				}{
 					Map: c.planner.World.Map, Spawncount: c.spawncount, EpisodeFrame: c.moves,
 					Frame: frame, ObservationFrame: c.planner.World.Snapshot.Frame,
@@ -487,9 +512,11 @@ func (c *Client) run(ctx context.Context) error {
 					LastTeammate:      c.planner.World.Snapshot.LastTeammate,
 					TeammateAgeFrames: c.planner.World.Snapshot.TeammateAgeFrames,
 					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround,
-					Goal: c.planner.World.Goal, Navigation: c.planner.World.Navigation,
+					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
+					Navigation:     c.planner.World.Navigation,
 					GeometryStatus: c.planner.World.GeometryStatus,
 					Elevator:       c.planner.World.Elevator, Movers: c.planner.World.Snapshot.Movers,
+					Sounds:      c.planner.World.Snapshot.Sounds,
 					Enemies:     c.planner.World.Snapshot.Enemies,
 					Arbitration: c.planner.World.Command,
 					Command:     cmd,

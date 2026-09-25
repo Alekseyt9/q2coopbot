@@ -26,6 +26,8 @@ type Config struct {
 	TestTeleportMap, TestTeleport     string
 	TestTeleportAfter                 string
 	TestTeleportAfterFrames           int
+	TestTeleportReturn                string
+	TestTeleportReturnAfterFrames     int
 	TestSpawnMap, TestSpawnSoldier    string
 	TestSpawnClass                    string
 	Port, GameFrames, TestChangeAfter int
@@ -146,6 +148,17 @@ func Run(ctx context.Context, cfg Config) error {
 			return err
 		}
 	}
+	var teleportReturnPosition quake.Vec3
+	if cfg.TestTeleportReturn != "" || cfg.TestTeleportReturnAfterFrames != 0 {
+		if cfg.TestTeleportAfter == "" || cfg.TestTeleportReturnAfterFrames < 1 {
+			return fmt.Errorf("test.teleport_return requires test.teleport_after and positive test.teleport_return_after_frames")
+		}
+		var err error
+		teleportReturnPosition, err = parseTestTeleport(cfg.TestTeleportReturn)
+		if err != nil {
+			return err
+		}
+	}
 	var spawnPosition quake.Vec3
 	if cfg.TestSpawnMap != "" || cfg.TestSpawnSoldier != "" {
 		if !cfg.FramePaced || !regexp.MustCompile(`^[A-Za-z0-9_]+$`).MatchString(cfg.TestSpawnMap) {
@@ -184,6 +197,7 @@ func Run(ctx context.Context, cfg Config) error {
 		testChangeAfter: cfg.TestChangeAfter, testRconPassword: cfg.TestRCONPassword,
 		testTeleportMap: cfg.TestTeleportMap, testTeleportPosition: teleportPosition,
 		testTeleportAfterPosition: teleportAfterPosition, testTeleportAfterFrames: cfg.TestTeleportAfterFrames,
+		testTeleportReturnPosition: teleportReturnPosition, testTeleportReturnAfterFrames: cfg.TestTeleportReturnAfterFrames,
 		testSpawnMap: cfg.TestSpawnMap, testSpawnPosition: spawnPosition,
 		testSpawnClass: cfg.TestSpawnClass,
 		testGapStart:   cfg.TestGapStart, testGapFrames: cfg.TestGapFrames,

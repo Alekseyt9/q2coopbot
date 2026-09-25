@@ -136,19 +136,26 @@ func TestPlannerSearchesLastSeenPointWithinBounds(t *testing.T) {
 	if p.World.Goal != "search_last_seen" || p.World.Navigation != "ready" || !p.hasGoal || p.goalPoint != last || p.World.Snapshot.Teammate != nil {
 		t.Fatalf("bounded search did not use last confirmed point: %+v", p.World)
 	}
-	s.Frame, age = 11, 2
+	s.Teammate = &last
+	s.Frame = 11
+	p.update(s, "")
+	if p.World.Goal != "follow_teammate" || !p.hasGoal {
+		t.Fatalf("fresh sighting did not interrupt search: %+v", p.World)
+	}
+	s.Teammate = nil
+	s.Frame, age = 12, 2
 	s.Self = quake.Vec3{145, 0, 24}
 	p.update(s, "")
 	if p.World.Goal != "wait_for_teammate" || p.hasGoal {
 		t.Fatalf("search continued at last-seen point: %+v", p.World)
 	}
-	s.Frame, age = 12, 41
+	s.Frame, age = 13, 41
 	s.Self = quake.Vec3{0, 0, 24}
 	p.update(s, "")
 	if p.World.Goal != "wait_for_teammate" || p.hasGoal {
 		t.Fatalf("expired memory remained a search goal: %+v", p.World)
 	}
-	s.Frame = 13
+	s.Frame = 14
 	s.Teammate = &last
 	p.update(s, "")
 	if p.World.Goal != "follow_teammate" || !p.hasGoal {
@@ -173,6 +180,49 @@ func TestLastSeenSearchRejectsElevatorRoute(t *testing.T) {
 	cmd := p.command(quake.UserCmd{})
 	if cmd.Forward != 0 || cmd.Side != 0 || cmd.Up != 0 {
 		t.Fatalf("stale goal moved into elevator route: %+v", cmd)
+	}
+}
+
+func TestLastSeenViewpointIsOneShotAndFreshSightingWins(t *testing.T) {
+	last := quake.Vec3{200, 0, 24}
+	view := quake.Vec3{100, 0, 24}
+	age := 3
+	nav := &quake.Navigator{Areas: []quake.Area{{}, {Min: quake.Vec3{0, -20, 0}, Max: quake.Vec3{220, 20, 50}}}, Edges: make([][]quake.Edge, 2)}
+	p := &Planner{Nav: nav, World: World{Map: "test", GeometryStatus: "ready"},
+		probeTarget: &view, probeAttempted: true, probeProgressFrame: 10, probeLastSelf: quake.Vec3{145, 0, 24}}
+	s := quake.Snapshot{Map: "test", Frame: 11, Self: quake.Vec3{145, 0, 24}, LastTeammate: &last,
+		TeammateAgeFrames: &age, Health: 100, OnGround: true}
+	p.update(s, "")
+	if p.World.Goal != "probe_last_seen" || p.World.SearchTarget == nil || *p.World.SearchTarget != view {
+		t.Fatalf("viewpoint probe was not selected: %+v", p.World)
+	}
+	s.Frame, s.Self = 12, view
+	p.update(s, "")
+	if p.World.Goal != "wait_for_teammate" || p.probeTarget != nil {
+		t.Fatalf("probe did not stop at viewpoint: %+v", p.World)
+	}
+	s.Frame, s.Self = 13, quake.Vec3{145, 0, 24}
+	p.update(s, "")
+	if p.World.Goal != "wait_for_teammate" || p.hasGoal {
+		t.Fatalf("completed probe restarted without a new observation: %+v", p.World)
+	}
+	s.Frame, s.Teammate = 14, &last
+	p.update(s, "")
+	if p.World.Goal != "cover_teammate" || p.probeAttempted || p.World.SearchTarget != nil {
+		t.Fatalf("fresh sighting did not end probe: %+v", p.World)
+	}
+}
+
+func TestViewpointRouteChecksObservedDoor(t *testing.T) {
+	m := &quake.MapInfo{Entities: []quake.MapEntity{{Class: "func_door", Model: 1}},
+		Models: []quake.BSPModel{{}, {Min: quake.Vec3{50, -12, 0}, Max: quake.Vec3{60, 12, 48}}}}
+	p := &Planner{World: World{Geometry: m}}
+	from, goal := quake.Vec3{0, 0, 24}, quake.Vec3{100, 0, 24}
+	if p.searchRouteDoorsClear([]quake.Mover{{Model: 1}}, from, nil, goal) {
+		t.Fatal("closed door was treated as a safe viewpoint path")
+	}
+	if !p.searchRouteDoorsClear([]quake.Mover{{Model: 1, Origin: quake.Vec3{200, 0, 0}}}, from, nil, goal) {
+		t.Fatal("moved door still blocked the viewpoint path")
 	}
 }
 

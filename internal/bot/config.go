@@ -36,30 +36,32 @@ type ConfigFile struct {
 		StopFile   string `json:"stop_file"`
 	} `json:"output"`
 	Test struct {
-		Idle                 bool   `json:"idle"`
-		ExitOnReconnect      bool   `json:"exit_on_reconnect"`
-		ChangeMap            string `json:"change_map"`
-		ChangeAfterFrames    int    `json:"change_after_frames"`
-		TeleportMap          string `json:"teleport_map"`
-		Teleport             string `json:"teleport"`
-		TeleportAfter        string `json:"teleport_after"`
-		TeleportAfterFrames  int    `json:"teleport_after_frames"`
-		SpawnMap             string `json:"spawn_map"`
-		SpawnSoldier         string `json:"spawn_soldier"`
-		SpawnClass           string `json:"spawn_class"`
-		ObservationGapStart  int    `json:"observation_gap_start"`
-		ObservationGapFrames int    `json:"observation_gap_frames"`
-		LineCross            bool   `json:"line_cross"`
-		HoldPosition         bool   `json:"hold_position"`
-		GroundEdgeProbe      bool   `json:"ground_edge_probe"`
-		NoAAS                bool   `json:"no_aas"`
-		DoorProbe            bool   `json:"door_probe"`
-		DoorPassProbe        bool   `json:"door_pass_probe"`
-		ButtonProbe          bool   `json:"button_probe"`
-		ButtonAutoGoal       bool   `json:"button_auto_goal"`
-		NoBSP                bool   `json:"no_bsp"`
-		PartialBSP           bool   `json:"partial_bsp"`
-		HideDoor53           bool   `json:"hide_door_53"`
+		Idle                      bool   `json:"idle"`
+		ExitOnReconnect           bool   `json:"exit_on_reconnect"`
+		ChangeMap                 string `json:"change_map"`
+		ChangeAfterFrames         int    `json:"change_after_frames"`
+		TeleportMap               string `json:"teleport_map"`
+		Teleport                  string `json:"teleport"`
+		TeleportAfter             string `json:"teleport_after"`
+		TeleportAfterFrames       int    `json:"teleport_after_frames"`
+		TeleportReturn            string `json:"teleport_return"`
+		TeleportReturnAfterFrames int    `json:"teleport_return_after_frames"`
+		SpawnMap                  string `json:"spawn_map"`
+		SpawnSoldier              string `json:"spawn_soldier"`
+		SpawnClass                string `json:"spawn_class"`
+		ObservationGapStart       int    `json:"observation_gap_start"`
+		ObservationGapFrames      int    `json:"observation_gap_frames"`
+		LineCross                 bool   `json:"line_cross"`
+		HoldPosition              bool   `json:"hold_position"`
+		GroundEdgeProbe           bool   `json:"ground_edge_probe"`
+		NoAAS                     bool   `json:"no_aas"`
+		DoorProbe                 bool   `json:"door_probe"`
+		DoorPassProbe             bool   `json:"door_pass_probe"`
+		ButtonProbe               bool   `json:"button_probe"`
+		ButtonAutoGoal            bool   `json:"button_auto_goal"`
+		NoBSP                     bool   `json:"no_bsp"`
+		PartialBSP                bool   `json:"partial_bsp"`
+		HideDoor53                bool   `json:"hide_door_53"`
 	} `json:"test"`
 }
 
@@ -122,6 +124,7 @@ func LoadConfig(path string) (Config, error) {
 	}
 	cfg.TestTeleportMap, cfg.TestTeleport = file.Test.TeleportMap, file.Test.Teleport
 	cfg.TestTeleportAfter, cfg.TestTeleportAfterFrames = file.Test.TeleportAfter, file.Test.TeleportAfterFrames
+	cfg.TestTeleportReturn, cfg.TestTeleportReturnAfterFrames = file.Test.TeleportReturn, file.Test.TeleportReturnAfterFrames
 	cfg.TestSpawnMap, cfg.TestSpawnSoldier, cfg.TestSpawnClass = file.Test.SpawnMap, file.Test.SpawnSoldier, file.Test.SpawnClass
 	cfg.TestGapStart, cfg.TestGapFrames = file.Test.ObservationGapStart, file.Test.ObservationGapFrames
 	cfg.TestLineCross, cfg.TestHoldPosition = file.Test.LineCross, file.Test.HoldPosition

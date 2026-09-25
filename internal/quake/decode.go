@@ -78,11 +78,19 @@ type Frame struct {
 	DeltaAngles [3]int16
 	Entities    map[int]Entity
 }
+type SoundEvent struct {
+	Index    byte   `json:"index"`
+	Name     string `json:"name,omitempty"`
+	Entity   int    `json:"entity,omitempty"`
+	Channel  int    `json:"channel,omitempty"`
+	Position *Vec3  `json:"position,omitempty"`
+}
 type Decoder struct {
 	Config         map[int]string
 	Baselines      map[int]Entity
 	Frames         map[int]Frame
 	Commands       []string
+	Sounds         []SoundEvent
 	Map            string
 	PlayerNumber   int
 	lastTeammate   *Vec3
@@ -384,6 +392,7 @@ func (d *Decoder) frame(r *reader) (Frame, error) {
 func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 	r := reader{data: data}
 	d.Commands = nil
+	d.Sounds = nil
 	d.ServerdataSeen = false
 	var frames []Frame
 	for r.pos < len(data) {
@@ -511,24 +520,40 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 			if e != nil {
 				return frames, e
 			}
-			if e = r.skip(1); e != nil {
+			index, e := r.byte()
+			if e != nil {
 				return frames, e
 			}
-			n := 0
+			if flags&^byte(31) != 0 {
+				return frames, fmt.Errorf("unsupported sound flags %d", flags)
+			}
+			sound := SoundEvent{Index: index, Name: d.Config[288+int(index)]}
 			for _, bit := range []byte{1, 2, 16} {
 				if flags&bit != 0 {
-					n++
+					if e = r.skip(1); e != nil {
+						return frames, e
+					}
 				}
 			}
 			if flags&8 != 0 {
-				n += 2
+				channel, err := r.ushort()
+				if err != nil {
+					return frames, err
+				}
+				sound.Entity, sound.Channel = int(channel>>3), int(channel&7)
 			}
 			if flags&4 != 0 {
-				n += 6
+				var position Vec3
+				for i := range position {
+					coord, err := r.short()
+					if err != nil {
+						return frames, err
+					}
+					position[i] = float64(coord) / 8
+				}
+				sound.Position = &position
 			}
-			if e = r.skip(n); e != nil {
-				return frames, e
-			}
+			d.Sounds = append(d.Sounds, sound)
 		case 5:
 			e = r.skip(512)
 			if e != nil {
@@ -567,21 +592,22 @@ type Mover struct {
 	Origin Vec3 `json:"origin"`
 }
 type Snapshot struct {
-	Map               string   `json:"map"`
-	Frame             int      `json:"frame"`
-	Self              Vec3     `json:"self"`
-	OnGround          bool     `json:"on_ground"`
-	Teammate          *Vec3    `json:"teammate,omitempty"`
-	LastTeammate      *Vec3    `json:"last_teammate,omitempty"`
-	TeammateAgeFrames *int     `json:"teammate_age_frames,omitempty"`
-	Health            int16    `json:"health"`
-	Armor             int16    `json:"armor"`
-	Ammo              int16    `json:"ammo"`
-	Weapon            string   `json:"weapon"`
-	DeltaAngles       [3]int16 `json:"delta_angles"`
-	Enemies           []Object `json:"enemies"`
-	Pickups           []Object `json:"pickups"`
-	Movers            []Mover  `json:"movers,omitempty"`
+	Map               string       `json:"map"`
+	Frame             int          `json:"frame"`
+	Self              Vec3         `json:"self"`
+	OnGround          bool         `json:"on_ground"`
+	Teammate          *Vec3        `json:"teammate,omitempty"`
+	LastTeammate      *Vec3        `json:"last_teammate,omitempty"`
+	TeammateAgeFrames *int         `json:"teammate_age_frames,omitempty"`
+	Health            int16        `json:"health"`
+	Armor             int16        `json:"armor"`
+	Ammo              int16        `json:"ammo"`
+	Weapon            string       `json:"weapon"`
+	DeltaAngles       [3]int16     `json:"delta_angles"`
+	Enemies           []Object     `json:"enemies"`
+	Pickups           []Object     `json:"pickups"`
+	Movers            []Mover      `json:"movers,omitempty"`
+	Sounds            []SoundEvent `json:"sounds,omitempty"`
 }
 
 func (d *Decoder) Snapshot(f Frame) Snapshot {

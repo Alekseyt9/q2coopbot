@@ -109,6 +109,34 @@ func TestSnapshotSeparatesVisibleAndLastSeenTeammate(t *testing.T) {
 		t.Fatalf("old-map teammate survived transition: %+v", changed)
 	}
 }
+
+func TestSoundPacketDistinguishesEntityFromExplicitPosition(t *testing.T) {
+	d := NewDecoder()
+	d.Config[288+7] = "player/step.wav"
+	entitySound := []byte{9, 8, 7}
+	entitySound = binary.LittleEndian.AppendUint16(entitySound, 2<<3|3)
+	if _, err := d.Parse(entitySound); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Sounds) != 1 || d.Sounds[0].Entity != 2 || d.Sounds[0].Channel != 3 ||
+		d.Sounds[0].Position != nil || d.Sounds[0].Name != "player/step.wav" {
+		t.Fatalf("entity-relative sound invented a position: %+v", d.Sounds)
+	}
+	positioned := []byte{9, 1 | 2 | 4 | 8 | 16, 7, 255, 64, 5}
+	positioned = binary.LittleEndian.AppendUint16(positioned, 2<<3|3)
+	for _, coord := range []int16{800, -160, 192} {
+		positioned = binary.LittleEndian.AppendUint16(positioned, uint16(coord))
+	}
+	if _, err := d.Parse(positioned); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Sounds) != 1 || d.Sounds[0].Position == nil || *d.Sounds[0].Position != (Vec3{100, -20, 24}) {
+		t.Fatalf("explicit sound position was lost: %+v", d.Sounds)
+	}
+	if _, err := d.Parse([]byte{9, 4, 7, 0}); err == nil {
+		t.Fatal("truncated sound position was accepted")
+	}
+}
 func TestDecodePlayerGroundFlag(t *testing.T) {
 	d := NewDecoder()
 	packet := binary.LittleEndian.AppendUint16(nil, 16)  // PS_M_FLAGS
