@@ -1,12 +1,21 @@
-# Generated binaries and reports
-build*/
-build*.log
-artifacts/
-headless-parity-captures/
-dev_tools/
-bspc.log
+# Local workspace (workspace/tools/bspc remains tracked source)
+/workspace/build/
+/workspace/runtime/
+/workspace/artifacts/
+/workspace/tools/dev_tools/
+
+# Legacy output paths, in case an old script recreates them
+/build*/
+/build*.log
+/artifacts/
+/headless-parity-captures/
+/dev_tools/
+/bspc.log
 *.exe
 *.dll
+*.pdb
+*.test
+coverage.out
 
 # Python example caches
 __pycache__/

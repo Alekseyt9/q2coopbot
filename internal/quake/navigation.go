@@ -1,4 +1,4 @@
-package main
+package quake
 
 import (
 	"container/heap"
@@ -92,11 +92,11 @@ func LoadAAS(path string) (*Navigator, error) {
 	}
 	return n, nil
 }
-func distance(a, b Vec3) float64 {
+func Distance(a, b Vec3) float64 {
 	x, y, z := a[0]-b[0], a[1]-b[1], a[2]-b[2]
 	return math.Sqrt(x*x + y*y + z*z)
 }
-func horizontal(a, b Vec3) float64 { return math.Hypot(a[0]-b[0], a[1]-b[1]) }
+func Horizontal(a, b Vec3) float64 { return math.Hypot(a[0]-b[0], a[1]-b[1]) }
 func (n *Navigator) AreaFor(p Vec3) int {
 	best, score := -1, math.Inf(1)
 	nearby := -1
@@ -109,7 +109,7 @@ func (n *Navigator) AreaFor(p Vec3) int {
 			outside += d * d
 		}
 		if outside <= 64 {
-			d := distance(p, a.Center)
+			d := Distance(p, a.Center)
 			if d < score {
 				best, score = i, d
 			}

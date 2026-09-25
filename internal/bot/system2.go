@@ -1,4 +1,4 @@
-package main
+package bot
 
 import (
 	"bytes"
@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"q2coopbot/internal/quake"
 )
 
 type StrategyDecision struct {
@@ -60,13 +62,13 @@ func compactPlanState(w World) planState {
 	s := w.Snapshot
 	state := planState{Map: w.Map, BotHP: s.Health, BotAmmo: s.Ammo, BotWeapon: s.Weapon, Navigation: w.Navigation, CurrentPlan: w.Goal}
 	if s.Teammate != nil {
-		v := int(math.Round(horizontal(s.Self, *s.Teammate)))
+		v := int(math.Round(quake.Horizontal(s.Self, *s.Teammate)))
 		state.HumanDistance = &v
 	}
 	for _, e := range s.Enemies {
-		item := planEnemy{ID: e.ID, DistanceBot: int(math.Round(horizontal(s.Self, e.Origin))), ClearShot: e.ClearShot}
+		item := planEnemy{ID: e.ID, DistanceBot: int(math.Round(quake.Horizontal(s.Self, e.Origin))), ClearShot: e.ClearShot}
 		if s.Teammate != nil {
-			v := int(math.Round(horizontal(*s.Teammate, e.Origin)))
+			v := int(math.Round(quake.Horizontal(*s.Teammate, e.Origin)))
 			item.DistanceHuman = &v
 		}
 		state.Enemies = append(state.Enemies, item)
@@ -79,7 +81,7 @@ func compactPlanState(w World) planState {
 		if !strings.Contains(p.Class, "health") {
 			continue
 		}
-		v := int(math.Round(horizontal(s.Self, p.Origin)))
+		v := int(math.Round(quake.Horizontal(s.Self, p.Origin)))
 		if state.HealthPickupDistance == nil || v < *state.HealthPickupDistance {
 			state.HealthPickupDistance = &v
 		}

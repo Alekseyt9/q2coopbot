@@ -1,4 +1,4 @@
-package main
+package quake
 
 import (
 	"encoding/binary"
@@ -30,6 +30,17 @@ type MapInfo struct {
 	Entities  []MapEntity `json:"entities"`
 	collision *CollisionMap
 }
+
+// ClearShot reports whether the loaded BSP has a clear static line of fire.
+func (m *MapInfo) ClearShot(from, to Vec3) bool {
+	if m == nil || m.collision == nil {
+		return false
+	}
+	return m.collision.ClearShot(from, to)
+}
+
+func (m *MapInfo) HasCollision() bool { return m != nil && m.collision != nil }
+
 type bspPlane struct {
 	normal Vec3
 	dist   float64

@@ -1,4 +1,4 @@
-package main
+package quake
 
 import (
 	"encoding/binary"
@@ -586,13 +586,13 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 	}
 	for _, entity := range f.Entities {
 		path := strings.ToLower(d.Config[32+entity.Model])
-		if strings.Contains(path, "/monsters/") && distance(entity.Origin, f.Origin) < 1024 {
+		if strings.Contains(path, "/monsters/") && Distance(entity.Origin, f.Origin) < 1024 {
 			kind := strings.SplitN(strings.SplitN(path, "/monsters/", 2)[1], "/", 2)[0]
 			if kind == "soldier" && entity.Frame >= 272 && entity.Frame <= 474 || kind == "infantry" && entity.Frame >= 125 && entity.Frame <= 178 {
 				continue
 			}
 			s.Enemies = append(s.Enemies, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame})
-		} else if strings.Contains(path, "/items/") && distance(entity.Origin, f.Origin) < 384 {
+		} else if strings.Contains(path, "/items/") && Distance(entity.Origin, f.Origin) < 384 {
 			kind := strings.SplitN(strings.SplitN(path, "/items/", 2)[1], "/", 2)[0]
 			if strings.Contains(kind, "heal") {
 				kind = "health"
@@ -602,11 +602,11 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 	}
 	return s
 }
-func yawTo(from, to Vec3, delta int16) int16 {
+func YawTo(from, to Vec3, delta int16) int16 {
 	radians := math.Atan2(to[1]-from[1], to[0]-from[0])
 	return int16(int(math.Round(radians*65536/(2*math.Pi))) - int(delta))
 }
-func pitchTo(from, to Vec3, delta int16) int16 {
-	radians := math.Atan2(to[2]-from[2], horizontal(from, to))
+func PitchTo(from, to Vec3, delta int16) int16 {
+	radians := math.Atan2(to[2]-from[2], Horizontal(from, to))
 	return int16(-int(math.Round(radians*65536/(2*math.Pi))) - int(delta))
 }

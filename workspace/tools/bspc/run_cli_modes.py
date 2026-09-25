@@ -283,12 +283,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--bspc",
         dest="bspc_path",
         type=Path,
-        help="Path to the bspc executable (defaults to build/tools/bspc/bspc)",
+        help="Path to the bspc executable (defaults to workspace/build/aas/workspace/tools/bspc/bspc)",
     )
     parser.add_argument(
         "--workspace",
         type=Path,
-        default=Path("build/test-output/bspc_cli"),
+        default=Path("workspace/build/test-output/bspc_cli"),
         help="Directory used for generated files",
     )
     parser.add_argument(
@@ -306,7 +306,8 @@ def main(argv: list[str]) -> int:
 
     bspc_path = args.bspc_path
     if bspc_path is None:
-        bspc_path = repo_root / "build" / "tools" / "bspc" / "bspc"
+        binary = "bspc.exe" if sys.platform == "win32" else "bspc"
+        bspc_path = repo_root / "workspace" / "build" / "aas" / "workspace" / "tools" / "bspc" / binary
     if not bspc_path.exists():
         raise FileNotFoundError(
             f"bspc executable not found at {bspc_path}. Build the tool before running this script."
@@ -315,7 +316,7 @@ def main(argv: list[str]) -> int:
     map_asset = repo_root / "tests" / "support" / "assets" / "bspc" / "simple_room.map"
     if not map_asset.exists():
         raise FileNotFoundError(f"MAP asset missing: {map_asset}")
-    bsp_asset = repo_root / "dev_tools" / "assets" / "maps" / "2box4.bsp"
+    bsp_asset = repo_root / "workspace" / "tools" / "dev_tools" / "assets" / "maps" / "2box4.bsp"
     if not bsp_asset.exists():
         print(f"bspc CLI parity skipped: BSP asset missing: {bsp_asset}")
         return 125

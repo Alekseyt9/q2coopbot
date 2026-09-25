@@ -25,9 +25,9 @@ $pythonExe = if (Get-Command uv -ErrorAction SilentlyContinue) {
 }
 $eventLog = Join-Path $RuntimeRoot 'coopbot_debug_events.jsonl'
 $botlibLogSource = Join-Path $RuntimeRoot 'botlib.log'
-$artifactRoot = Join-Path $RepoRoot "artifacts\udp-$Scenario-baseline"
+$artifactRoot = Join-Path $RepoRoot "workspace\artifacts\udp-$Scenario-baseline"
 if ($OpenJev) {
-    $artifactRoot = Join-Path $RepoRoot "artifacts\udp-$Scenario-openjev"
+    $artifactRoot = Join-Path $RepoRoot "workspace\artifacts\udp-$Scenario-openjev"
 }
 
 if (-not (Test-Path -LiteralPath $q2ded)) {

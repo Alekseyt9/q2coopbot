@@ -1,4 +1,4 @@
-package main
+package quake
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestConnectRequestUsesQuakeUserinfoSeparators(t *testing.T) {
-	request := connectRequest(1234, 5678, "GoCoopMate")
+	request := ConnectRequest(1234, 5678, "GoCoopMate")
 	if !strings.Contains(request, `"\name\GoCoopMate\skin\male/grunt`) ||
 		strings.Contains(request, `\\name`) {
 		t.Fatalf("invalid Quake userinfo in connect request: %q", request)
@@ -17,7 +17,7 @@ func TestConnectRequestUsesQuakeUserinfoSeparators(t *testing.T) {
 }
 
 func TestMovePacketMatchesProtocol34Reference(t *testing.T) {
-	got := movePacket(UserCmd{Yaw: 8192, Forward: 400, Buttons: 1, Msec: 50}, UserCmd{}, 7)
+	got := MovePacket(UserCmd{Yaw: 8192, Forward: 400, Buttons: 1, Msec: 50}, UserCmd{}, 7)
 	want, _ := hex.DecodeString("02a4ffffffff0000000000004a00209001013200")
 	if !bytes.Equal(got, want) {
 		t.Fatalf("move packet = %x, want %x", got, want)
@@ -119,21 +119,5 @@ func TestBSPBrushBlocksLineOfFire(t *testing.T) {
 	}
 	if !box.ClearShot(Vec3{-5, 20, 5}, Vec3{15, 20, 5}) {
 		t.Fatal("shot outside brush was blocked")
-	}
-}
-func TestPlannerKeepsWaypointProgress(t *testing.T) {
-	n := &Navigator{Areas: []Area{{}, {Min: Vec3{-10, -10, -10}, Max: Vec3{10, 10, 10}}, {Min: Vec3{90, -10, -10}, Max: Vec3{110, 10, 10}}}, Edges: [][]Edge{{}, {{To: 2, Start: Vec3{32, 0, 0}, End: Vec3{92, 0, 0}, Kind: 2, Cost: 10}}, nil}}
-	goal := Vec3{100, 0, 0}
-	p := &Planner{Nav: n, World: World{Map: "test"}}
-	s := Snapshot{Map: "test", Frame: 1, Self: Vec3{0, 0, 0}, Teammate: &goal, Health: 100}
-	p.update(s, "")
-	if len(p.World.Route) != 2 {
-		t.Fatalf("initial route=%v", p.World.Route)
-	}
-	s.Self = Vec3{32, 0, 0}
-	s.Frame = 2
-	p.update(s, "")
-	if len(p.World.Route) != 1 || p.World.Route[0].Position != (Vec3{92, 0, 0}) {
-		t.Fatalf("route progress lost: %+v", p.World.Route)
 	}
 }
