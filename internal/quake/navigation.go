@@ -12,19 +12,19 @@ import (
 type Vec3 [3]float64
 type Area struct{ Min, Max, Center Vec3 }
 type Edge struct {
-	To         int
-	Start, End Vec3
+	To          int
+	Start, End  Vec3
 	Kind, Cost  int
 	Model, Rise int
 }
 type Waypoint struct {
-	Position        Vec3   `json:"position"`
-	Jump            bool   `json:"jump"`
-	Kind            int    `json:"kind,omitempty"`
-	Model           int    `json:"model,omitempty"`
-	Rise            int    `json:"rise,omitempty"`
-	ToArea          int    `json:"to_area,omitempty"`
-	ElevatorPhase   string `json:"elevator_phase,omitempty"`
+	Position      Vec3   `json:"position"`
+	Jump          bool   `json:"jump"`
+	Kind          int    `json:"kind,omitempty"`
+	Model         int    `json:"model,omitempty"`
+	Rise          int    `json:"rise,omitempty"`
+	ToArea        int    `json:"to_area,omitempty"`
+	ElevatorPhase string `json:"elevator_phase,omitempty"`
 }
 type Navigator struct {
 	Areas []Area
@@ -110,7 +110,9 @@ func LoadAAS(path string) (*Navigator, error) {
 				if kind == 11 {
 					model = int(int32(binary.LittleEndian.Uint32(r[p+4:])))
 					rise = int(int32(binary.LittleEndian.Uint32(r[p+8:])))
-					if model <= 0 || rise <= 0 { continue }
+					if model <= 0 || rise <= 0 {
+						continue
+					}
 				}
 				n.Edges[i] = append(n.Edges[i], Edge{To: to, Start: vec(r, p+12), End: vec(r, p+24), Kind: kind, Cost: cost, Model: model, Rise: rise})
 			}

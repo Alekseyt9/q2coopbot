@@ -152,8 +152,10 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	}
 	p.World.Goal = "wait_for_teammate"
 	p.World.Route = nil
+	p.World.Elevator = ""
 	p.hasGoal = false
 	if s.Teammate == nil {
+		p.elevator = nil
 		return
 	}
 	goal := *s.Teammate
@@ -218,8 +220,8 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	teleported := p.observed && quake.Horizontal(s.Self, p.lastObserved) > 256
 	p.lastObserved = s.Self
 	p.observed = true
-	goalChanged := quake.Horizontal(goal, p.target) > 80 || math.Abs(goal[2]-p.target[2]) > 80
-	if p.elevator != nil && (goalChanged || teleported) {
+	goalChanged := p.elevator == nil && (quake.Horizontal(goal, p.target) > 80 || math.Abs(goal[2]-p.target[2]) > 80)
+	if p.elevator != nil && teleported {
 		p.elevator = nil
 		p.routeKnown = false
 	}
@@ -238,6 +240,9 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.World.Navigation = "ready"
 	} else {
 		p.World.Navigation = "unreachable"
+	}
+	if p.elevator != nil {
+		p.World.Elevator = p.elevator.stage
 	}
 	if quake.Horizontal(s.Self, p.lastSelf) > 12 {
 		p.lastProgress = now
@@ -272,6 +277,9 @@ func (p *Planner) command(prev quake.UserCmd) quake.UserCmd {
 	}
 	if s.Health <= 0 {
 		return cmd
+	}
+	if p.elevator != nil && p.routeIndex < len(p.route) && p.route[p.routeIndex].ElevatorPhase == "board" {
+		return p.elevatorCommand(cmd, p.route[p.routeIndex])
 	}
 	tactic := ""
 	if p.World.Tactic != nil {

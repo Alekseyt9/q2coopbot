@@ -28,7 +28,13 @@ func TestLoadAASVersions(t *testing.T) {
 			}
 			binary.LittleEndian.PutUint32(data[headerSize+2*48+28+20:], 1) // area 1 has one reach
 			binary.LittleEndian.PutUint32(data[len(data)-44:], 1)          // destination area
-			binary.LittleEndian.PutUint32(data[len(data)-8:], 2)           // walk
+			kind := uint32(2)
+			if version == 5 {
+				kind = 11
+				binary.LittleEndian.PutUint32(data[len(data)-40:], 50)  // model *50
+				binary.LittleEndian.PutUint32(data[len(data)-36:], 190) // rise
+			}
+			binary.LittleEndian.PutUint32(data[len(data)-8:], kind)
 			if version == 5 {
 				for i := 8; i < headerSize; i++ {
 					data[i] ^= byte((i - 8) * 119)
@@ -42,8 +48,11 @@ func TestLoadAASVersions(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(nav.Areas) != 2 || len(nav.Edges[1]) != 1 || nav.Edges[1][0].Kind != 2 {
+			if len(nav.Areas) != 2 || len(nav.Edges[1]) != 1 || nav.Edges[1][0].Kind != int(kind) {
 				t.Fatalf("unexpected AAS graph: areas=%d edges=%v", len(nav.Areas), nav.Edges[1])
+			}
+			if version == 5 && (nav.Edges[1][0].Model != 50 || nav.Edges[1][0].Rise != 190) {
+				t.Fatalf("elevator metadata: %+v", nav.Edges[1][0])
 			}
 		})
 	}

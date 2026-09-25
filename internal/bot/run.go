@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"q2coopbot/internal/quake"
@@ -20,9 +23,26 @@ type Config struct {
 	WorldFile, TracePath, StopFile    string
 	System1Model, System2Model        string
 	TestChangeMap, TestRCONPassword   string
+	TestTeleportMap, TestTeleport     string
 	Port, GameFrames, TestChangeAfter int
 	Duration                          time.Duration
 	FramePaced, Idle, ExitOnReconnect bool
+}
+
+func parseTestTeleport(value string) (quake.Vec3, error) {
+	var position quake.Vec3
+	parts := strings.Split(value, ",")
+	if len(parts) != 3 {
+		return position, fmt.Errorf("test teleport position must be x,y,z")
+	}
+	for i, part := range parts {
+		v, err := strconv.ParseFloat(strings.TrimSpace(part), 64)
+		if err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v < -32768 || v > 32767 {
+			return position, fmt.Errorf("invalid test teleport coordinate %q", part)
+		}
+		position[i] = v
+	}
+	return position, nil
 }
 
 // The test server accepts the destination and entry as separate RCON arguments.
@@ -54,6 +74,17 @@ func Run(ctx context.Context, cfg Config) error {
 			return fmt.Errorf("Q2COOPBOT_TEST_RCON is required for test map change")
 		}
 	}
+	var teleportPosition quake.Vec3
+	if cfg.TestTeleportMap != "" || cfg.TestTeleport != "" {
+		if !cfg.FramePaced || !regexp.MustCompile(`^[A-Za-z0-9_]+$`).MatchString(cfg.TestTeleportMap) {
+			return fmt.Errorf("test teleport requires --frame-paced and a simple --test-teleport-map")
+		}
+		var err error
+		teleportPosition, err = parseTestTeleport(cfg.TestTeleport)
+		if err != nil {
+			return err
+		}
+	}
 	if cfg.AASDir == "" {
 		cfg.AASDir = filepath.Join(cfg.GameDir, "maps")
 	}
@@ -73,6 +104,7 @@ func Run(ctx context.Context, cfg Config) error {
 		idle: cfg.Idle, duration: cfg.Duration, framePaced: cfg.FramePaced, gameFrames: cfg.GameFrames,
 		exitOnReconnect: cfg.ExitOnReconnect, testChangeMap: cfg.TestChangeMap,
 		testChangeAfter: cfg.TestChangeAfter, testRconPassword: cfg.TestRCONPassword,
+		testTeleportMap: cfg.TestTeleportMap, testTeleportPosition: teleportPosition,
 	}
 	if cfg.TracePath != "" {
 		client.traceFile, err = os.Create(cfg.TracePath)

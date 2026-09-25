@@ -244,10 +244,14 @@ func (d *Decoder) playerstate(r *reader, old Frame) (Frame, error) {
 	}
 	if flags&16 != 0 {
 		f.PMFlags, e = r.byte()
-		if e != nil { return f, e }
+		if e != nil {
+			return f, e
+		}
 	}
 	if flags&32 != 0 {
-		if e = skip(2); e != nil { return f, e }
+		if e = skip(2); e != nil {
+			return f, e
+		}
 	}
 	if flags&64 != 0 {
 		for i := 0; i < 3; i++ {

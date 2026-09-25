@@ -14,6 +14,7 @@ param(
     [int[]]$Timescales = @(1, 2),
     [switch]$UnlimitedLoopbackRate,
     [switch]$SynchronizedStart,
+    [switch]$ElevatorTrial,
     [string]$OutputRoot = ''
 )
 
@@ -27,6 +28,9 @@ if ($TransitionMap -and ($TransitionMap -notmatch '^[A-Za-z0-9_]+$' -or $Transit
 }
 if ($LeaveTeammateOnTransition -and -not $TransitionMap) { throw '-LeaveTeammateOnTransition requires -TransitionMap.' }
 if ($RequireTransitionAAS -and -not $TransitionMap) { throw '-RequireTransitionAAS requires -TransitionMap.' }
+if ($ElevatorTrial -and ($TransitionMap -ne 'base2' -or -not $SynchronizedStart -or -not $AASDir)) {
+    throw '-ElevatorTrial requires -TransitionMap base2, -SynchronizedStart and -AASDir.'
+}
 if ($AASDir -and -not (Test-Path -LiteralPath $AASDir -PathType Container)) { throw "AAS directory is missing: $AASDir" }
 if (-not $ServerExe) { $ServerExe = Join-Path $RuntimeRoot 'q2ded.exe' }
 $gameDir = Join-Path $RuntimeRoot 'baseq2'
@@ -67,6 +71,7 @@ foreach ($scale in $Timescales) {
     $stderr = Join-Path $OutputRoot "$name-server.err.log"
     $humanLog = Join-Path $OutputRoot "$name-human.log"
     $humanErr = Join-Path $OutputRoot "$name-human.err.log"
+    $humanTracePath = Join-Path $OutputRoot "$name-human-trace.jsonl"
     $botLog = Join-Path $OutputRoot "$name-bot.log"
     $tracePath = Join-Path $OutputRoot "$name-trace.jsonl"
     $worldPath = Join-Path $OutputRoot "$name-world.json"
@@ -75,6 +80,7 @@ foreach ($scale in $Timescales) {
     $rconPassword = if ($TransitionMap) { [guid]::NewGuid().ToString('N') } else { '' }
     if ($TransitionMap) { $args = "+set rcon_password $rconPassword $args" }
     if ($UnlimitedLoopbackRate) { $args = "+set sv_test_unlimited_loopback 1 $args" }
+    if ($ElevatorTrial) { $args = "+set cheats 1 $args" }
     if ($SynchronizedStart) { $args = "+set sv_test_trace_client GoCoopMate +set sv_test_start_client GoCoopMate $args" }
     $server = Start-Process -FilePath $ServerExe -ArgumentList $args -WorkingDirectory $RuntimeRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
     $human = $null
@@ -93,6 +99,7 @@ foreach ($scale in $Timescales) {
         $wallLimit = [int][math]::Ceiling($totalFrames / (10.0 * $scale) * 3 + 20)
         if ($WallLimitSeconds -gt 0) { $wallLimit = $WallLimitSeconds }
         $humanArgs = "--port $runPort --name TestHuman --game-dir `"$gameDir`" --idle --frame-paced --duration $($wallLimit + 10)s"
+        if ($ElevatorTrial) { $humanArgs += " --trace-jsonl `"$humanTracePath`" --test-teleport-map base2 --test-teleport -11,1408,85" }
         if ($LeaveTeammateOnTransition) { $humanArgs += ' --test-exit-on-reconnect' }
         $human = Start-Process -FilePath $botExe -ArgumentList $humanArgs -WorkingDirectory $repoRoot -RedirectStandardOutput $humanLog -RedirectStandardError $humanErr -WindowStyle Hidden -PassThru
         $humanUntil = (Get-Date).AddSeconds(20)
@@ -105,6 +112,7 @@ foreach ($scale in $Timescales) {
         $botArgs = @('--port', "$runPort", '--name', 'GoCoopMate', '--game-dir', $gameDir, '--world-json', $worldPath, '--trace-jsonl', $tracePath, '--frame-paced', '--game-frames', "$GameFrames", '--duration', "${wallLimit}s")
         if ($AASDir) { $botArgs += @('--aas-dir', $AASDir) }
         if ($TransitionMap) { $botArgs += @('--test-change-map', $TransitionMap, '--test-change-after-frames', "$TransitionAfterFrames") }
+        if ($ElevatorTrial) { $botArgs += @('--test-teleport-map', 'base2', '--test-teleport', '-8,1408,-53') }
         $previousRcon = $env:Q2COOPBOT_TEST_RCON
         try {
             if ($TransitionMap) { $env:Q2COOPBOT_TEST_RCON = $rconPassword }
@@ -126,6 +134,9 @@ foreach ($scale in $Timescales) {
         $observedMaps = [System.Collections.Generic.List[string]]::new()
         $teammateSeenInTrace = $false
         $teammateSeenAfterTransition = $false
+        $elevatorStages = [System.Collections.Generic.List[string]]::new()
+        $elevatorMoverObserved = $false
+        $botNearGate = $false
         foreach ($line in Get-Content -LiteralPath $tracePath) {
             $entry = $line | ConvertFrom-Json
             $sent["$($entry.spawncount):$($entry.client_sequence)"] = $entry.sent_command
@@ -135,6 +146,21 @@ foreach ($scale in $Timescales) {
             }
             if ($entry.map -and ($observedMaps.Count -eq 0 -or $observedMaps[$observedMaps.Count - 1] -cne $entry.map)) {
                 $observedMaps.Add($entry.map)
+            }
+            if ($ElevatorTrial -and $entry.map -eq 'base2') {
+                if ($entry.elevator -and -not $elevatorStages.Contains($entry.elevator)) { $elevatorStages.Add($entry.elevator) }
+                if (@($entry.movers | Where-Object { $_.model -eq 50 }).Count -gt 0) { $elevatorMoverObserved = $true }
+                if ([math]::Abs($entry.self[0] + 8) -lt 48 -and [math]::Abs($entry.self[1] - 1408) -lt 48 -and [math]::Abs($entry.self[2] + 43) -lt 48) { $botNearGate = $true }
+            }
+        }
+        $humanAtTop = $false
+        if ($ElevatorTrial -and (Test-Path -LiteralPath $humanTracePath)) {
+            foreach ($line in Get-Content -LiteralPath $humanTracePath) {
+                $entry = $line | ConvertFrom-Json
+                if ($entry.map -eq 'base2' -and [math]::Abs($entry.self[0] + 11) -lt 48 -and [math]::Abs($entry.self[1] - 1408) -lt 48 -and [math]::Abs($entry.self[2] - 95) -lt 48) {
+                    $humanAtTop = $true
+                    break
+                }
             }
         }
         $applied = @(Read-AppliedCommands $stdout)
@@ -163,6 +189,8 @@ foreach ($scale in $Timescales) {
             teammate_seen = $teammateSeenInTrace
             teammate_seen_after_transition = $teammateSeenAfterTransition
             teammate_left_on_transition = [bool]$LeaveTeammateOnTransition
+            elevator_trial = [bool]$ElevatorTrial; elevator_stages = $elevatorStages.ToArray()
+            elevator_mover_observed = $elevatorMoverObserved; bot_near_gate = $botNearGate; human_at_top = $humanAtTop
             sent_commands = $sent.Count; applied_new_commands = $newCommands.Count
             matched_applied_commands = $matchedSequences.Count; trace_jsonl = $tracePath
             applied_jsonl = $appliedPath; world_json = $worldPath; server_log = $stdout
@@ -194,5 +222,12 @@ if (@($results | Where-Object { $_.game_frames -lt $GameFrames -or $_.frame_gaps
 }
 if ($SynchronizedStart -and @($results | Where-Object { $_.matched_applied_commands -ne $_.sent_commands -or $_.applied_new_commands -ne $_.sent_commands }).Count -gt 0) {
     throw "Server did not apply every sent command: $summary"
+}
+if ($ElevatorTrial -and @($results | Where-Object {
+    -not $_.bot_near_gate -or -not $_.human_at_top -or -not $_.elevator_mover_observed -or
+    -not ($_.elevator_stages -contains 'board') -or -not ($_.elevator_stages -contains 'ride') -or
+    -not ($_.elevator_stages -contains 'exit') -or -not ($_.elevator_stages -contains 'completed')
+}).Count -gt 0) {
+    throw "Elevator trial did not complete; inspect positions, mover and stages in $summary"
 }
 Write-Output "Saved $summary"

@@ -32,10 +32,12 @@ type MapInfo struct {
 	collision *CollisionMap
 }
 
-type BSPModel struct { Min, Max, Origin Vec3 }
+type BSPModel struct{ Min, Max, Origin Vec3 }
 
 func (m *MapInfo) Model(index int) (BSPModel, bool) {
-	if m == nil || index <= 0 || index >= len(m.Models) { return BSPModel{}, false }
+	if m == nil || index <= 0 || index >= len(m.Models) {
+		return BSPModel{}, false
+	}
 	return m.Models[index], true
 }
 

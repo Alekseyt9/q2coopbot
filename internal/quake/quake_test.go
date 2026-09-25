@@ -80,6 +80,25 @@ func TestDecodeFullFrameAndTeammate(t *testing.T) {
 		t.Fatalf("decoded snapshot: %+v", s)
 	}
 }
+func TestSnapshotExposesGroundAndMover(t *testing.T) {
+	d := NewDecoder()
+	d.Config[30] = "4"
+	d.Config[39] = "*50"
+	s := d.Snapshot(Frame{Number: 3, PMFlags: 4, Entities: map[int]Entity{9: {Number: 9, Model: 7, Origin: Vec3{0, 0, -190}}}})
+	if !s.OnGround || len(s.Movers) != 1 || s.Movers[0].Model != 50 || s.Movers[0].Origin[2] != -190 {
+		t.Fatalf("mover snapshot: %+v", s)
+	}
+}
+func TestDecodePlayerGroundFlag(t *testing.T) {
+	d := NewDecoder()
+	packet := binary.LittleEndian.AppendUint16(nil, 16)  // PS_M_FLAGS
+	packet = append(packet, 4)                           // PMF_ON_GROUND
+	packet = binary.LittleEndian.AppendUint32(packet, 0) // no changed stats
+	f, err := d.playerstate(&reader{data: packet}, Frame{})
+	if err != nil || f.PMFlags != 4 {
+		t.Fatalf("playerstate flags=%d err=%v", f.PMFlags, err)
+	}
+}
 func TestMapReconnectOpcode(t *testing.T) {
 	d := NewDecoder()
 	_, e := d.Parse([]byte{8})
@@ -107,6 +126,16 @@ func TestRouteUsesReachabilities(t *testing.T) {
 	}
 	if _, ok = n.Route(Vec3{100, 0, 0}, Vec3{0, 0, 0}); ok {
 		t.Fatal("invented route through missing reverse edge")
+	}
+}
+func TestRoutePreservesElevatorReach(t *testing.T) {
+	n := &Navigator{Areas: []Area{{},
+		{Min: Vec3{-100, -10, -60}, Max: Vec3{-1, 10, -20}, Center: Vec3{-50, 0, -40}},
+		{Min: Vec3{0, -10, 80}, Max: Vec3{100, 10, 120}, Center: Vec3{50, 0, 100}},
+	}, Edges: [][]Edge{{}, {{To: 2, Start: Vec3{-1, 0, -40}, End: Vec3{1, 0, 100}, Kind: 11, Model: 50, Rise: 190, Cost: 145}}, nil}}
+	route, ok := n.Route(Vec3{-50, 0, -40}, Vec3{50, 0, 100})
+	if !ok || len(route) != 2 || route[0].ElevatorPhase != "board" || route[1].ElevatorPhase != "exit" || route[0].Model != 50 || route[0].Rise != 190 || route[0].ToArea != 2 {
+		t.Fatalf("elevator route=%+v ok=%t", route, ok)
 	}
 }
 func TestBSPBrushBlocksLineOfFire(t *testing.T) {

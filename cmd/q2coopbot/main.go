@@ -27,6 +27,8 @@ func main() {
 	flag.BoolVar(&cfg.ExitOnReconnect, "test-exit-on-reconnect", false, "test only: leave when server changes map")
 	flag.StringVar(&cfg.TestChangeMap, "test-change-map", "", "test only: switch the server to this map through local RCON")
 	flag.IntVar(&cfg.TestChangeAfter, "test-change-after-frames", 20, "test only: game frames before requesting map change")
+	flag.StringVar(&cfg.TestTeleportMap, "test-teleport-map", "", "test only: map on which to teleport this client once")
+	flag.StringVar(&cfg.TestTeleport, "test-teleport", "", "test only: teleport coordinates x,y,z; server requires cheats 1")
 	flag.StringVar(&cfg.System2Model, "system2-model", "", "optional Ollama strategy model, called asynchronously every 2 seconds")
 	flag.StringVar(&cfg.System1Model, "system1-model", "", "optional Ollama tactical model, called asynchronously every 1 second")
 	flag.Parse()
