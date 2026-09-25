@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"net"
 	"os"
@@ -68,6 +69,9 @@ type Client struct {
 	testLineCross        bool
 	testHoldPosition     bool
 	testGroundEdgeProbe  bool
+	testDoorProbe        bool
+	testDoorPassProbe    bool
+	testDoorPassStarted  bool
 	testLineEntered      bool
 	testLineLeft         bool
 	lastObservedMap      string
@@ -380,10 +384,22 @@ func (c *Client) run(ctx context.Context) error {
 			if c.testGroundEdgeProbe && c.testTeleportSent {
 				c.planner.setTestGroundEdgeGoal()
 			}
+			if c.testDoorProbe && c.testTeleportSent {
+				c.planner.setTestDoorGoal()
+			}
+			if c.testDoorPassProbe && c.testTeleportSent {
+				s := c.planner.World.Snapshot
+				if s.Map == "base2" && s.OnGround && math.Abs(s.Self[0]+64) < 8 && math.Abs(s.Self[1]+800) < 8 {
+					c.testDoorPassStarted = true
+				}
+				if c.testDoorPassStarted {
+					c.planner.setTestDoorPassGoal()
+				}
+			}
 			cmd := c.planner.command(c.previous)
-			if c.testGroundEdgeProbe && c.testTeleportSent && !c.planner.World.Snapshot.OnGround {
+			if (c.testGroundEdgeProbe || c.testDoorProbe || c.testDoorPassProbe) && c.testTeleportSent && !c.planner.World.Snapshot.OnGround {
 				cmd = quake.UserCmd{}
-				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_edge_settling"}
+				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_teleport_settling"}
 			}
 			if c.testHoldPosition {
 				cmd.Forward, cmd.Side, cmd.Up = 0, 0, 0
@@ -427,6 +443,7 @@ func (c *Client) run(ctx context.Context) error {
 					OnGround         bool            `json:"on_ground"`
 					Goal             string          `json:"goal"`
 					Navigation       string          `json:"navigation"`
+					GeometryStatus   string          `json:"geometry_status"`
 					Elevator         string          `json:"elevator,omitempty"`
 					Movers           []quake.Mover   `json:"movers,omitempty"`
 					Enemies          []quake.Object  `json:"enemies,omitempty"`
@@ -440,7 +457,8 @@ func (c *Client) run(ctx context.Context) error {
 					Self: c.planner.World.Snapshot.Self, Teammate: c.planner.World.Snapshot.Teammate,
 					Health: c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround,
 					Goal: c.planner.World.Goal, Navigation: c.planner.World.Navigation,
-					Elevator: c.planner.World.Elevator, Movers: c.planner.World.Snapshot.Movers,
+					GeometryStatus: c.planner.World.GeometryStatus,
+					Elevator:       c.planner.World.Elevator, Movers: c.planner.World.Snapshot.Movers,
 					Enemies:     c.planner.World.Snapshot.Enemies,
 					Arbitration: c.planner.World.Command,
 					Command:     cmd,

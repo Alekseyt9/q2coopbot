@@ -18,6 +18,7 @@ type World struct {
 	Areas          int               `json:"areas"`
 	Reachabilities int               `json:"reachabilities"`
 	Navigation     string            `json:"navigation"`
+	GeometryStatus string            `json:"geometry_status"`
 	Goal           string            `json:"goal"`
 	Strategy       *StrategyDecision `json:"strategy,omitempty"`
 	Tactic         *TacticalDecision `json:"tactic,omitempty"`
@@ -28,29 +29,31 @@ type World struct {
 	Updated        time.Time         `json:"updated"`
 }
 type Planner struct {
-	Nav          *quake.Navigator
-	AASDir       string
-	GameClock    bool
-	TestNoAAS    bool
-	World        World
-	lastSelf     quake.Vec3
-	lastProgress time.Time
-	routeAt      time.Time
-	target       quake.Vec3
-	route        []quake.Waypoint
-	routeIndex   int
-	routeKnown   bool
-	routeOK      bool
-	lastObserved quake.Vec3
-	observed     bool
-	detourUntil  time.Time
-	detourSide   int16
-	failures     int
-	goalPoint    quake.Vec3
-	hasGoal      bool
-	decision     *StrategyDecision
-	tactic       *TacticalDecision
-	elevator     *elevatorRide
+	Nav            *quake.Navigator
+	AASDir         string
+	GameClock      bool
+	TestNoAAS      bool
+	TestNoBSP      bool
+	TestPartialBSP bool
+	World          World
+	lastSelf       quake.Vec3
+	lastProgress   time.Time
+	routeAt        time.Time
+	target         quake.Vec3
+	route          []quake.Waypoint
+	routeIndex     int
+	routeKnown     bool
+	routeOK        bool
+	lastObserved   quake.Vec3
+	observed       bool
+	detourUntil    time.Time
+	detourSide     int16
+	failures       int
+	goalPoint      quake.Vec3
+	hasGoal        bool
+	decision       *StrategyDecision
+	tactic         *TacticalDecision
+	elevator       *elevatorRide
 }
 
 // setTestGroundEdgeGoal bypasses route selection only for the live edge fixture.
@@ -64,6 +67,33 @@ func (p *Planner) setTestGroundEdgeGoal() {
 	p.World.Navigation = "direct_clear"
 	p.World.Route = nil
 	p.goalPoint = quake.Vec3{s.Self[0], s.Self[1] - 200, s.Self[2]}
+	p.hasGoal = true
+	p.detourUntil = time.Time{}
+}
+
+// setTestDoorGoal exercises the normal command guard with a direct door approach.
+func (p *Planner) setTestDoorGoal() {
+	s := p.World.Snapshot
+	if p.World.Map != "base2" || !s.OnGround || math.Abs(s.Self[0]-96) > 8 || math.Abs(s.Self[1]+300) > 8 {
+		return
+	}
+	p.World.Goal = "follow_teammate"
+	p.World.Navigation = "direct_clear"
+	p.World.Route = nil
+	p.goalPoint = quake.Vec3{96, -160, s.Self[2]}
+	p.hasGoal = true
+	p.detourUntil = time.Time{}
+}
+
+func (p *Planner) setTestDoorPassGoal() {
+	s := p.World.Snapshot
+	if p.World.Map != "base2" || !s.OnGround {
+		return
+	}
+	p.World.Goal = "follow_teammate"
+	p.World.Navigation = "direct_clear"
+	p.World.Route = nil
+	p.goalPoint = quake.Vec3{112, -800, s.Self[2]}
 	p.hasGoal = true
 	p.detourUntil = time.Time{}
 }
@@ -88,7 +118,7 @@ func (p *Planner) setMap(name, root string) {
 	if p.World.Map == name {
 		return
 	}
-	p.World = World{Map: name, Navigation: "aas_missing"}
+	p.World = World{Map: name, Navigation: "aas_missing", GeometryStatus: "unavailable"}
 	p.Nav = nil
 	p.failures = 0
 	p.decision = nil
@@ -104,11 +134,23 @@ func (p *Planner) setMap(name, root string) {
 	if name == "" {
 		return
 	}
-	if info, e := quake.LoadMap(root, name); e == nil {
-		p.World.Geometry = &info
-		log.Printf("map=%s BSP entities=%d brushes=%d", name, len(info.Entities), info.Brushes)
+	if !p.TestNoBSP {
+		if info, e := quake.LoadMap(root, name); e == nil {
+			if p.TestPartialBSP {
+				info.Models = nil
+			}
+			p.World.Geometry = &info
+			if info.MovementComplete() {
+				p.World.GeometryStatus = "ready"
+			} else {
+				p.World.GeometryStatus = "incomplete"
+			}
+			log.Printf("map=%s BSP status=%s entities=%d brushes=%d", name, p.World.GeometryStatus, len(info.Entities), info.Brushes)
+		} else {
+			log.Printf("map=%s BSP unavailable: %v", name, e)
+		}
 	} else {
-		log.Printf("map=%s BSP unavailable: %v", name, e)
+		log.Printf("map=%s BSP disabled by test fixture", name)
 	}
 	if p.TestNoAAS {
 		log.Printf("map=%s AAS disabled by test fixture", name)
@@ -155,7 +197,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			from, to := s.Self, s.Enemies[i].Origin
 			from[2] += 22
 			to[2] += 22
-			clear := p.World.Geometry.ClearShot(from, to)
+			clear := p.World.Geometry.ClearShot(from, to) && !p.World.Geometry.DoorShotBlocked(s.Movers, from, to)
 			s.Enemies[i].ClearShot = &clear
 		}
 	}
@@ -310,6 +352,11 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		p.World.Command.LimitReason = "dead"
 		return cmd
 	}
+	if p.World.GeometryStatus == "unavailable" || p.World.GeometryStatus == "incomplete" {
+		p.World.Command.LimitReason = "bsp_" + p.World.GeometryStatus
+		p.World.Command.MoveLimitReason = p.World.Command.LimitReason
+		return cmd
+	}
 	if p.elevator != nil && p.routeIndex < len(p.route) && p.route[p.routeIndex].ElevatorPhase == "board" {
 		cmd = p.elevatorCommand(cmd, p.route[p.routeIndex])
 		p.World.Command = CommandDecision{MoveSource: "elevator", AimSource: "elevator", Skill: "elevator", LimitReason: p.World.Elevator}
@@ -395,6 +442,18 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 	if s.OnGround && cmd.Up == 0 {
 		if hazard := p.World.Geometry.GroundMoveHazard(p.Nav, s.Self, dx, dy); hazard != "" {
 			p.World.Command.MoveSource = "none"
+			p.World.Command.MoveLimitReason = hazard
+			if p.World.Command.LimitReason == "" {
+				p.World.Command.LimitReason = hazard
+			}
+			return cmd
+		}
+	}
+	if s.OnGround {
+		if hazard := p.World.Geometry.DoorMoveHazard(s.Movers, s.Self, dx, dy); hazard != "" {
+			cmd.Up = 0
+			p.World.Command.MoveSource = "none"
+			p.World.Command.MoveLimitReason = hazard
 			if p.World.Command.LimitReason == "" {
 				p.World.Command.LimitReason = hazard
 			}

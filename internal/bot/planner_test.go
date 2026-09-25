@@ -79,6 +79,36 @@ func TestPlannerKeepsFriendlyFireReasonWithoutMovementGoal(t *testing.T) {
 	}
 }
 
+func TestPlannerDoorGuardAlsoStopsStuckJump(t *testing.T) {
+	goal := quake.Vec3{100, 0, 24}
+	s := quake.Snapshot{Map: "test", Frame: 1, Self: quake.Vec3{0, 0, 24}, Teammate: &goal,
+		Health: 100, OnGround: true, Movers: []quake.Mover{{Model: 1}}}
+	m := &quake.MapInfo{Models: []quake.BSPModel{{}, {Min: quake.Vec3{40, -40, -20}, Max: quake.Vec3{60, 40, 80}}},
+		Entities: []quake.MapEntity{{Class: "func_door", Model: 1}}}
+	now := time.Now()
+	p := &Planner{World: World{Map: "test", Geometry: m, Snapshot: s, Navigation: "ready", Goal: "follow_teammate", Updated: now},
+		hasGoal: true, goalPoint: goal, detourUntil: now.Add(time.Second), detourSide: 200}
+	cmd := p.commandAt(quake.UserCmd{}, now)
+	if cmd.Forward != 0 || cmd.Side != 0 || cmd.Up != 0 || p.World.Command.MoveLimitReason != "dynamic_door_blocked" {
+		t.Fatalf("stuck jump crossed door: cmd=%+v decision=%+v", cmd, p.World.Command)
+	}
+}
+
+func TestPlannerStopsWithUnavailableOrIncompleteBSP(t *testing.T) {
+	goal := quake.Vec3{100, 0, 24}
+	s := quake.Snapshot{Map: "test", Frame: 1, Self: quake.Vec3{0, 0, 24}, Teammate: &goal, Health: 100, OnGround: true}
+	for _, status := range []string{"unavailable", "incomplete"} {
+		t.Run(status, func(t *testing.T) {
+			p := &Planner{World: World{Map: "test", Navigation: "ready", GeometryStatus: status, Snapshot: s, Updated: time.Now()},
+				hasGoal: true, goalPoint: goal}
+			cmd := p.command(quake.UserCmd{})
+			if cmd.Forward != 0 || cmd.Side != 0 || cmd.Up != 0 || cmd.Buttons != 0 || p.World.Command.MoveLimitReason != "bsp_"+status {
+				t.Fatalf("unsafe command with BSP %s: cmd=%+v decision=%+v", status, cmd, p.World.Command)
+			}
+		})
+	}
+}
+
 func TestTeammateBlocksShot(t *testing.T) {
 	from, target := quake.Vec3{0, 0, 22}, quake.Vec3{200, 0, 22}
 	for _, tc := range []struct {

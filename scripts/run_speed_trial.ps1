@@ -20,6 +20,9 @@ param(
     [switch]$FriendlyFireTrial,
     [switch]$GroundEdgeTrial,
     [switch]$NoAASTrial,
+    [switch]$DoorTrial,
+    [switch]$DoorPassTrial,
+    [string]$BSPFailureTrial = '',
     [string]$OutputRoot = ''
 )
 
@@ -52,6 +55,21 @@ if ($GroundEdgeTrial -and ($Map -ne 'base1' -or $TransitionMap -or -not $Synchro
 if ($NoAASTrial -and ($Map -ne 'base1' -or $TransitionMap -or -not $SynchronizedStart -or
     $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $ObservationGapTrial)) {
     throw '-NoAASTrial requires base1, synchronized start, and no other gameplay trial except -GroundEdgeTrial.'
+}
+if ($DoorTrial -and ($Map -ne 'base1' -or $TransitionMap -ne 'base2' -or -not $SynchronizedStart -or
+    $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $ObservationGapTrial -or $GroundEdgeTrial -or $NoAASTrial)) {
+    throw '-DoorTrial requires synchronized base1 to base2 transition and no other gameplay trial.'
+}
+if ($DoorPassTrial -and ($Map -ne 'base1' -or $TransitionMap -ne 'base2' -or -not $SynchronizedStart -or
+    $GameFrames -lt 80 -or $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or
+    $ObservationGapTrial -or $GroundEdgeTrial -or $NoAASTrial -or $DoorTrial)) {
+    throw '-DoorPassTrial requires at least 80 frames, synchronized base1 to base2 transition and no other gameplay trial.'
+}
+if ($BSPFailureTrial -and ($BSPFailureTrial -notin @('unavailable', 'incomplete') -or
+    $Map -ne 'base1' -or $TransitionMap -or -not $SynchronizedStart -or
+    $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $ObservationGapTrial -or
+    $GroundEdgeTrial -or $NoAASTrial -or $DoorTrial -or $DoorPassTrial)) {
+    throw '-BSPFailureTrial requires unavailable or incomplete, base1, synchronized start, and no other gameplay trial.'
 }
 if ($AASDir -and -not (Test-Path -LiteralPath $AASDir -PathType Container)) { throw "AAS directory is missing: $AASDir" }
 if (-not $ServerExe) { $ServerExe = Join-Path $RuntimeRoot 'q2ded.exe' }
@@ -105,7 +123,7 @@ foreach ($scale in $Timescales) {
     $rconPassword = if ($TransitionMap) { [guid]::NewGuid().ToString('N') } else { '' }
     if ($TransitionMap) { $args = "+set rcon_password $rconPassword $args" }
     if ($UnlimitedLoopbackRate) { $args = "+set sv_test_unlimited_loopback 1 $args" }
-    if ($ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $GroundEdgeTrial) { $args = "+set cheats 1 $args" }
+    if ($ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $GroundEdgeTrial -or $DoorTrial -or $DoorPassTrial) { $args = "+set cheats 1 $args" }
     if ($SynchronizedStart) { $args = "+set sv_test_trace_client GoCoopMate +set sv_test_start_client GoCoopMate $args" }
     $server = Start-Process -FilePath $ServerExe -ArgumentList $args -WorkingDirectory $RuntimeRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
     $human = $null
@@ -135,6 +153,14 @@ foreach ($scale in $Timescales) {
             $humanConfig.output.trace_jsonl = $humanTracePath
             $humanConfig.test.teleport_map = 'base2'
             $humanConfig.test.teleport = '10,1408,85'
+        }
+        if ($DoorTrial) {
+            $humanConfig.test.teleport_map = 'base2'
+            $humanConfig.test.teleport = '96,-180,24'
+        }
+        if ($DoorPassTrial) {
+            $humanConfig.test.teleport_map = 'base2'
+            $humanConfig.test.teleport = '160,-800,24'
         }
         if ($CombatMoveTrial -or $FriendlyFireTrial) {
             $humanConfig.test.spawn_map = 'base1'
@@ -177,6 +203,18 @@ foreach ($scale in $Timescales) {
             $botConfig.test.teleport = '-88,40,24'
             $botConfig.test.ground_edge_probe = $true
         }
+        if ($DoorTrial) {
+            $botConfig.test.teleport_map = 'base2'
+            $botConfig.test.teleport = '96,-300,24'
+            $botConfig.test.door_probe = $true
+        }
+        if ($DoorPassTrial) {
+            $botConfig.test.teleport_map = 'base2'
+            $botConfig.test.teleport = '-64,-800,24'
+            $botConfig.test.door_pass_probe = $true
+        }
+        if ($BSPFailureTrial -eq 'unavailable') { $botConfig.test.no_bsp = $true }
+        if ($BSPFailureTrial -eq 'incomplete') { $botConfig.test.partial_bsp = $true }
         if ($NoAASTrial) { $botConfig.test.no_aas = $true }
         if ($FriendlyFireTrial) { $botConfig.test.hold_position = $true }
         if ($ObservationGapTrial) {
@@ -228,6 +266,22 @@ foreach ($scale in $Timescales) {
         $noAASGroundBlocks = 0
         $noAASOrigin = $null
         $noAASMaxProgress = 0.0
+        $doorMoverObserved = $false
+        $doorBlockedFrames = 0
+        $doorShotBlockedFrames = 0
+        $doorProbeFrames = 0
+        $doorMaxY = [double]::NegativeInfinity
+        $doorPassBlockedFrames = 0
+        $doorPassOpenMoveFrames = 0
+        $doorPassMinZ = [double]::PositiveInfinity
+        $doorPassMaxZ = [double]::NegativeInfinity
+        $doorPassMaxX = [double]::NegativeInfinity
+        $doorPassCrossedGrounded = $false
+        $bspStatusFrames = 0
+        $bspNeutralFrames = 0
+        $bspMotionFrames = 0
+        $bspOrigin = $null
+        $bspMaxDrift = 0.0
         foreach ($line in Get-Content -LiteralPath $tracePath) {
             $entry = $line | ConvertFrom-Json
             $sent["$($entry.spawncount):$($entry.client_sequence)"] = $entry.sent_command
@@ -294,6 +348,44 @@ foreach ($scale in $Timescales) {
                     $noAASMaxProgress = [math]::Max($noAASMaxProgress, $progress)
                 }
             }
+            if ($DoorTrial -and $entry.map -eq 'base2' -and $entry.on_ground -and
+                [math]::Abs($entry.self[0] - 96) -lt 8 -and [math]::Abs($entry.self[1] + 300) -lt 8) {
+                $doorProbeFrames++
+                $doorMaxY = [math]::Max($doorMaxY, [double]$entry.self[1])
+                if (@($entry.movers | Where-Object { $_.model -eq 53 }).Count -gt 0) { $doorMoverObserved = $true }
+                if (@($entry.enemies | Where-Object {
+                    $_.class -eq 'monster_infantry' -and [math]::Abs($_.origin[0] - 96) -lt 8 -and
+                    [math]::Abs($_.origin[1] + 96) -lt 8 -and $_.clear_shot -eq $false
+                }).Count -gt 0) { $doorShotBlockedFrames++ }
+                if ($entry.arbitration.move_limit_reason -eq 'dynamic_door_blocked' -and
+                    $entry.sent_command.Forward -eq 0 -and $entry.sent_command.Side -eq 0 -and $entry.sent_command.Up -eq 0) {
+                    $doorBlockedFrames++
+                }
+            }
+            if ($DoorPassTrial -and $entry.map -eq 'base2' -and [math]::Abs($entry.self[1] + 800) -lt 64) {
+                $doorPassMaxX = [math]::Max($doorPassMaxX, [double]$entry.self[0])
+                if ($entry.self[0] -gt 96 -and $entry.on_ground) { $doorPassCrossedGrounded = $true }
+                $doorMover = @($entry.movers | Where-Object { $_.model -eq 27 } | Select-Object -First 1)
+                if ($doorMover.Count -gt 0) {
+                    $z = [double]$doorMover[0].origin[2]
+                    $doorPassMinZ = [math]::Min($doorPassMinZ, $z)
+                    $doorPassMaxZ = [math]::Max($doorPassMaxZ, $z)
+                    if ($z -gt 72 -and ($entry.sent_command.Forward -ne 0 -or $entry.sent_command.Side -ne 0)) { $doorPassOpenMoveFrames++ }
+                }
+                if ($entry.arbitration.move_limit_reason -eq 'dynamic_door_blocked' -and
+                    $entry.sent_command.Forward -eq 0 -and $entry.sent_command.Side -eq 0) { $doorPassBlockedFrames++ }
+            }
+            if ($BSPFailureTrial -and $entry.map -eq 'base1') {
+                if ($entry.geometry_status -eq $BSPFailureTrial) { $bspStatusFrames++ }
+                if ($entry.arbitration.limit_reason -eq "bsp_$BSPFailureTrial" -and
+                    $entry.sent_command.Forward -eq 0 -and $entry.sent_command.Side -eq 0 -and
+                    $entry.sent_command.Up -eq 0 -and $entry.sent_command.Buttons -eq 0) { $bspNeutralFrames++ }
+                if ($entry.sent_command.Forward -ne 0 -or $entry.sent_command.Side -ne 0 -or
+                    $entry.sent_command.Up -ne 0 -or $entry.sent_command.Buttons -ne 0) { $bspMotionFrames++ }
+                if ($null -eq $bspOrigin) { $bspOrigin = @([double]$entry.self[0], [double]$entry.self[1]) }
+                $drift = [math]::Sqrt([math]::Pow($entry.self[0] - $bspOrigin[0], 2) + [math]::Pow($entry.self[1] - $bspOrigin[1], 2))
+                $bspMaxDrift = [math]::Max($bspMaxDrift, $drift)
+            }
         }
         $humanAtTop = $false
         if ($ElevatorTrial -and (Test-Path -LiteralPath $humanTracePath)) {
@@ -350,6 +442,7 @@ foreach ($scale in $Timescales) {
             game_fps = [double]::Parse($fields.game_fps, [cultureinfo]::InvariantCulture)
             wall_seconds = [double]::Parse($fields.wall_s, [cultureinfo]::InvariantCulture)
             decode_errors = [int]$fields.decode_errors; navigation = $world.navigation
+            geometry_status = $world.geometry_status
             aas_loaded = [bool]$world.aas_loaded; aas_areas = [int]$world.areas; aas_reachabilities = [int]$world.reachabilities
             teammate_seen = $teammateSeenInTrace
             teammate_seen_after_transition = $teammateSeenAfterTransition
@@ -374,6 +467,19 @@ foreach ($scale in $Timescales) {
             no_aas_trial = [bool]$NoAASTrial; no_aas_direct_frames = $noAASDirectFrames
             no_aas_move_frames = $noAASMoveFrames; no_aas_ground_blocks = $noAASGroundBlocks
             no_aas_max_progress = $noAASMaxProgress
+            door_trial = [bool]$DoorTrial; door_mover_observed = $doorMoverObserved
+            door_probe_frames = $doorProbeFrames; door_blocked_frames = $doorBlockedFrames
+            door_shot_blocked_frames = $doorShotBlockedFrames
+            door_max_y = $(if ($DoorTrial -and $doorMaxY -ne [double]::NegativeInfinity) { $doorMaxY } else { $null })
+            door_pass_trial = [bool]$DoorPassTrial; door_pass_blocked_frames = $doorPassBlockedFrames
+            door_pass_open_move_frames = $doorPassOpenMoveFrames
+            door_pass_min_z = $(if ($DoorPassTrial -and $doorPassMinZ -ne [double]::PositiveInfinity) { $doorPassMinZ } else { $null })
+            door_pass_max_z = $(if ($DoorPassTrial -and $doorPassMaxZ -ne [double]::NegativeInfinity) { $doorPassMaxZ } else { $null })
+            door_pass_max_x = $(if ($DoorPassTrial -and $doorPassMaxX -ne [double]::NegativeInfinity) { $doorPassMaxX } else { $null })
+            door_pass_crossed_grounded = $doorPassCrossedGrounded
+            bsp_failure_trial = $BSPFailureTrial; bsp_status_frames = $bspStatusFrames
+            bsp_neutral_frames = $bspNeutralFrames; bsp_motion_frames = $bspMotionFrames
+            bsp_max_xy_drift = $bspMaxDrift
             sent_commands = $sent.Count; applied_new_commands = $newCommands.Count
             matched_applied_commands = $matchedSequences.Count; trace_jsonl = $tracePath
             bot_config_json = $botConfigPath; human_config_json = $humanConfigPath
@@ -441,5 +547,25 @@ if ($NoAASTrial -and @($results | Where-Object {
     })
 }).Count -gt 0) {
     throw "No-AAS trial did not show the expected direct movement or safe edge stop: $summary"
+}
+if ($DoorTrial -and @($results | Where-Object {
+    -not $_.door_mover_observed -or $_.door_probe_frames -lt 3 -or $_.door_blocked_frames -lt 3 -or
+    $_.door_shot_blocked_frames -lt 3 -or $_.door_max_y -gt -268
+}).Count -gt 0) {
+    throw "Door trial did not observe and block the closed door: $summary"
+}
+if ($DoorPassTrial -and @($results | Where-Object {
+    $_.door_pass_blocked_frames -lt 1 -or $_.door_pass_open_move_frames -lt 1 -or
+    $_.door_pass_min_z -gt 8 -or $_.door_pass_max_z -lt 72 -or
+    $_.door_pass_max_x -lt 96 -or -not $_.door_pass_crossed_grounded
+}).Count -gt 0) {
+    throw "Door pass trial did not show trigger, opening, and grounded crossing: $summary"
+}
+if ($BSPFailureTrial -and @($results | Where-Object {
+    $_.geometry_status -ne $BSPFailureTrial -or -not $_.aas_loaded -or $_.aas_reachabilities -le 0 -or
+    $_.bsp_status_frames -lt $GameFrames -or $_.bsp_neutral_frames -lt $GameFrames -or
+    $_.bsp_motion_frames -ne 0 -or $_.bsp_max_xy_drift -ge 2
+}).Count -gt 0) {
+    throw "BSP failure trial did not hold a neutral command with AAS present: $summary"
 }
 Write-Output "Saved $summary"

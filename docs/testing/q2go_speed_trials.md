@@ -82,3 +82,28 @@ cmake --build F:\src\quake2\yquake2\build\codex-speed-test --target q2ded game
 ```
 
 В первом прогоне на обеих скоростях `aas_loaded=false`, бот получил близкую прямую цель, выдал три кадра движения `direct_clear` и прошёл 55,15 единицы до режима сопровождения рядом с напарником. Во втором без AAS у края все 58 наземных кадров остановлены `no_ground_support`; высота осталась 24,125. В каждом из четырёх эпизодов сервер применил 61/61 команду без пропусков кадров и ошибок декодирования. Артефакты: `workspace/artifacts/no-aas-direct-final-20260925/summary.json` и `workspace/artifacts/no-aas-edge-final-20260925/summary.json`. Без AAS бот всё ещё не строит дальний маршрут: резервный режим допустим только для близкой прямой цели.
+
+Проверка видимой поступательной двери `base2`:
+
+```powershell
+./scripts/run_speed_trial.ps1 -TransitionMap base2 -TransitionAfterFrames 10 -GameFrames 60 -Timescales 1,2 -SynchronizedStart -UnlimitedLoopbackRate -DoorTrial
+```
+
+Сценарий телепортирует бота перед дверью BSP-модели `*53`, человека — за ней, и задаёт прямую тестовую цель через проём. Код формирования команды остаётся штатным. На 1× и 2× в 57/57 наземных кадрах наблюдался mover двери, движение блокировалось `move_limit_reason=dynamic_door_blocked`, а стоящая за дверью цель отмечалась `clear_shot=false`. Бот сохранил позицию перед дверью; сервер принял 72/72 команды, без потерь кадров и ошибок декодирования. Артефакт: `workspace/artifacts/door-guard-final-20260925/summary.json`. Сценарий не открывает дверь и не проверяет проход через неё; вращающиеся и исчезнувшие из снимка двери остаются непроверенными.
+
+Дверь `*53` имеет `targetname=t6` и открывается извне. Для живой проверки приближения выбрана другая поступательная дверь `*27` на `base2`, у которой игровой код создаёт триггер касания:
+
+```powershell
+./scripts/run_speed_trial.ps1 -TransitionMap base2 -TransitionAfterFrames 10 -GameFrames 120 -Timescales 1,2 -SynchronizedStart -UnlimitedLoopbackRate -DoorPassTrial
+```
+
+Тестовые телепорты ставят бота в `(-64,-800,24)` и неподвижного человека в `(160,-800,24)`; бот подаёт обычную команду движения к точке за дверью. На 1×/2× он получил по пять кадров `dynamic_door_blocked`, дверь поднялась от `z=0` до `z=122`, после чего бот прошёл до `x=119.125` и остался на полу. В каждом прогоне 132/132 команды приняты `ClientThink`, пропусков кадров и ошибок декодирования нет. Артефакт: `workspace/artifacts/door-pass-final-20260925/summary.json`. Отдельно повторены закрытая дверь `*53` и край `base1` после исправления горизонта предохранителя: `workspace/artifacts/door-closed-regression-20260925/summary.json` и `workspace/artifacts/door-edge-regression-20260925/summary.json`.
+
+Проверка отказа BSP при исправном AAS:
+
+```powershell
+./scripts/run_speed_trial.ps1 -GameFrames 60 -Timescales 1,2 -SynchronizedStart -UnlimitedLoopbackRate -BSPFailureTrial unavailable
+./scripts/run_speed_trial.ps1 -GameFrames 60 -Timescales 1,2 -SynchronizedStart -UnlimitedLoopbackRate -BSPFailureTrial incomplete
+```
+
+`unavailable` отключает загрузку BSP только в тестовом Go-клиенте; `incomplete` удаляет из его загруженной карты модели кистевых объектов. Карта сервера и AAS остаются прежними. В обоих режимах при 1× и 2×: `aas_loaded=true`, 5586 переходов, `navigation=ready`, 61/61 нейтральных команд с причиной `bsp_unavailable` или `bsp_incomplete`, активных команд нет, смещение XY равно 0. Сервер применил 61/61 команд без пропусков и ошибок декодирования. Артефакты: `workspace/artifacts/bsp-unavailable-final-20260925/summary.json` и `workspace/artifacts/bsp-incomplete-final-20260925/summary.json`. Обычный `base1` и проход через дверь `base2` повторно прошли на 1× со статусом `ready`: 31/31 и 92/92 команд применены, дверь пройдена; артефакты `workspace/artifacts/bsp-status-base1-regression-20260925/summary.json` и `workspace/artifacts/bsp-status-door-regression-20260925/summary.json`.

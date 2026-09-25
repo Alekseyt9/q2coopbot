@@ -47,8 +47,8 @@ Copy-Item config.example.json config.local.json
 Для сборки отдельной утилиты AAS с предварительным расчётом переходов:
 
 ```powershell
-cmake -S . -B workspace/build/aas -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build workspace/build/aas --target bspc
+cmake -S . -B workspace/build/aas-current -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build workspace/build/aas-current --target bspc
 ./scripts/compile_aas.ps1 -BspPath 'F:\path\to\base2.bsp' -OutputRoot workspace/artifacts/aas-base2
 ./scripts/prepare_runtime.ps1 -AASRoot workspace/artifacts/aas-base2
 ```

@@ -51,6 +51,10 @@ type ConfigFile struct {
 		HoldPosition         bool   `json:"hold_position"`
 		GroundEdgeProbe      bool   `json:"ground_edge_probe"`
 		NoAAS                bool   `json:"no_aas"`
+		DoorProbe            bool   `json:"door_probe"`
+		DoorPassProbe        bool   `json:"door_pass_probe"`
+		NoBSP                bool   `json:"no_bsp"`
+		PartialBSP           bool   `json:"partial_bsp"`
 	} `json:"test"`
 }
 
@@ -117,5 +121,8 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestLineCross, cfg.TestHoldPosition = file.Test.LineCross, file.Test.HoldPosition
 	cfg.TestGroundEdgeProbe = file.Test.GroundEdgeProbe
 	cfg.TestNoAAS = file.Test.NoAAS
+	cfg.TestDoorProbe = file.Test.DoorProbe
+	cfg.TestDoorPassProbe = file.Test.DoorPassProbe
+	cfg.TestNoBSP, cfg.TestPartialBSP = file.Test.NoBSP, file.Test.PartialBSP
 	return cfg, nil
 }

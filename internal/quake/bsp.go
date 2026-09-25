@@ -15,6 +15,7 @@ import (
 
 type MapEntity struct {
 	Class      string `json:"class"`
+	Model      int    `json:"model,omitempty"`
 	Origin     Vec3   `json:"origin"`
 	Target     string `json:"target,omitempty"`
 	TargetName string `json:"target_name,omitempty"`
@@ -51,6 +52,26 @@ func (m *MapInfo) ClearShot(from, to Vec3) bool {
 
 func (m *MapInfo) HasCollision() bool { return m != nil && m.collision != nil }
 
+// MovementComplete reports whether the static collision and brush-model
+// metadata needed by the movement guard are both available.
+func (m *MapInfo) MovementComplete() bool {
+	if !m.HasCollision() || len(m.Models) == 0 {
+		return false
+	}
+	if len(m.collision.planes) == 0 || len(m.collision.sides) == 0 ||
+		len(m.collision.brushes) == 0 || len(m.collision.worldBrushes) == 0 {
+		return false
+	}
+	for _, entity := range m.Entities {
+		if entity.Class == "func_door" || entity.Class == "func_plat" {
+			if entity.Model <= 0 || entity.Model >= len(m.Models) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // PlayerMoveClear tests a 32x32 standing player hull against static world
 // brushes. Dynamic doors and platforms are deliberately outside this BSP map.
 func (m *MapInfo) PlayerMoveClear(from, to Vec3) bool {
@@ -80,7 +101,7 @@ func (m *MapInfo) GroundMoveHazard(nav *Navigator, origin Vec3, dx, dy float64) 
 	if distance < 0.001 {
 		return ""
 	}
-	step := math.Min(distance, 40)
+	step := 40.0
 	next := Vec3{origin[0] + dx/distance*step, origin[1] + dy/distance*step, origin[2]}
 	if !m.PlayerMoveClear(origin, next) {
 		return "static_hull_blocked"
@@ -89,6 +110,107 @@ func (m *MapInfo) GroundMoveHazard(nav *Navigator, origin Vec3, dx, dy float64) 
 		return "no_ground_support"
 	}
 	return ""
+}
+
+// DoorMoveHazard checks observed translating BSP doors. Their brushes are not
+// part of the static world collision set; an unseen or rotating door cannot be
+// located reliably from the current snapshot.
+func (m *MapInfo) DoorMoveHazard(movers []Mover, origin Vec3, dx, dy float64) string {
+	if m == nil {
+		return ""
+	}
+	distance := math.Hypot(dx, dy)
+	if distance < 0.001 {
+		return ""
+	}
+	step := 40.0
+	next := Vec3{origin[0] + dx/distance*step, origin[1] + dy/distance*step, origin[2]}
+	for _, mover := range movers {
+		model, ok := m.Model(mover.Model)
+		if !ok || !m.translatingDoor(mover.Model) {
+			continue
+		}
+		min, max := Vec3{}, Vec3{}
+		for axis := 0; axis < 3; axis++ {
+			min[axis] = model.Min[axis] + mover.Origin[axis]
+			max[axis] = model.Max[axis] + mover.Origin[axis]
+		}
+		playerMin, playerMax := Vec3{-16, -16, -24}, Vec3{16, 16, 32}
+		// A closing door can overlap the player. Let the server resolve movement
+		// out of that overlap instead of pinning the player in place.
+		if pointInsideExpandedAABB(origin, min, max, playerMin, playerMax) {
+			continue
+		}
+		if sweptBoxAABB(origin, next, min, max, playerMin, playerMax) {
+			return "dynamic_door_blocked"
+		}
+	}
+	return ""
+}
+
+func pointInsideExpandedAABB(point, min, max, hullMin, hullMax Vec3) bool {
+	for axis := 0; axis < 3; axis++ {
+		if point[axis] < min[axis]-hullMax[axis] || point[axis] > max[axis]-hullMin[axis] {
+			return false
+		}
+	}
+	return true
+}
+
+// DoorShotBlocked keeps the static BSP line-of-fire test from treating an
+// observed closed brush door as empty space.
+func (m *MapInfo) DoorShotBlocked(movers []Mover, from, to Vec3) bool {
+	if m == nil {
+		return false
+	}
+	for _, mover := range movers {
+		model, ok := m.Model(mover.Model)
+		if !ok || !m.translatingDoor(mover.Model) {
+			continue
+		}
+		min, max := Vec3{}, Vec3{}
+		for axis := 0; axis < 3; axis++ {
+			min[axis] = model.Min[axis] + mover.Origin[axis]
+			max[axis] = model.Max[axis] + mover.Origin[axis]
+		}
+		if sweptBoxAABB(from, to, min, max, Vec3{}, Vec3{}) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *MapInfo) translatingDoor(model int) bool {
+	for _, entity := range m.Entities {
+		if entity.Model == model && entity.Class == "func_door" {
+			return true
+		}
+	}
+	return false
+}
+
+func sweptBoxAABB(from, to, min, max, hullMin, hullMax Vec3) bool {
+	enter, leave := 0.0, 1.0
+	for axis := 0; axis < 3; axis++ {
+		lo, hi := min[axis]-hullMax[axis], max[axis]-hullMin[axis]
+		delta := to[axis] - from[axis]
+		if math.Abs(delta) < 0.001 {
+			if from[axis] < lo || from[axis] > hi {
+				return false
+			}
+			continue
+		}
+		a, b := (lo-from[axis])/delta, (hi-from[axis])/delta
+		if a > b {
+			a, b = b, a
+		}
+		enter = math.Max(enter, a)
+		leave = math.Min(leave, b)
+		if enter > leave {
+			return false
+		}
+	}
+	return enter <= 1 && leave >= 0
 }
 
 type bspPlane struct {
@@ -314,6 +436,9 @@ func parseMapEntities(text string) []MapEntity {
 				class := props["classname"]
 				if class != "" {
 					e := MapEntity{Class: class, Target: props["target"], TargetName: props["targetname"], Map: props["map"]}
+					if strings.HasPrefix(props["model"], "*") {
+						e.Model, _ = strconv.Atoi(strings.TrimPrefix(props["model"], "*"))
+					}
 					values := strings.Fields(props["origin"])
 					if len(values) == 3 {
 						for i, v := range values {

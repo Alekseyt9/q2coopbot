@@ -37,6 +37,9 @@ func TestPlayerMoveClearAndGroundDrop(t *testing.T) {
 	if got := m.GroundMoveHazard(nil, Vec3{90, 0, 24}, 40, 0); got != "no_ground_support" {
 		t.Fatalf("edge hazard=%q", got)
 	}
+	if got := m.GroundMoveHazard(nil, Vec3{90, 0, 24}, 1, 0); got != "no_ground_support" {
+		t.Fatalf("full-speed detour edge hazard=%q", got)
+	}
 	n := &Navigator{Areas: []Area{{}, {Min: Vec3{110, -20, 0}, Max: Vec3{140, 20, 40}, Flags: 1}}}
 	if got := m.GroundMoveHazard(n, Vec3{90, 0, 24}, 40, 0); got != "" {
 		t.Fatalf("AAS grounded support was ignored: %q", got)
@@ -50,5 +53,63 @@ func TestGroundedNearDoesNotTrustDistantRouteFallback(t *testing.T) {
 	}
 	if n.GroundedNear(Vec3{30, 10, 24}) {
 		t.Fatal("distant grounded area was used as support")
+	}
+}
+
+func TestDoorMoveHazardUsesObservedTranslatingDoor(t *testing.T) {
+	m := &MapInfo{
+		Models:   []BSPModel{{}, {Min: Vec3{80, -252, -16}, Max: Vec3{112, -236, 112}}},
+		Entities: []MapEntity{{Class: "func_door", Model: 1}},
+	}
+	start := Vec3{96, -300, 24}
+	closed := []Mover{{Model: 1, Origin: Vec3{}}}
+	if got := m.DoorMoveHazard(closed, start, 0, 140); got != "dynamic_door_blocked" {
+		t.Fatalf("closed door hazard=%q", got)
+	}
+	if got := m.DoorMoveHazard(closed, start, 0, 1); got != "dynamic_door_blocked" {
+		t.Fatalf("full-speed detour door hazard=%q", got)
+	}
+	if got := m.DoorMoveHazard(closed, Vec3{96, -260, 24}, 0, -140); got != "" {
+		t.Fatalf("movement out of a door overlap was blocked: %q", got)
+	}
+	if !m.DoorShotBlocked(closed, Vec3{96, -300, 30}, Vec3{96, -96, 30}) {
+		t.Fatal("closed door did not block line of fire")
+	}
+	if got := m.DoorMoveHazard(nil, start, 0, 140); got != "" {
+		t.Fatalf("unobserved door hazard=%q", got)
+	}
+	open := []Mover{{Model: 1, Origin: Vec3{200, 0, 0}}}
+	if got := m.DoorMoveHazard(open, start, 0, 140); got != "" {
+		t.Fatalf("moved door hazard=%q", got)
+	}
+	if m.DoorShotBlocked(open, Vec3{96, -300, 30}, Vec3{96, -96, 30}) {
+		t.Fatal("moved door still blocked line of fire")
+	}
+	m.Entities[0].Class = "func_door_rotating"
+	if got := m.DoorMoveHazard(closed, start, 0, 140); got != "" {
+		t.Fatalf("rotating door was treated as translating: %q", got)
+	}
+}
+
+func TestMovementCompleteRequiresBrushModels(t *testing.T) {
+	m := &MapInfo{collision: &CollisionMap{planes: []bspPlane{{}}, sides: []uint16{0},
+		brushes: []bspBrush{{}}, worldBrushes: []int{0}}, Models: []BSPModel{{}, {}},
+		Entities: []MapEntity{{Class: "func_door", Model: 1}}}
+	if !m.MovementComplete() {
+		t.Fatal("complete BSP was rejected")
+	}
+	m.collision.worldBrushes = nil
+	if m.MovementComplete() {
+		t.Fatal("missing static world brushes were accepted")
+	}
+	m.collision.worldBrushes = []int{0}
+	m.Entities[0].Model = 2
+	if m.MovementComplete() {
+		t.Fatal("out-of-range door model was accepted")
+	}
+	m.Entities[0].Model = 1
+	m.Models = nil
+	if m.MovementComplete() {
+		t.Fatal("missing model lump was accepted")
 	}
 }

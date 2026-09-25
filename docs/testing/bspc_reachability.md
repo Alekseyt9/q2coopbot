@@ -5,8 +5,8 @@
 Для сборки нужны CMake, Ninja и компилятор C/C++ (на Windows проверен MinGW GCC 15). Каталог `bin` MinGW должен быть в `PATH`, чтобы компилятор мог запустить свои вспомогательные программы. Игровые BSP и PAK не входят в репозиторий. Пример запуска из корня проекта:
 
 ```powershell
-cmake -S . -B workspace/build/aas -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build workspace/build/aas --target bspc
+cmake -S . -B workspace/build/aas-current -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build workspace/build/aas-current --target bspc
 ./scripts/compile_aas.ps1 -BspPath 'F:\path\to\base1.bsp' -OutputRoot workspace/artifacts/aas-base1
 ./scripts/compile_aas.ps1 -BspPath 'F:\path\to\base2.bsp' -OutputRoot workspace/artifacts/aas-base2 -RequireElevator
 ./scripts/prepare_runtime.ps1 -AASRoot workspace/artifacts/aas-base1

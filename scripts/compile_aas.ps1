@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$BspPath,
-    [string]$BspcExe = (Join-Path (Split-Path -Parent $PSScriptRoot) 'workspace\build\aas\workspace\tools\bspc\bspc.exe'),
+    [string]$BspcExe = (Join-Path (Split-Path -Parent $PSScriptRoot) 'workspace\build\aas-current\workspace\tools\bspc\bspc.exe'),
     [string]$OutputRoot = (Join-Path (Split-Path -Parent $PSScriptRoot) ('workspace\artifacts\aas-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))),
     [int]$Threads = 1,
     [int]$WallLimitSeconds = 900,
