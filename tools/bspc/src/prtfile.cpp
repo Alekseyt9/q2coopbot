@@ -9,16 +9,13 @@
 
 #include "logging.hpp"
 #include "legacy_common.hpp"
-#include "q_shared.h"
 #include "portals.hpp"
 #include "tree.hpp"
 
-// The original BSPC sources use CONTENTS_Q2TRANSLUCENT to represent the translucent
-// flag. The shared Quake headers exposed to the reconstructed tool only provide
-// CONTENTS_TRANSLUCENT, so alias the constant for clarity when porting logic.
-#ifndef CONTENTS_Q2TRANSLUCENT
-#define CONTENTS_Q2TRANSLUCENT CONTENTS_TRANSLUCENT
-#endif
+// Quake II brush content flags needed by this standalone AAS utility.
+constexpr int CONTENTS_SOLID = 1;
+constexpr int CONTENTS_DETAIL = 0x08000000;
+constexpr int CONTENTS_Q2TRANSLUCENT = 0x10000000;
 
 namespace bspc::legacy
 {

@@ -1,5 +1,7 @@
 # Documentation index
 
+**Текущий проект — Go UDP-бот.** Начните с [README](../README.md) и [плана Go-бота](system2_strategy_tactics_plan.md). Большинство остальных документов ниже относятся к удалённой реконструкции Gladiator и сохранены как исторические материалы; пути к её исходникам и командам сборки теперь не действуют.
+
 Documentation for the **Q2 Gladiator Bot Botlib Reconstruction**.
 
 These documents were written over the course of the reverse-engineering effort

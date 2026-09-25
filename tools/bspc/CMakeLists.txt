@@ -27,7 +27,6 @@ add_executable(bspc
 target_include_directories(bspc
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_SOURCE_DIR}/src/shared
 )
 
 target_compile_features(bspc PRIVATE cxx_std_17)
