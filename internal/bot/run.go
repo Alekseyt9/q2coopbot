@@ -24,7 +24,9 @@ type Config struct {
 	System1Model, System2Model        string
 	TestChangeMap, TestRCONPassword   string
 	TestTeleportMap, TestTeleport     string
+	TestSpawnMap, TestSpawnSoldier    string
 	Port, GameFrames, TestChangeAfter int
+	TestGapStart, TestGapFrames       int
 	Duration                          time.Duration
 	FramePaced, Idle, ExitOnReconnect bool
 }
@@ -65,6 +67,11 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.TracePath != "" && !cfg.FramePaced {
 		return fmt.Errorf("--trace-jsonl requires --frame-paced")
 	}
+	if cfg.TestGapStart != 0 || cfg.TestGapFrames != 0 {
+		if !cfg.FramePaced || cfg.GameFrames == 0 || cfg.TestGapStart < 1 || cfg.TestGapFrames < 1 || cfg.TestGapStart+cfg.TestGapFrames >= cfg.GameFrames {
+			return fmt.Errorf("test observation gap requires --frame-paced and a positive interval inside --game-frames")
+		}
+	}
 	if cfg.TestChangeMap != "" {
 		validMap := regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 		if !cfg.FramePaced || cfg.GameFrames <= cfg.TestChangeAfter || cfg.TestChangeAfter < 1 || !validMap.MatchString(cfg.TestChangeMap) {
@@ -81,6 +88,17 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 		var err error
 		teleportPosition, err = parseTestTeleport(cfg.TestTeleport)
+		if err != nil {
+			return err
+		}
+	}
+	var spawnPosition quake.Vec3
+	if cfg.TestSpawnMap != "" || cfg.TestSpawnSoldier != "" {
+		if !cfg.FramePaced || !regexp.MustCompile(`^[A-Za-z0-9_]+$`).MatchString(cfg.TestSpawnMap) {
+			return fmt.Errorf("test soldier spawn requires --frame-paced and a simple --test-spawn-map")
+		}
+		var err error
+		spawnPosition, err = parseTestTeleport(cfg.TestSpawnSoldier)
 		if err != nil {
 			return err
 		}
@@ -105,6 +123,8 @@ func Run(ctx context.Context, cfg Config) error {
 		exitOnReconnect: cfg.ExitOnReconnect, testChangeMap: cfg.TestChangeMap,
 		testChangeAfter: cfg.TestChangeAfter, testRconPassword: cfg.TestRCONPassword,
 		testTeleportMap: cfg.TestTeleportMap, testTeleportPosition: teleportPosition,
+		testSpawnMap: cfg.TestSpawnMap, testSpawnPosition: spawnPosition,
+		testGapStart: cfg.TestGapStart, testGapFrames: cfg.TestGapFrames,
 	}
 	if cfg.TracePath != "" {
 		client.traceFile, err = os.Create(cfg.TracePath)

@@ -15,6 +15,8 @@ param(
     [switch]$UnlimitedLoopbackRate,
     [switch]$SynchronizedStart,
     [switch]$ElevatorTrial,
+    [switch]$CombatMoveTrial,
+    [switch]$ObservationGapTrial,
     [string]$OutputRoot = ''
 )
 
@@ -30,6 +32,12 @@ if ($LeaveTeammateOnTransition -and -not $TransitionMap) { throw '-LeaveTeammate
 if ($RequireTransitionAAS -and -not $TransitionMap) { throw '-RequireTransitionAAS requires -TransitionMap.' }
 if ($ElevatorTrial -and ($TransitionMap -ne 'base2' -or -not $SynchronizedStart -or -not $AASDir)) {
     throw '-ElevatorTrial requires -TransitionMap base2, -SynchronizedStart and -AASDir.'
+}
+if ($CombatMoveTrial -and ($Map -ne 'base1' -or $TransitionMap -or -not $SynchronizedStart -or $ElevatorTrial)) {
+    throw '-CombatMoveTrial requires -Map base1, -SynchronizedStart, and no map transition or elevator trial.'
+}
+if ($ObservationGapTrial -and (-not $CombatMoveTrial -or $GameFrames -lt 30)) {
+    throw '-ObservationGapTrial requires -CombatMoveTrial and at least 30 game frames.'
 }
 if ($AASDir -and -not (Test-Path -LiteralPath $AASDir -PathType Container)) { throw "AAS directory is missing: $AASDir" }
 if (-not $ServerExe) { $ServerExe = Join-Path $RuntimeRoot 'q2ded.exe' }
@@ -80,7 +88,7 @@ foreach ($scale in $Timescales) {
     $rconPassword = if ($TransitionMap) { [guid]::NewGuid().ToString('N') } else { '' }
     if ($TransitionMap) { $args = "+set rcon_password $rconPassword $args" }
     if ($UnlimitedLoopbackRate) { $args = "+set sv_test_unlimited_loopback 1 $args" }
-    if ($ElevatorTrial) { $args = "+set cheats 1 $args" }
+    if ($ElevatorTrial -or $CombatMoveTrial) { $args = "+set cheats 1 $args" }
     if ($SynchronizedStart) { $args = "+set sv_test_trace_client GoCoopMate +set sv_test_start_client GoCoopMate $args" }
     $server = Start-Process -FilePath $ServerExe -ArgumentList $args -WorkingDirectory $RuntimeRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
     $human = $null
@@ -99,7 +107,8 @@ foreach ($scale in $Timescales) {
         $wallLimit = [int][math]::Ceiling($totalFrames / (10.0 * $scale) * 3 + 20)
         if ($WallLimitSeconds -gt 0) { $wallLimit = $WallLimitSeconds }
         $humanArgs = "--port $runPort --name TestHuman --game-dir `"$gameDir`" --idle --frame-paced --duration $($wallLimit + 10)s"
-        if ($ElevatorTrial) { $humanArgs += " --trace-jsonl `"$humanTracePath`" --test-teleport-map base2 --test-teleport -11,1408,85" }
+        if ($ElevatorTrial) { $humanArgs += " --trace-jsonl `"$humanTracePath`" --test-teleport-map base2 --test-teleport 10,1408,85" }
+        if ($CombatMoveTrial) { $humanArgs += ' --test-spawn-map base1 --test-spawn-soldier 96,-200,24' }
         if ($LeaveTeammateOnTransition) { $humanArgs += ' --test-exit-on-reconnect' }
         $human = Start-Process -FilePath $botExe -ArgumentList $humanArgs -WorkingDirectory $repoRoot -RedirectStandardOutput $humanLog -RedirectStandardError $humanErr -WindowStyle Hidden -PassThru
         $humanUntil = (Get-Date).AddSeconds(20)
@@ -112,7 +121,8 @@ foreach ($scale in $Timescales) {
         $botArgs = @('--port', "$runPort", '--name', 'GoCoopMate', '--game-dir', $gameDir, '--world-json', $worldPath, '--trace-jsonl', $tracePath, '--frame-paced', '--game-frames', "$GameFrames", '--duration', "${wallLimit}s")
         if ($AASDir) { $botArgs += @('--aas-dir', $AASDir) }
         if ($TransitionMap) { $botArgs += @('--test-change-map', $TransitionMap, '--test-change-after-frames', "$TransitionAfterFrames") }
-        if ($ElevatorTrial) { $botArgs += @('--test-teleport-map', 'base2', '--test-teleport', '-8,1408,-53') }
+        if ($ElevatorTrial) { $botArgs += @('--test-teleport-map', 'base2', '--test-teleport', '-36,1408,-40') }
+        if ($ObservationGapTrial) { $botArgs += @('--test-observation-gap-start', '1', '--test-observation-gap-frames', '12') }
         $previousRcon = $env:Q2COOPBOT_TEST_RCON
         try {
             if ($TransitionMap) { $env:Q2COOPBOT_TEST_RCON = $rconPassword }
@@ -137,6 +147,15 @@ foreach ($scale in $Timescales) {
         $elevatorStages = [System.Collections.Generic.List[string]]::new()
         $elevatorMoverObserved = $false
         $botNearGate = $false
+        $elevatorMinZ = [double]::PositiveInfinity
+        $elevatorMaxZ = [double]::NegativeInfinity
+        $completedFrame = -1
+        $regroupedOnUpperFloor = $false
+        $combatMoveFrames = 0
+        $combatMoveWithSide = 0
+        $staleNeutralFrames = 0
+        $attackBeforeGap = 0
+        $recoveredActionFrames = 0
         foreach ($line in Get-Content -LiteralPath $tracePath) {
             $entry = $line | ConvertFrom-Json
             $sent["$($entry.spawncount):$($entry.client_sequence)"] = $entry.sent_command
@@ -150,14 +169,38 @@ foreach ($scale in $Timescales) {
             if ($ElevatorTrial -and $entry.map -eq 'base2') {
                 if ($entry.elevator -and -not $elevatorStages.Contains($entry.elevator)) { $elevatorStages.Add($entry.elevator) }
                 if (@($entry.movers | Where-Object { $_.model -eq 50 }).Count -gt 0) { $elevatorMoverObserved = $true }
-                if ([math]::Abs($entry.self[0] + 8) -lt 48 -and [math]::Abs($entry.self[1] - 1408) -lt 48 -and [math]::Abs($entry.self[2] + 43) -lt 48) { $botNearGate = $true }
+                if ([math]::Abs($entry.self[0] + 36) -lt 48 -and [math]::Abs($entry.self[1] - 1408) -lt 48 -and [math]::Abs($entry.self[2] + 38) -lt 48) { $botNearGate = $true }
+                if ($entry.elevator -in @('board', 'ride', 'exit', 'completed')) {
+                    $elevatorMinZ = [math]::Min($elevatorMinZ, [double]$entry.self[2])
+                    $elevatorMaxZ = [math]::Max($elevatorMaxZ, [double]$entry.self[2])
+                }
+                if ($entry.elevator -eq 'completed') { $completedFrame = [int]$entry.frame }
+                if ($completedFrame -ge 0 -and $entry.frame -gt $completedFrame -and $null -ne $entry.teammate -and
+                    [math]::Abs($entry.self[2] - $entry.teammate[2]) -lt 32 -and
+                    [math]::Sqrt([math]::Pow($entry.self[0] - $entry.teammate[0], 2) + [math]::Pow($entry.self[1] - $entry.teammate[1], 2)) -lt 100) {
+                    $regroupedOnUpperFloor = $true
+                }
+            }
+            if ($CombatMoveTrial -and $entry.arbitration.aim_source -eq 'enemy' -and
+                $entry.arbitration.move_source -in @('route', 'detour') -and ($entry.sent_command.Buttons -band 1)) {
+                $combatMoveFrames++
+                if ([math]::Abs($entry.sent_command.Side) -gt 10) { $combatMoveWithSide++ }
+            }
+            if ($ObservationGapTrial) {
+                if ($entry.relative_frame -lt 1 -and ($entry.sent_command.Buttons -band 1)) { $attackBeforeGap++ }
+                if ($entry.arbitration.limit_reason -eq 'stale_observation' -and
+                    $entry.sent_command.Forward -eq 0 -and $entry.sent_command.Side -eq 0 -and
+                    $entry.sent_command.Up -eq 0 -and $entry.sent_command.Buttons -eq 0 -and
+                    $entry.observation_frame -lt $entry.frame) { $staleNeutralFrames++ }
+                if ($entry.relative_frame -ge 13 -and $entry.observation_frame -eq $entry.frame -and
+                    ($entry.sent_command.Forward -ne 0 -or $entry.sent_command.Side -ne 0 -or $entry.sent_command.Buttons -ne 0)) { $recoveredActionFrames++ }
             }
         }
         $humanAtTop = $false
         if ($ElevatorTrial -and (Test-Path -LiteralPath $humanTracePath)) {
             foreach ($line in Get-Content -LiteralPath $humanTracePath) {
                 $entry = $line | ConvertFrom-Json
-                if ($entry.map -eq 'base2' -and [math]::Abs($entry.self[0] + 11) -lt 48 -and [math]::Abs($entry.self[1] - 1408) -lt 48 -and [math]::Abs($entry.self[2] - 95) -lt 48) {
+                if ($entry.map -eq 'base2' -and [math]::Abs($entry.self[0] - 10) -lt 32 -and [math]::Abs($entry.self[1] - 1408) -lt 32 -and [math]::Abs($entry.self[2] - 24) -lt 32) {
                     $humanAtTop = $true
                     break
                 }
@@ -191,6 +234,12 @@ foreach ($scale in $Timescales) {
             teammate_left_on_transition = [bool]$LeaveTeammateOnTransition
             elevator_trial = [bool]$ElevatorTrial; elevator_stages = $elevatorStages.ToArray()
             elevator_mover_observed = $elevatorMoverObserved; bot_near_gate = $botNearGate; human_at_top = $humanAtTop
+            elevator_min_z = $(if ($ElevatorTrial -and $elevatorMinZ -ne [double]::PositiveInfinity) { $elevatorMinZ } else { $null })
+            elevator_max_z = $(if ($ElevatorTrial -and $elevatorMaxZ -ne [double]::NegativeInfinity) { $elevatorMaxZ } else { $null })
+            regrouped_on_upper_floor = $regroupedOnUpperFloor
+            combat_move_trial = [bool]$CombatMoveTrial; combat_move_frames = $combatMoveFrames; combat_move_with_side = $combatMoveWithSide
+            observation_gap_trial = [bool]$ObservationGapTrial; attack_before_gap = $attackBeforeGap
+            stale_neutral_frames = $staleNeutralFrames; recovered_action_frames = $recoveredActionFrames
             sent_commands = $sent.Count; applied_new_commands = $newCommands.Count
             matched_applied_commands = $matchedSequences.Count; trace_jsonl = $tracePath
             applied_jsonl = $appliedPath; world_json = $worldPath; server_log = $stdout
@@ -226,8 +275,18 @@ if ($SynchronizedStart -and @($results | Where-Object { $_.matched_applied_comma
 if ($ElevatorTrial -and @($results | Where-Object {
     -not $_.bot_near_gate -or -not $_.human_at_top -or -not $_.elevator_mover_observed -or
     -not ($_.elevator_stages -contains 'board') -or -not ($_.elevator_stages -contains 'ride') -or
-    -not ($_.elevator_stages -contains 'exit') -or -not ($_.elevator_stages -contains 'completed')
+    -not ($_.elevator_stages -contains 'exit') -or -not ($_.elevator_stages -contains 'completed') -or
+    -not ($_.elevator_stages.IndexOf('board') -lt $_.elevator_stages.IndexOf('ride') -and
+        $_.elevator_stages.IndexOf('ride') -lt $_.elevator_stages.IndexOf('exit') -and
+        $_.elevator_stages.IndexOf('exit') -lt $_.elevator_stages.IndexOf('completed')) -or
+    $_.elevator_max_z - $_.elevator_min_z -lt 100 -or -not $_.regrouped_on_upper_floor
 }).Count -gt 0) {
     throw "Elevator trial did not complete; inspect positions, mover and stages in $summary"
+}
+if ($CombatMoveTrial -and @($results | Where-Object { $_.combat_move_frames -le 0 -or $_.combat_move_with_side -le 0 }).Count -gt 0) {
+    throw "Combat movement trial did not produce firing while following a route: $summary"
+}
+if ($ObservationGapTrial -and @($results | Where-Object { $_.attack_before_gap -le 0 -or $_.stale_neutral_frames -le 0 -or $_.recovered_action_frames -le 0 }).Count -gt 0) {
+    throw "Observation gap did not stop an active command and recover: $summary"
 }
 Write-Output "Saved $summary"

@@ -23,6 +23,7 @@ type World struct {
 	Tactic         *TacticalDecision `json:"tactic,omitempty"`
 	Route          []quake.Waypoint  `json:"route,omitempty"`
 	Elevator       string            `json:"elevator,omitempty"`
+	Command        CommandDecision   `json:"command"`
 	Snapshot       quake.Snapshot    `json:"snapshot"`
 	Updated        time.Time         `json:"updated"`
 }
@@ -168,7 +169,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 	}
 	if p.World.Goal == "recover_health" { /* keep health objective */
-	} else if quake.Horizontal(s.Self, goal) < 100 && math.Abs(s.Self[2]-goal[2]) < 64 {
+	} else if quake.Horizontal(s.Self, goal) < 100 && math.Abs(s.Self[2]-goal[2]) < 40 {
 		p.World.Goal = "cover_teammate"
 	} else {
 		p.World.Goal = "follow_teammate"
@@ -207,7 +208,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	}
 	p.goalPoint = goal
 	if p.Nav == nil {
-		if p.World.Geometry.HasCollision() && quake.Horizontal(s.Self, goal) < 256 && math.Abs(s.Self[2]-goal[2]) < 64 {
+		if p.World.Geometry.HasCollision() && quake.Horizontal(s.Self, goal) < 256 && math.Abs(s.Self[2]-goal[2]) < 40 {
 			from, to := s.Self, goal
 			from[2] += 18
 			to[2] += 18
@@ -220,7 +221,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	teleported := p.observed && quake.Horizontal(s.Self, p.lastObserved) > 256
 	p.lastObserved = s.Self
 	p.observed = true
-	goalChanged := p.elevator == nil && (quake.Horizontal(goal, p.target) > 80 || math.Abs(goal[2]-p.target[2]) > 80)
+	goalChanged := p.elevator == nil && (quake.Horizontal(goal, p.target) > 80 || math.Abs(goal[2]-p.target[2]) > 32)
 	if p.elevator != nil && teleported {
 		p.elevator = nil
 		p.routeKnown = false
@@ -260,7 +261,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.routeKnown = false
 		log.Printf("navigation stuck map=%s self=%v failures=%d", s.Map, s.Self, p.failures)
 	}
-	if p.World.Navigation == "unreachable" && p.World.Geometry.HasCollision() && quake.Horizontal(s.Self, goal) < 256 && math.Abs(s.Self[2]-goal[2]) < 64 {
+	if p.World.Navigation == "unreachable" && p.World.Geometry.HasCollision() && quake.Horizontal(s.Self, goal) < 256 && math.Abs(s.Self[2]-goal[2]) < 40 {
 		from, to := s.Self, goal
 		from[2] += 18
 		to[2] += 18
@@ -270,22 +271,36 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	}
 }
 func (p *Planner) command(prev quake.UserCmd) quake.UserCmd {
+	return p.commandAt(prev, time.Now())
+}
+
+func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 	cmd := quake.UserCmd{Yaw: prev.Yaw, Msec: 50}
+	p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none"}
 	s := p.World.Snapshot
 	if p.World.Map == "" || s.Frame == 0 {
+		p.World.Command.LimitReason = "no_frame"
+		return cmd
+	}
+	if p.World.Updated.IsZero() || now.Sub(p.World.Updated) > 300*time.Millisecond {
+		p.World.Command.LimitReason = "stale_observation"
 		return cmd
 	}
 	if s.Health <= 0 {
+		p.World.Command.LimitReason = "dead"
 		return cmd
 	}
 	if p.elevator != nil && p.routeIndex < len(p.route) && p.route[p.routeIndex].ElevatorPhase == "board" {
-		return p.elevatorCommand(cmd, p.route[p.routeIndex])
+		cmd = p.elevatorCommand(cmd, p.route[p.routeIndex])
+		p.World.Command = CommandDecision{MoveSource: "elevator", AimSource: "elevator", Skill: "elevator", LimitReason: p.World.Elevator}
+		return cmd
 	}
 	tactic := ""
 	if p.World.Tactic != nil {
 		tactic = p.World.Tactic.Action
 	}
 	if tactic == "hold" {
+		p.World.Command.LimitReason = "tactic_hold"
 		return cmd
 	}
 	var enemy *quake.Object
@@ -301,18 +316,29 @@ func (p *Planner) command(prev quake.UserCmd) quake.UserCmd {
 		from, to := s.Self, enemy.Origin
 		from[2] += 22
 		to[2] += 22
-		cmd.Yaw = quake.YawTo(from, to, s.DeltaAngles[1])
-		cmd.Pitch = quake.PitchTo(from, to, s.DeltaAngles[0])
-		cmd.Buttons = 1
+		if s.Teammate != nil && teammateBlocksShot(from, to, *s.Teammate) {
+			p.World.Command.LimitReason = "friendly_line_of_fire"
+		} else {
+			cmd.Yaw = quake.YawTo(from, to, s.DeltaAngles[1])
+			cmd.Pitch = quake.PitchTo(from, to, s.DeltaAngles[0])
+			cmd.Buttons = 1
+			p.World.Command.AimSource = "enemy"
+		}
 	}
 	if tactic == "attack" {
+		if p.World.Command.LimitReason == "" {
+			p.World.Command.LimitReason = "tactic_attack_stationary"
+		}
 		return cmd
 	}
 	if p.World.Goal != "follow_teammate" && p.World.Goal != "recover_health" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
+		p.World.Command.LimitReason = "no_movement_goal"
 		return cmd
 	}
 	if p.routeIndex < len(p.route) && p.route[p.routeIndex].ElevatorPhase == "board" {
-		return p.elevatorCommand(cmd, p.route[p.routeIndex])
+		cmd = p.elevatorCommand(cmd, p.route[p.routeIndex])
+		p.World.Command = CommandDecision{MoveSource: "elevator", AimSource: "elevator", Skill: "elevator", LimitReason: p.World.Elevator}
+		return cmd
 	}
 	target := p.goalPoint
 	jump := false
@@ -324,18 +350,27 @@ func (p *Planner) command(prev quake.UserCmd) quake.UserCmd {
 		}
 	}
 	if quake.Horizontal(s.Self, target) < 10 {
+		p.World.Command.LimitReason = "at_waypoint"
 		return cmd
 	}
-	if cmd.Buttons == 0 {
-		cmd.Yaw = quake.YawTo(s.Self, target, s.DeltaAngles[1])
-	}
-	cmd.Forward = 400
+	dx, dy := target[0]-s.Self[0], target[1]-s.Self[1]
+	p.World.Command.MoveSource = "route"
 	if jump || target[2]-s.Self[2] > 32 {
 		cmd.Up = 200
 	}
 	if p.navigationNow(s.Frame).Before(p.detourUntil) {
 		cmd.Up = 200
-		cmd.Side = p.detourSide
+		distance := math.Hypot(dx, dy)
+		if distance > 0 {
+			ux, uy := dx/distance, dy/distance
+			dx = ux + uy*float64(p.detourSide)/400
+			dy = uy - ux*float64(p.detourSide)/400
+			p.World.Command.MoveSource = "detour"
+		}
+	}
+	cmd = worldMove(cmd, s, dx, dy, 400, cmd.Buttons != 0)
+	if cmd.Buttons == 0 {
+		p.World.Command.AimSource = "route"
 	}
 	return cmd
 }

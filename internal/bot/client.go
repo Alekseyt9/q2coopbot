@@ -59,6 +59,11 @@ type Client struct {
 	testTeleportMap      string
 	testTeleportPosition quake.Vec3
 	testTeleportSent     bool
+	testSpawnMap         string
+	testSpawnPosition    quake.Vec3
+	testSpawnSent        bool
+	testGapStart         int
+	testGapFrames        int
 	lastObservedMap      string
 	mapChanges           int
 	beginPending         string
@@ -190,7 +195,10 @@ func (c *Client) handle(packet []byte) {
 				log.Printf("map observed=%s frame=%d transitions=%d", s.Map, f.Number, c.mapChanges)
 				c.lastObservedMap = s.Map
 			}
-			c.planner.update(s, c.root)
+			relativeFrame := f.Number - c.firstMoveFrame
+			if c.firstMoveFrame < 0 || c.testGapFrames == 0 || relativeFrame < c.testGapStart || relativeFrame >= c.testGapStart+c.testGapFrames {
+				c.planner.update(s, c.root)
+			}
 			if c.frames%50 == 0 {
 				w := c.planner.World
 				log.Printf("frame=%d self=%v teammate=%v goal=%s nav=%s route=%d enemies=%d", f.Number, s.Self, s.Teammate, w.Goal, w.Navigation, len(w.Route), len(s.Enemies))
@@ -248,6 +256,15 @@ func (c *Client) writeWorld() error {
 	}
 	return os.WriteFile(c.worldFile, data, 0644)
 }
+
+func (c *Client) needsSafetyStop(now time.Time) bool {
+	if !c.begun || !c.framePaced || !c.frameReady || c.latestFrame != c.lastMoveFrame ||
+		c.planner.World.Updated.IsZero() || now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
+		return false
+	}
+	return c.previous.Buttons != 0 || c.previous.Forward != 0 || c.previous.Side != 0 || c.previous.Up != 0
+}
+
 func (c *Client) run(ctx context.Context) error {
 	defer func() { _ = c.conn.Close() }()
 	c.start = time.Now()
@@ -306,6 +323,15 @@ func (c *Client) run(ctx context.Context) error {
 			log.Printf("scenario test teleport map=%s target=%v", c.testTeleportMap, p)
 			continue
 		}
+		if c.begun && c.testSpawnMap != "" && !c.testSpawnSent && c.planner.World.Map == c.testSpawnMap && c.frameReady {
+			p := c.testSpawnPosition
+			if err := c.command(fmt.Sprintf("spawnentity monster_soldier_light %g %g %g", p[0], p[1], p[2])); err != nil {
+				return err
+			}
+			c.testSpawnSent = true
+			log.Printf("scenario test soldier spawn map=%s target=%v", c.testSpawnMap, p)
+			continue
+		}
 		if c.begun && c.framePaced && c.testChangeMap != "" && !c.testChangeSent &&
 			c.firstMoveFrame >= 0 && c.lastMoveFrame-c.firstMoveFrame >= c.testChangeAfter &&
 			c.latestFrame > c.lastMoveFrame {
@@ -328,15 +354,19 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			return nil
 		}
-		if c.begun && (!c.framePaced && now.After(c.nextMove) || c.framePaced && c.frameReady && c.latestFrame > c.lastMoveFrame) {
+		if c.begun && (!c.framePaced && now.After(c.nextMove) || c.framePaced && c.frameReady && c.latestFrame > c.lastMoveFrame || c.needsSafetyStop(now)) {
 			frame := c.latestFrame
+			safetyStop := c.needsSafetyStop(now)
 			cmd := c.planner.command(c.previous)
 			if c.idle {
 				cmd = quake.UserCmd{}
+				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_idle"}
 			}
 			if c.framePaced {
 				cmd.Msec = 100
-				if c.firstMoveFrame < 0 {
+				if safetyStop {
+					log.Printf("safety stop: no fresh observation for %s after frame=%d", now.Sub(c.planner.World.Updated).Truncate(time.Millisecond), frame)
+				} else if c.firstMoveFrame < 0 {
 					c.firstMoveFrame = frame
 					c.firstMoveAt = now
 				} else if frame > c.lastMoveFrame+1 {
@@ -352,29 +382,37 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			if c.traceFile != nil && c.framePaced {
 				entry := struct {
-					Map            string        `json:"map"`
-					Spawncount     int           `json:"spawncount"`
-					EpisodeFrame   int           `json:"episode_frame"`
-					Frame          int           `json:"frame"`
-					RelativeFrame  int           `json:"relative_frame"`
-					ClientSequence uint32        `json:"client_sequence"`
-					Self           quake.Vec3    `json:"self"`
-					Teammate       *quake.Vec3   `json:"teammate,omitempty"`
-					Health         int16         `json:"health"`
-					OnGround       bool          `json:"on_ground"`
-					Goal           string        `json:"goal"`
-					Navigation     string        `json:"navigation"`
-					Elevator       string        `json:"elevator,omitempty"`
-					Movers         []quake.Mover `json:"movers,omitempty"`
-					Command        quake.UserCmd `json:"sent_command"`
+					Map              string          `json:"map"`
+					Spawncount       int             `json:"spawncount"`
+					EpisodeFrame     int             `json:"episode_frame"`
+					Frame            int             `json:"frame"`
+					ObservationFrame int             `json:"observation_frame"`
+					ObservationAgeMS int64           `json:"observation_age_ms"`
+					RelativeFrame    int             `json:"relative_frame"`
+					ClientSequence   uint32          `json:"client_sequence"`
+					Self             quake.Vec3      `json:"self"`
+					Teammate         *quake.Vec3     `json:"teammate,omitempty"`
+					Health           int16           `json:"health"`
+					OnGround         bool            `json:"on_ground"`
+					Goal             string          `json:"goal"`
+					Navigation       string          `json:"navigation"`
+					Elevator         string          `json:"elevator,omitempty"`
+					Movers           []quake.Mover   `json:"movers,omitempty"`
+					Enemies          []quake.Object  `json:"enemies,omitempty"`
+					Arbitration      CommandDecision `json:"arbitration"`
+					Command          quake.UserCmd   `json:"sent_command"`
 				}{
 					Map: c.planner.World.Map, Spawncount: c.spawncount, EpisodeFrame: c.moves,
-					Frame: frame, RelativeFrame: frame - c.firstMoveFrame, ClientSequence: clientSequence,
+					Frame: frame, ObservationFrame: c.planner.World.Snapshot.Frame,
+					ObservationAgeMS: now.Sub(c.planner.World.Updated).Milliseconds(),
+					RelativeFrame:    frame - c.firstMoveFrame, ClientSequence: clientSequence,
 					Self: c.planner.World.Snapshot.Self, Teammate: c.planner.World.Snapshot.Teammate,
 					Health: c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround,
 					Goal: c.planner.World.Goal, Navigation: c.planner.World.Navigation,
 					Elevator: c.planner.World.Elevator, Movers: c.planner.World.Snapshot.Movers,
-					Command: cmd,
+					Enemies:     c.planner.World.Snapshot.Enemies,
+					Arbitration: c.planner.World.Command,
+					Command:     cmd,
 				}
 				data, err := json.Marshal(entry)
 				if err != nil {
@@ -386,7 +424,7 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			c.previous = cmd
 			c.moves++
-			if c.framePaced {
+			if c.framePaced && !safetyStop {
 				c.lastMoveFrame = frame
 			} else {
 				c.nextMove = c.nextMove.Add(50 * time.Millisecond)

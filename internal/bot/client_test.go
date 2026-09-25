@@ -9,6 +9,27 @@ import (
 	"q2coopbot/internal/quake"
 )
 
+func TestClientSafetyStopWhenFramesStop(t *testing.T) {
+	now := time.Now()
+	c := &Client{begun: true, framePaced: true, frameReady: true, latestFrame: 7, lastMoveFrame: 7,
+		previous: quake.UserCmd{Forward: 400, Buttons: 1}, planner: &Planner{World: World{Updated: now}}}
+	if c.needsSafetyStop(now.Add(300 * time.Millisecond)) {
+		t.Fatal("fresh observation triggered safety stop")
+	}
+	if !c.needsSafetyStop(now.Add(301 * time.Millisecond)) {
+		t.Fatal("stalled frame did not trigger safety stop")
+	}
+	c.previous = quake.UserCmd{}
+	if c.needsSafetyStop(now.Add(time.Second)) {
+		t.Fatal("neutral command caused repeated safety stop")
+	}
+	c.previous = quake.UserCmd{Forward: 400}
+	c.latestFrame++
+	if c.needsSafetyStop(now.Add(time.Second)) {
+		t.Fatal("new frame should use normal command path")
+	}
+}
+
 func TestReconnectUsesFreshUDPChannel(t *testing.T) {
 	server, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
