@@ -106,4 +106,36 @@ cmake --build F:\src\quake2\yquake2\build\codex-speed-test --target q2ded game
 ./scripts/run_speed_trial.ps1 -GameFrames 60 -Timescales 1,2 -SynchronizedStart -UnlimitedLoopbackRate -BSPFailureTrial incomplete
 ```
 
-`unavailable` отключает загрузку BSP только в тестовом Go-клиенте; `incomplete` удаляет из его загруженной карты модели кистевых объектов. Карта сервера и AAS остаются прежними. В обоих режимах при 1× и 2×: `aas_loaded=true`, 5586 переходов, `navigation=ready`, 61/61 нейтральных команд с причиной `bsp_unavailable` или `bsp_incomplete`, активных команд нет, смещение XY равно 0. Сервер применил 61/61 команд без пропусков и ошибок декодирования. Артефакты: `workspace/artifacts/bsp-unavailable-final-20260925/summary.json` и `workspace/artifacts/bsp-incomplete-final-20260925/summary.json`. Обычный `base1` и проход через дверь `base2` повторно прошли на 1× со статусом `ready`: 31/31 и 92/92 команд применены, дверь пройдена; артефакты `workspace/artifacts/bsp-status-base1-regression-20260925/summary.json` и `workspace/artifacts/bsp-status-door-regression-20260925/summary.json`.
+`unavailable` отключает загрузку BSP только в тестовом Go-клиенте; `incomplete` удаляет из его загруженной карты модели кистевых объектов. Карта сервера и AAS остаются прежними. В обоих режимах при 1× и 2×: `aas_loaded=true`, 5586 переходов, `navigation=ready`, 61/61 нейтральных команд с причиной `bsp_unavailable` или `bsp_incomplete`, активных команд нет, смещение XY равно 0. Сервер применил 61/61 команд без пропусков и ошибок декодирования. Артефакты: `workspace/artifacts/bsp-unavailable-final-20260925/summary.json` и `workspace/artifacts/bsp-incomplete-final-20260925/summary.json`. Обычный `base1` и проход через дверь `base2` повторно прошли на 1× со статусом `ready`: 31/31 и 92/92 команд применены, дверь пройдена; финальные артефакты `workspace/artifacts/bsp-status-final-regression-20260925/summary.json` и `workspace/artifacts/bsp-status-door-final-regression-20260925/summary.json`.
+
+Проверка двери, не попавшей в снимок Go-бота:
+
+```powershell
+./scripts/run_speed_trial.ps1 -TransitionMap base2 -TransitionAfterFrames 10 -GameFrames 60 -Timescales 1,2 -SynchronizedStart -UnlimitedLoopbackRate -DoorTrial -HideDoorMover
+```
+
+Тест скрывает mover `*53` только от планировщика Go-бота. На 1×/2× бот получил `dynamic_door_unobserved` в 57/57 проверяемых кадрах и `clear_shot=false` для цели за дверью; позиция `y=-300` сохранилась. Сервер применил 72/72 команды в каждом прогоне, пропусков и ошибок декодирования нет. Артефакт: `workspace/artifacts/door-unobserved-20260925/summary.json`. Регрессии видимой закрытой двери и прохода после открытия на 1×: `workspace/artifacts/door-observed-regression-20260925/summary.json` и `workspace/artifacts/door-pass-unobserved-regression-20260925/summary.json`.
+
+Проверка активации кнопки `*34` касанием и движения связанной двери `*33` на `base2`:
+
+```powershell
+./scripts/run_speed_trial.ps1 -TransitionMap base2 -TransitionAfterFrames 10 -GameFrames 80 -Timescales 1,2 -SynchronizedStart -UnlimitedLoopbackRate -ButtonTrial
+```
+
+Кнопка имеет `target=t29`, дверь — `targetname=t29`; у кнопки `health=0` и нет собственного `targetname`, поэтому игровой код разрешает касание. Тестовая цель берётся из BSP-модели найденной кнопки, а команда подхода имеет скорость 80 с горизонтом проверки 8 единиц. На 1×/2× бот без выстрелов дошёл от `y=1940` до `1959.875`, кнопка сместилась на 4 единицы, после этого дверь — на 74. В обоих прогонах 92/92 команды применены без потерь кадров и ошибок; артефакт `workspace/artifacts/button-touch-linked-final-20260925/summary.json`. Регрессия прохода через дверь `*27`: `workspace/artifacts/button-door-pass-regression-20260925/summary.json`.
+
+Выбор связанной кнопки обычным планировщиком при длинном обходе AAS:
+
+```powershell
+./scripts/run_speed_trial.ps1 -TransitionMap base2 -TransitionAfterFrames 10 -GameFrames 100 -Timescales 1,2 -SynchronizedStart -UnlimitedLoopbackRate -ButtonAutoTrial
+```
+
+Тест задаёт только известную точку напарника за дверью `*33`; кнопку и путь к ней выбирает планировщик. Подмена точки нужна потому, что настоящий напарник за стеной вне PVS и его новая позиция не приходит клиенту. На 1× и 2× наблюдались фазы `button_approach` и `button_touch` без выстрелов, кнопка `*34` сдвинулась на 4 единицы раньше подъёма двери `*33` на 74; затем бот возобновил движение к цели. Оба прогона: 112/112 применённых команд, нет пропусков и ошибок. Артефакт `workspace/artifacts/button-auto-final-20260925b/summary.json`. Регрессии ручной тестовой цели кнопки и прохода через независимую дверь: `workspace/artifacts/button-auto-primitive-regression-20260925/summary.json` и `workspace/artifacts/button-auto-door-regression-20260925/summary.json`. Сценарий не доказывает, что бот сам узнал новую позицию скрытого напарника или завершил воссоединение.
+
+Проверка текущей видимости и последней подтверждённой позиции напарника:
+
+```powershell
+./scripts/run_speed_trial.ps1 -TransitionMap base2 -TransitionAfterFrames 10 -GameFrames 80 -Timescales 1,2 -SynchronizedStart -UnlimitedLoopbackRate -TeammateMemoryTrial
+```
+
+На `base2` тестовый человек сначала находится рядом с ботом в `(220,1940)`, затем переходит за стену в `(194,2080)`. Трасса человека подтверждает вторую позицию. В трассе бота `teammate` заполнен только при текущей видимости; после ухода за стену он отсутствует, а `last_teammate` сохраняет прежнюю точку и `teammate_age_frames` растёт. На 1×: 12 видимых и 68 скрытых кадров; на 2×: 12 и 68. Во всех скрытых кадрах цель `wait_for_teammate`, движение нулевое; сервер применил 92/92 команды в каждом прогоне, пропусков кадров и ошибок декодирования нет. Артефакт: `workspace/artifacts/teammate-memory-20260925/summary.json`. Сценарий проверяет исчезновение из PVS, но не проверяет последующий поиск или воссоединение.

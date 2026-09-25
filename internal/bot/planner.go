@@ -35,6 +35,9 @@ type Planner struct {
 	TestNoAAS      bool
 	TestNoBSP      bool
 	TestPartialBSP bool
+	TestHideDoor53 bool
+	button         *buttonTask
+	buttonCooldown int
 	World          World
 	lastSelf       quake.Vec3
 	lastProgress   time.Time
@@ -98,6 +101,28 @@ func (p *Planner) setTestDoorPassGoal() {
 	p.detourUntil = time.Time{}
 }
 
+// setTestButtonGoal exercises a touch-operated button through ordinary movement.
+func (p *Planner) setTestButtonGoal() {
+	s := p.World.Snapshot
+	if p.World.Map != "base2" || !s.OnGround {
+		return
+	}
+	button, action, ok := p.World.Geometry.ButtonForDoor(33)
+	if !ok || action != "touch" {
+		return
+	}
+	model, ok := p.World.Geometry.Model(button.Model)
+	if !ok {
+		return
+	}
+	p.World.Goal = "touch_button"
+	p.World.Navigation = "direct_clear"
+	p.World.Route = nil
+	p.goalPoint = quake.Vec3{(model.Min[0] + model.Max[0]) / 2, model.Max[1] + 28, s.Self[2]}
+	p.hasGoal = true
+	p.detourUntil = time.Time{}
+}
+
 func (p *Planner) navigationNow(frame int) time.Time {
 	if p.GameClock {
 		return time.Unix(0, int64(frame)*int64(100*time.Millisecond))
@@ -120,6 +145,8 @@ func (p *Planner) setMap(name, root string) {
 	}
 	p.World = World{Map: name, Navigation: "aas_missing", GeometryStatus: "unavailable"}
 	p.Nav = nil
+	p.button = nil
+	p.buttonCooldown = 0
 	p.failures = 0
 	p.decision = nil
 	p.tactic = nil
@@ -191,6 +218,15 @@ func (p *Planner) setMap(name, root string) {
 }
 func (p *Planner) update(s quake.Snapshot, root string) {
 	p.setMap(s.Map, root)
+	if p.TestHideDoor53 && s.Map == "base2" {
+		visible := make([]quake.Mover, 0, len(s.Movers))
+		for _, mover := range s.Movers {
+			if mover.Model != 53 {
+				visible = append(visible, mover)
+			}
+		}
+		s.Movers = visible
+	}
 	now := p.navigationNow(s.Frame)
 	if p.World.Geometry.HasCollision() {
 		for i := range s.Enemies {
@@ -217,26 +253,43 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	p.World.Route = nil
 	p.World.Elevator = ""
 	p.hasGoal = false
+	searching := false
 	if s.Teammate == nil {
 		p.elevator = nil
-		return
+		if s.LastTeammate == nil || s.TeammateAgeFrames == nil || *s.TeammateAgeFrames <= 0 ||
+			*s.TeammateAgeFrames > 40 || p.World.GeometryStatus != "ready" || p.Nav == nil ||
+			s.Health <= 0 || !s.OnGround || quake.Horizontal(s.Self, *s.LastTeammate) <= 64 ||
+			quake.Horizontal(s.Self, *s.LastTeammate) > 512 || math.Abs(s.Self[2]-(*s.LastTeammate)[2]) > 80 {
+			return
+		}
+		searching = true
 	}
-	goal := *s.Teammate
+	goal := quake.Vec3{}
+	if searching {
+		goal = *s.LastTeammate
+		p.World.Goal = "search_last_seen"
+	} else {
+		goal = *s.Teammate
+	}
 	p.hasGoal = true
 	for _, pickup := range s.Pickups {
+		if searching {
+			break
+		}
 		if s.Health < 45 && strings.Contains(pickup.Class, "health") && quake.Horizontal(s.Self, pickup.Origin) < 300 {
 			goal = pickup.Origin
 			p.World.Goal = "recover_health"
 			break
 		}
 	}
-	if p.World.Goal == "recover_health" { /* keep health objective */
+	if searching { /* the last known point is a search target, not a visible teammate */
+	} else if p.World.Goal == "recover_health" { /* keep health objective */
 	} else if quake.Horizontal(s.Self, goal) < 100 && math.Abs(s.Self[2]-goal[2]) < 40 {
 		p.World.Goal = "cover_teammate"
 	} else {
 		p.World.Goal = "follow_teammate"
 	}
-	if p.World.Strategy != nil {
+	if !searching && p.World.Strategy != nil {
 		switch p.World.Strategy.Choice {
 		case "recover":
 			for _, pickup := range s.Pickups {
@@ -259,7 +312,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			}
 		}
 	}
-	if p.World.Tactic != nil && p.World.Tactic.Action == "recover" {
+	if !searching && p.World.Tactic != nil && p.World.Tactic.Action == "recover" {
 		for _, pickup := range s.Pickups {
 			if strings.Contains(pickup.Class, "health") && quake.Horizontal(s.Self, pickup.Origin) < 300 {
 				goal = pickup.Origin
@@ -296,6 +349,23 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.routeKnown = true
 	}
 	if p.routeOK {
+		if searching {
+			travel, at := 0.0, s.Self
+			for _, wp := range p.route {
+				if wp.Jump || wp.Kind == 11 || wp.ElevatorPhase != "" {
+					p.routeOK = false
+					break
+				}
+				travel += quake.Horizontal(at, wp.Position)
+				at = wp.Position
+			}
+			travel += quake.Horizontal(at, goal)
+			if travel > 640 {
+				p.routeOK = false
+			}
+		}
+	}
+	if p.routeOK {
 		for p.routeIndex < len(p.route) && p.route[p.routeIndex].Kind != 11 && quake.Horizontal(s.Self, p.route[p.routeIndex].Position) <= 10 && math.Abs(s.Self[2]-p.route[p.routeIndex].Position[2]) <= 64 {
 			p.routeIndex++
 		}
@@ -315,7 +385,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.lastProgress = now
 		p.lastSelf = s.Self
 	}
-	if p.elevator == nil && p.World.Goal == "follow_teammate" && now.Sub(p.lastProgress) > 2500*time.Millisecond && now.After(p.detourUntil) {
+	if p.elevator == nil && p.button == nil && p.World.Goal == "follow_teammate" && now.Sub(p.lastProgress) > 2500*time.Millisecond && now.After(p.detourUntil) {
 		p.failures++
 		p.detourSide = -p.detourSide
 		p.detourUntil = now.Add(800 * time.Millisecond)
@@ -323,7 +393,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.routeKnown = false
 		log.Printf("navigation stuck map=%s self=%v failures=%d", s.Map, s.Self, p.failures)
 	}
-	if p.World.Navigation == "unreachable" && p.World.Geometry.HasCollision() && quake.Horizontal(s.Self, goal) < 256 && math.Abs(s.Self[2]-goal[2]) < 40 {
+	if !searching && p.World.Navigation == "unreachable" && p.World.Geometry.HasCollision() && quake.Horizontal(s.Self, goal) < 256 && math.Abs(s.Self[2]-goal[2]) < 40 {
 		from, to := s.Self, goal
 		from[2] += 18
 		to[2] += 18
@@ -370,6 +440,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		p.World.Command.LimitReason = "tactic_hold"
 		return cmd
 	}
+	p.applyButtonTask(s)
 	var enemy *quake.Object
 	best := math.Inf(1)
 	for i := range s.Enemies {
@@ -379,7 +450,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 			enemy = &s.Enemies[i]
 		}
 	}
-	if tactic != "follow" && tactic != "recover" && enemy != nil && best < 650 && (s.Ammo > 0 || strings.Contains(strings.ToLower(s.Weapon), "blast")) && enemy.ClearShot != nil && *enemy.ClearShot {
+	if p.World.Goal != "search_last_seen" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && tactic != "follow" && tactic != "recover" && enemy != nil && best < 650 && (s.Ammo > 0 || strings.Contains(strings.ToLower(s.Weapon), "blast")) && enemy.ClearShot != nil && *enemy.ClearShot {
 		from, to := s.Self, enemy.Origin
 		from[2] += 22
 		to[2] += 22
@@ -398,7 +469,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		}
 		return cmd
 	}
-	if p.World.Goal != "follow_teammate" && p.World.Goal != "recover_health" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
+	if p.World.Goal != "follow_teammate" && p.World.Goal != "recover_health" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && p.World.Goal != "search_last_seen" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
 		if p.World.Command.LimitReason == "" {
 			p.World.Command.LimitReason = "no_movement_goal"
 		}
@@ -440,7 +511,11 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		}
 	}
 	if s.OnGround && cmd.Up == 0 {
-		if hazard := p.World.Geometry.GroundMoveHazard(p.Nav, s.Self, dx, dy); hazard != "" {
+		probeStep := 40.0
+		if p.World.Goal == "touch_button" {
+			probeStep = 8
+		}
+		if hazard := p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, probeStep); hazard != "" {
 			p.World.Command.MoveSource = "none"
 			p.World.Command.MoveLimitReason = hazard
 			if p.World.Command.LimitReason == "" {
@@ -460,7 +535,11 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 			return cmd
 		}
 	}
-	cmd = worldMove(cmd, s, dx, dy, 400, cmd.Buttons != 0)
+	speed := 400.0
+	if p.World.Goal == "touch_button" {
+		speed = 80
+	}
+	cmd = worldMove(cmd, s, dx, dy, speed, cmd.Buttons != 0)
 	if cmd.Buttons == 0 {
 		p.World.Command.AimSource = "route"
 	}

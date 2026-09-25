@@ -19,6 +19,8 @@ type MapEntity struct {
 	Origin     Vec3   `json:"origin"`
 	Target     string `json:"target,omitempty"`
 	TargetName string `json:"target_name,omitempty"`
+	Health     int    `json:"health,omitempty"`
+	SpawnFlags int    `json:"spawn_flags,omitempty"`
 	Map        string `json:"map,omitempty"`
 }
 type MapInfo struct {
@@ -40,6 +42,34 @@ func (m *MapInfo) Model(index int) (BSPModel, bool) {
 		return BSPModel{}, false
 	}
 	return m.Models[index], true
+}
+
+// ButtonForDoor finds a directly linked button and the action the Quake II
+// game code accepts for it. A remotely named button has no local touch hook.
+func (m *MapInfo) ButtonForDoor(doorModel int) (MapEntity, string, bool) {
+	if m == nil {
+		return MapEntity{}, "", false
+	}
+	for _, door := range m.Entities {
+		if door.Model != doorModel || (door.Class != "func_door" && door.Class != "func_door_rotating") || door.TargetName == "" {
+			continue
+		}
+		for _, button := range m.Entities {
+			if button.Class != "func_button" || button.Target != door.TargetName {
+				continue
+			}
+			if _, ok := m.Model(button.Model); !ok {
+				continue
+			}
+			if button.Health > 0 {
+				return button, "shoot", true
+			}
+			if button.TargetName == "" {
+				return button, "touch", true
+			}
+		}
+	}
+	return MapEntity{}, "", false
 }
 
 // ClearShot reports whether the loaded BSP has a clear static line of fire.
@@ -94,14 +124,18 @@ func (m *MapInfo) GroundDrop(origin Vec3, maxDrop float64) (float64, bool) {
 // AAS grounded areas cover floors whose support is absent from the static BSP
 // brush view; dynamic movers still require a separate controller.
 func (m *MapInfo) GroundMoveHazard(nav *Navigator, origin Vec3, dx, dy float64) string {
+	return m.GroundMoveHazardStep(nav, origin, dx, dy, 40)
+}
+
+// GroundMoveHazardStep checks the displacement commanded for one game tick.
+func (m *MapInfo) GroundMoveHazardStep(nav *Navigator, origin Vec3, dx, dy, step float64) string {
 	if !m.HasCollision() {
 		return ""
 	}
 	distance := math.Hypot(dx, dy)
-	if distance < 0.001 {
+	if distance < 0.001 || step <= 0 {
 		return ""
 	}
-	step := 40.0
 	next := Vec3{origin[0] + dx/distance*step, origin[1] + dy/distance*step, origin[2]}
 	if !m.PlayerMoveClear(origin, next) {
 		return "static_hull_blocked"
@@ -112,28 +146,44 @@ func (m *MapInfo) GroundMoveHazard(nav *Navigator, origin Vec3, dx, dy float64) 
 	return ""
 }
 
-// DoorMoveHazard checks observed translating BSP doors. Their brushes are not
-// part of the static world collision set; an unseen or rotating door cannot be
-// located reliably from the current snapshot.
+// DoorMoveHazard checks translating BSP doors. An unobserved door is treated
+// as occupying its spawn bounds, so an unknown state cannot clear the passage.
 func (m *MapInfo) DoorMoveHazard(movers []Mover, origin Vec3, dx, dy float64) string {
+	_, reason := m.DoorMoveBlock(movers, origin, dx, dy)
+	return reason
+}
+
+// DoorMoveBlock also returns the brush model responsible for the obstruction.
+func (m *MapInfo) DoorMoveBlock(movers []Mover, origin Vec3, dx, dy float64) (int, string) {
 	if m == nil {
-		return ""
+		return 0, ""
 	}
 	distance := math.Hypot(dx, dy)
 	if distance < 0.001 {
-		return ""
+		return 0, ""
 	}
 	step := 40.0
 	next := Vec3{origin[0] + dx/distance*step, origin[1] + dy/distance*step, origin[2]}
+	observed := make(map[int]Mover, len(movers))
 	for _, mover := range movers {
-		model, ok := m.Model(mover.Model)
-		if !ok || !m.translatingDoor(mover.Model) {
+		observed[mover.Model] = mover
+	}
+	for _, entity := range m.Entities {
+		if entity.Class != "func_door" {
 			continue
 		}
+		model, ok := m.Model(entity.Model)
+		if !ok {
+			continue
+		}
+		mover, visible := observed[entity.Model]
 		min, max := Vec3{}, Vec3{}
 		for axis := 0; axis < 3; axis++ {
-			min[axis] = model.Min[axis] + mover.Origin[axis]
-			max[axis] = model.Max[axis] + mover.Origin[axis]
+			min[axis], max[axis] = model.Min[axis], model.Max[axis]
+			if visible {
+				min[axis] += mover.Origin[axis]
+				max[axis] += mover.Origin[axis]
+			}
 		}
 		playerMin, playerMax := Vec3{-16, -16, -24}, Vec3{16, 16, 32}
 		// A closing door can overlap the player. Let the server resolve movement
@@ -142,10 +192,13 @@ func (m *MapInfo) DoorMoveHazard(movers []Mover, origin Vec3, dx, dy float64) st
 			continue
 		}
 		if sweptBoxAABB(origin, next, min, max, playerMin, playerMax) {
-			return "dynamic_door_blocked"
+			if !visible {
+				return entity.Model, "dynamic_door_unobserved"
+			}
+			return entity.Model, "dynamic_door_blocked"
 		}
 	}
-	return ""
+	return 0, ""
 }
 
 func pointInsideExpandedAABB(point, min, max, hullMin, hullMax Vec3) bool {
@@ -157,32 +210,34 @@ func pointInsideExpandedAABB(point, min, max, hullMin, hullMax Vec3) bool {
 	return true
 }
 
-// DoorShotBlocked keeps the static BSP line-of-fire test from treating an
-// observed closed brush door as empty space.
+// DoorShotBlocked keeps unknown as well as observed closed brush doors from
+// being treated as clear lines of fire.
 func (m *MapInfo) DoorShotBlocked(movers []Mover, from, to Vec3) bool {
 	if m == nil {
 		return false
 	}
+	observed := make(map[int]Mover, len(movers))
 	for _, mover := range movers {
-		model, ok := m.Model(mover.Model)
-		if !ok || !m.translatingDoor(mover.Model) {
+		observed[mover.Model] = mover
+	}
+	for _, entity := range m.Entities {
+		if entity.Class != "func_door" {
 			continue
 		}
+		model, ok := m.Model(entity.Model)
+		if !ok {
+			continue
+		}
+		mover, visible := observed[entity.Model]
 		min, max := Vec3{}, Vec3{}
 		for axis := 0; axis < 3; axis++ {
-			min[axis] = model.Min[axis] + mover.Origin[axis]
-			max[axis] = model.Max[axis] + mover.Origin[axis]
+			min[axis], max[axis] = model.Min[axis], model.Max[axis]
+			if visible {
+				min[axis] += mover.Origin[axis]
+				max[axis] += mover.Origin[axis]
+			}
 		}
 		if sweptBoxAABB(from, to, min, max, Vec3{}, Vec3{}) {
-			return true
-		}
-	}
-	return false
-}
-
-func (m *MapInfo) translatingDoor(model int) bool {
-	for _, entity := range m.Entities {
-		if entity.Model == model && entity.Class == "func_door" {
 			return true
 		}
 	}
@@ -436,6 +491,8 @@ func parseMapEntities(text string) []MapEntity {
 				class := props["classname"]
 				if class != "" {
 					e := MapEntity{Class: class, Target: props["target"], TargetName: props["targetname"], Map: props["map"]}
+					e.Health, _ = strconv.Atoi(props["health"])
+					e.SpawnFlags, _ = strconv.Atoi(props["spawnflags"])
 					if strings.HasPrefix(props["model"], "*") {
 						e.Model, _ = strconv.Atoi(strings.TrimPrefix(props["model"], "*"))
 					}

@@ -24,6 +24,8 @@ type Config struct {
 	System1Model, System2Model        string
 	TestChangeMap, TestRCONPassword   string
 	TestTeleportMap, TestTeleport     string
+	TestTeleportAfter                 string
+	TestTeleportAfterFrames           int
 	TestSpawnMap, TestSpawnSoldier    string
 	TestSpawnClass                    string
 	Port, GameFrames, TestChangeAfter int
@@ -36,7 +38,10 @@ type Config struct {
 	TestNoAAS                         bool
 	TestDoorProbe                     bool
 	TestDoorPassProbe                 bool
+	TestButtonProbe                   bool
+	TestButtonAutoGoal                bool
 	TestNoBSP, TestPartialBSP         bool
+	TestHideDoor53                    bool
 }
 
 func parseTestTeleport(value string) (quake.Vec3, error) {
@@ -93,8 +98,17 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.TestDoorProbe && (!cfg.FramePaced || cfg.TestTeleportMap != "base2" || cfg.TestTeleport != "96,-300,24") {
 		return fmt.Errorf("test.door_probe requires frame pacing and the base2 door teleport")
 	}
+	if cfg.TestHideDoor53 && !cfg.TestDoorProbe {
+		return fmt.Errorf("test.hide_door_53 requires test.door_probe")
+	}
 	if cfg.TestDoorPassProbe && (!cfg.FramePaced || cfg.TestTeleportMap != "base2" || cfg.TestTeleport != "-64,-800,24") {
 		return fmt.Errorf("test.door_pass_probe requires frame pacing and the base2 approach teleport")
+	}
+	if cfg.TestButtonProbe && (!cfg.FramePaced || cfg.TestTeleportMap != "base2" || cfg.TestTeleport != "320,1940,-144") {
+		return fmt.Errorf("test.button_probe requires frame pacing and the base2 button teleport")
+	}
+	if cfg.TestButtonAutoGoal && (!cfg.FramePaced || cfg.TestTeleportMap != "base2" || cfg.TestTeleport != "194,1940,-144") {
+		return fmt.Errorf("test.button_auto_goal requires frame pacing and the base2 door-side teleport")
 	}
 	if cfg.TestGapStart != 0 || cfg.TestGapFrames != 0 {
 		if !cfg.FramePaced || cfg.GameFrames == 0 || cfg.TestGapStart < 1 || cfg.TestGapFrames < 1 || cfg.TestGapStart+cfg.TestGapFrames >= cfg.GameFrames {
@@ -117,6 +131,17 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 		var err error
 		teleportPosition, err = parseTestTeleport(cfg.TestTeleport)
+		if err != nil {
+			return err
+		}
+	}
+	var teleportAfterPosition quake.Vec3
+	if cfg.TestTeleportAfter != "" || cfg.TestTeleportAfterFrames != 0 {
+		if cfg.TestTeleport == "" || cfg.TestTeleportAfterFrames < 1 {
+			return fmt.Errorf("test.teleport_after requires test.teleport and positive test.teleport_after_frames")
+		}
+		var err error
+		teleportAfterPosition, err = parseTestTeleport(cfg.TestTeleportAfter)
 		if err != nil {
 			return err
 		}
@@ -152,12 +177,13 @@ func Run(ctx context.Context, cfg Config) error {
 	defer conn.Close()
 	client := &Client{
 		conn: conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
-		decoder: quake.NewDecoder(), planner: &Planner{AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP},
+		decoder: quake.NewDecoder(), planner: &Planner{AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53},
 		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name,
 		idle: cfg.Idle, duration: cfg.Duration, framePaced: cfg.FramePaced, gameFrames: cfg.GameFrames,
 		exitOnReconnect: cfg.ExitOnReconnect, testChangeMap: cfg.TestChangeMap,
 		testChangeAfter: cfg.TestChangeAfter, testRconPassword: cfg.TestRCONPassword,
 		testTeleportMap: cfg.TestTeleportMap, testTeleportPosition: teleportPosition,
+		testTeleportAfterPosition: teleportAfterPosition, testTeleportAfterFrames: cfg.TestTeleportAfterFrames,
 		testSpawnMap: cfg.TestSpawnMap, testSpawnPosition: spawnPosition,
 		testSpawnClass: cfg.TestSpawnClass,
 		testGapStart:   cfg.TestGapStart, testGapFrames: cfg.TestGapFrames,
@@ -166,6 +192,8 @@ func Run(ctx context.Context, cfg Config) error {
 		testGroundEdgeProbe: cfg.TestGroundEdgeProbe,
 		testDoorProbe:       cfg.TestDoorProbe,
 		testDoorPassProbe:   cfg.TestDoorPassProbe,
+		testButtonProbe:     cfg.TestButtonProbe,
+		testButtonAutoGoal:  cfg.TestButtonAutoGoal,
 	}
 	if cfg.TracePath != "" {
 		client.traceFile, err = os.Create(cfg.TracePath)

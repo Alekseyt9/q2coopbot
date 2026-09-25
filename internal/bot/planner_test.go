@@ -109,6 +109,85 @@ func TestPlannerStopsWithUnavailableOrIncompleteBSP(t *testing.T) {
 	}
 }
 
+func TestPlannerDoesNotTreatLastSeenTeammateAsVisibleGoal(t *testing.T) {
+	last := quake.Vec3{200, 0, 24}
+	age := 20
+	p := &Planner{World: World{Map: "test", GeometryStatus: "ready", Navigation: "ready"}}
+	s := quake.Snapshot{Map: "test", Frame: 21, Self: quake.Vec3{0, 0, 24}, LastTeammate: &last,
+		TeammateAgeFrames: &age, Health: 100, OnGround: true}
+	p.update(s, "")
+	if p.World.Goal != "wait_for_teammate" || p.hasGoal || p.World.Snapshot.Teammate != nil || p.World.Snapshot.LastTeammate == nil {
+		t.Fatalf("last-seen position became a visible goal: %+v", p.World)
+	}
+	cmd := p.command(quake.UserCmd{})
+	if cmd.Forward != 0 || cmd.Side != 0 || cmd.Up != 0 || cmd.Buttons != 0 {
+		t.Fatalf("bot moved toward stale position: %+v", cmd)
+	}
+}
+
+func TestPlannerSearchesLastSeenPointWithinBounds(t *testing.T) {
+	last := quake.Vec3{200, 0, 24}
+	age := 1
+	nav := &quake.Navigator{Areas: []quake.Area{{}, {Min: quake.Vec3{-10, -20, 0}, Max: quake.Vec3{220, 20, 50}}}, Edges: make([][]quake.Edge, 2)}
+	p := &Planner{Nav: nav, World: World{Map: "test", GeometryStatus: "ready", Navigation: "ready"}}
+	s := quake.Snapshot{Map: "test", Frame: 10, Self: quake.Vec3{0, 0, 24}, LastTeammate: &last,
+		TeammateAgeFrames: &age, Health: 100, OnGround: true}
+	p.update(s, "")
+	if p.World.Goal != "search_last_seen" || p.World.Navigation != "ready" || !p.hasGoal || p.goalPoint != last || p.World.Snapshot.Teammate != nil {
+		t.Fatalf("bounded search did not use last confirmed point: %+v", p.World)
+	}
+	s.Frame, age = 11, 2
+	s.Self = quake.Vec3{145, 0, 24}
+	p.update(s, "")
+	if p.World.Goal != "wait_for_teammate" || p.hasGoal {
+		t.Fatalf("search continued at last-seen point: %+v", p.World)
+	}
+	s.Frame, age = 12, 41
+	s.Self = quake.Vec3{0, 0, 24}
+	p.update(s, "")
+	if p.World.Goal != "wait_for_teammate" || p.hasGoal {
+		t.Fatalf("expired memory remained a search goal: %+v", p.World)
+	}
+	s.Frame = 13
+	s.Teammate = &last
+	p.update(s, "")
+	if p.World.Goal != "follow_teammate" || !p.hasGoal {
+		t.Fatalf("fresh observation did not resume following: %+v", p.World)
+	}
+}
+
+func TestLastSeenSearchRejectsElevatorRoute(t *testing.T) {
+	last := quake.Vec3{200, 0, 24}
+	age := 1
+	nav := &quake.Navigator{Areas: []quake.Area{{},
+		{Min: quake.Vec3{-10, -10, 0}, Max: quake.Vec3{10, 10, 50}},
+		{Min: quake.Vec3{190, -10, 0}, Max: quake.Vec3{210, 10, 50}},
+	}, Edges: [][]quake.Edge{{}, {{To: 2, Start: quake.Vec3{20, 0, 24}, End: quake.Vec3{180, 0, 24}, Kind: 11, Cost: 1}}, nil}}
+	p := &Planner{Nav: nav, World: World{Map: "test", GeometryStatus: "ready"}}
+	s := quake.Snapshot{Map: "test", Frame: 10, Self: quake.Vec3{0, 0, 24}, LastTeammate: &last,
+		TeammateAgeFrames: &age, Health: 100, OnGround: true}
+	p.update(s, "")
+	if p.World.Navigation != "unreachable" || len(p.World.Route) != 0 {
+		t.Fatalf("stale goal used an elevator route: %+v", p.World)
+	}
+	cmd := p.command(quake.UserCmd{})
+	if cmd.Forward != 0 || cmd.Side != 0 || cmd.Up != 0 {
+		t.Fatalf("stale goal moved into elevator route: %+v", cmd)
+	}
+}
+
+func TestButtonTaskStopsWhenMoverObservationDisappears(t *testing.T) {
+	goal := quake.Vec3{100, 0, 24}
+	p := &Planner{World: World{Map: "test", GeometryStatus: "ready", Geometry: &quake.MapInfo{},
+		Goal: "follow_teammate"}, button: &buttonTask{doorModel: 1, buttonModel: 2, started: 1}}
+	s := quake.Snapshot{Map: "test", Frame: 2, Self: quake.Vec3{0, 0, 24}, Teammate: &goal,
+		Movers: []quake.Mover{{Model: 1}}}
+	p.applyButtonTask(s)
+	if p.button != nil || p.buttonCooldown <= s.Frame || p.World.Goal != "follow_teammate" {
+		t.Fatalf("missing button mover was still actionable: task=%+v cooldown=%d goal=%q", p.button, p.buttonCooldown, p.World.Goal)
+	}
+}
+
 func TestTeammateBlocksShot(t *testing.T) {
 	from, target := quake.Vec3{0, 0, 22}, quake.Vec3{200, 0, 22}
 	for _, tc := range []struct {

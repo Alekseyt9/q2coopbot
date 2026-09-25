@@ -42,6 +42,8 @@ type ConfigFile struct {
 		ChangeAfterFrames    int    `json:"change_after_frames"`
 		TeleportMap          string `json:"teleport_map"`
 		Teleport             string `json:"teleport"`
+		TeleportAfter        string `json:"teleport_after"`
+		TeleportAfterFrames  int    `json:"teleport_after_frames"`
 		SpawnMap             string `json:"spawn_map"`
 		SpawnSoldier         string `json:"spawn_soldier"`
 		SpawnClass           string `json:"spawn_class"`
@@ -53,8 +55,11 @@ type ConfigFile struct {
 		NoAAS                bool   `json:"no_aas"`
 		DoorProbe            bool   `json:"door_probe"`
 		DoorPassProbe        bool   `json:"door_pass_probe"`
+		ButtonProbe          bool   `json:"button_probe"`
+		ButtonAutoGoal       bool   `json:"button_auto_goal"`
 		NoBSP                bool   `json:"no_bsp"`
 		PartialBSP           bool   `json:"partial_bsp"`
+		HideDoor53           bool   `json:"hide_door_53"`
 	} `json:"test"`
 }
 
@@ -116,6 +121,7 @@ func LoadConfig(path string) (Config, error) {
 		cfg.TestChangeAfter = 20
 	}
 	cfg.TestTeleportMap, cfg.TestTeleport = file.Test.TeleportMap, file.Test.Teleport
+	cfg.TestTeleportAfter, cfg.TestTeleportAfterFrames = file.Test.TeleportAfter, file.Test.TeleportAfterFrames
 	cfg.TestSpawnMap, cfg.TestSpawnSoldier, cfg.TestSpawnClass = file.Test.SpawnMap, file.Test.SpawnSoldier, file.Test.SpawnClass
 	cfg.TestGapStart, cfg.TestGapFrames = file.Test.ObservationGapStart, file.Test.ObservationGapFrames
 	cfg.TestLineCross, cfg.TestHoldPosition = file.Test.LineCross, file.Test.HoldPosition
@@ -123,6 +129,9 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestNoAAS = file.Test.NoAAS
 	cfg.TestDoorProbe = file.Test.DoorProbe
 	cfg.TestDoorPassProbe = file.Test.DoorPassProbe
+	cfg.TestButtonProbe = file.Test.ButtonProbe
+	cfg.TestButtonAutoGoal = file.Test.ButtonAutoGoal
 	cfg.TestNoBSP, cfg.TestPartialBSP = file.Test.NoBSP, file.Test.PartialBSP
+	cfg.TestHideDoor53 = file.Test.HideDoor53
 	return cfg, nil
 }

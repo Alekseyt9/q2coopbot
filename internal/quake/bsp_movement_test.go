@@ -34,6 +34,9 @@ func TestPlayerMoveClearAndGroundDrop(t *testing.T) {
 	if got := m.GroundMoveHazard(nil, Vec3{0, 0, 24}, 40, 0); got != "static_hull_blocked" {
 		t.Fatalf("wall hazard=%q", got)
 	}
+	if got := m.GroundMoveHazardStep(nil, Vec3{0, 0, 24}, 40, 0, 8); got != "" {
+		t.Fatalf("slow approach was blocked early: %q", got)
+	}
 	if got := m.GroundMoveHazard(nil, Vec3{90, 0, 24}, 40, 0); got != "no_ground_support" {
 		t.Fatalf("edge hazard=%q", got)
 	}
@@ -66,6 +69,9 @@ func TestDoorMoveHazardUsesObservedTranslatingDoor(t *testing.T) {
 	if got := m.DoorMoveHazard(closed, start, 0, 140); got != "dynamic_door_blocked" {
 		t.Fatalf("closed door hazard=%q", got)
 	}
+	if model, reason := m.DoorMoveBlock(closed, start, 0, 140); model != 1 || reason != "dynamic_door_blocked" {
+		t.Fatalf("closed door model=%d reason=%q", model, reason)
+	}
 	if got := m.DoorMoveHazard(closed, start, 0, 1); got != "dynamic_door_blocked" {
 		t.Fatalf("full-speed detour door hazard=%q", got)
 	}
@@ -75,8 +81,14 @@ func TestDoorMoveHazardUsesObservedTranslatingDoor(t *testing.T) {
 	if !m.DoorShotBlocked(closed, Vec3{96, -300, 30}, Vec3{96, -96, 30}) {
 		t.Fatal("closed door did not block line of fire")
 	}
-	if got := m.DoorMoveHazard(nil, start, 0, 140); got != "" {
+	if got := m.DoorMoveHazard(nil, start, 0, 140); got != "dynamic_door_unobserved" {
 		t.Fatalf("unobserved door hazard=%q", got)
+	}
+	if !m.DoorShotBlocked(nil, Vec3{96, -300, 30}, Vec3{96, -96, 30}) {
+		t.Fatal("unobserved door was treated as a clear shot")
+	}
+	if got := m.DoorMoveHazard(nil, Vec3{200, -300, 24}, 0, 140); got != "" {
+		t.Fatalf("unobserved distant door blocked unrelated movement: %q", got)
 	}
 	open := []Mover{{Model: 1, Origin: Vec3{200, 0, 0}}}
 	if got := m.DoorMoveHazard(open, start, 0, 140); got != "" {
@@ -111,5 +123,36 @@ func TestMovementCompleteRequiresBrushModels(t *testing.T) {
 	m.Models = nil
 	if m.MovementComplete() {
 		t.Fatal("missing model lump was accepted")
+	}
+}
+
+func TestButtonForDoorChecksLinkAndActivation(t *testing.T) {
+	m := &MapInfo{Models: make([]BSPModel, 4), Entities: []MapEntity{
+		{Class: "func_door", Model: 1, TargetName: "gate"},
+		{Class: "func_button", Model: 2, Target: "gate"},
+	}}
+	button, action, ok := m.ButtonForDoor(1)
+	if !ok || button.Model != 2 || action != "touch" {
+		t.Fatalf("touch button lookup=%+v %q %t", button, action, ok)
+	}
+	m.Entities[1].Health = 10
+	_, action, ok = m.ButtonForDoor(1)
+	if !ok || action != "shoot" {
+		t.Fatalf("shoot button lookup=%q %t", action, ok)
+	}
+	m.Entities[1].Health = 0
+	m.Entities[1].TargetName = "remote"
+	if _, _, ok := m.ButtonForDoor(1); ok {
+		t.Fatal("remotely activated button was offered as a local action")
+	}
+}
+
+func TestParsedButtonHealthSelectsShoot(t *testing.T) {
+	entities := parseMapEntities(`{"classname" "func_door" "model" "*1" "targetname" "gate"}
+{"classname" "func_button" "model" "*2" "target" "gate" "health" "20" "spawnflags" "8"}`)
+	m := &MapInfo{Models: make([]BSPModel, 3), Entities: entities}
+	button, action, ok := m.ButtonForDoor(1)
+	if !ok || button.Model != 2 || button.SpawnFlags != 8 || action != "shoot" {
+		t.Fatalf("parsed button action=%q button=%+v ok=%t", action, button, ok)
 	}
 }

@@ -21,7 +21,12 @@ param(
     [switch]$GroundEdgeTrial,
     [switch]$NoAASTrial,
     [switch]$DoorTrial,
+    [switch]$HideDoorMover,
     [switch]$DoorPassTrial,
+    [switch]$ButtonTrial,
+    [switch]$ButtonAutoTrial,
+    [switch]$TeammateMemoryTrial,
+    [switch]$TeammateSearchTrial,
     [string]$BSPFailureTrial = '',
     [string]$OutputRoot = ''
 )
@@ -60,10 +65,32 @@ if ($DoorTrial -and ($Map -ne 'base1' -or $TransitionMap -ne 'base2' -or -not $S
     $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $ObservationGapTrial -or $GroundEdgeTrial -or $NoAASTrial)) {
     throw '-DoorTrial requires synchronized base1 to base2 transition and no other gameplay trial.'
 }
+if ($HideDoorMover -and -not $DoorTrial) { throw '-HideDoorMover requires -DoorTrial.' }
 if ($DoorPassTrial -and ($Map -ne 'base1' -or $TransitionMap -ne 'base2' -or -not $SynchronizedStart -or
     $GameFrames -lt 80 -or $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or
     $ObservationGapTrial -or $GroundEdgeTrial -or $NoAASTrial -or $DoorTrial)) {
     throw '-DoorPassTrial requires at least 80 frames, synchronized base1 to base2 transition and no other gameplay trial.'
+}
+if ($ButtonTrial -and ($Map -ne 'base1' -or $TransitionMap -ne 'base2' -or -not $SynchronizedStart -or
+    $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $ObservationGapTrial -or
+    $GroundEdgeTrial -or $NoAASTrial -or $DoorTrial -or $DoorPassTrial -or $BSPFailureTrial)) {
+    throw '-ButtonTrial requires synchronized base1 to base2 transition and no other gameplay trial.'
+}
+if ($ButtonAutoTrial -and ($Map -ne 'base1' -or $TransitionMap -ne 'base2' -or -not $SynchronizedStart -or
+    $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $ObservationGapTrial -or
+    $GroundEdgeTrial -or $NoAASTrial -or $DoorTrial -or $DoorPassTrial -or $ButtonTrial -or $BSPFailureTrial)) {
+    throw '-ButtonAutoTrial requires synchronized base1 to base2 transition and no other gameplay trial.'
+}
+if ($TeammateMemoryTrial -and ($Map -ne 'base1' -or $TransitionMap -ne 'base2' -or -not $SynchronizedStart -or
+    $GameFrames -lt 70 -or $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $ObservationGapTrial -or
+    $GroundEdgeTrial -or $NoAASTrial -or $DoorTrial -or $DoorPassTrial -or $ButtonTrial -or $ButtonAutoTrial -or $BSPFailureTrial)) {
+    throw '-TeammateMemoryTrial requires at least 70 frames, synchronized base1 to base2 transition and no other gameplay trial.'
+}
+if ($TeammateSearchTrial -and ($Map -ne 'base1' -or $TransitionMap -ne 'base2' -or -not $SynchronizedStart -or
+    $GameFrames -lt 70 -or $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $ObservationGapTrial -or
+    $GroundEdgeTrial -or $NoAASTrial -or $DoorTrial -or $DoorPassTrial -or $ButtonTrial -or $ButtonAutoTrial -or
+    $TeammateMemoryTrial -or $BSPFailureTrial)) {
+    throw '-TeammateSearchTrial requires at least 70 frames, synchronized base1 to base2 transition and no other gameplay trial.'
 }
 if ($BSPFailureTrial -and ($BSPFailureTrial -notin @('unavailable', 'incomplete') -or
     $Map -ne 'base1' -or $TransitionMap -or -not $SynchronizedStart -or
@@ -123,7 +150,7 @@ foreach ($scale in $Timescales) {
     $rconPassword = if ($TransitionMap) { [guid]::NewGuid().ToString('N') } else { '' }
     if ($TransitionMap) { $args = "+set rcon_password $rconPassword $args" }
     if ($UnlimitedLoopbackRate) { $args = "+set sv_test_unlimited_loopback 1 $args" }
-    if ($ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $GroundEdgeTrial -or $DoorTrial -or $DoorPassTrial) { $args = "+set cheats 1 $args" }
+    if ($ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $GroundEdgeTrial -or $DoorTrial -or $DoorPassTrial -or $ButtonTrial -or $ButtonAutoTrial -or $TeammateMemoryTrial -or $TeammateSearchTrial) { $args = "+set cheats 1 $args" }
     if ($SynchronizedStart) { $args = "+set sv_test_trace_client GoCoopMate +set sv_test_start_client GoCoopMate $args" }
     $server = Start-Process -FilePath $ServerExe -ArgumentList $args -WorkingDirectory $RuntimeRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
     $human = $null
@@ -161,6 +188,28 @@ foreach ($scale in $Timescales) {
         if ($DoorPassTrial) {
             $humanConfig.test.teleport_map = 'base2'
             $humanConfig.test.teleport = '160,-800,24'
+        }
+        if ($ButtonTrial) {
+            $humanConfig.test.teleport_map = 'base2'
+            $humanConfig.test.teleport = '360,1940,-144'
+        }
+        if ($ButtonAutoTrial) {
+            $humanConfig.test.teleport_map = 'base2'
+            $humanConfig.test.teleport = '194,2080,-144'
+        }
+        if ($TeammateMemoryTrial) {
+            $humanConfig.output.trace_jsonl = $humanTracePath
+            $humanConfig.test.teleport_map = 'base2'
+            $humanConfig.test.teleport = '220,1940,-144'
+            $humanConfig.test.teleport_after = '194,2080,-144'
+            $humanConfig.test.teleport_after_frames = 12
+        }
+        if ($TeammateSearchTrial) {
+            $humanConfig.output.trace_jsonl = $humanTracePath
+            $humanConfig.test.teleport_map = 'base2'
+            $humanConfig.test.teleport = '320,1940,-144'
+            $humanConfig.test.teleport_after = '194,2080,-144'
+            $humanConfig.test.teleport_after_frames = 3
         }
         if ($CombatMoveTrial -or $FriendlyFireTrial) {
             $humanConfig.test.spawn_map = 'base1'
@@ -207,11 +256,26 @@ foreach ($scale in $Timescales) {
             $botConfig.test.teleport_map = 'base2'
             $botConfig.test.teleport = '96,-300,24'
             $botConfig.test.door_probe = $true
+            if ($HideDoorMover) { $botConfig.test.hide_door_53 = $true }
         }
         if ($DoorPassTrial) {
             $botConfig.test.teleport_map = 'base2'
             $botConfig.test.teleport = '-64,-800,24'
             $botConfig.test.door_pass_probe = $true
+        }
+        if ($ButtonTrial) {
+            $botConfig.test.teleport_map = 'base2'
+            $botConfig.test.teleport = '320,1940,-144'
+            $botConfig.test.button_probe = $true
+        }
+        if ($ButtonAutoTrial) {
+            $botConfig.test.teleport_map = 'base2'
+            $botConfig.test.teleport = '194,1940,-144'
+            $botConfig.test.button_auto_goal = $true
+        }
+        if ($TeammateMemoryTrial -or $TeammateSearchTrial) {
+            $botConfig.test.teleport_map = 'base2'
+            $botConfig.test.teleport = '194,1940,-144'
         }
         if ($BSPFailureTrial -eq 'unavailable') { $botConfig.test.no_bsp = $true }
         if ($BSPFailureTrial -eq 'incomplete') { $botConfig.test.partial_bsp = $true }
@@ -268,6 +332,7 @@ foreach ($scale in $Timescales) {
         $noAASMaxProgress = 0.0
         $doorMoverObserved = $false
         $doorBlockedFrames = 0
+        $doorUnobservedFrames = 0
         $doorShotBlockedFrames = 0
         $doorProbeFrames = 0
         $doorMaxY = [double]::NegativeInfinity
@@ -282,12 +347,77 @@ foreach ($scale in $Timescales) {
         $bspMotionFrames = 0
         $bspOrigin = $null
         $bspMaxDrift = 0.0
+        $buttonProbeFrames = 0
+        $buttonMoveFrames = 0
+        $buttonFireFrames = 0
+        $buttonMinY = [double]::PositiveInfinity
+        $buttonMaxY = [double]::NegativeInfinity
+        $buttonMaxMoverY = [double]::NegativeInfinity
+        $buttonMaxDoorZ = [double]::NegativeInfinity
+        $buttonFirstMovedFrame = $null
+        $buttonDoorFirstMovedFrame = $null
+        $autoApproachFrames = 0
+        $autoTouchFrames = 0
+        $autoFireFrames = 0
+        $autoResumedFrames = 0
+        $autoMaxButtonY = [double]::NegativeInfinity
+        $autoMaxDoorZ = [double]::NegativeInfinity
+        $autoButtonFirstFrame = $null
+        $autoDoorFirstFrame = $null
+        $autoTouched = $false
+        $memoryVisibleFrames = 0
+        $memoryHiddenFrames = 0
+        $memoryHiddenMoveFrames = 0
+        $memoryHiddenWaitFrames = 0
+        $memoryMaxAge = 0
+        $memoryUnexpectedLastPosition = 0
+        $searchFrames = 0
+        $searchMoveFrames = 0
+        $searchStartX = $null
+        $searchMaxX = [double]::NegativeInfinity
+        $searchWaitAfter = 0
+        $searchWaitAtPoint = 0
+        $searchWaitMoveFrames = 0
         foreach ($line in Get-Content -LiteralPath $tracePath) {
             $entry = $line | ConvertFrom-Json
             $sent["$($entry.spawncount):$($entry.client_sequence)"] = $entry.sent_command
             if ($null -ne $entry.teammate) { $teammateSeenInTrace = $true }
             if ($TransitionMap -and $entry.map -eq $TransitionMap -and $null -ne $entry.teammate) {
                 $teammateSeenAfterTransition = $true
+            }
+            if ($TeammateMemoryTrial -and $entry.map -eq 'base2') {
+                if ($null -ne $entry.teammate -and [math]::Abs($entry.teammate[0] - 220) -lt 32 -and
+                    [math]::Abs($entry.teammate[1] - 1940) -lt 32) { $memoryVisibleFrames++ }
+                if ($null -eq $entry.teammate -and $null -ne $entry.last_teammate -and $entry.teammate_age_frames -gt 0) {
+                    $memoryHiddenFrames++
+                    $memoryMaxAge = [math]::Max($memoryMaxAge, [int]$entry.teammate_age_frames)
+                    if ([math]::Abs($entry.last_teammate[0] - 220) -gt 32 -or
+                        [math]::Abs($entry.last_teammate[1] - 1940) -gt 32) { $memoryUnexpectedLastPosition++ }
+                    if ($entry.sent_command.Forward -ne 0 -or $entry.sent_command.Side -ne 0 -or
+                        $entry.sent_command.Up -ne 0) { $memoryHiddenMoveFrames++ }
+                    if ($entry.goal -eq 'wait_for_teammate') { $memoryHiddenWaitFrames++ }
+                }
+            }
+            if ($TeammateSearchTrial -and $entry.map -eq 'base2' -and $null -eq $entry.teammate -and
+                $null -ne $entry.last_teammate -and [math]::Abs($entry.last_teammate[0] - 320) -lt 32 -and
+                [math]::Abs($entry.last_teammate[1] - 1940) -lt 32) {
+                if ($entry.goal -eq 'search_last_seen') {
+                    $searchFrames++
+                    if ($null -eq $searchStartX) { $searchStartX = [double]$entry.self[0] }
+                    $searchMaxX = [math]::Max($searchMaxX, [double]$entry.self[0])
+                    if ($entry.sent_command.Forward -ne 0 -or $entry.sent_command.Side -ne 0) { $searchMoveFrames++ }
+                }
+                if ($entry.teammate_age_frames -gt 40 -and $entry.goal -eq 'wait_for_teammate' -and
+                    $entry.sent_command.Forward -eq 0 -and $entry.sent_command.Side -eq 0 -and $entry.sent_command.Up -eq 0) {
+                    $searchWaitAfter++
+                }
+                if ($entry.goal -eq 'wait_for_teammate') {
+                    if ($entry.teammate_age_frames -le 40 -and
+                        [math]::Sqrt([math]::Pow($entry.self[0] - $entry.last_teammate[0], 2) +
+                                     [math]::Pow($entry.self[1] - $entry.last_teammate[1], 2)) -le 64) { $searchWaitAtPoint++ }
+                    if ($entry.sent_command.Forward -ne 0 -or $entry.sent_command.Side -ne 0 -or
+                        $entry.sent_command.Up -ne 0) { $searchWaitMoveFrames++ }
+                }
             }
             if ($entry.map -and ($observedMaps.Count -eq 0 -or $observedMaps[$observedMaps.Count - 1] -cne $entry.map)) {
                 $observedMaps.Add($entry.map)
@@ -361,6 +491,10 @@ foreach ($scale in $Timescales) {
                     $entry.sent_command.Forward -eq 0 -and $entry.sent_command.Side -eq 0 -and $entry.sent_command.Up -eq 0) {
                     $doorBlockedFrames++
                 }
+                if ($entry.arbitration.move_limit_reason -eq 'dynamic_door_unobserved' -and
+                    $entry.sent_command.Forward -eq 0 -and $entry.sent_command.Side -eq 0 -and $entry.sent_command.Up -eq 0) {
+                    $doorUnobservedFrames++
+                }
             }
             if ($DoorPassTrial -and $entry.map -eq 'base2' -and [math]::Abs($entry.self[1] + 800) -lt 64) {
                 $doorPassMaxX = [math]::Max($doorPassMaxX, [double]$entry.self[0])
@@ -386,8 +520,58 @@ foreach ($scale in $Timescales) {
                 $drift = [math]::Sqrt([math]::Pow($entry.self[0] - $bspOrigin[0], 2) + [math]::Pow($entry.self[1] - $bspOrigin[1], 2))
                 $bspMaxDrift = [math]::Max($bspMaxDrift, $drift)
             }
+            if ($ButtonTrial -and $entry.map -eq 'base2' -and $entry.on_ground -and
+                [math]::Abs($entry.self[0] - 320) -lt 8 -and $entry.self[1] -ge 1900 -and $entry.self[1] -le 2020) {
+                $buttonProbeFrames++
+                $buttonMinY = [math]::Min($buttonMinY, [double]$entry.self[1])
+                $buttonMaxY = [math]::Max($buttonMaxY, [double]$entry.self[1])
+                if ($entry.sent_command.Forward -ne 0 -or $entry.sent_command.Side -ne 0) { $buttonMoveFrames++ }
+                if ($entry.sent_command.Buttons -ne 0) { $buttonFireFrames++ }
+                $buttonMover = @($entry.movers | Where-Object { $_.model -eq 34 } | Select-Object -First 1)
+                if ($buttonMover.Count -gt 0) {
+                    $movedY = [double]$buttonMover[0].origin[1]
+                    $buttonMaxMoverY = [math]::Max($buttonMaxMoverY, $movedY)
+                    if ($movedY -gt 1 -and $null -eq $buttonFirstMovedFrame) { $buttonFirstMovedFrame = [int]$entry.frame }
+                }
+                $buttonDoor = @($entry.movers | Where-Object { $_.model -eq 33 } | Select-Object -First 1)
+                if ($buttonDoor.Count -gt 0) {
+                    $movedZ = [double]$buttonDoor[0].origin[2]
+                    $buttonMaxDoorZ = [math]::Max($buttonMaxDoorZ, $movedZ)
+                    if ($movedZ -gt 1 -and $null -eq $buttonDoorFirstMovedFrame) { $buttonDoorFirstMovedFrame = [int]$entry.frame }
+                }
+            }
+            if ($ButtonAutoTrial -and $entry.map -eq 'base2' -and $entry.on_ground) {
+                if ($entry.arbitration.skill -eq 'button_approach') { $autoApproachFrames++ }
+                if ($entry.arbitration.skill -eq 'button_touch') {
+                    $autoTouchFrames++
+                    $autoTouched = $true
+                }
+                if ($entry.arbitration.skill -like 'button*' -and $entry.sent_command.Buttons -ne 0) { $autoFireFrames++ }
+                if ($autoTouched -and $entry.goal -eq 'follow_teammate' -and
+                    ($entry.sent_command.Forward -ne 0 -or $entry.sent_command.Side -ne 0)) { $autoResumedFrames++ }
+                $buttonMover = @($entry.movers | Where-Object { $_.model -eq 34 } | Select-Object -First 1)
+                if ($buttonMover.Count -gt 0) {
+                    $movedY = [double]$buttonMover[0].origin[1]
+                    $autoMaxButtonY = [math]::Max($autoMaxButtonY, $movedY)
+                    if ($movedY -gt 1 -and $null -eq $autoButtonFirstFrame) { $autoButtonFirstFrame = [int]$entry.frame }
+                }
+                $buttonDoor = @($entry.movers | Where-Object { $_.model -eq 33 } | Select-Object -First 1)
+                if ($buttonDoor.Count -gt 0) {
+                    $movedZ = [double]$buttonDoor[0].origin[2]
+                    $autoMaxDoorZ = [math]::Max($autoMaxDoorZ, $movedZ)
+                    if ($movedZ -gt 1 -and $null -eq $autoDoorFirstFrame) { $autoDoorFirstFrame = [int]$entry.frame }
+                }
+            }
         }
         $humanAtTop = $false
+        $memoryHumanBehindWall = $false
+        if (($TeammateMemoryTrial -or $TeammateSearchTrial) -and (Test-Path -LiteralPath $humanTracePath)) {
+            foreach ($line in Get-Content -LiteralPath $humanTracePath) {
+                $entry = $line | ConvertFrom-Json
+                if ($entry.map -eq 'base2' -and [math]::Abs($entry.self[0] - 194) -lt 16 -and
+                    [math]::Abs($entry.self[1] - 2080) -lt 16) { $memoryHumanBehindWall = $true; break }
+            }
+        }
         if ($ElevatorTrial -and (Test-Path -LiteralPath $humanTracePath)) {
             foreach ($line in Get-Content -LiteralPath $humanTracePath) {
                 $entry = $line | ConvertFrom-Json
@@ -469,6 +653,7 @@ foreach ($scale in $Timescales) {
             no_aas_max_progress = $noAASMaxProgress
             door_trial = [bool]$DoorTrial; door_mover_observed = $doorMoverObserved
             door_probe_frames = $doorProbeFrames; door_blocked_frames = $doorBlockedFrames
+            door_unobserved_trial = [bool]$HideDoorMover; door_unobserved_frames = $doorUnobservedFrames
             door_shot_blocked_frames = $doorShotBlockedFrames
             door_max_y = $(if ($DoorTrial -and $doorMaxY -ne [double]::NegativeInfinity) { $doorMaxY } else { $null })
             door_pass_trial = [bool]$DoorPassTrial; door_pass_blocked_frames = $doorPassBlockedFrames
@@ -480,6 +665,32 @@ foreach ($scale in $Timescales) {
             bsp_failure_trial = $BSPFailureTrial; bsp_status_frames = $bspStatusFrames
             bsp_neutral_frames = $bspNeutralFrames; bsp_motion_frames = $bspMotionFrames
             bsp_max_xy_drift = $bspMaxDrift
+            button_trial = [bool]$ButtonTrial; button_probe_frames = $buttonProbeFrames
+            button_move_frames = $buttonMoveFrames; button_fire_frames = $buttonFireFrames
+            button_min_y = $(if ($buttonMinY -ne [double]::PositiveInfinity) { $buttonMinY } else { $null })
+            button_max_y = $(if ($buttonMaxY -ne [double]::NegativeInfinity) { $buttonMaxY } else { $null })
+            button_max_mover_y = $(if ($buttonMaxMoverY -ne [double]::NegativeInfinity) { $buttonMaxMoverY } else { $null })
+            button_max_door_z = $(if ($buttonMaxDoorZ -ne [double]::NegativeInfinity) { $buttonMaxDoorZ } else { $null })
+            button_first_moved_frame = $buttonFirstMovedFrame
+            button_door_first_moved_frame = $buttonDoorFirstMovedFrame
+            button_auto_trial = [bool]$ButtonAutoTrial; button_auto_approach_frames = $autoApproachFrames
+            button_auto_touch_frames = $autoTouchFrames; button_auto_fire_frames = $autoFireFrames
+            button_auto_resumed_frames = $autoResumedFrames
+            button_auto_max_button_y = $(if ($autoMaxButtonY -ne [double]::NegativeInfinity) { $autoMaxButtonY } else { $null })
+            button_auto_max_door_z = $(if ($autoMaxDoorZ -ne [double]::NegativeInfinity) { $autoMaxDoorZ } else { $null })
+            button_auto_button_first_frame = $autoButtonFirstFrame
+            button_auto_door_first_frame = $autoDoorFirstFrame
+            teammate_memory_trial = [bool]$TeammateMemoryTrial
+            memory_visible_frames = $memoryVisibleFrames; memory_hidden_frames = $memoryHiddenFrames
+            memory_max_age_frames = $memoryMaxAge; memory_hidden_move_frames = $memoryHiddenMoveFrames
+            memory_hidden_wait_frames = $memoryHiddenWaitFrames; memory_unexpected_last_position = $memoryUnexpectedLastPosition
+            memory_human_behind_wall = $memoryHumanBehindWall
+            teammate_search_trial = [bool]$TeammateSearchTrial
+            search_frames = $searchFrames; search_move_frames = $searchMoveFrames
+            search_start_x = $searchStartX
+            search_max_x = $(if ($searchMaxX -ne [double]::NegativeInfinity) { $searchMaxX } else { $null })
+            search_wait_after = $searchWaitAfter
+            search_wait_at_point = $searchWaitAtPoint; search_wait_move_frames = $searchWaitMoveFrames
             sent_commands = $sent.Count; applied_new_commands = $newCommands.Count
             matched_applied_commands = $matchedSequences.Count; trace_jsonl = $tracePath
             bot_config_json = $botConfigPath; human_config_json = $humanConfigPath
@@ -548,11 +759,50 @@ if ($NoAASTrial -and @($results | Where-Object {
 }).Count -gt 0) {
     throw "No-AAS trial did not show the expected direct movement or safe edge stop: $summary"
 }
-if ($DoorTrial -and @($results | Where-Object {
+if ($DoorTrial -and -not $HideDoorMover -and @($results | Where-Object {
     -not $_.door_mover_observed -or $_.door_probe_frames -lt 3 -or $_.door_blocked_frames -lt 3 -or
     $_.door_shot_blocked_frames -lt 3 -or $_.door_max_y -gt -268
 }).Count -gt 0) {
     throw "Door trial did not observe and block the closed door: $summary"
+}
+if ($HideDoorMover -and @($results | Where-Object {
+    $_.door_mover_observed -or $_.door_probe_frames -lt 3 -or $_.door_unobserved_frames -lt 3 -or
+    $_.door_shot_blocked_frames -lt 3 -or $_.door_max_y -gt -268
+}).Count -gt 0) {
+    throw "Unobserved door trial did not hold the unknown passage: $summary"
+}
+if ($ButtonTrial -and @($results | Where-Object {
+    $_.button_probe_frames -lt 10 -or $_.button_move_frames -lt 2 -or $_.button_fire_frames -ne 0 -or
+    $_.button_min_y -gt 1941 -or $_.button_max_y -lt 1958 -or
+    $_.button_max_mover_y -lt 3 -or $_.button_max_door_z -lt 60 -or
+    $null -eq $_.button_first_moved_frame -or $null -eq $_.button_door_first_moved_frame -or
+    $_.button_first_moved_frame -ge $_.button_door_first_moved_frame
+}).Count -gt 0) {
+    throw "Button trial did not touch button *34 and open door *33: $summary"
+}
+if ($ButtonAutoTrial -and @($results | Where-Object {
+    $_.geometry_status -ne 'ready' -or -not $_.aas_loaded -or
+    $_.button_auto_approach_frames -lt 3 -or $_.button_auto_touch_frames -lt 3 -or
+    $_.button_auto_fire_frames -ne 0 -or $_.button_auto_resumed_frames -lt 1 -or
+    $_.button_auto_max_button_y -lt 3 -or $_.button_auto_max_door_z -lt 60 -or
+    $null -eq $_.button_auto_button_first_frame -or $null -eq $_.button_auto_door_first_frame -or
+    $_.button_auto_button_first_frame -ge $_.button_auto_door_first_frame
+}).Count -gt 0) {
+    throw "Automatic button choice did not activate door and resume: $summary"
+}
+if ($TeammateMemoryTrial -and @($results | Where-Object {
+    -not $_.memory_human_behind_wall -or $_.memory_visible_frames -lt 3 -or $_.memory_hidden_frames -lt 10 -or $_.memory_max_age_frames -lt 10 -or
+    $_.memory_hidden_move_frames -ne 0 -or $_.memory_hidden_wait_frames -lt 10 -or
+    $_.memory_unexpected_last_position -ne 0
+}).Count -gt 0) {
+    throw "Teammate visibility and last-seen memory trial failed: $summary"
+}
+if ($TeammateSearchTrial -and @($results | Where-Object {
+    -not $_.memory_human_behind_wall -or $_.search_frames -lt 2 -or $_.search_move_frames -lt 2 -or
+    $null -eq $_.search_start_x -or $null -eq $_.search_max_x -or $_.search_max_x - $_.search_start_x -lt 20 -or
+    $_.search_wait_after -lt 5 -or $_.search_wait_at_point -lt 3 -or $_.search_wait_move_frames -ne 0
+}).Count -gt 0) {
+    throw "Teammate last-seen search trial failed: $summary"
 }
 if ($DoorPassTrial -and @($results | Where-Object {
     $_.door_pass_blocked_frames -lt 1 -or $_.door_pass_open_move_frames -lt 1 -or

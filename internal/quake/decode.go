@@ -85,7 +85,9 @@ type Decoder struct {
 	Commands       []string
 	Map            string
 	PlayerNumber   int
-	Teammate       *Vec3
+	lastTeammate   *Vec3
+	lastTeammateAt int
+	lastMap        string
 	Errors         int
 	LastError      string
 	ServerdataSeen bool
@@ -397,7 +399,9 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 			d.Baselines = map[int]Entity{}
 			d.Frames = map[int]Frame{}
 			d.Map = ""
-			d.Teammate = nil
+			d.lastTeammate = nil
+			d.lastTeammateAt = 0
+			d.lastMap = ""
 			_, e = r.long()
 			if e != nil {
 				return frames, e
@@ -563,23 +567,30 @@ type Mover struct {
 	Origin Vec3 `json:"origin"`
 }
 type Snapshot struct {
-	Map         string   `json:"map"`
-	Frame       int      `json:"frame"`
-	Self        Vec3     `json:"self"`
-	OnGround    bool     `json:"on_ground"`
-	Teammate    *Vec3    `json:"teammate,omitempty"`
-	Health      int16    `json:"health"`
-	Armor       int16    `json:"armor"`
-	Ammo        int16    `json:"ammo"`
-	Weapon      string   `json:"weapon"`
-	DeltaAngles [3]int16 `json:"delta_angles"`
-	Enemies     []Object `json:"enemies"`
-	Pickups     []Object `json:"pickups"`
-	Movers      []Mover  `json:"movers,omitempty"`
+	Map               string   `json:"map"`
+	Frame             int      `json:"frame"`
+	Self              Vec3     `json:"self"`
+	OnGround          bool     `json:"on_ground"`
+	Teammate          *Vec3    `json:"teammate,omitempty"`
+	LastTeammate      *Vec3    `json:"last_teammate,omitempty"`
+	TeammateAgeFrames *int     `json:"teammate_age_frames,omitempty"`
+	Health            int16    `json:"health"`
+	Armor             int16    `json:"armor"`
+	Ammo              int16    `json:"ammo"`
+	Weapon            string   `json:"weapon"`
+	DeltaAngles       [3]int16 `json:"delta_angles"`
+	Enemies           []Object `json:"enemies"`
+	Pickups           []Object `json:"pickups"`
+	Movers            []Mover  `json:"movers,omitempty"`
 }
 
 func (d *Decoder) Snapshot(f Frame) Snapshot {
 	s := Snapshot{Map: d.Map, Frame: f.Number, Self: f.Origin, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles}
+	if d.lastMap != d.Map || f.Number < d.lastTeammateAt {
+		d.lastTeammate = nil
+		d.lastTeammateAt = 0
+		d.lastMap = d.Map
+	}
 	maxclients, _ := strconv.Atoi(d.Config[30])
 	if maxclients <= 0 {
 		maxclients = 4
@@ -599,9 +610,15 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 		}
 	}
 	if s.Teammate != nil {
-		d.Teammate = s.Teammate
-	} else {
-		s.Teammate = d.Teammate
+		p := *s.Teammate
+		d.lastTeammate = &p
+		d.lastTeammateAt = f.Number
+	}
+	if d.lastTeammate != nil {
+		p := *d.lastTeammate
+		age := f.Number - d.lastTeammateAt
+		s.LastTeammate = &p
+		s.TeammateAgeFrames = &age
 	}
 	for _, entity := range f.Entities {
 		path := strings.ToLower(d.Config[32+entity.Model])

@@ -89,6 +89,26 @@ func TestSnapshotExposesGroundAndMover(t *testing.T) {
 		t.Fatalf("mover snapshot: %+v", s)
 	}
 }
+
+func TestSnapshotSeparatesVisibleAndLastSeenTeammate(t *testing.T) {
+	d := NewDecoder()
+	d.Map, d.PlayerNumber = "base1", 1
+	d.Config[30] = "4"
+	position := Vec3{32, -16, 24}
+	visible := d.Snapshot(Frame{Number: 10, Entities: map[int]Entity{2: {Number: 2, Model: 255, Origin: position}}})
+	if visible.Teammate == nil || visible.LastTeammate == nil || visible.TeammateAgeFrames == nil || *visible.TeammateAgeFrames != 0 {
+		t.Fatalf("visible teammate memory=%+v", visible)
+	}
+	hidden := d.Snapshot(Frame{Number: 13, Entities: map[int]Entity{}})
+	if hidden.Teammate != nil || hidden.LastTeammate == nil || *hidden.LastTeammate != position || hidden.TeammateAgeFrames == nil || *hidden.TeammateAgeFrames != 3 {
+		t.Fatalf("PVS loss was treated as current visibility: %+v", hidden)
+	}
+	d.Map = "base2"
+	changed := d.Snapshot(Frame{Number: 1, Entities: map[int]Entity{}})
+	if changed.Teammate != nil || changed.LastTeammate != nil || changed.TeammateAgeFrames != nil {
+		t.Fatalf("old-map teammate survived transition: %+v", changed)
+	}
+}
 func TestDecodePlayerGroundFlag(t *testing.T) {
 	d := NewDecoder()
 	packet := binary.LittleEndian.AppendUint16(nil, 16)  // PS_M_FLAGS
