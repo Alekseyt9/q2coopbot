@@ -297,12 +297,16 @@ func (c *Client) run(ctx context.Context) error {
 		if c.begun && c.framePaced && c.testChangeMap != "" && !c.testChangeSent &&
 			c.firstMoveFrame >= 0 && c.lastMoveFrame-c.firstMoveFrame >= c.testChangeAfter &&
 			c.latestFrame > c.lastMoveFrame {
-			if err := c.oob(fmt.Sprintf("rcon %s map %s\n", c.testRconPassword, c.testChangeMap)); err != nil {
+			mapArg, err := transitionMapArgument(c.testChangeMap, c.lastObservedMap)
+			if err != nil {
+				return err
+			}
+			if err := c.oob(fmt.Sprintf("rcon %s sv_test_map_entry %s\n", c.testRconPassword, mapArg)); err != nil {
 				return err
 			}
 			c.testChangeSent = true
 			c.testChangeAt = now
-			log.Printf("scenario map change requested from=%s to=%s after=%d frames", c.lastObservedMap, c.testChangeMap, c.testChangeAfter)
+			log.Printf("scenario map change requested from=%s to=%s entry=%s after=%d frames", c.lastObservedMap, c.testChangeMap, c.lastObservedMap, c.testChangeAfter)
 			continue
 		}
 		if c.framePaced && c.gameFrames > 0 && c.firstMoveFrame >= 0 &&

@@ -6,6 +6,7 @@ param(
     [int]$Port = 28120,
     [int]$GameFrames = 100,
     [string]$TransitionMap = '',
+    [switch]$RequireTransitionAAS,
     [int]$TransitionAfterFrames = 20,
     [switch]$LeaveTeammateOnTransition,
     [int]$WallLimitSeconds = 0,
@@ -24,6 +25,7 @@ if ($TransitionMap -and ($TransitionMap -notmatch '^[A-Za-z0-9_]+$' -or $Transit
     throw 'Map transition requires a distinct simple map name, a frame inside the episode, and -SynchronizedStart.'
 }
 if ($LeaveTeammateOnTransition -and -not $TransitionMap) { throw '-LeaveTeammateOnTransition requires -TransitionMap.' }
+if ($RequireTransitionAAS -and -not $TransitionMap) { throw '-RequireTransitionAAS requires -TransitionMap.' }
 if (-not $ServerExe) { $ServerExe = Join-Path $RuntimeRoot 'q2ded.exe' }
 $gameDir = Join-Path $RuntimeRoot 'baseq2'
 if (-not (Test-Path -LiteralPath $ServerExe) -or -not (Test-Path -LiteralPath $gameDir) -or
@@ -120,10 +122,14 @@ foreach ($scale in $Timescales) {
         $sent = @{}
         $observedMaps = [System.Collections.Generic.List[string]]::new()
         $teammateSeenInTrace = $false
+        $teammateSeenAfterTransition = $false
         foreach ($line in Get-Content -LiteralPath $tracePath) {
             $entry = $line | ConvertFrom-Json
             $sent["$($entry.spawncount):$($entry.client_sequence)"] = $entry.sent_command
             if ($null -ne $entry.teammate) { $teammateSeenInTrace = $true }
+            if ($TransitionMap -and $entry.map -eq $TransitionMap -and $null -ne $entry.teammate) {
+                $teammateSeenAfterTransition = $true
+            }
             if ($entry.map -and ($observedMaps.Count -eq 0 -or $observedMaps[$observedMaps.Count - 1] -cne $entry.map)) {
                 $observedMaps.Add($entry.map)
             }
@@ -150,7 +156,9 @@ foreach ($scale in $Timescales) {
             game_fps = [double]::Parse($fields.game_fps, [cultureinfo]::InvariantCulture)
             wall_seconds = [double]::Parse($fields.wall_s, [cultureinfo]::InvariantCulture)
             decode_errors = [int]$fields.decode_errors; navigation = $world.navigation
+            aas_loaded = [bool]$world.aas_loaded; aas_areas = [int]$world.areas; aas_reachabilities = [int]$world.reachabilities
             teammate_seen = $teammateSeenInTrace
+            teammate_seen_after_transition = $teammateSeenAfterTransition
             teammate_left_on_transition = [bool]$LeaveTeammateOnTransition
             sent_commands = $sent.Count; applied_new_commands = $newCommands.Count
             matched_applied_commands = $matchedSequences.Count; trace_jsonl = $tracePath
@@ -168,6 +176,15 @@ $summary = Join-Path $OutputRoot 'summary.json'
 $results | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $summary -Encoding UTF8
 if ($TransitionMap -and @($results | Where-Object { $_.transition_timeout -or -not $_.transition_observed -or $_.final_map -ne $TransitionMap }).Count -gt 0) {
     throw "Map transition was not observed; inspect transition_timeout, observed_maps and server log in $summary"
+}
+if ($TransitionMap -and -not $LeaveTeammateOnTransition -and
+    @($results | Where-Object { -not $_.teammate_seen_after_transition }).Count -gt 0) {
+    throw "Teammate was not observed after map transition: $summary"
+}
+if ($RequireTransitionAAS -and @($results | Where-Object {
+    -not $_.aas_loaded -or $_.aas_areas -le 0 -or $_.aas_reachabilities -le 0 -or $_.navigation -ne 'ready'
+}).Count -gt 0) {
+    throw "Transition map AAS route was not ready: $summary"
 }
 if (@($results | Where-Object { $_.game_frames -lt $GameFrames -or $_.frame_gaps -gt 0 -or $_.decode_errors -gt 0 -or -not $_.teammate_seen }).Count -gt 0) {
     throw "Speed trial failed observation gate: $summary"

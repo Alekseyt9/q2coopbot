@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$AssetsRoot = 'F:\src\quake2\q2coopbot-runtime-vanilla\baseq2',
+    [string]$AASRoot = '',
     [string]$ServerExe = 'F:\src\quake2\yquake2\build\codex-speed-test\release\q2ded.exe',
     [string]$GameDll = 'F:\src\quake2\yquake2\build\codex-speed-test\release\baseq2\game.dll',
     [string]$RuntimeRoot = (Join-Path (Split-Path -Parent $PSScriptRoot) 'workspace\runtime\q2go')
@@ -9,6 +10,24 @@ param(
 $ErrorActionPreference = 'Stop'
 foreach ($path in @($AssetsRoot, $ServerExe, $GameDll)) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Required input is missing: $path" }
+}
+if ($AASRoot -and -not (Test-Path -LiteralPath $AASRoot -PathType Container)) {
+    throw "AAS directory is missing: $AASRoot"
+}
+$additionalAAS = @()
+if ($AASRoot) {
+    $additionalAAS = @(Get-ChildItem -LiteralPath $AASRoot -Filter '*.aas' -File)
+    if ($additionalAAS.Count -eq 0) { throw "No AAS files found in: $AASRoot" }
+    foreach ($aas in $additionalAAS) {
+        $data = [IO.File]::ReadAllBytes($aas.FullName)
+        $reachOffset = if ($data.Length -ge 120) { [BitConverter]::ToInt32($data, 8 + 9 * 8) } else { -1 }
+        $reachLength = if ($data.Length -ge 120) { [BitConverter]::ToInt32($data, 8 + 9 * 8 + 4) } else { 0 }
+        if ($data.Length -lt 120 -or [Text.Encoding]::ASCII.GetString($data, 0, 4) -ne 'EAAS' -or
+            $reachLength -le 0 -or $reachLength % 44 -ne 0 -or $reachOffset -lt 120 -or
+            $reachOffset -gt $data.Length -or $reachLength -gt $data.Length - $reachOffset) {
+            throw "AAS has no reachability data: $($aas.FullName)"
+        }
+    }
 }
 $marker = Join-Path $RuntimeRoot '.q2go-prepared-runtime'
 if ((Test-Path -LiteralPath $RuntimeRoot) -and -not (Test-Path -LiteralPath $marker)) {
@@ -34,6 +53,9 @@ if (Test-Path -LiteralPath $sourceMaps) {
     Get-ChildItem -LiteralPath $sourceMaps -Filter '*.aas' -File | ForEach-Object {
         Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $maps $_.Name) -Force
     }
+}
+foreach ($aas in $additionalAAS) {
+    Copy-Item -LiteralPath $aas.FullName -Destination (Join-Path $maps $aas.Name) -Force
 }
 Copy-Item -LiteralPath $ServerExe -Destination (Join-Path $RuntimeRoot 'q2ded.exe') -Force
 Copy-Item -LiteralPath $GameDll -Destination (Join-Path $baseq2 'game.dll') -Force

@@ -12,7 +12,7 @@ cmake --build F:\src\quake2\yquake2\build\codex-speed-test --target q2ded game
 ./scripts/prepare_runtime.ps1
 ```
 
-`prepare_runtime.ps1` берёт из указанного `AssetsRoot` только PAK/AAS-файлы, копирует сервер и `game.dll` из сборки Yamagi в игнорируемый Git каталог `workspace/runtime/q2go`. Пути источников можно задать через `-AssetsRoot`, `-ServerExe`, `-GameDll`.
+`prepare_runtime.ps1` берёт из указанного `AssetsRoot` только PAK/AAS-файлы, копирует сервер и `game.dll` из сборки Yamagi в игнорируемый Git каталог `workspace/runtime/q2go`. Пути источников можно задать через `-AssetsRoot`, `-ServerExe`, `-GameDll`; пригодные AAS из отдельного каталога можно добавить через `-AASRoot`. Файлы из этого каталога должны содержать переходы между областями, иначе скрипт завершится ошибкой.
 
 ```powershell
 go test ./...
@@ -41,11 +41,13 @@ go build -o workspace/build/go/q2coopbot.exe ./cmd/q2coopbot
 - `examples/python-harness/` — прежний Python-прототип и его тесты, сохранённые только как пример;
 - `docs/` — текущий [план Go-бота](docs/system2_strategy_tactics_plan.md) и исторические материалы прежней реконструкции.
 
-Для сборки утилиты AAS:
+Для сборки экспериментальной утилиты AAS:
 
 ```powershell
 cmake -S . -B workspace/build/aas -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build workspace/build/aas --target bspc
 ```
+
+Текущая реконструкция `bspc` записывает только заголовок AAS и стандартный габарит игрока; генерация геометрии и переходов ещё не реализована. Её выход нельзя использовать для маршрутизации Go-бота. Оригинальный `bspc.exe` создаёт геометрию и области, но переходы затем достраивал BotLib при загрузке карты. Для тестов нужны готовые AAS-файлы с переходами.
 
 Игровые PAK/AAS-файлы и исполняемый сервер не входят в репозиторий. Исторические документы могут описывать удалённый C-бот; они сохранены для справки и не задают текущую сборку.

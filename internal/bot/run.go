@@ -25,6 +25,16 @@ type Config struct {
 	FramePaced, Idle, ExitOnReconnect bool
 }
 
+// The test server accepts the destination and entry as separate RCON arguments.
+// Its command joins them after console macro expansion, which would consume '$'.
+func transitionMapArgument(destination, previous string) (string, error) {
+	validMap := regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+	if !validMap.MatchString(destination) || !validMap.MatchString(previous) {
+		return "", fmt.Errorf("transition requires simple destination and previous map names")
+	}
+	return destination + " " + previous, nil
+}
+
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.GameDir == "" {
 		return fmt.Errorf("--game-dir is required")
