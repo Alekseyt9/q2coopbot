@@ -67,6 +67,18 @@ func TestPlannerAvoidsFriendlyFireWhileFollowing(t *testing.T) {
 	}
 }
 
+func TestPlannerKeepsFriendlyFireReasonWithoutMovementGoal(t *testing.T) {
+	goal, clear := quake.Vec3{60, 0, 0}, true
+	p := &Planner{World: World{Map: "test"}}
+	s := quake.Snapshot{Map: "test", Frame: 1, Self: quake.Vec3{0, 0, 0}, Teammate: &goal,
+		Health: 100, Ammo: 10, Weapon: "Blaster", Enemies: []quake.Object{{Origin: quake.Vec3{120, 0, 0}, ClearShot: &clear}}}
+	p.update(s, "")
+	cmd := p.command(quake.UserCmd{})
+	if cmd.Buttons != 0 || p.World.Command.LimitReason != "friendly_line_of_fire" {
+		t.Fatalf("friendly safety reason was lost: cmd=%+v decision=%+v", cmd, p.World.Command)
+	}
+}
+
 func TestTeammateBlocksShot(t *testing.T) {
 	from, target := quake.Vec3{0, 0, 22}, quake.Vec3{200, 0, 22}
 	for _, tc := range []struct {

@@ -332,7 +332,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		return cmd
 	}
 	if p.World.Goal != "follow_teammate" && p.World.Goal != "recover_health" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
-		p.World.Command.LimitReason = "no_movement_goal"
+		if p.World.Command.LimitReason == "" {
+			p.World.Command.LimitReason = "no_movement_goal"
+		}
 		return cmd
 	}
 	if p.routeIndex < len(p.route) && p.route[p.routeIndex].ElevatorPhase == "board" {
@@ -350,7 +352,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		}
 	}
 	if quake.Horizontal(s.Self, target) < 10 {
-		p.World.Command.LimitReason = "at_waypoint"
+		if p.World.Command.LimitReason == "" {
+			p.World.Command.LimitReason = "at_waypoint"
+		}
 		return cmd
 	}
 	dx, dy := target[0]-s.Self[0], target[1]-s.Self[1]

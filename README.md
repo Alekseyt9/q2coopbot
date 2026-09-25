@@ -18,8 +18,11 @@ cmake --build F:\src\quake2\yquake2\build\codex-speed-test --target q2ded game
 go test ./...
 New-Item -ItemType Directory -Force workspace/build/go | Out-Null
 go build -o workspace/build/go/q2coopbot.exe ./cmd/q2coopbot
-./workspace/build/go/q2coopbot.exe --game-dir .\workspace\runtime\q2go\baseq2 --port 27910 --name GoCoopMate
+Copy-Item config.example.json config.local.json
+./workspace/build/go/q2coopbot.exe --config config.local.json
 ```
+
+Все настройки Go-клиента находятся в JSON-файле; при запуске нужен только `--config`. Пример — [`config.example.json`](config.example.json). Относительные пути внутри JSON считаются от каталога самого файла, `run.duration` задаётся в формате Go (`30s`, `5m`, `0s` для работы без ограничения). Локальный `config.local.json` исключён из Git. Автоматический тест сохраняет отдельные конфиги обоих клиентов в каталоге результатов. Тестовый RCON-пароль передаётся через `Q2COOPBOT_TEST_RCON` и в JSON не записывается.
 
 Для автоматического теста скорости с неподвижным вторым Go-клиентом:
 
@@ -31,7 +34,7 @@ go build -o workspace/build/go/q2coopbot.exe ./cmd/q2coopbot
 
 ## Структура
 
-- `cmd/q2coopbot/` — CLI, флаги и запуск;
+- `cmd/q2coopbot/` — запуск с единственным аргументом `--config`;
 - `internal/bot/` — UDP-сессия, планирование и подключение моделей;
 - `internal/quake/` — протокол 34, команды движения, BSP и AAS;
 - `go.mod` — Go-модуль;

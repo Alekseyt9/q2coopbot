@@ -1,0 +1,18 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 27910
+  },
+  "client": {
+    "name": "GoCoopMate",
+    "game_dir": "workspace/runtime/q2go/baseq2"
+  },
+  "run": {
+    "duration": "0s",
+    "frame_paced": false
+  },
+  "models": {
+    "system1": "",
+    "system2": ""
+  }
+}

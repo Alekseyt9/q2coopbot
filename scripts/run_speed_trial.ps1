@@ -17,6 +17,7 @@ param(
     [switch]$ElevatorTrial,
     [switch]$CombatMoveTrial,
     [switch]$ObservationGapTrial,
+    [switch]$FriendlyFireTrial,
     [string]$OutputRoot = ''
 )
 
@@ -39,12 +40,18 @@ if ($CombatMoveTrial -and ($Map -ne 'base1' -or $TransitionMap -or -not $Synchro
 if ($ObservationGapTrial -and (-not $CombatMoveTrial -or $GameFrames -lt 30)) {
     throw '-ObservationGapTrial requires -CombatMoveTrial and at least 30 game frames.'
 }
+if ($FriendlyFireTrial -and ($Map -ne 'base1' -or $TransitionMap -or -not $SynchronizedStart -or $ElevatorTrial -or $CombatMoveTrial)) {
+    throw '-FriendlyFireTrial requires -Map base1, -SynchronizedStart, and no other gameplay trial.'
+}
 if ($AASDir -and -not (Test-Path -LiteralPath $AASDir -PathType Container)) { throw "AAS directory is missing: $AASDir" }
 if (-not $ServerExe) { $ServerExe = Join-Path $RuntimeRoot 'q2ded.exe' }
 $gameDir = Join-Path $RuntimeRoot 'baseq2'
 if (-not (Test-Path -LiteralPath $ServerExe) -or -not (Test-Path -LiteralPath $gameDir) -or
     -not (Test-Path -LiteralPath (Join-Path $repoRoot 'go.mod'))) { throw 'Vanilla server runtime or Go module is missing.' }
 if (-not $OutputRoot) { $OutputRoot = Join-Path $repoRoot ('workspace\artifacts\speed-' + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
+$OutputRoot = [System.IO.Path]::GetFullPath($OutputRoot)
+$gameDir = [System.IO.Path]::GetFullPath($gameDir)
+if ($AASDir) { $AASDir = [System.IO.Path]::GetFullPath($AASDir) }
 New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
 $botExe = Join-Path $OutputRoot 'q2coopbot.exe'
 Push-Location $repoRoot
@@ -88,7 +95,7 @@ foreach ($scale in $Timescales) {
     $rconPassword = if ($TransitionMap) { [guid]::NewGuid().ToString('N') } else { '' }
     if ($TransitionMap) { $args = "+set rcon_password $rconPassword $args" }
     if ($UnlimitedLoopbackRate) { $args = "+set sv_test_unlimited_loopback 1 $args" }
-    if ($ElevatorTrial -or $CombatMoveTrial) { $args = "+set cheats 1 $args" }
+    if ($ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial) { $args = "+set cheats 1 $args" }
     if ($SynchronizedStart) { $args = "+set sv_test_trace_client GoCoopMate +set sv_test_start_client GoCoopMate $args" }
     $server = Start-Process -FilePath $ServerExe -ArgumentList $args -WorkingDirectory $RuntimeRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
     $human = $null
@@ -106,11 +113,31 @@ foreach ($scale in $Timescales) {
         $totalFrames = $GameFrames + $(if ($TransitionMap) { $TransitionAfterFrames + 20 } else { 0 })
         $wallLimit = [int][math]::Ceiling($totalFrames / (10.0 * $scale) * 3 + 20)
         if ($WallLimitSeconds -gt 0) { $wallLimit = $WallLimitSeconds }
-        $humanArgs = "--port $runPort --name TestHuman --game-dir `"$gameDir`" --idle --frame-paced --duration $($wallLimit + 10)s"
-        if ($ElevatorTrial) { $humanArgs += " --trace-jsonl `"$humanTracePath`" --test-teleport-map base2 --test-teleport 10,1408,85" }
-        if ($CombatMoveTrial) { $humanArgs += ' --test-spawn-map base1 --test-spawn-soldier 96,-200,24' }
-        if ($LeaveTeammateOnTransition) { $humanArgs += ' --test-exit-on-reconnect' }
-        $human = Start-Process -FilePath $botExe -ArgumentList $humanArgs -WorkingDirectory $repoRoot -RedirectStandardOutput $humanLog -RedirectStandardError $humanErr -WindowStyle Hidden -PassThru
+        $humanConfigPath = Join-Path $OutputRoot "$name-human-config.json"
+        $humanConfig = [ordered]@{
+            server = [ordered]@{ host = '127.0.0.1'; port = $runPort }
+            client = [ordered]@{ name = 'TestHuman'; game_dir = $gameDir }
+            run = [ordered]@{ duration = "$($wallLimit + 10)s"; frame_paced = $true }
+            output = [ordered]@{}
+            test = [ordered]@{ idle = $true }
+        }
+        if ($ElevatorTrial) {
+            $humanConfig.output.trace_jsonl = $humanTracePath
+            $humanConfig.test.teleport_map = 'base2'
+            $humanConfig.test.teleport = '10,1408,85'
+        }
+        if ($CombatMoveTrial -or $FriendlyFireTrial) {
+            $humanConfig.test.spawn_map = 'base1'
+            $humanConfig.test.spawn_soldier = '96,-200,24'
+        }
+        if ($FriendlyFireTrial) {
+            $humanConfig.output.trace_jsonl = $humanTracePath
+            $humanConfig.test.spawn_class = 'monster_infantry'
+            $humanConfig.test.line_cross = $true
+        }
+        if ($LeaveTeammateOnTransition) { $humanConfig.test.exit_on_reconnect = $true }
+        $humanConfig | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $humanConfigPath -Encoding UTF8
+        $human = Start-Process -FilePath $botExe -ArgumentList "--config `"$humanConfigPath`"" -WorkingDirectory $repoRoot -RedirectStandardOutput $humanLog -RedirectStandardError $humanErr -WindowStyle Hidden -PassThru
         $humanUntil = (Get-Date).AddSeconds(20)
         while ((Get-Date) -lt $humanUntil) {
             if ($human.HasExited) { throw "Test human exited: $humanErr" }
@@ -118,15 +145,33 @@ foreach ($scale in $Timescales) {
             Start-Sleep -Milliseconds 100
         }
         if ((Get-Date) -ge $humanUntil) { throw "Test human failed to spawn: $stdout" }
-        $botArgs = @('--port', "$runPort", '--name', 'GoCoopMate', '--game-dir', $gameDir, '--world-json', $worldPath, '--trace-jsonl', $tracePath, '--frame-paced', '--game-frames', "$GameFrames", '--duration', "${wallLimit}s")
-        if ($AASDir) { $botArgs += @('--aas-dir', $AASDir) }
-        if ($TransitionMap) { $botArgs += @('--test-change-map', $TransitionMap, '--test-change-after-frames', "$TransitionAfterFrames") }
-        if ($ElevatorTrial) { $botArgs += @('--test-teleport-map', 'base2', '--test-teleport', '-36,1408,-40') }
-        if ($ObservationGapTrial) { $botArgs += @('--test-observation-gap-start', '1', '--test-observation-gap-frames', '12') }
+        $botConfigPath = Join-Path $OutputRoot "$name-bot-config.json"
+        $botConfig = [ordered]@{
+            server = [ordered]@{ host = '127.0.0.1'; port = $runPort }
+            client = [ordered]@{ name = 'GoCoopMate'; game_dir = $gameDir }
+            run = [ordered]@{ duration = "${wallLimit}s"; frame_paced = $true; game_frames = $GameFrames }
+            output = [ordered]@{ world_json = $worldPath; trace_jsonl = $tracePath }
+            test = [ordered]@{}
+        }
+        if ($AASDir) { $botConfig.client.aas_dir = $AASDir }
+        if ($TransitionMap) {
+            $botConfig.test.change_map = $TransitionMap
+            $botConfig.test.change_after_frames = $TransitionAfterFrames
+        }
+        if ($ElevatorTrial) {
+            $botConfig.test.teleport_map = 'base2'
+            $botConfig.test.teleport = '-36,1408,-40'
+        }
+        if ($FriendlyFireTrial) { $botConfig.test.hold_position = $true }
+        if ($ObservationGapTrial) {
+            $botConfig.test.observation_gap_start = 1
+            $botConfig.test.observation_gap_frames = 12
+        }
+        $botConfig | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $botConfigPath -Encoding UTF8
         $previousRcon = $env:Q2COOPBOT_TEST_RCON
         try {
             if ($TransitionMap) { $env:Q2COOPBOT_TEST_RCON = $rconPassword }
-            & $botExe @botArgs 2>&1 | Tee-Object -FilePath $botLog | Out-Null
+            & $botExe --config $botConfigPath 2>&1 | Tee-Object -FilePath $botLog | Out-Null
         } finally {
             $env:Q2COOPBOT_TEST_RCON = $previousRcon
         }
@@ -156,6 +201,8 @@ foreach ($scale in $Timescales) {
         $staleNeutralFrames = 0
         $attackBeforeGap = 0
         $recoveredActionFrames = 0
+        $friendlyBlockedFrames = [System.Collections.Generic.List[int]]::new()
+        $friendlyFireFrames = [System.Collections.Generic.List[int]]::new()
         foreach ($line in Get-Content -LiteralPath $tracePath) {
             $entry = $line | ConvertFrom-Json
             $sent["$($entry.spawncount):$($entry.client_sequence)"] = $entry.sent_command
@@ -195,6 +242,12 @@ foreach ($scale in $Timescales) {
                 if ($entry.relative_frame -ge 13 -and $entry.observation_frame -eq $entry.frame -and
                     ($entry.sent_command.Forward -ne 0 -or $entry.sent_command.Side -ne 0 -or $entry.sent_command.Buttons -ne 0)) { $recoveredActionFrames++ }
             }
+            if ($FriendlyFireTrial -and @($entry.enemies | Where-Object { $_.clear_shot -eq $true }).Count -gt 0) {
+                if ($entry.arbitration.limit_reason -eq 'friendly_line_of_fire' -and $entry.sent_command.Buttons -eq 0) {
+                    $friendlyBlockedFrames.Add([int]$entry.frame)
+                }
+                if ($entry.sent_command.Buttons -band 1) { $friendlyFireFrames.Add([int]$entry.frame) }
+            }
         }
         $humanAtTop = $false
         if ($ElevatorTrial -and (Test-Path -LiteralPath $humanTracePath)) {
@@ -204,6 +257,29 @@ foreach ($scale in $Timescales) {
                     $humanAtTop = $true
                     break
                 }
+            }
+        }
+        $humanMinY = [double]::PositiveInfinity
+        $humanMaxY = [double]::NegativeInfinity
+        $humanNearLine = $false
+        $humanReturned = $false
+        if ($FriendlyFireTrial -and (Test-Path -LiteralPath $humanTracePath)) {
+            foreach ($line in Get-Content -LiteralPath $humanTracePath) {
+                $entry = $line | ConvertFrom-Json
+                if ($entry.map -eq 'base1') {
+                    $humanMinY = [math]::Min($humanMinY, [double]$entry.self[1])
+                    $humanMaxY = [math]::Max($humanMaxY, [double]$entry.self[1])
+                    if ($entry.health -gt 0 -and [math]::Abs($entry.self[0] - 66) -lt 8 -and [math]::Abs($entry.self[1] + 234) -lt 8) { $humanNearLine = $true }
+                    if ($humanNearLine -and $entry.health -gt 0 -and [math]::Abs($entry.self[0] - 128) -lt 8 -and [math]::Abs($entry.self[1] + 320) -lt 8) { $humanReturned = $true }
+                }
+            }
+        }
+        $fireBeforeBlock = 0
+        $fireAfterBlock = 0
+        if ($friendlyBlockedFrames.Count -gt 0) {
+            foreach ($fireFrame in $friendlyFireFrames) {
+                if ($fireFrame -lt $friendlyBlockedFrames[0]) { $fireBeforeBlock++ }
+                if ($fireFrame -gt $friendlyBlockedFrames[$friendlyBlockedFrames.Count - 1]) { $fireAfterBlock++ }
             }
         }
         $applied = @(Read-AppliedCommands $stdout)
@@ -240,8 +316,14 @@ foreach ($scale in $Timescales) {
             combat_move_trial = [bool]$CombatMoveTrial; combat_move_frames = $combatMoveFrames; combat_move_with_side = $combatMoveWithSide
             observation_gap_trial = [bool]$ObservationGapTrial; attack_before_gap = $attackBeforeGap
             stale_neutral_frames = $staleNeutralFrames; recovered_action_frames = $recoveredActionFrames
+            friendly_fire_trial = [bool]$FriendlyFireTrial; friendly_blocked_frames = $friendlyBlockedFrames.Count
+            fire_before_block = $fireBeforeBlock; fire_after_block = $fireAfterBlock
+            human_min_y = $(if ($FriendlyFireTrial -and $humanMinY -ne [double]::PositiveInfinity) { $humanMinY } else { $null })
+            human_max_y = $(if ($FriendlyFireTrial -and $humanMaxY -ne [double]::NegativeInfinity) { $humanMaxY } else { $null })
+            human_near_line = $humanNearLine; human_returned = $humanReturned
             sent_commands = $sent.Count; applied_new_commands = $newCommands.Count
             matched_applied_commands = $matchedSequences.Count; trace_jsonl = $tracePath
+            bot_config_json = $botConfigPath; human_config_json = $humanConfigPath
             applied_jsonl = $appliedPath; world_json = $worldPath; server_log = $stdout
         }
         $results.Add($result)
@@ -288,5 +370,8 @@ if ($CombatMoveTrial -and @($results | Where-Object { $_.combat_move_frames -le 
 }
 if ($ObservationGapTrial -and @($results | Where-Object { $_.attack_before_gap -le 0 -or $_.stale_neutral_frames -le 0 -or $_.recovered_action_frames -le 0 }).Count -gt 0) {
     throw "Observation gap did not stop an active command and recover: $summary"
+}
+if ($FriendlyFireTrial -and @($results | Where-Object { $_.friendly_blocked_frames -le 0 -or $_.fire_before_block -le 0 -or $_.fire_after_block -le 0 -or -not $_.human_near_line -or -not $_.human_returned }).Count -gt 0) {
+    throw "Friendly-fire trial did not show fire, a crossing hold, and resumed fire: $summary"
 }
 Write-Output "Saved $summary"

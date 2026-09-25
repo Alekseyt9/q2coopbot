@@ -60,10 +60,15 @@ type Client struct {
 	testTeleportPosition quake.Vec3
 	testTeleportSent     bool
 	testSpawnMap         string
+	testSpawnClass       string
 	testSpawnPosition    quake.Vec3
 	testSpawnSent        bool
 	testGapStart         int
 	testGapFrames        int
+	testLineCross        bool
+	testHoldPosition     bool
+	testLineEntered      bool
+	testLineLeft         bool
 	lastObservedMap      string
 	mapChanges           int
 	beginPending         string
@@ -325,12 +330,26 @@ func (c *Client) run(ctx context.Context) error {
 		}
 		if c.begun && c.testSpawnMap != "" && !c.testSpawnSent && c.planner.World.Map == c.testSpawnMap && c.frameReady {
 			p := c.testSpawnPosition
-			if err := c.command(fmt.Sprintf("spawnentity monster_soldier_light %g %g %g", p[0], p[1], p[2])); err != nil {
+			if err := c.command(fmt.Sprintf("spawnentity %s %g %g %g", c.testSpawnClass, p[0], p[1], p[2])); err != nil {
 				return err
 			}
 			c.testSpawnSent = true
 			log.Printf("scenario test soldier spawn map=%s target=%v", c.testSpawnMap, p)
 			continue
+		}
+		if c.begun && c.testLineCross && c.firstMoveFrame >= 0 && c.frameReady {
+			relativeFrame := c.latestFrame - c.firstMoveFrame
+			if relativeFrame >= 3 && !c.testLineEntered {
+				if err := c.command("teleport 66 -234 24"); err != nil {
+					return err
+				}
+				c.testLineEntered = true
+			} else if relativeFrame >= 5 && !c.testLineLeft {
+				if err := c.command("teleport 128 -320 24"); err != nil {
+					return err
+				}
+				c.testLineLeft = true
+			}
 		}
 		if c.begun && c.framePaced && c.testChangeMap != "" && !c.testChangeSent &&
 			c.firstMoveFrame >= 0 && c.lastMoveFrame-c.firstMoveFrame >= c.testChangeAfter &&
@@ -358,6 +377,10 @@ func (c *Client) run(ctx context.Context) error {
 			frame := c.latestFrame
 			safetyStop := c.needsSafetyStop(now)
 			cmd := c.planner.command(c.previous)
+			if c.testHoldPosition {
+				cmd.Forward, cmd.Side, cmd.Up = 0, 0, 0
+				c.planner.World.Command.MoveSource = "test_hold"
+			}
 			if c.idle {
 				cmd = quake.UserCmd{}
 				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_idle"}

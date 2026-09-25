@@ -3,6 +3,7 @@
 /workspace/runtime/
 /workspace/artifacts/
 /workspace/tools/dev_tools/
+/config.local.json
 
 # Legacy output paths, in case an old script recreates them
 /build*/

@@ -11,31 +11,15 @@ import (
 )
 
 func main() {
-	var cfg bot.Config
-	flag.StringVar(&cfg.Host, "host", "127.0.0.1", "server host")
-	flag.IntVar(&cfg.Port, "port", 27910, "server UDP port")
-	flag.StringVar(&cfg.Name, "name", "GoCoopMate", "client name")
-	flag.StringVar(&cfg.GameDir, "game-dir", "", "baseq2 directory containing maps/*.aas")
-	flag.StringVar(&cfg.AASDir, "aas-dir", "", "directory containing campaign AAS files; default game-dir/maps")
-	flag.DurationVar(&cfg.Duration, "duration", 0, "session duration; 0 runs until Ctrl-C")
-	flag.BoolVar(&cfg.FramePaced, "frame-paced", false, "send one 100 ms usercmd per received game frame (for accelerated local tests)")
-	flag.IntVar(&cfg.GameFrames, "game-frames", 0, "stop after this many observed game frames in frame-paced mode; 0 disables")
-	flag.StringVar(&cfg.WorldFile, "world-json", "", "current world state output")
-	flag.StringVar(&cfg.TracePath, "trace-jsonl", "", "write one observation and usercmd per received game frame")
-	flag.StringVar(&cfg.StopFile, "stop-file", "", "disconnect when file appears")
-	flag.BoolVar(&cfg.Idle, "idle", false, "send neutral movement commands as a stationary test player")
-	flag.BoolVar(&cfg.ExitOnReconnect, "test-exit-on-reconnect", false, "test only: leave when server changes map")
-	flag.StringVar(&cfg.TestChangeMap, "test-change-map", "", "test only: switch the server to this map through local RCON")
-	flag.IntVar(&cfg.TestChangeAfter, "test-change-after-frames", 20, "test only: game frames before requesting map change")
-	flag.StringVar(&cfg.TestTeleportMap, "test-teleport-map", "", "test only: map on which to teleport this client once")
-	flag.StringVar(&cfg.TestTeleport, "test-teleport", "", "test only: teleport coordinates x,y,z; server requires cheats 1")
-	flag.StringVar(&cfg.TestSpawnMap, "test-spawn-map", "", "test only: map on which to spawn one soldier")
-	flag.StringVar(&cfg.TestSpawnSoldier, "test-spawn-soldier", "", "test only: soldier coordinates x,y,z; server requires cheats 1")
-	flag.IntVar(&cfg.TestGapStart, "test-observation-gap-start", 0, "test only: first relative game frame whose observation is ignored")
-	flag.IntVar(&cfg.TestGapFrames, "test-observation-gap-frames", 0, "test only: number of successive observations ignored")
-	flag.StringVar(&cfg.System2Model, "system2-model", "", "optional Ollama strategy model, called asynchronously every 2 seconds")
-	flag.StringVar(&cfg.System1Model, "system1-model", "", "optional Ollama tactical model, called asynchronously every 1 second")
+	configPath := flag.String("config", "", "path to the Go companion JSON config")
 	flag.Parse()
+	if *configPath == "" || flag.NArg() != 0 {
+		log.Fatal("usage: q2coopbot --config path/to/config.json")
+	}
+	cfg, err := bot.LoadConfig(*configPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 	cfg.TestRCONPassword = os.Getenv("Q2COOPBOT_TEST_RCON")
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()

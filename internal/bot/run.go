@@ -25,10 +25,13 @@ type Config struct {
 	TestChangeMap, TestRCONPassword   string
 	TestTeleportMap, TestTeleport     string
 	TestSpawnMap, TestSpawnSoldier    string
+	TestSpawnClass                    string
 	Port, GameFrames, TestChangeAfter int
 	TestGapStart, TestGapFrames       int
 	Duration                          time.Duration
 	FramePaced, Idle, ExitOnReconnect bool
+	TestLineCross                     bool
+	TestHoldPosition                  bool
 }
 
 func parseTestTeleport(value string) (quake.Vec3, error) {
@@ -59,23 +62,29 @@ func transitionMapArgument(destination, previous string) (string, error) {
 
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.GameDir == "" {
-		return fmt.Errorf("--game-dir is required")
+		return fmt.Errorf("client.game_dir is required")
 	}
 	if cfg.GameFrames < 0 || cfg.GameFrames > 0 && !cfg.FramePaced {
-		return fmt.Errorf("--game-frames requires --frame-paced and a non-negative value")
+		return fmt.Errorf("run.game_frames requires run.frame_paced and a non-negative value")
 	}
 	if cfg.TracePath != "" && !cfg.FramePaced {
-		return fmt.Errorf("--trace-jsonl requires --frame-paced")
+		return fmt.Errorf("output.trace_jsonl requires run.frame_paced")
+	}
+	if cfg.TestLineCross && (!cfg.FramePaced || !cfg.Idle || cfg.TestSpawnMap != "base1") {
+		return fmt.Errorf("test.line_cross requires run.frame_paced, test.idle, and test.spawn_map=base1")
+	}
+	if cfg.TestHoldPosition && !cfg.FramePaced {
+		return fmt.Errorf("test.hold_position requires run.frame_paced")
 	}
 	if cfg.TestGapStart != 0 || cfg.TestGapFrames != 0 {
 		if !cfg.FramePaced || cfg.GameFrames == 0 || cfg.TestGapStart < 1 || cfg.TestGapFrames < 1 || cfg.TestGapStart+cfg.TestGapFrames >= cfg.GameFrames {
-			return fmt.Errorf("test observation gap requires --frame-paced and a positive interval inside --game-frames")
+			return fmt.Errorf("test observation gap requires run.frame_paced and a positive interval inside run.game_frames")
 		}
 	}
 	if cfg.TestChangeMap != "" {
 		validMap := regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 		if !cfg.FramePaced || cfg.GameFrames <= cfg.TestChangeAfter || cfg.TestChangeAfter < 1 || !validMap.MatchString(cfg.TestChangeMap) {
-			return fmt.Errorf("test map change requires --frame-paced, --game-frames greater than --test-change-after-frames, and a simple map name")
+			return fmt.Errorf("test.change_map requires run.frame_paced, run.game_frames greater than test.change_after_frames, and a simple map name")
 		}
 		if cfg.TestRCONPassword == "" {
 			return fmt.Errorf("Q2COOPBOT_TEST_RCON is required for test map change")
@@ -84,7 +93,7 @@ func Run(ctx context.Context, cfg Config) error {
 	var teleportPosition quake.Vec3
 	if cfg.TestTeleportMap != "" || cfg.TestTeleport != "" {
 		if !cfg.FramePaced || !regexp.MustCompile(`^[A-Za-z0-9_]+$`).MatchString(cfg.TestTeleportMap) {
-			return fmt.Errorf("test teleport requires --frame-paced and a simple --test-teleport-map")
+			return fmt.Errorf("test.teleport requires run.frame_paced and a simple test.teleport_map")
 		}
 		var err error
 		teleportPosition, err = parseTestTeleport(cfg.TestTeleport)
@@ -95,13 +104,19 @@ func Run(ctx context.Context, cfg Config) error {
 	var spawnPosition quake.Vec3
 	if cfg.TestSpawnMap != "" || cfg.TestSpawnSoldier != "" {
 		if !cfg.FramePaced || !regexp.MustCompile(`^[A-Za-z0-9_]+$`).MatchString(cfg.TestSpawnMap) {
-			return fmt.Errorf("test soldier spawn requires --frame-paced and a simple --test-spawn-map")
+			return fmt.Errorf("test.spawn_soldier requires run.frame_paced and a simple test.spawn_map")
 		}
 		var err error
 		spawnPosition, err = parseTestTeleport(cfg.TestSpawnSoldier)
 		if err != nil {
 			return err
 		}
+	}
+	if cfg.TestSpawnClass == "" {
+		cfg.TestSpawnClass = "monster_soldier_light"
+	}
+	if cfg.TestSpawnClass != "monster_soldier_light" && cfg.TestSpawnClass != "monster_soldier_ss" && cfg.TestSpawnClass != "monster_infantry" {
+		return fmt.Errorf("unsupported test spawn class %q", cfg.TestSpawnClass)
 	}
 	if cfg.AASDir == "" {
 		cfg.AASDir = filepath.Join(cfg.GameDir, "maps")
@@ -124,7 +139,10 @@ func Run(ctx context.Context, cfg Config) error {
 		testChangeAfter: cfg.TestChangeAfter, testRconPassword: cfg.TestRCONPassword,
 		testTeleportMap: cfg.TestTeleportMap, testTeleportPosition: teleportPosition,
 		testSpawnMap: cfg.TestSpawnMap, testSpawnPosition: spawnPosition,
-		testGapStart: cfg.TestGapStart, testGapFrames: cfg.TestGapFrames,
+		testSpawnClass: cfg.TestSpawnClass,
+		testGapStart:   cfg.TestGapStart, testGapFrames: cfg.TestGapFrames,
+		testLineCross:    cfg.TestLineCross,
+		testHoldPosition: cfg.TestHoldPosition,
 	}
 	if cfg.TracePath != "" {
 		client.traceFile, err = os.Create(cfg.TracePath)
