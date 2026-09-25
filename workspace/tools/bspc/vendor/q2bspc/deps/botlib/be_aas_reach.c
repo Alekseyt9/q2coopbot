@@ -2934,6 +2934,139 @@ void AAS_Reachability_Teleport(void)
 	} //end for
 } //end of the function AAS_Reachability_Teleport
 //===========================================================================
+// The Quake II coop bot used this extra search when a wide func_plat hid the
+// lower walkable area from the usual perimeter samples. Keep the ordinary
+// reachability pass first, and only try this when it found no link.
+static int AAS_Reachability_ElevatorWidePlatform(int ent, int modelnum,
+		vec3_t modelmins, vec3_t modelmaxs, vec3_t origin,
+		vec3_t platbottom, vec3_t plattop, float height, float speed)
+{
+	int source, destination, i, j, expansion, axis;
+	int topareas = 0, grounded = 0, distinct = 0, clear = 0;
+	vec3_t bottom, top, start, end, direction, mins, maxs, midpoint;
+	float x[8], y[8];
+	aas_trace_t trace;
+	aas_lreachability_t *reach;
+
+	VectorCopy(platbottom, bottom);
+	bottom[2] += 16;
+	source = 0;
+	for (i = 0; i < 24; i++)
+	{
+		source = AAS_PointAreaNum(bottom);
+		if (source && (AAS_AreaGrounded(source) || AAS_AreaSwim(source))) break;
+		bottom[2] += 4;
+	}
+	if (i == 24)
+	{
+		botimport.Print(PRT_MESSAGE, "func_plat model %d: no lower walkable area\n", modelnum);
+		return 0;
+	}
+	VectorCopy(modelmins, mins);
+	VectorCopy(modelmaxs, maxs);
+	VectorAdd(mins, maxs, midpoint);
+	VectorScale(midpoint, 0.5f, midpoint);
+	for (expansion = 0; expansion < 3; expansion++)
+	{
+		for (axis = 0; axis < 3; axis++)
+		{
+			mins[axis] -= 4;
+			maxs[axis] += 4;
+		}
+		x[0] = mins[0]; x[1] = midpoint[0]; x[2] = maxs[0]; x[3] = midpoint[0];
+		y[0] = midpoint[1]; y[1] = maxs[1]; y[2] = midpoint[1]; y[3] = mins[1];
+		x[4] = mins[0]; x[5] = maxs[0]; x[6] = maxs[0]; x[7] = mins[0];
+		y[4] = maxs[1]; y[5] = maxs[1]; y[6] = mins[1]; y[7] = mins[1];
+		for (j = 0; j < 8; j++)
+		{
+			top[0] = origin[0] + x[j];
+			top[1] = origin[1] + y[j];
+			for (i = 0; i < 24; i++)
+			{
+				top[2] = plattop[2] + 16 - i * 4;
+				destination = AAS_PointAreaNum(top);
+				if (destination) topareas++;
+				if (destination && AAS_AreaGrounded(destination)) grounded++;
+				if (destination && AAS_AreaGrounded(destination) && destination != source) distinct++;
+				if (!destination || !AAS_AreaGrounded(destination) ||
+					destination == source ||
+					AAS_ReachabilityExists(source, destination)) continue;
+				VectorCopy(plattop, start);
+				start[2] += 32;
+				VectorCopy(top, end);
+				end[2] += 1;
+				trace = AAS_TraceClientBBox(start, end, PRESENCE_CROUCH, -1);
+				if (distinct == 1)
+				{
+					vec3_t sidestart;
+					vec3_t bboxmins, bboxmaxs;
+					aas_trace_t sidetrace;
+					bsp_trace_t worldtrace;
+					AAS_PresenceTypeBoundingBox(PRESENCE_CROUCH, bboxmins, bboxmaxs);
+					botimport.Trace(&worldtrace, start, bboxmins, bboxmaxs, end, -1, CONTENTS_SOLID);
+					VectorCopy(start, sidestart);
+					for (axis = 0; axis < 2; axis++)
+					{
+						if (sidestart[axis] < origin[axis] + modelmins[axis] + 8)
+							sidestart[axis] = origin[axis] + modelmins[axis] + 8;
+						else if (sidestart[axis] > origin[axis] + modelmaxs[axis] - 8)
+							sidestart[axis] = origin[axis] + modelmaxs[axis] - 8;
+					}
+					sidestart[0] = top[0] < origin[0] + modelmins[0] + 8 ?
+						origin[0] + modelmins[0] + 8 :
+						(top[0] > origin[0] + modelmaxs[0] - 8 ?
+						origin[0] + modelmaxs[0] - 8 : top[0]);
+					sidestart[1] = top[1] < origin[1] + modelmins[1] + 8 ?
+						origin[1] + modelmins[1] + 8 :
+						(top[1] > origin[1] + modelmaxs[1] - 8 ?
+						origin[1] + modelmaxs[1] - 8 : top[1]);
+					sidetrace = AAS_TraceClientBBox(sidestart, end, PRESENCE_CROUCH, -1);
+					botimport.Print(PRT_MESSAGE,
+						"func_plat %d: first upper area %d at %.1f %.1f %.1f trace %.3f solid=%d hitarea=%d sidearea=%d sidetrace=%.3f sidesolid=%d worldtrace=%.3f worldsolid=%d\n",
+						modelnum, destination, top[0], top[1], top[2],
+						trace.fraction, trace.startsolid, trace.area,
+						AAS_PointAreaNum(sidestart), sidetrace.fraction, sidetrace.startsolid,
+						worldtrace.fraction, worldtrace.startsolid);
+				}
+				if (trace.fraction < 1) continue;
+				clear++;
+				VectorSubtract(top, platbottom, direction);
+				direction[2] = 0;
+				if (VectorNormalize(direction) == 0)
+				{
+					VectorSet(direction, 1, 0, 0);
+				}
+				VectorCopy(bottom, start);
+				for (axis = 0; axis < 64; axis++)
+				{
+					if (start[0] < origin[0] + mins[0] || start[0] > origin[0] + maxs[0] ||
+						start[1] < origin[1] + mins[1] || start[1] > origin[1] + maxs[1]) break;
+					VectorMA(start, 4, direction, start);
+				}
+				if (axis == 64) continue;
+				reach = AAS_AllocReachability();
+				if (!reach) return 0;
+				reach->areanum = destination;
+				reach->facenum = modelnum;
+				reach->edgenum = (int) height;
+				VectorCopy(start, reach->start);
+				VectorCopy(top, reach->end);
+				reach->traveltype = TRAVEL_ELEVATOR | AAS_TravelFlagsForTeam(ent);
+				reach->traveltime = aassettings.rs_startelevator + height * 100 / speed;
+				reach->next = areareachability[source];
+				areareachability[source] = reach;
+				reach_elevator++;
+				botimport.Print(PRT_MESSAGE, "func_plat model %d: wide-platform elevator %d -> %d\n",
+					modelnum, source, destination);
+				return 1;
+			}
+		}
+	}
+	botimport.Print(PRT_MESSAGE, "func_plat model %d: no upper exit (source=%d upper=%d grounded=%d distinct=%d clear=%d)\n",
+		modelnum, source, topareas, grounded, distinct, clear);
+	return 0;
+}
+
 // create possible elevator (func_plat) reachabilities
 // this is very game dependent.... :(
 //
@@ -2943,11 +3076,11 @@ void AAS_Reachability_Teleport(void)
 //===========================================================================
 void AAS_Reachability_Elevator(void)
 {
-	int area1num, area2num, modelnum, i, j, k, l, n, p;
+	int area1num, area2num, modelnum, i, j, k, l, n, p, oldreach;
 	float lip, height, speed;
 	char model[MAX_EPAIRKEY], classname[MAX_EPAIRKEY];
 	int ent;
-	vec3_t mins, maxs, origin, angles = {0, 0, 0};
+	vec3_t mins, maxs, originalmins, originalmaxs, origin, angles = {0, 0, 0};
 	vec3_t pos1, pos2, mids, platbottom, plattop;
 	vec3_t bottomorg, toporg, start, end, dir;
 	vec_t xvals[8], yvals[8], xvals_top[8], yvals_top[8];
@@ -2981,6 +3114,9 @@ void AAS_Reachability_Elevator(void)
 			//NOTE: the origin is usually (0,0,0) and the mins and maxs
 			//      are the absolute mins and maxs
 			AAS_BSPModelMinsMaxsOrigin(modelnum, angles, mins, maxs, origin);
+			VectorCopy(mins, originalmins);
+			VectorCopy(maxs, originalmaxs);
+			oldreach = reach_elevator;
 			//
 			AAS_VectorForBSPEpairKey(ent, "origin", origin);
 			//pos1 is the top position, pos2 is the bottom
@@ -3147,6 +3283,12 @@ void AAS_Reachability_Elevator(void)
 					} //end for
 				} //end for
 			} //end for
+			if (reach_elevator == oldreach)
+			{
+				AAS_Reachability_ElevatorWidePlatform(ent, modelnum,
+					originalmins, originalmaxs, origin, platbottom, plattop,
+					height, speed);
+			}
 		} //end if
 	} //end for
 } //end of the function AAS_Reachability_Elevator

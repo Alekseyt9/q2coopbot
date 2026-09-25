@@ -1,6 +1,7 @@
-# BSPC CLI regression checks
+# Historical BSPC reconstruction CLI regression checks
 
-The reconstructed `bspc` binary ships with placeholder pipelines that mirror
+This test exercises the historical `bspc_reconstruction` target, not the default
+reachability-capable `bspc` target. The reconstructed binary ships with placeholder pipelines that mirror
 the control-flow of the historical tool. The script at
 `workspace/tools/bspc/run_cli_modes.py` exercises every CLI mode against lightweight
 fixtures so that automated pipelines can detect argument parsing or filesystem
@@ -8,11 +9,11 @@ regressions quickly.
 
 ## Running the smoke test
 
-1. Build the `bspc` executable (`cmake -S . -B workspace/build/aas -G Ninja` and `cmake --build workspace/build/aas --target bspc`).
+1. Build the historical executable (`cmake -S . -B workspace/build/aas -G Ninja` and `cmake --build workspace/build/aas --target bspc_reconstruction`).
 2. Execute the harness:
 
    ```bash
-   python workspace/tools/bspc/run_cli_modes.py --bspc /path/to/workspace/build/aas/workspace/tools/bspc/bspc
+   python workspace/tools/bspc/run_cli_modes.py --bspc /path/to/workspace/build/aas/workspace/tools/bspc/bspc_reconstruction
    ```
 
    The script emits a JSON summary that records the command line for each mode,

@@ -41,13 +41,15 @@ go build -o workspace/build/go/q2coopbot.exe ./cmd/q2coopbot
 - `examples/python-harness/` — прежний Python-прототип и его тесты, сохранённые только как пример;
 - `docs/` — текущий [план Go-бота](docs/system2_strategy_tactics_plan.md) и исторические материалы прежней реконструкции.
 
-Для сборки экспериментальной утилиты AAS:
+Для сборки отдельной утилиты AAS с предварительным расчётом переходов:
 
 ```powershell
 cmake -S . -B workspace/build/aas -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build workspace/build/aas --target bspc
+./scripts/compile_aas.ps1 -BspPath 'F:\path\to\base2.bsp' -OutputRoot workspace/artifacts/aas-base2
+./scripts/prepare_runtime.ps1 -AASRoot workspace/artifacts/aas-base2
 ```
 
-Текущая реконструкция `bspc` записывает только заголовок AAS и стандартный габарит игрока; генерация геометрии и переходов ещё не реализована. Её выход нельзя использовать для маршрутизации Go-бота. Оригинальный `bspc.exe` создаёт геометрию и области, но переходы затем достраивал BotLib при загрузке карты. Для тестов нужны готовые AAS-файлы с переходами.
+Цель `bspc` собирает Quake II-совместимый форк BSPC: AAS версии 5 содержит области и рассчитанные заранее переходы, которые Go-клиент читает без BotLib. Исходники форка, версия и лицензия GPL-2.0-or-later указаны в [UPSTREAM.md](workspace/tools/bspc/vendor/q2bspc/UPSTREAM.md). Старая неполная реализация сохранена только как отдельная цель `bspc_reconstruction` для исторических тестов. Проверенный запуск и ограничения описаны в [проверке генерации AAS](docs/testing/bspc_reachability.md).
 
 Игровые PAK/AAS-файлы и исполняемый сервер не входят в репозиторий. Исторические документы могут описывать удалённый C-бот; они сохранены для справки и не задают текущую сборку.
