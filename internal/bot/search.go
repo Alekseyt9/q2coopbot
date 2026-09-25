@@ -6,13 +6,44 @@ import (
 	"q2coopbot/internal/quake"
 )
 
+// SearchAttempt records one bounded test of a viewpoint near the last sighting.
+// It never asserts that the teammate is at the target.
+type SearchAttempt struct {
+	Entity              int         `json:"entity"`
+	LastSeenFrame       int         `json:"last_seen_frame"`
+	Target              *quake.Vec3 `json:"target,omitempty"`
+	Basis               string      `json:"basis"`
+	ExpectedObservation string      `json:"expected_observation"`
+	Attempt             int         `json:"attempt"`
+	MaxAttempts         int         `json:"max_attempts"`
+	StartFrame          int         `json:"start_frame"`
+	EndFrame            int         `json:"end_frame,omitempty"`
+	State               string      `json:"state"`
+	Outcome             string      `json:"outcome,omitempty"`
+}
+
+func (p *Planner) finishSearchAttempt(frame int, outcome string) {
+	if p.searchAttempt == nil || p.searchAttempt.State != "active" {
+		return
+	}
+	p.searchAttempt.State = "completed"
+	p.searchAttempt.Outcome = outcome
+	p.searchAttempt.EndFrame = frame
+}
+
 // hiddenTeammateGoal permits one short approach to a confirmed position and
 // one nearby viewpoint. Neither point is treated as the teammate's position.
 func (p *Planner) hiddenTeammateGoal(s quake.Snapshot) (quake.Vec3, string, bool) {
+	if p.searchAttempt != nil && s.TeammateAgeFrames != nil &&
+		(p.searchAttempt.Entity != s.LastTeammateEntity ||
+			p.searchAttempt.LastSeenFrame != s.Frame-*s.TeammateAgeFrames) {
+		p.searchAttempt = nil
+	}
 	if s.LastTeammate == nil || s.TeammateAgeFrames == nil || *s.TeammateAgeFrames <= 0 ||
 		*s.TeammateAgeFrames > 40 || p.World.GeometryStatus != "ready" || p.Nav == nil ||
 		s.Health <= 0 || !s.OnGround || quake.Horizontal(s.Self, *s.LastTeammate) > 512 ||
 		math.Abs(s.Self[2]-(*s.LastTeammate)[2]) > 80 {
+		p.finishSearchAttempt(s.Frame, "preconditions_lost")
 		return quake.Vec3{}, "", false
 	}
 	if p.probeTarget != nil {
@@ -21,6 +52,11 @@ func (p *Planner) hiddenTeammateGoal(s quake.Snapshot) (quake.Vec3, string, bool
 			p.probeProgressFrame = s.Frame
 		}
 		if s.Frame-p.probeProgressFrame > 8 || quake.Horizontal(s.Self, *p.probeTarget) <= 16 {
+			if s.Frame-p.probeProgressFrame > 8 {
+				p.finishSearchAttempt(s.Frame, "stalled")
+			} else {
+				p.finishSearchAttempt(s.Frame, "not_seen")
+			}
 			p.probeTarget = nil
 			return quake.Vec3{}, "", false
 		}
@@ -39,9 +75,19 @@ func (p *Planner) hiddenTeammateGoal(s quake.Snapshot) (quake.Vec3, string, bool
 	if !p.probeAttempted {
 		p.probeAttempted = true
 		if viewpoint, ok := p.selectSearchViewpoint(s); ok {
+			p.searchAttempt = &SearchAttempt{Entity: s.LastTeammateEntity,
+				LastSeenFrame: s.Frame - *s.TeammateAgeFrames, Target: &viewpoint,
+				Basis: "last_seen_aas_viewpoint", ExpectedObservation: "teammate_visible_in_current_snapshot",
+				Attempt: 1, MaxAttempts: 1, StartFrame: s.Frame, State: "active"}
 			p.probeTarget = &viewpoint
 			p.probeLastSelf = s.Self
 			p.probeProgressFrame = s.Frame
+		} else {
+			p.searchAttempt = &SearchAttempt{Entity: s.LastTeammateEntity,
+				LastSeenFrame: s.Frame - *s.TeammateAgeFrames,
+				Basis:         "last_seen_aas_viewpoint", ExpectedObservation: "teammate_visible_in_current_snapshot",
+				Attempt: 1, MaxAttempts: 1, StartFrame: s.Frame, EndFrame: s.Frame,
+				State: "completed", Outcome: "no_safe_viewpoint"}
 		}
 	}
 	if p.probeTarget != nil && quake.Horizontal(s.Self, *p.probeTarget) > 16 {

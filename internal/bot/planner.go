@@ -12,24 +12,26 @@ import (
 )
 
 type World struct {
-	Map            string            `json:"map"`
-	Geometry       *quake.MapInfo    `json:"geometry,omitempty"`
-	AASLoaded      bool              `json:"aas_loaded"`
-	Areas          int               `json:"areas"`
-	Reachabilities int               `json:"reachabilities"`
-	Navigation     string            `json:"navigation"`
-	GeometryStatus string            `json:"geometry_status"`
-	Goal           string            `json:"goal"`
-	SearchTarget   *quake.Vec3       `json:"search_target,omitempty"`
-	TeammateSound  *TeammateSoundCue `json:"teammate_sound,omitempty"`
-	TeammateMotion *TeammateMotion   `json:"teammate_motion,omitempty"`
-	Strategy       *StrategyDecision `json:"strategy,omitempty"`
-	Tactic         *TacticalDecision `json:"tactic,omitempty"`
-	Route          []quake.Waypoint  `json:"route,omitempty"`
-	Elevator       string            `json:"elevator,omitempty"`
-	Command        CommandDecision   `json:"command"`
-	Snapshot       quake.Snapshot    `json:"snapshot"`
-	Updated        time.Time         `json:"updated"`
+	Map              string            `json:"map"`
+	Geometry         *quake.MapInfo    `json:"geometry,omitempty"`
+	AASLoaded        bool              `json:"aas_loaded"`
+	Areas            int               `json:"areas"`
+	Reachabilities   int               `json:"reachabilities"`
+	Navigation       string            `json:"navigation"`
+	GeometryStatus   string            `json:"geometry_status"`
+	Goal             string            `json:"goal"`
+	SearchTarget     *quake.Vec3       `json:"search_target,omitempty"`
+	SearchAttempt    *SearchAttempt    `json:"search_attempt,omitempty"`
+	TeammateSound    *TeammateSoundCue `json:"teammate_sound,omitempty"`
+	TeammateMotion   *TeammateMotion   `json:"teammate_motion,omitempty"`
+	TeammateEvidence *TeammateEvidence `json:"teammate_evidence,omitempty"`
+	Strategy         *StrategyDecision `json:"strategy,omitempty"`
+	Tactic           *TacticalDecision `json:"tactic,omitempty"`
+	Route            []quake.Waypoint  `json:"route,omitempty"`
+	Elevator         string            `json:"elevator,omitempty"`
+	Command          CommandDecision   `json:"command"`
+	Snapshot         quake.Snapshot    `json:"snapshot"`
+	Updated          time.Time         `json:"updated"`
 }
 type Planner struct {
 	Nav                   *quake.Navigator
@@ -61,6 +63,7 @@ type Planner struct {
 	tactic                *TacticalDecision
 	elevator              *elevatorRide
 	probeTarget           *quake.Vec3
+	searchAttempt         *SearchAttempt
 	probeAttempted        bool
 	probeProgressFrame    int
 	probeLastSelf         quake.Vec3
@@ -68,6 +71,7 @@ type Planner struct {
 	lastSeenSelfKnown     bool
 	searchApproachStarted bool
 	teammateSoundCue      *TeammateSoundCue
+	teammateEvidence      *TeammateEvidence
 }
 
 // setTestGroundEdgeGoal bypasses route selection only for the live edge fixture.
@@ -166,11 +170,13 @@ func (p *Planner) setMap(name, root string) {
 	p.routeKnown = false
 	p.elevator = nil
 	p.probeTarget = nil
+	p.searchAttempt = nil
 	p.probeAttempted = false
 	p.probeProgressFrame = 0
 	p.lastSeenSelfKnown = false
 	p.searchApproachStarted = false
 	p.teammateSoundCue = nil
+	p.teammateEvidence = nil
 	p.observed = false
 	p.lastProgress = time.Time{}
 	p.detourUntil = time.Time{}
@@ -254,9 +260,11 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			s.Enemies[i].ClearShot = &clear
 		}
 	}
+	previous := p.World.Snapshot
 	p.World.Snapshot = s
 	p.updateTeammateSoundCue(s)
 	p.updateTeammateMotion(s)
+	p.updateTeammateEvidence(previous, s)
 	p.World.Updated = time.Now()
 	if p.decision != nil && time.Since(p.decision.At) < 8*time.Second {
 		p.World.Strategy = p.decision
@@ -271,6 +279,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	previousGoal := p.World.Goal
 	p.World.Goal = "wait_for_teammate"
 	p.World.SearchTarget = nil
+	p.World.SearchAttempt = nil
 	p.World.Route = nil
 	p.World.Elevator = ""
 	p.hasGoal = false
@@ -278,6 +287,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	if s.Teammate == nil {
 		p.elevator = nil
 		searchGoal, searchKind, ok := p.hiddenTeammateGoal(s)
+		p.World.SearchAttempt = p.searchAttempt
 		if !ok {
 			p.routeKnown = false
 			return
@@ -289,6 +299,11 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			p.routeKnown = false
 		}
 	} else {
+		if p.searchAttempt != nil && p.searchAttempt.State == "completed" && p.searchAttempt.EndFrame < s.Frame {
+			p.searchAttempt = nil
+		}
+		p.finishSearchAttempt(s.Frame, "reacquired")
+		p.World.SearchAttempt = p.searchAttempt
 		p.probeTarget = nil
 		p.probeAttempted = false
 		p.searchApproachStarted = false
@@ -387,6 +402,16 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			maxTravel = 320
 		}
 		_, p.routeOK = safeSearchRoute(p.route, s.Self, goal, maxTravel)
+	}
+	if searching && p.World.Goal == "probe_last_seen" && !p.routeOK {
+		p.finishSearchAttempt(s.Frame, "route_unavailable")
+		p.probeTarget = nil
+		p.World.SearchAttempt = p.searchAttempt
+		p.World.SearchTarget = nil
+		p.World.Goal = "wait_for_teammate"
+		p.World.Navigation = "unreachable"
+		p.hasGoal = false
+		return
 	}
 	if p.routeOK {
 		for p.routeIndex < len(p.route) && p.route[p.routeIndex].Kind != 11 && quake.Horizontal(s.Self, p.route[p.routeIndex].Position) <= 10 && math.Abs(s.Self[2]-p.route[p.routeIndex].Position[2]) <= 64 {

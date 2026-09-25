@@ -214,7 +214,10 @@ foreach ($scale in $Timescales) {
             $humanConfig.test.teleport = '320,1940,-144'
             $humanConfig.test.teleport_after = $(if ($HiddenPlayerSoundTrial) { '191,2111,-103' } else { '194,2080,-144' })
             $humanConfig.test.teleport_after_frames = 3
-            if ($HiddenPlayerSoundTrial) { $humanConfig.test.jump_after_teleport_frames = 25 }
+            if ($HiddenPlayerSoundTrial) {
+                $humanConfig.test.jump_after_teleport_frames = 25
+                $humanConfig.test.jump_again_after_teleport_frames = 33
+            }
             if ($ReacquireTeammate) {
                 $humanConfig.test.teleport_return = '400,1840,-144'
                 $humanConfig.test.teleport_return_after_frames = 15
@@ -397,6 +400,9 @@ foreach ($scale in $Timescales) {
         $reacquiredFollowMoveFrames = 0
         $probeAfterReacquire = 0
         $probeCompletedFrames = 0
+        $searchAttemptStarts = @{}
+        $searchAttemptOutcomes = @{}
+        $searchAttemptInvalid = 0
         $soundEvents = 0
         $soundExplicitPositions = 0
         $soundEntityOnly = 0
@@ -412,6 +418,11 @@ foreach ($scale in $Timescales) {
         $soundCueExpiredFrames = 0
         $soundPHSPossibleClusters = $null
         $soundPHSTotalClusters = $null
+        $evidenceActivityMax = 0
+        $evidenceActivityFramesMax = 0
+        $evidenceReacquireEvents = 0
+        $evidenceInvalid = 0
+        $evidenceVisualOutside = 0
         $motionFrames = 0
         $motionInvalid = 0
         $motionExpiredFrames = 0
@@ -475,6 +486,31 @@ foreach ($scale in $Timescales) {
                 }
             }
             if ($null -ne $entry.teammate) { $teammateSeenInTrace = $true }
+            if ($TeammateSearchTrial -and $null -ne $entry.search_attempt) {
+                $attempt = $entry.search_attempt
+                $attemptKey = "$($attempt.entity):$($attempt.last_seen_frame):$($attempt.start_frame)"
+                $searchAttemptStarts[$attemptKey] = $true
+                if ($attempt.state -eq 'completed') { $searchAttemptOutcomes[$attemptKey] = $attempt.outcome }
+                if ($attempt.attempt -ne 1 -or $attempt.max_attempts -ne 1 -or
+                    $attempt.basis -ne 'last_seen_aas_viewpoint' -or
+                    $attempt.expected_observation -ne 'teammate_visible_in_current_snapshot') {
+                    $searchAttemptInvalid++
+                }
+            }
+            if ($null -ne $entry.teammate_evidence) {
+                if ($null -eq $entry.teammate) {
+                    $evidenceActivityMax = [math]::Max($evidenceActivityMax, [int]$entry.teammate_evidence.activity_sounds)
+                    $evidenceActivityFramesMax = [math]::Max($evidenceActivityFramesMax, [int]$entry.teammate_evidence.activity_frames)
+                    if ($entry.teammate_evidence.location_status -ne 'unknown' -or
+                        $entry.teammate_evidence.reacquired -or $entry.teammate_evidence.visual_outside_nominal) {
+                        $evidenceInvalid++
+                    }
+                } elseif ($entry.teammate_evidence.reacquired) {
+                    $evidenceReacquireEvents++
+                    if ($entry.teammate_evidence.location_status -ne 'observed') { $evidenceInvalid++ }
+                    if ($entry.teammate_evidence.visual_outside_nominal) { $evidenceVisualOutside++ }
+                }
+            }
             if ($TransitionMap -and $entry.map -eq $TransitionMap -and $null -ne $entry.teammate) {
                 $teammateSeenAfterTransition = $true
             }
@@ -839,6 +875,10 @@ foreach ($scale in $Timescales) {
             search_wait_at_point = $searchWaitAtPoint; search_wait_move_frames = $searchWaitMoveFrames
             probe_frames = $probeFrames; probe_move_frames = $probeMoveFrames; probe_fire_frames = $probeFireFrames
             probe_target = $probeTarget; probe_target_changes = $probeTargetChanges
+            search_attempts = $searchAttemptStarts.Count
+            search_attempt_not_seen = @($searchAttemptOutcomes.Values | Where-Object { $_ -eq 'not_seen' }).Count
+            search_attempt_reacquired = @($searchAttemptOutcomes.Values | Where-Object { $_ -eq 'reacquired' }).Count
+            search_attempt_invalid = $searchAttemptInvalid
             search_reacquired_frames = $searchReacquiredFrames
             probe_completed_frames = $probeCompletedFrames
             sound_events = $soundEvents; sound_explicit_positions = $soundExplicitPositions; sound_entity_only = $soundEntityOnly
@@ -849,6 +889,9 @@ foreach ($scale in $Timescales) {
             sound_cue_max_age = $soundCueMaxAge; sound_cue_wrong_entity = $soundCueWrongEntity
             sound_cue_invalid = $soundCueInvalid; sound_cue_expired_frames = $soundCueExpiredFrames
             sound_phs_possible_clusters = $soundPHSPossibleClusters; sound_phs_total_clusters = $soundPHSTotalClusters
+            evidence_activity_max = $evidenceActivityMax; evidence_activity_frames_max = $evidenceActivityFramesMax
+            evidence_reacquire_events = $evidenceReacquireEvents
+            evidence_invalid = $evidenceInvalid; evidence_visual_outside = $evidenceVisualOutside
             motion_frames = $motionFrames; motion_invalid = $motionInvalid; motion_expired_frames = $motionExpiredFrames
             motion_at_sound_nearby = $motionAtSoundNearby; motion_at_sound_total = $motionAtSoundTotal
             motion_at_sound_radius = $motionAtSoundRadius
@@ -968,10 +1011,13 @@ if ($TeammateSearchTrial -and @($results | Where-Object {
     -not $_.memory_human_behind_wall -or $_.search_frames -lt 1 -or $_.search_move_frames -lt 1 -or $_.search_fire_frames -ne 0 -or
     $null -eq $_.search_start_x -or $null -eq $_.search_max_x -or
     $_.probe_frames -lt 2 -or $_.probe_move_frames -lt 2 -or $_.probe_fire_frames -ne 0 -or
+    $_.search_attempts -ne 1 -or $_.search_attempt_not_seen -ne 1 -or
+    $_.search_attempt_reacquired -ne 0 -or $_.search_attempt_invalid -ne 0 -or
     $null -eq $_.probe_target -or $_.probe_target_changes -ne 0 -or $_.probe_completed_frames -lt 1 -or
     $(if ($ReacquireTeammate) {
         -not $_.memory_human_returned -or $_.search_reacquired_frames -lt 3 -or
-        $_.reacquired_follow_move_frames -lt 1 -or $_.probe_after_reacquire -ne 0
+        $_.reacquired_follow_move_frames -lt 1 -or $_.probe_after_reacquire -ne 0 -or
+        $_.evidence_reacquire_events -lt 1 -or $_.evidence_invalid -ne 0
     } else { $_.search_wait_after -lt 5 -or $_.search_reacquired_frames -ne 0 }) -or
     $_.search_wait_move_frames -ne 0
 }).Count -gt 0) {
@@ -979,16 +1025,18 @@ if ($TeammateSearchTrial -and @($results | Where-Object {
 }
 if ($HiddenPlayerSoundTrial -and @($results | Where-Object {
     -not $_.memory_human_behind_wall -or $_.human_jump_commands -lt 1 -or $_.human_jump_max_z -lt -90 -or
-    $_.hidden_player_jump_sounds -lt 1 -or $_.hidden_player_jump_entity -ne $_.human_entity -or
+    $_.hidden_player_jump_sounds -lt 2 -or $_.hidden_player_jump_entity -ne $_.human_entity -or
     $_.hidden_player_jump_positions -ne 0 -or $_.sound_cue_frames -lt 1 -or
-    $_.sound_cue_zero_age -lt 1 -or $_.sound_cue_max_age -gt 10 -or
+    $_.sound_cue_zero_age -lt 2 -or $_.sound_cue_max_age -gt 10 -or
     $_.sound_cue_wrong_entity -ne 0 -or $_.sound_cue_invalid -ne 0 -or
     $_.sound_cue_expired_frames -lt 1 -or
     $_.sound_phs_possible_clusters -lt 1 -or
     $_.sound_phs_total_clusters -le $_.sound_phs_possible_clusters -or
     $_.motion_frames -lt 1 -or $_.motion_invalid -ne 0 -or $_.motion_expired_frames -lt 1 -or
     $_.motion_at_sound_nearby -lt 1 -or $_.motion_at_sound_total -lt $_.motion_at_sound_nearby -or
-    $_.motion_hidden_teleport_outside_frames -lt 1
+    $_.motion_hidden_teleport_outside_frames -lt 1 -or
+    $_.evidence_activity_max -lt 2 -or $_.evidence_activity_frames_max -lt 2 -or
+    $_.evidence_invalid -ne 0
 }).Count -gt 0) {
     throw "Hidden player sound trial did not confirm a bounded activity cue: $summary"
 }

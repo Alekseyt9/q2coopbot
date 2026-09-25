@@ -19,85 +19,86 @@ import (
 )
 
 type Client struct {
-	conn                          *net.UDPConn
-	address                       *net.UDPAddr
-	seq, serverSeq                uint32
-	serverReliable                uint32
-	qport                         uint16
-	challenge                     int
-	connected, begun              bool
-	spawncount                    int
-	lastHandshake                 string
-	handshakeAt                   time.Time
-	decoder                       *quake.Decoder
-	pendingSounds                 []quake.SoundEvent
-	planner                       *Planner
-	root                          string
-	previous                      quake.UserCmd
-	nextMove                      time.Time
-	lastFrame                     time.Time
-	framePaced                    bool
-	gameFrames                    int
-	frameReady                    bool
-	latestFrame                   int
-	firstMoveFrame                int
-	lastMoveFrame                 int
-	firstMoveAt                   time.Time
-	frameGaps                     int
-	suppressedFrames              int
-	frames, moves                 int
-	attacks                       int
-	worldFile                     string
-	traceFile                     *os.File
-	stopFile                      string
-	name                          string
-	idle                          bool
-	testChangeMap                 string
-	testChangeAfter               int
-	testRconPassword              string
-	testChangeSent                bool
-	testChangeAt                  time.Time
-	testChangeTimedOut            bool
-	testTeleportMap               string
-	testTeleportPosition          quake.Vec3
-	testTeleportSent              bool
-	testTeleportSentFrame         int
-	testTeleportAfterPosition     quake.Vec3
-	testTeleportAfterFrames       int
-	testTeleportAfterSent         bool
-	testTeleportAfterSentFrame    int
-	testTeleportReturnPosition    quake.Vec3
-	testTeleportReturnAfterFrames int
-	testTeleportReturnSent        bool
-	testJumpAfterTeleportFrames   int
-	testSpawnMap                  string
-	testSpawnClass                string
-	testSpawnPosition             quake.Vec3
-	testSpawnSent                 bool
-	testGapStart                  int
-	testGapFrames                 int
-	testLineCross                 bool
-	testHoldPosition              bool
-	testGroundEdgeProbe           bool
-	testDoorProbe                 bool
-	testDoorPassProbe             bool
-	testButtonProbe               bool
-	testButtonAutoGoal            bool
-	testDoorPassStarted           bool
-	testLineEntered               bool
-	testLineLeft                  bool
-	lastObservedMap               string
-	mapChanges                    int
-	beginPending                  string
-	beginAt                       time.Time
-	reconnected                   bool
-	exitOnReconnect               bool
-	stopOnReconnect               bool
-	strategist                    *Strategist
-	tactician                     *Tactician
-	seenCommands                  map[string]bool
-	duration                      time.Duration
-	start                         time.Time
+	conn                             *net.UDPConn
+	address                          *net.UDPAddr
+	seq, serverSeq                   uint32
+	serverReliable                   uint32
+	qport                            uint16
+	challenge                        int
+	connected, begun                 bool
+	spawncount                       int
+	lastHandshake                    string
+	handshakeAt                      time.Time
+	decoder                          *quake.Decoder
+	pendingSounds                    []quake.SoundEvent
+	planner                          *Planner
+	root                             string
+	previous                         quake.UserCmd
+	nextMove                         time.Time
+	lastFrame                        time.Time
+	framePaced                       bool
+	gameFrames                       int
+	frameReady                       bool
+	latestFrame                      int
+	firstMoveFrame                   int
+	lastMoveFrame                    int
+	firstMoveAt                      time.Time
+	frameGaps                        int
+	suppressedFrames                 int
+	frames, moves                    int
+	attacks                          int
+	worldFile                        string
+	traceFile                        *os.File
+	stopFile                         string
+	name                             string
+	idle                             bool
+	testChangeMap                    string
+	testChangeAfter                  int
+	testRconPassword                 string
+	testChangeSent                   bool
+	testChangeAt                     time.Time
+	testChangeTimedOut               bool
+	testTeleportMap                  string
+	testTeleportPosition             quake.Vec3
+	testTeleportSent                 bool
+	testTeleportSentFrame            int
+	testTeleportAfterPosition        quake.Vec3
+	testTeleportAfterFrames          int
+	testTeleportAfterSent            bool
+	testTeleportAfterSentFrame       int
+	testTeleportReturnPosition       quake.Vec3
+	testTeleportReturnAfterFrames    int
+	testTeleportReturnSent           bool
+	testJumpAfterTeleportFrames      int
+	testJumpAgainAfterTeleportFrames int
+	testSpawnMap                     string
+	testSpawnClass                   string
+	testSpawnPosition                quake.Vec3
+	testSpawnSent                    bool
+	testGapStart                     int
+	testGapFrames                    int
+	testLineCross                    bool
+	testHoldPosition                 bool
+	testGroundEdgeProbe              bool
+	testDoorProbe                    bool
+	testDoorPassProbe                bool
+	testButtonProbe                  bool
+	testButtonAutoGoal               bool
+	testDoorPassStarted              bool
+	testLineEntered                  bool
+	testLineLeft                     bool
+	lastObservedMap                  string
+	mapChanges                       int
+	beginPending                     string
+	beginAt                          time.Time
+	reconnected                      bool
+	exitOnReconnect                  bool
+	stopOnReconnect                  bool
+	strategist                       *Strategist
+	tactician                        *Tactician
+	seenCommands                     map[string]bool
+	duration                         time.Duration
+	start                            time.Time
 }
 
 func (c *Client) sendRaw(data []byte) error { _, e := c.conn.WriteToUDP(data, c.address); return e }
@@ -460,9 +461,11 @@ func (c *Client) run(ctx context.Context) error {
 				cmd = quake.UserCmd{}
 				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_idle"}
 			}
-			if c.testJumpAfterTeleportFrames > 0 && c.testTeleportAfterSent &&
-				c.latestFrame-c.testTeleportAfterSentFrame >= c.testJumpAfterTeleportFrames &&
-				c.latestFrame-c.testTeleportAfterSentFrame < c.testJumpAfterTeleportFrames+4 {
+			jumpAge := c.latestFrame - c.testTeleportAfterSentFrame
+			if c.testTeleportAfterSent && (c.testJumpAfterTeleportFrames > 0 &&
+				jumpAge >= c.testJumpAfterTeleportFrames && jumpAge < c.testJumpAfterTeleportFrames+4 ||
+				c.testJumpAgainAfterTeleportFrames > 0 && jumpAge >= c.testJumpAgainAfterTeleportFrames &&
+					jumpAge < c.testJumpAgainAfterTeleportFrames+4) {
 				cmd.Up = 400
 				c.planner.World.Command.MoveSource = "test_jump"
 			}
@@ -503,8 +506,10 @@ func (c *Client) run(ctx context.Context) error {
 					OnGround          bool               `json:"on_ground"`
 					Goal              string             `json:"goal"`
 					SearchTarget      *quake.Vec3        `json:"search_target,omitempty"`
+					SearchAttempt     *SearchAttempt     `json:"search_attempt,omitempty"`
 					TeammateSound     *TeammateSoundCue  `json:"teammate_sound,omitempty"`
 					TeammateMotion    *TeammateMotion    `json:"teammate_motion,omitempty"`
+					TeammateEvidence  *TeammateEvidence  `json:"teammate_evidence,omitempty"`
 					Navigation        string             `json:"navigation"`
 					GeometryStatus    string             `json:"geometry_status"`
 					Elevator          string             `json:"elevator,omitempty"`
@@ -523,11 +528,13 @@ func (c *Client) run(ctx context.Context) error {
 					TeammateAgeFrames: c.planner.World.Snapshot.TeammateAgeFrames,
 					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround,
 					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
-					TeammateSound:  c.planner.World.TeammateSound,
-					TeammateMotion: c.planner.World.TeammateMotion,
-					Navigation:     c.planner.World.Navigation,
-					GeometryStatus: c.planner.World.GeometryStatus,
-					Elevator:       c.planner.World.Elevator, Movers: c.planner.World.Snapshot.Movers,
+					SearchAttempt:    c.planner.World.SearchAttempt,
+					TeammateSound:    c.planner.World.TeammateSound,
+					TeammateMotion:   c.planner.World.TeammateMotion,
+					TeammateEvidence: c.planner.World.TeammateEvidence,
+					Navigation:       c.planner.World.Navigation,
+					GeometryStatus:   c.planner.World.GeometryStatus,
+					Elevator:         c.planner.World.Elevator, Movers: c.planner.World.Snapshot.Movers,
 					Sounds:      c.planner.World.Snapshot.Sounds,
 					Enemies:     c.planner.World.Snapshot.Enemies,
 					Arbitration: c.planner.World.Command,

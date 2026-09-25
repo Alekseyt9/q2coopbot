@@ -32,7 +32,7 @@ func (p *Planner) updateTeammateMotion(s quake.Snapshot) {
 		return
 	}
 	age := *s.TeammateAgeFrames
-	radius := motionOriginMargin + ordinaryMotionPerFrame*float64(age)
+	radius := nominalMotionRadius(age)
 	motion := &TeammateMotion{Entity: s.LastTeammateEntity, AgeFrames: age, Radius: radius,
 		Method: "conditional_horizontal_radius"}
 	for id := 1; id < len(p.Nav.Areas); id++ {
