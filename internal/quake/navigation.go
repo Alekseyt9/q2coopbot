@@ -14,11 +14,17 @@ type Area struct{ Min, Max, Center Vec3 }
 type Edge struct {
 	To         int
 	Start, End Vec3
-	Kind, Cost int
+	Kind, Cost  int
+	Model, Rise int
 }
 type Waypoint struct {
-	Position Vec3 `json:"position"`
-	Jump     bool `json:"jump"`
+	Position        Vec3   `json:"position"`
+	Jump            bool   `json:"jump"`
+	Kind            int    `json:"kind,omitempty"`
+	Model           int    `json:"model,omitempty"`
+	Rise            int    `json:"rise,omitempty"`
+	ToArea          int    `json:"to_area,omitempty"`
+	ElevatorPhase   string `json:"elevator_phase,omitempty"`
 }
 type Navigator struct {
 	Areas []Area
@@ -99,8 +105,14 @@ func LoadAAS(path string) (*Navigator, error) {
 			to := int(int32(binary.LittleEndian.Uint32(r[p:])))
 			kind := int(binary.LittleEndian.Uint32(r[p+36:]) & 0xffffff)
 			cost := int(binary.LittleEndian.Uint16(r[p+40:]))
-			if to > 0 && to < len(n.Areas) && kind >= 2 && kind <= 9 {
-				n.Edges[i] = append(n.Edges[i], Edge{to, vec(r, p+12), vec(r, p+24), kind, cost})
+			if to > 0 && to < len(n.Areas) && (kind >= 2 && kind <= 9 || kind == 11) {
+				model, rise := 0, 0
+				if kind == 11 {
+					model = int(int32(binary.LittleEndian.Uint32(r[p+4:])))
+					rise = int(int32(binary.LittleEndian.Uint32(r[p+8:])))
+					if model <= 0 || rise <= 0 { continue }
+				}
+				n.Edges[i] = append(n.Edges[i], Edge{To: to, Start: vec(r, p+12), End: vec(r, p+24), Kind: kind, Cost: cost, Model: model, Rise: rise})
 			}
 		}
 	}
@@ -198,7 +210,15 @@ func (n *Navigator) Route(start, goal Vec3) ([]Waypoint, bool) {
 	for i := len(reverse) - 1; i >= 0; i-- {
 		e := reverse[i]
 		jump := e.Kind == 4 || e.Kind == 5 || e.Kind == 9
-		waypoints = append(waypoints, Waypoint{e.Start, jump}, Waypoint{e.End, jump})
+		if e.Kind == 11 {
+			waypoints = append(waypoints,
+				Waypoint{Position: e.Start, Kind: 11, Model: e.Model, Rise: e.Rise, ToArea: e.To, ElevatorPhase: "board"},
+				Waypoint{Position: e.End, Kind: 11, Model: e.Model, Rise: e.Rise, ToArea: e.To, ElevatorPhase: "exit"})
+		} else {
+			waypoints = append(waypoints,
+				Waypoint{Position: e.Start, Jump: jump, Kind: e.Kind, ToArea: e.To},
+				Waypoint{Position: e.End, Jump: jump, Kind: e.Kind, ToArea: e.To})
+		}
 	}
 	return waypoints, true
 }

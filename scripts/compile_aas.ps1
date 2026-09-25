@@ -4,7 +4,8 @@ param(
     [string]$BspcExe = (Join-Path (Split-Path -Parent $PSScriptRoot) 'workspace\build\aas\workspace\tools\bspc\bspc.exe'),
     [string]$OutputRoot = (Join-Path (Split-Path -Parent $PSScriptRoot) ('workspace\artifacts\aas-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))),
     [int]$Threads = 1,
-    [int]$WallLimitSeconds = 900
+    [int]$WallLimitSeconds = 900,
+    [switch]$RequireElevator
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,9 +56,17 @@ foreach ($lump in @(@(7, 48, 'areas'), @(8, 28, 'settings'), @(9, 44, 'reachabil
     $counts[$name] = [int]($length / $rowSize)
 }
 if ($counts.areas -ne $counts.settings) { throw "AAS area/settings mismatch: $aas" }
+$reachOffset = [BitConverter]::ToInt32($header, 12 + 9 * 8)
+$elevators = 0
+for ($i = 0; $i -lt $counts.reachabilities; $i++) {
+    $type = [BitConverter]::ToUInt32($data, $reachOffset + $i * 44 + 36) -band 0x00ffffff
+    if ($type -eq 11) { $elevators++ }
+}
+if ($RequireElevator -and $elevators -eq 0) { throw "No elevator reachability in $aas; inspect $stdout" }
 $summary = [pscustomobject]@{
     map = $map; aas = $aas; version = 5; areas = $counts.areas
-    reachabilities = $counts.reachabilities; sha256 = (Get-FileHash -LiteralPath $aas).Hash
+    reachabilities = $counts.reachabilities; elevator_reachabilities = $elevators
+    sha256 = (Get-FileHash -LiteralPath $aas).Hash
     compiler_log = $stdout
 }
 $summaryPath = Join-Path $output "$map-summary.json"

@@ -72,6 +72,7 @@ type Frame struct {
 	Number      int
 	Suppressed  byte
 	Origin      Vec3
+	PMFlags     byte
 	Stats       [32]int16
 	Gun         int
 	DeltaAngles [3]int16
@@ -234,12 +235,19 @@ func (d *Decoder) playerstate(r *reader, old Frame) (Frame, error) {
 			f.Origin[i] = float64(v) / 8
 		}
 	}
-	for _, p := range [][2]int{{4, 6}, {8, 1}, {16, 1}, {32, 2}} {
+	for _, p := range [][2]int{{4, 6}, {8, 1}} {
 		if flags&uint16(p[0]) != 0 {
 			if e = skip(p[1]); e != nil {
 				return f, e
 			}
 		}
+	}
+	if flags&16 != 0 {
+		f.PMFlags, e = r.byte()
+		if e != nil { return f, e }
+	}
+	if flags&32 != 0 {
+		if e = skip(2); e != nil { return f, e }
 	}
 	if flags&64 != 0 {
 		for i := 0; i < 3; i++ {
@@ -545,10 +553,16 @@ type Object struct {
 	Frame     int    `json:"frame,omitempty"`
 	ClearShot *bool  `json:"clear_shot,omitempty"`
 }
+type Mover struct {
+	ID     int  `json:"id"`
+	Model  int  `json:"model"`
+	Origin Vec3 `json:"origin"`
+}
 type Snapshot struct {
 	Map         string   `json:"map"`
 	Frame       int      `json:"frame"`
 	Self        Vec3     `json:"self"`
+	OnGround    bool     `json:"on_ground"`
 	Teammate    *Vec3    `json:"teammate,omitempty"`
 	Health      int16    `json:"health"`
 	Armor       int16    `json:"armor"`
@@ -557,10 +571,11 @@ type Snapshot struct {
 	DeltaAngles [3]int16 `json:"delta_angles"`
 	Enemies     []Object `json:"enemies"`
 	Pickups     []Object `json:"pickups"`
+	Movers      []Mover  `json:"movers,omitempty"`
 }
 
 func (d *Decoder) Snapshot(f Frame) Snapshot {
-	s := Snapshot{Map: d.Map, Frame: f.Number, Self: f.Origin, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles}
+	s := Snapshot{Map: d.Map, Frame: f.Number, Self: f.Origin, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles}
 	maxclients, _ := strconv.Atoi(d.Config[30])
 	if maxclients <= 0 {
 		maxclients = 4
@@ -586,6 +601,11 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 	}
 	for _, entity := range f.Entities {
 		path := strings.ToLower(d.Config[32+entity.Model])
+		if strings.HasPrefix(path, "*") {
+			if model, err := strconv.Atoi(strings.TrimPrefix(path, "*")); err == nil {
+				s.Movers = append(s.Movers, Mover{ID: entity.Number, Model: model, Origin: entity.Origin})
+			}
+		}
 		if strings.Contains(path, "/monsters/") && Distance(entity.Origin, f.Origin) < 1024 {
 			kind := strings.SplitN(strings.SplitN(path, "/monsters/", 2)[1], "/", 2)[0]
 			if kind == "soldier" && entity.Frame >= 272 && entity.Frame <= 474 || kind == "infantry" && entity.Frame >= 125 && entity.Frame <= 178 {

@@ -2942,7 +2942,6 @@ static int AAS_Reachability_ElevatorWidePlatform(int ent, int modelnum,
 		vec3_t platbottom, vec3_t plattop, float height, float speed)
 {
 	int source, destination, i, j, expansion, axis;
-	int topareas = 0, grounded = 0, distinct = 0, clear = 0;
 	vec3_t bottom, top, start, end, direction, mins, maxs, midpoint;
 	float x[8], y[8];
 	aas_trace_t trace;
@@ -2985,9 +2984,6 @@ static int AAS_Reachability_ElevatorWidePlatform(int ent, int modelnum,
 			{
 				top[2] = plattop[2] + 16 - i * 4;
 				destination = AAS_PointAreaNum(top);
-				if (destination) topareas++;
-				if (destination && AAS_AreaGrounded(destination)) grounded++;
-				if (destination && AAS_AreaGrounded(destination) && destination != source) distinct++;
 				if (!destination || !AAS_AreaGrounded(destination) ||
 					destination == source ||
 					AAS_ReachabilityExists(source, destination)) continue;
@@ -2996,40 +2992,11 @@ static int AAS_Reachability_ElevatorWidePlatform(int ent, int modelnum,
 				VectorCopy(top, end);
 				end[2] += 1;
 				trace = AAS_TraceClientBBox(start, end, PRESENCE_CROUCH, -1);
-				if (distinct == 1)
-				{
-					vec3_t sidestart;
-					vec3_t bboxmins, bboxmaxs;
-					aas_trace_t sidetrace;
-					bsp_trace_t worldtrace;
-					AAS_PresenceTypeBoundingBox(PRESENCE_CROUCH, bboxmins, bboxmaxs);
-					botimport.Trace(&worldtrace, start, bboxmins, bboxmaxs, end, -1, CONTENTS_SOLID);
-					VectorCopy(start, sidestart);
-					for (axis = 0; axis < 2; axis++)
-					{
-						if (sidestart[axis] < origin[axis] + modelmins[axis] + 8)
-							sidestart[axis] = origin[axis] + modelmins[axis] + 8;
-						else if (sidestart[axis] > origin[axis] + modelmaxs[axis] - 8)
-							sidestart[axis] = origin[axis] + modelmaxs[axis] - 8;
-					}
-					sidestart[0] = top[0] < origin[0] + modelmins[0] + 8 ?
-						origin[0] + modelmins[0] + 8 :
-						(top[0] > origin[0] + modelmaxs[0] - 8 ?
-						origin[0] + modelmaxs[0] - 8 : top[0]);
-					sidestart[1] = top[1] < origin[1] + modelmins[1] + 8 ?
-						origin[1] + modelmins[1] + 8 :
-						(top[1] > origin[1] + modelmaxs[1] - 8 ?
-						origin[1] + modelmaxs[1] - 8 : top[1]);
-					sidetrace = AAS_TraceClientBBox(sidestart, end, PRESENCE_CROUCH, -1);
-					botimport.Print(PRT_MESSAGE,
-						"func_plat %d: first upper area %d at %.1f %.1f %.1f trace %.3f solid=%d hitarea=%d sidearea=%d sidetrace=%.3f sidesolid=%d worldtrace=%.3f worldsolid=%d\n",
-						modelnum, destination, top[0], top[1], top[2],
-						trace.fraction, trace.startsolid, trace.area,
-						AAS_PointAreaNum(sidestart), sidetrace.fraction, sidetrace.startsolid,
-						worldtrace.fraction, worldtrace.startsolid);
-				}
-				if (trace.fraction < 1) continue;
-				clear++;
+				// A moving plat is absent from the static AAS geometry. As in
+				// the old coop bot, a downward-found grounded exit may be
+				// accepted when the trace starts inside that missing space.
+				// A later obstruction with a clear start still rejects it.
+				if (trace.fraction < 1 && !trace.startsolid) continue;
 				VectorSubtract(top, platbottom, direction);
 				direction[2] = 0;
 				if (VectorNormalize(direction) == 0)
@@ -3062,8 +3029,7 @@ static int AAS_Reachability_ElevatorWidePlatform(int ent, int modelnum,
 			}
 		}
 	}
-	botimport.Print(PRT_MESSAGE, "func_plat model %d: no upper exit (source=%d upper=%d grounded=%d distinct=%d clear=%d)\n",
-		modelnum, source, topareas, grounded, distinct, clear);
+	botimport.Print(PRT_MESSAGE, "func_plat model %d: no upper walkable area with usable exit\n", modelnum);
 	return 0;
 }
 

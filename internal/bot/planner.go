@@ -22,6 +22,7 @@ type World struct {
 	Strategy       *StrategyDecision `json:"strategy,omitempty"`
 	Tactic         *TacticalDecision `json:"tactic,omitempty"`
 	Route          []quake.Waypoint  `json:"route,omitempty"`
+	Elevator       string            `json:"elevator,omitempty"`
 	Snapshot       quake.Snapshot    `json:"snapshot"`
 	Updated        time.Time         `json:"updated"`
 }
@@ -47,6 +48,7 @@ type Planner struct {
 	hasGoal      bool
 	decision     *StrategyDecision
 	tactic       *TacticalDecision
+	elevator     *elevatorRide
 }
 
 func (p *Planner) navigationNow(frame int) time.Time {
@@ -77,6 +79,7 @@ func (p *Planner) setMap(name, root string) {
 	p.route = nil
 	p.routeIndex = 0
 	p.routeKnown = false
+	p.elevator = nil
 	p.observed = false
 	p.lastProgress = time.Time{}
 	p.detourUntil = time.Time{}
@@ -163,7 +166,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 	}
 	if p.World.Goal == "recover_health" { /* keep health objective */
-	} else if quake.Horizontal(s.Self, goal) < 100 {
+	} else if quake.Horizontal(s.Self, goal) < 100 && math.Abs(s.Self[2]-goal[2]) < 64 {
 		p.World.Goal = "cover_teammate"
 	} else {
 		p.World.Goal = "follow_teammate"
@@ -215,7 +218,12 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	teleported := p.observed && quake.Horizontal(s.Self, p.lastObserved) > 256
 	p.lastObserved = s.Self
 	p.observed = true
-	if !p.routeKnown || quake.Horizontal(goal, p.target) > 80 || now.Sub(p.routeAt) > 4*time.Second || teleported {
+	goalChanged := quake.Horizontal(goal, p.target) > 80 || math.Abs(goal[2]-p.target[2]) > 80
+	if p.elevator != nil && (goalChanged || teleported) {
+		p.elevator = nil
+		p.routeKnown = false
+	}
+	if !p.routeKnown || goalChanged || p.elevator == nil && now.Sub(p.routeAt) > 4*time.Second || teleported {
 		p.routeAt = now
 		p.target = goal
 		p.routeIndex = 0
@@ -223,7 +231,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.routeKnown = true
 	}
 	if p.routeOK {
-		for p.routeIndex < len(p.route) && quake.Horizontal(s.Self, p.route[p.routeIndex].Position) <= 10 && math.Abs(s.Self[2]-p.route[p.routeIndex].Position[2]) <= 64 {
+		for p.routeIndex < len(p.route) && p.route[p.routeIndex].Kind != 11 && quake.Horizontal(s.Self, p.route[p.routeIndex].Position) <= 10 && math.Abs(s.Self[2]-p.route[p.routeIndex].Position[2]) <= 64 {
 			p.routeIndex++
 		}
 		p.World.Route = p.route[p.routeIndex:]
@@ -239,7 +247,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.lastProgress = now
 		p.lastSelf = s.Self
 	}
-	if p.World.Goal == "follow_teammate" && now.Sub(p.lastProgress) > 2500*time.Millisecond && now.After(p.detourUntil) {
+	if p.elevator == nil && p.World.Goal == "follow_teammate" && now.Sub(p.lastProgress) > 2500*time.Millisecond && now.After(p.detourUntil) {
 		p.failures++
 		p.detourSide = -p.detourSide
 		p.detourUntil = now.Add(800 * time.Millisecond)
@@ -294,6 +302,9 @@ func (p *Planner) command(prev quake.UserCmd) quake.UserCmd {
 	}
 	if p.World.Goal != "follow_teammate" && p.World.Goal != "recover_health" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
 		return cmd
+	}
+	if p.routeIndex < len(p.route) && p.route[p.routeIndex].ElevatorPhase == "board" {
+		return p.elevatorCommand(cmd, p.route[p.routeIndex])
 	}
 	target := p.goalPoint
 	jump := false

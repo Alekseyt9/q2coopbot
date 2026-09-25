@@ -28,7 +28,15 @@ type MapInfo struct {
 	Leaves    int         `json:"leaves"`
 	Brushes   int         `json:"brushes"`
 	Entities  []MapEntity `json:"entities"`
+	Models    []BSPModel  `json:"-"`
 	collision *CollisionMap
+}
+
+type BSPModel struct { Min, Max, Origin Vec3 }
+
+func (m *MapInfo) Model(index int) (BSPModel, bool) {
+	if m == nil || index <= 0 || index >= len(m.Models) { return BSPModel{}, false }
+	return m.Models[index], true
 }
 
 // ClearShot reports whether the loaded BSP has a clear static line of fire.
@@ -248,6 +256,15 @@ func LoadMap(root, name string) (MapInfo, error) {
 	if len(models) < 48 {
 		return MapInfo{}, errors.New("BSP has no world model")
 	}
+	modelBounds := make([]BSPModel, len(models)/48)
+	for i := range modelBounds {
+		for axis := 0; axis < 3; axis++ {
+			at := i*48 + axis*4
+			modelBounds[i].Min[axis] = float64(math.Float32frombits(binary.LittleEndian.Uint32(models[at:])))
+			modelBounds[i].Max[axis] = float64(math.Float32frombits(binary.LittleEndian.Uint32(models[at+12:])))
+			modelBounds[i].Origin[axis] = float64(math.Float32frombits(binary.LittleEndian.Uint32(models[at+24:])))
+		}
+	}
 	c := &CollisionMap{planes: make([]bspPlane, len(planes)/20), sides: make([]uint16, len(sides)/4), brushes: make([]bspBrush, len(brushes)/12)}
 	for i := range c.planes {
 		p := i * 20
@@ -318,5 +335,5 @@ func LoadMap(root, name string) (MapInfo, error) {
 	if e = walk(int(int32(binary.LittleEndian.Uint32(models[36:])))); e != nil {
 		return MapInfo{}, e
 	}
-	return MapInfo{Name: name, BSPSource: source, Planes: len(planes) / 20, Nodes: len(nodes) / 28, Leaves: len(leaves) / 28, Brushes: len(brushes) / 12, Entities: parseMapEntities(string(entities)), collision: c}, nil
+	return MapInfo{Name: name, BSPSource: source, Planes: len(planes) / 20, Nodes: len(nodes) / 28, Leaves: len(leaves) / 28, Brushes: len(brushes) / 12, Entities: parseMapEntities(string(entities)), Models: modelBounds, collision: c}, nil
 }
