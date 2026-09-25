@@ -6,6 +6,7 @@ param(
     [int]$Port = 28120,
     [int]$GameFrames = 100,
     [string]$TransitionMap = '',
+    [string]$AASDir = '',
     [switch]$RequireTransitionAAS,
     [int]$TransitionAfterFrames = 20,
     [switch]$LeaveTeammateOnTransition,
@@ -26,6 +27,7 @@ if ($TransitionMap -and ($TransitionMap -notmatch '^[A-Za-z0-9_]+$' -or $Transit
 }
 if ($LeaveTeammateOnTransition -and -not $TransitionMap) { throw '-LeaveTeammateOnTransition requires -TransitionMap.' }
 if ($RequireTransitionAAS -and -not $TransitionMap) { throw '-RequireTransitionAAS requires -TransitionMap.' }
+if ($AASDir -and -not (Test-Path -LiteralPath $AASDir -PathType Container)) { throw "AAS directory is missing: $AASDir" }
 if (-not $ServerExe) { $ServerExe = Join-Path $RuntimeRoot 'q2ded.exe' }
 $gameDir = Join-Path $RuntimeRoot 'baseq2'
 if (-not (Test-Path -LiteralPath $ServerExe) -or -not (Test-Path -LiteralPath $gameDir) -or
@@ -101,6 +103,7 @@ foreach ($scale in $Timescales) {
         }
         if ((Get-Date) -ge $humanUntil) { throw "Test human failed to spawn: $stdout" }
         $botArgs = @('--port', "$runPort", '--name', 'GoCoopMate', '--game-dir', $gameDir, '--world-json', $worldPath, '--trace-jsonl', $tracePath, '--frame-paced', '--game-frames', "$GameFrames", '--duration', "${wallLimit}s")
+        if ($AASDir) { $botArgs += @('--aas-dir', $AASDir) }
         if ($TransitionMap) { $botArgs += @('--test-change-map', $TransitionMap, '--test-change-after-frames', "$TransitionAfterFrames") }
         $previousRcon = $env:Q2COOPBOT_TEST_RCON
         try {

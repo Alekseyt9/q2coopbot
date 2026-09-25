@@ -20,10 +20,24 @@ if ($AASRoot) {
     if ($additionalAAS.Count -eq 0) { throw "No AAS files found in: $AASRoot" }
     foreach ($aas in $additionalAAS) {
         $data = [IO.File]::ReadAllBytes($aas.FullName)
-        $reachOffset = if ($data.Length -ge 120) { [BitConverter]::ToInt32($data, 8 + 9 * 8) } else { -1 }
-        $reachLength = if ($data.Length -ge 120) { [BitConverter]::ToInt32($data, 8 + 9 * 8 + 4) } else { 0 }
-        if ($data.Length -lt 120 -or [Text.Encoding]::ASCII.GetString($data, 0, 4) -ne 'EAAS' -or
-            $reachLength -le 0 -or $reachLength % 44 -ne 0 -or $reachOffset -lt 120 -or
+        if ($data.Length -lt 120 -or [Text.Encoding]::ASCII.GetString($data, 0, 4) -ne 'EAAS') {
+            throw "Invalid AAS header: $($aas.FullName)"
+        }
+        $version = [BitConverter]::ToInt32($data, 4)
+        if ($version -notin @(2, 3, 4, 5)) { throw "Unsupported AAS version $version`: $($aas.FullName)" }
+        $headerSize = if ($version -ge 4) { 124 } else { 120 }
+        if ($data.Length -lt $headerSize) { throw "Truncated AAS header: $($aas.FullName)" }
+        $header = [byte[]]$data[0..($headerSize - 1)]
+        if ($version -eq 5) {
+            for ($i = 8; $i -lt $headerSize; $i++) {
+                $header[$i] = $header[$i] -bxor [byte]((($i - 8) * 119) -band 255)
+            }
+        }
+        $reachDirectory = $headerSize - 14 * 8 + 9 * 8
+        $reachOffset = [BitConverter]::ToInt32($header, $reachDirectory)
+        $reachLength = [BitConverter]::ToInt32($header, $reachDirectory + 4)
+        if (
+            $reachLength -le 0 -or $reachLength % 44 -ne 0 -or $reachOffset -lt $headerSize -or
             $reachOffset -gt $data.Length -or $reachLength -gt $data.Length - $reachOffset) {
             throw "AAS has no reachability data: $($aas.FullName)"
         }

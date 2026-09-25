@@ -41,14 +41,28 @@ func LoadAAS(path string) (*Navigator, error) {
 		return nil, errors.New("invalid AAS header")
 	}
 	version := binary.LittleEndian.Uint32(data[4:])
-	if version != 2 && version != 3 {
+	if version != 2 && version != 3 && version != 4 && version != 5 {
 		return nil, fmt.Errorf("unsupported AAS version %d", version)
 	}
+	headerSize := 8 + 14*8
+	if version >= 4 {
+		headerSize += 4 // BSP checksum precedes the lump directory.
+	}
+	if len(data) < headerSize {
+		return nil, errors.New("truncated AAS header")
+	}
+	header := make([]byte, headerSize)
+	copy(header, data[:headerSize])
+	if version == 5 {
+		for i := 8; i < len(header); i++ {
+			header[i] ^= byte((i - 8) * 119)
+		}
+	}
 	lump := func(i, rowSize int) ([]byte, error) {
-		p := 8 + i*8
-		off := int(int32(binary.LittleEndian.Uint32(data[p:])))
-		n := int(int32(binary.LittleEndian.Uint32(data[p+4:])))
-		if off < 0 || n < 0 || off > len(data) || n > len(data)-off || n%rowSize != 0 {
+		p := headerSize - 14*8 + i*8
+		off := int(int32(binary.LittleEndian.Uint32(header[p:])))
+		n := int(int32(binary.LittleEndian.Uint32(header[p+4:])))
+		if off < headerSize || n < 0 || off > len(data) || n > len(data)-off || n%rowSize != 0 {
 			return nil, fmt.Errorf("invalid AAS lump %d", i)
 		}
 		return data[off : off+n], nil

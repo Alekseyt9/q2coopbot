@@ -1,4 +1,4 @@
-add_executable(bspc
+add_executable(bspc_reconstruction EXCLUDE_FROM_ALL
     src/main.cpp
     src/bsp_builder.cpp
     src/aas_compiler.cpp
@@ -24,9 +24,11 @@ add_executable(bspc
     src/world_parser_utils.cpp
 )
 
-target_include_directories(bspc
+target_include_directories(bspc_reconstruction
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_compile_features(bspc PRIVATE cxx_std_17)
+target_compile_features(bspc_reconstruction PRIVATE cxx_std_17)
+
+add_subdirectory(vendor/q2bspc)
