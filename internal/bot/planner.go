@@ -31,6 +31,7 @@ type Planner struct {
 	Nav          *quake.Navigator
 	AASDir       string
 	GameClock    bool
+	TestNoAAS    bool
 	World        World
 	lastSelf     quake.Vec3
 	lastProgress time.Time
@@ -50,6 +51,21 @@ type Planner struct {
 	decision     *StrategyDecision
 	tactic       *TacticalDecision
 	elevator     *elevatorRide
+}
+
+// setTestGroundEdgeGoal bypasses route selection only for the live edge fixture.
+// The normal command path still decides whether the proposed step is safe.
+func (p *Planner) setTestGroundEdgeGoal() {
+	s := p.World.Snapshot
+	if p.World.Map != "base1" || !s.OnGround || math.Abs(s.Self[0]+88) > 8 || math.Abs(s.Self[1]-40) > 8 {
+		return
+	}
+	p.World.Goal = "follow_teammate"
+	p.World.Navigation = "direct_clear"
+	p.World.Route = nil
+	p.goalPoint = quake.Vec3{s.Self[0], s.Self[1] - 200, s.Self[2]}
+	p.hasGoal = true
+	p.detourUntil = time.Time{}
 }
 
 func (p *Planner) navigationNow(frame int) time.Time {
@@ -93,6 +109,10 @@ func (p *Planner) setMap(name, root string) {
 		log.Printf("map=%s BSP entities=%d brushes=%d", name, len(info.Entities), info.Brushes)
 	} else {
 		log.Printf("map=%s BSP unavailable: %v", name, e)
+	}
+	if p.TestNoAAS {
+		log.Printf("map=%s AAS disabled by test fixture", name)
+		return
 	}
 	paths := []string{filepath.Join(p.AASDir, name+".aas"), filepath.Join(root, "maps", name+".aas")}
 	var n *quake.Navigator
@@ -370,6 +390,15 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 			dx = ux + uy*float64(p.detourSide)/400
 			dy = uy - ux*float64(p.detourSide)/400
 			p.World.Command.MoveSource = "detour"
+		}
+	}
+	if s.OnGround && cmd.Up == 0 {
+		if hazard := p.World.Geometry.GroundMoveHazard(p.Nav, s.Self, dx, dy); hazard != "" {
+			p.World.Command.MoveSource = "none"
+			if p.World.Command.LimitReason == "" {
+				p.World.Command.LimitReason = hazard
+			}
+			return cmd
 		}
 	}
 	cmd = worldMove(cmd, s, dx, dy, 400, cmd.Buttons != 0)

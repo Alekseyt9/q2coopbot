@@ -22,7 +22,7 @@ human-playability здесь нет. Зато он позволяет прове
   сервером `baseq2\game.dll`/`baseq2\gamex86_64.dll`);
 - Python 3;
 - команда выполняется из
-  `F:\src\quake2\q2coopbot-release`.
+  `F:\src\quake2\q2coopbot-src`.
 
 ## Запуск dedicated server
 
@@ -70,7 +70,7 @@ $server = Start-Process (Join-Path $runtime 'q2ded.exe') -ArgumentList $serverAr
 
 ## Подключение и вход в игру
 
-Из корня `q2coopbot-release`:
+Из корня `q2coopbot-src`:
 
 ```powershell
 python .\tools\q2_client_handshake.py `

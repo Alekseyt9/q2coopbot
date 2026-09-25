@@ -32,6 +32,8 @@ type Config struct {
 	FramePaced, Idle, ExitOnReconnect bool
 	TestLineCross                     bool
 	TestHoldPosition                  bool
+	TestGroundEdgeProbe               bool
+	TestNoAAS                         bool
 }
 
 func parseTestTeleport(value string) (quake.Vec3, error) {
@@ -75,6 +77,12 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if cfg.TestHoldPosition && !cfg.FramePaced {
 		return fmt.Errorf("test.hold_position requires run.frame_paced")
+	}
+	if cfg.TestNoAAS && !cfg.FramePaced {
+		return fmt.Errorf("test.no_aas requires run.frame_paced")
+	}
+	if cfg.TestGroundEdgeProbe && (!cfg.FramePaced || cfg.TestTeleportMap != "base1" || cfg.TestTeleport != "-88,40,24") {
+		return fmt.Errorf("test.ground_edge_probe requires frame pacing and the base1 edge teleport")
 	}
 	if cfg.TestGapStart != 0 || cfg.TestGapFrames != 0 {
 		if !cfg.FramePaced || cfg.GameFrames == 0 || cfg.TestGapStart < 1 || cfg.TestGapFrames < 1 || cfg.TestGapStart+cfg.TestGapFrames >= cfg.GameFrames {
@@ -132,7 +140,7 @@ func Run(ctx context.Context, cfg Config) error {
 	defer conn.Close()
 	client := &Client{
 		conn: conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
-		decoder: quake.NewDecoder(), planner: &Planner{AASDir: cfg.AASDir, GameClock: cfg.FramePaced},
+		decoder: quake.NewDecoder(), planner: &Planner{AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS},
 		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name,
 		idle: cfg.Idle, duration: cfg.Duration, framePaced: cfg.FramePaced, gameFrames: cfg.GameFrames,
 		exitOnReconnect: cfg.ExitOnReconnect, testChangeMap: cfg.TestChangeMap,
@@ -141,8 +149,9 @@ func Run(ctx context.Context, cfg Config) error {
 		testSpawnMap: cfg.TestSpawnMap, testSpawnPosition: spawnPosition,
 		testSpawnClass: cfg.TestSpawnClass,
 		testGapStart:   cfg.TestGapStart, testGapFrames: cfg.TestGapFrames,
-		testLineCross:    cfg.TestLineCross,
-		testHoldPosition: cfg.TestHoldPosition,
+		testLineCross:       cfg.TestLineCross,
+		testHoldPosition:    cfg.TestHoldPosition,
+		testGroundEdgeProbe: cfg.TestGroundEdgeProbe,
 	}
 	if cfg.TracePath != "" {
 		client.traceFile, err = os.Create(cfg.TracePath)

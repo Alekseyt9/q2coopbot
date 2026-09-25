@@ -67,6 +67,7 @@ type Client struct {
 	testGapFrames        int
 	testLineCross        bool
 	testHoldPosition     bool
+	testGroundEdgeProbe  bool
 	testLineEntered      bool
 	testLineLeft         bool
 	lastObservedMap      string
@@ -376,7 +377,14 @@ func (c *Client) run(ctx context.Context) error {
 		if c.begun && (!c.framePaced && now.After(c.nextMove) || c.framePaced && c.frameReady && c.latestFrame > c.lastMoveFrame || c.needsSafetyStop(now)) {
 			frame := c.latestFrame
 			safetyStop := c.needsSafetyStop(now)
+			if c.testGroundEdgeProbe && c.testTeleportSent {
+				c.planner.setTestGroundEdgeGoal()
+			}
 			cmd := c.planner.command(c.previous)
+			if c.testGroundEdgeProbe && c.testTeleportSent && !c.planner.World.Snapshot.OnGround {
+				cmd = quake.UserCmd{}
+				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_edge_settling"}
+			}
 			if c.testHoldPosition {
 				cmd.Forward, cmd.Side, cmd.Up = 0, 0, 0
 				c.planner.World.Command.MoveSource = "test_hold"

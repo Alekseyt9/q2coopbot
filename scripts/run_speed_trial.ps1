@@ -18,6 +18,8 @@ param(
     [switch]$CombatMoveTrial,
     [switch]$ObservationGapTrial,
     [switch]$FriendlyFireTrial,
+    [switch]$GroundEdgeTrial,
+    [switch]$NoAASTrial,
     [string]$OutputRoot = ''
 )
 
@@ -42,6 +44,14 @@ if ($ObservationGapTrial -and (-not $CombatMoveTrial -or $GameFrames -lt 30)) {
 }
 if ($FriendlyFireTrial -and ($Map -ne 'base1' -or $TransitionMap -or -not $SynchronizedStart -or $ElevatorTrial -or $CombatMoveTrial)) {
     throw '-FriendlyFireTrial requires -Map base1, -SynchronizedStart, and no other gameplay trial.'
+}
+if ($GroundEdgeTrial -and ($Map -ne 'base1' -or $TransitionMap -or -not $SynchronizedStart -or
+    $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $ObservationGapTrial)) {
+    throw '-GroundEdgeTrial requires base1, synchronized start, and no other gameplay trial.'
+}
+if ($NoAASTrial -and ($Map -ne 'base1' -or $TransitionMap -or -not $SynchronizedStart -or
+    $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $ObservationGapTrial)) {
+    throw '-NoAASTrial requires base1, synchronized start, and no other gameplay trial except -GroundEdgeTrial.'
 }
 if ($AASDir -and -not (Test-Path -LiteralPath $AASDir -PathType Container)) { throw "AAS directory is missing: $AASDir" }
 if (-not $ServerExe) { $ServerExe = Join-Path $RuntimeRoot 'q2ded.exe' }
@@ -95,7 +105,7 @@ foreach ($scale in $Timescales) {
     $rconPassword = if ($TransitionMap) { [guid]::NewGuid().ToString('N') } else { '' }
     if ($TransitionMap) { $args = "+set rcon_password $rconPassword $args" }
     if ($UnlimitedLoopbackRate) { $args = "+set sv_test_unlimited_loopback 1 $args" }
-    if ($ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial) { $args = "+set cheats 1 $args" }
+    if ($ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $GroundEdgeTrial) { $args = "+set cheats 1 $args" }
     if ($SynchronizedStart) { $args = "+set sv_test_trace_client GoCoopMate +set sv_test_start_client GoCoopMate $args" }
     $server = Start-Process -FilePath $ServerExe -ArgumentList $args -WorkingDirectory $RuntimeRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
     $human = $null
@@ -162,6 +172,12 @@ foreach ($scale in $Timescales) {
             $botConfig.test.teleport_map = 'base2'
             $botConfig.test.teleport = '-36,1408,-40'
         }
+        if ($GroundEdgeTrial) {
+            $botConfig.test.teleport_map = 'base1'
+            $botConfig.test.teleport = '-88,40,24'
+            $botConfig.test.ground_edge_probe = $true
+        }
+        if ($NoAASTrial) { $botConfig.test.no_aas = $true }
         if ($FriendlyFireTrial) { $botConfig.test.hold_position = $true }
         if ($ObservationGapTrial) {
             $botConfig.test.observation_gap_start = 1
@@ -203,6 +219,15 @@ foreach ($scale in $Timescales) {
         $recoveredActionFrames = 0
         $friendlyBlockedFrames = [System.Collections.Generic.List[int]]::new()
         $friendlyFireFrames = [System.Collections.Generic.List[int]]::new()
+        $groundEdgeBlockedFrames = 0
+        $groundEdgeProbeFrames = 0
+        $groundEdgeMinZ = [double]::PositiveInfinity
+        $groundEdgeMaxOffset = 0.0
+        $noAASDirectFrames = 0
+        $noAASMoveFrames = 0
+        $noAASGroundBlocks = 0
+        $noAASOrigin = $null
+        $noAASMaxProgress = 0.0
         foreach ($line in Get-Content -LiteralPath $tracePath) {
             $entry = $line | ConvertFrom-Json
             $sent["$($entry.spawncount):$($entry.client_sequence)"] = $entry.sent_command
@@ -247,6 +272,27 @@ foreach ($scale in $Timescales) {
                     $friendlyBlockedFrames.Add([int]$entry.frame)
                 }
                 if ($entry.sent_command.Buttons -band 1) { $friendlyFireFrames.Add([int]$entry.frame) }
+            }
+            if ($GroundEdgeTrial -and $entry.map -eq 'base1' -and $entry.on_ground -and
+                [math]::Abs($entry.self[0] + 88) -lt 8 -and [math]::Abs($entry.self[1] - 40) -lt 8) {
+                $groundEdgeProbeFrames++
+                $groundEdgeMinZ = [math]::Min($groundEdgeMinZ, [double]$entry.self[2])
+                $offset = [math]::Sqrt([math]::Pow($entry.self[0] + 88, 2) + [math]::Pow($entry.self[1] - 40, 2))
+                $groundEdgeMaxOffset = [math]::Max($groundEdgeMaxOffset, $offset)
+                if ($entry.arbitration.limit_reason -eq 'no_ground_support' -and
+                    $entry.sent_command.Forward -eq 0 -and $entry.sent_command.Side -eq 0 -and $entry.sent_command.Up -eq 0) {
+                    $groundEdgeBlockedFrames++
+                }
+            }
+            if ($NoAASTrial) {
+                if ($entry.navigation -eq 'direct_clear') { $noAASDirectFrames++ }
+                if ($entry.sent_command.Forward -ne 0 -or $entry.sent_command.Side -ne 0) { $noAASMoveFrames++ }
+                if ($entry.arbitration.limit_reason -eq 'no_ground_support') { $noAASGroundBlocks++ }
+                if (-not $GroundEdgeTrial) {
+                    if ($null -eq $noAASOrigin) { $noAASOrigin = @([double]$entry.self[0], [double]$entry.self[1]) }
+                    $progress = [math]::Sqrt([math]::Pow($entry.self[0] - $noAASOrigin[0], 2) + [math]::Pow($entry.self[1] - $noAASOrigin[1], 2))
+                    $noAASMaxProgress = [math]::Max($noAASMaxProgress, $progress)
+                }
             }
         }
         $humanAtTop = $false
@@ -321,6 +367,13 @@ foreach ($scale in $Timescales) {
             human_min_y = $(if ($FriendlyFireTrial -and $humanMinY -ne [double]::PositiveInfinity) { $humanMinY } else { $null })
             human_max_y = $(if ($FriendlyFireTrial -and $humanMaxY -ne [double]::NegativeInfinity) { $humanMaxY } else { $null })
             human_near_line = $humanNearLine; human_returned = $humanReturned
+            ground_edge_trial = [bool]$GroundEdgeTrial; ground_edge_probe_frames = $groundEdgeProbeFrames
+            ground_edge_blocked_frames = $groundEdgeBlockedFrames
+            ground_edge_min_z = $(if ($GroundEdgeTrial -and $groundEdgeMinZ -ne [double]::PositiveInfinity) { $groundEdgeMinZ } else { $null })
+            ground_edge_max_offset = $groundEdgeMaxOffset
+            no_aas_trial = [bool]$NoAASTrial; no_aas_direct_frames = $noAASDirectFrames
+            no_aas_move_frames = $noAASMoveFrames; no_aas_ground_blocks = $noAASGroundBlocks
+            no_aas_max_progress = $noAASMaxProgress
             sent_commands = $sent.Count; applied_new_commands = $newCommands.Count
             matched_applied_commands = $matchedSequences.Count; trace_jsonl = $tracePath
             bot_config_json = $botConfigPath; human_config_json = $humanConfigPath
@@ -373,5 +426,20 @@ if ($ObservationGapTrial -and @($results | Where-Object { $_.attack_before_gap -
 }
 if ($FriendlyFireTrial -and @($results | Where-Object { $_.friendly_blocked_frames -le 0 -or $_.fire_before_block -le 0 -or $_.fire_after_block -le 0 -or -not $_.human_near_line -or -not $_.human_returned }).Count -gt 0) {
     throw "Friendly-fire trial did not show fire, a crossing hold, and resumed fire: $summary"
+}
+if ($GroundEdgeTrial -and @($results | Where-Object {
+    $_.ground_edge_probe_frames -lt 3 -or $_.ground_edge_blocked_frames -lt 3 -or
+    $_.ground_edge_blocked_frames -ne $_.ground_edge_probe_frames -or
+    $_.ground_edge_min_z -lt 20 -or $_.ground_edge_max_offset -ge 8
+}).Count -gt 0) {
+    throw "Ground edge trial did not hold at the unsupported step: $summary"
+}
+if ($NoAASTrial -and @($results | Where-Object {
+    $_.aas_loaded -or $_.aas_areas -ne 0 -or $_.aas_reachabilities -ne 0 -or
+    $(if ($GroundEdgeTrial) { $_.ground_edge_blocked_frames -lt 3 } else {
+        $_.no_aas_direct_frames -lt 3 -or $_.no_aas_move_frames -lt 3 -or $_.no_aas_max_progress -lt 30
+    })
+}).Count -gt 0) {
+    throw "No-AAS trial did not show the expected direct movement or safe edge stop: $summary"
 }
 Write-Output "Saved $summary"

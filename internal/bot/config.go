@@ -49,6 +49,8 @@ type ConfigFile struct {
 		ObservationGapFrames int    `json:"observation_gap_frames"`
 		LineCross            bool   `json:"line_cross"`
 		HoldPosition         bool   `json:"hold_position"`
+		GroundEdgeProbe      bool   `json:"ground_edge_probe"`
+		NoAAS                bool   `json:"no_aas"`
 	} `json:"test"`
 }
 
@@ -113,5 +115,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestSpawnMap, cfg.TestSpawnSoldier, cfg.TestSpawnClass = file.Test.SpawnMap, file.Test.SpawnSoldier, file.Test.SpawnClass
 	cfg.TestGapStart, cfg.TestGapFrames = file.Test.ObservationGapStart, file.Test.ObservationGapFrames
 	cfg.TestLineCross, cfg.TestHoldPosition = file.Test.LineCross, file.Test.HoldPosition
+	cfg.TestGroundEdgeProbe = file.Test.GroundEdgeProbe
+	cfg.TestNoAAS = file.Test.NoAAS
 	return cfg, nil
 }

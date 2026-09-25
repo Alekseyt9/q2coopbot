@@ -10,7 +10,10 @@ import (
 )
 
 type Vec3 [3]float64
-type Area struct{ Min, Max, Center Vec3 }
+type Area struct {
+	Min, Max, Center Vec3
+	Contents, Flags  int
+}
 type Edge struct {
 	To          int
 	Start, End  Vec3
@@ -91,7 +94,9 @@ func LoadAAS(path string) (*Navigator, error) {
 	n := &Navigator{Areas: make([]Area, len(a)/48), Edges: make([][]Edge, len(a)/48)}
 	for i := range n.Areas {
 		p := i * 48
-		n.Areas[i] = Area{vec(a, p+12), vec(a, p+24), vec(a, p+36)}
+		n.Areas[i] = Area{Min: vec(a, p+12), Max: vec(a, p+24), Center: vec(a, p+36),
+			Contents: int(int32(binary.LittleEndian.Uint32(s[i*28:]))),
+			Flags:    int(int32(binary.LittleEndian.Uint32(s[i*28+4:])))}
 	}
 	for i := range n.Edges {
 		p := i * 28
@@ -152,6 +157,29 @@ func (n *Navigator) AreaFor(p Vec3) int {
 		return nearby
 	}
 	return -1
+}
+
+// GroundedNear only trusts areas that actually contain the point (allowing
+// small BSP/AAS rounding differences), unlike AreaFor's route fallback.
+func (n *Navigator) GroundedNear(p Vec3) bool {
+	if n == nil {
+		return false
+	}
+	for i := 1; i < len(n.Areas); i++ {
+		a := n.Areas[i]
+		if a.Flags&1 == 0 {
+			continue
+		}
+		outside := 0.0
+		for axis := 0; axis < 3; axis++ {
+			d := math.Max(a.Min[axis]-p[axis], math.Max(0, p[axis]-a.Max[axis]))
+			outside += d * d
+		}
+		if outside <= 4 {
+			return true
+		}
+	}
+	return false
 }
 
 type queueItem struct{ area, cost int }

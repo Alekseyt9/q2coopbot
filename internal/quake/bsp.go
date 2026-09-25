@@ -51,6 +51,46 @@ func (m *MapInfo) ClearShot(from, to Vec3) bool {
 
 func (m *MapInfo) HasCollision() bool { return m != nil && m.collision != nil }
 
+// PlayerMoveClear tests a 32x32 standing player hull against static world
+// brushes. Dynamic doors and platforms are deliberately outside this BSP map.
+func (m *MapInfo) PlayerMoveClear(from, to Vec3) bool {
+	if !m.HasCollision() {
+		return false
+	}
+	return m.collision.boxClear(from, to, Vec3{-16, -16, -24}, Vec3{16, 16, 32})
+}
+
+// GroundDrop reports the vertical distance from the player's current feet to
+// the nearest static walkable surface below a proposed origin.
+func (m *MapInfo) GroundDrop(origin Vec3, maxDrop float64) (float64, bool) {
+	if !m.HasCollision() || maxDrop < 0 {
+		return 0, false
+	}
+	return m.collision.groundDrop(origin, maxDrop)
+}
+
+// GroundMoveHazard examines one full-speed tick of ordinary ground movement.
+// AAS grounded areas cover floors whose support is absent from the static BSP
+// brush view; dynamic movers still require a separate controller.
+func (m *MapInfo) GroundMoveHazard(nav *Navigator, origin Vec3, dx, dy float64) string {
+	if !m.HasCollision() {
+		return ""
+	}
+	distance := math.Hypot(dx, dy)
+	if distance < 0.001 {
+		return ""
+	}
+	step := math.Min(distance, 40)
+	next := Vec3{origin[0] + dx/distance*step, origin[1] + dy/distance*step, origin[2]}
+	if !m.PlayerMoveClear(origin, next) {
+		return "static_hull_blocked"
+	}
+	if _, ok := m.GroundDrop(next, 24); !ok && !nav.GroundedNear(next) {
+		return "no_ground_support"
+	}
+	return ""
+}
+
 type bspPlane struct {
 	normal Vec3
 	dist   float64
@@ -101,6 +141,99 @@ func (m *CollisionMap) ClearShot(from, to Vec3) bool {
 		}
 	}
 	return true
+}
+
+func (m *CollisionMap) boxClear(from, to, mins, maxs Vec3) bool {
+	for _, index := range m.worldBrushes {
+		brush := m.brushes[index]
+		if brush.contents&3 == 0 {
+			continue
+		}
+		enter, leave := 0.0, 1.0
+		outside, startOutside := false, false
+		for side := brush.first; side < brush.first+brush.count; side++ {
+			plane := m.planes[m.sides[side]]
+			minDot := 0.0
+			for axis := 0; axis < 3; axis++ {
+				if plane.normal[axis] >= 0 {
+					minDot += mins[axis] * plane.normal[axis]
+				} else {
+					minDot += maxs[axis] * plane.normal[axis]
+				}
+			}
+			d1, d2 := minDot-plane.dist+0.125, minDot-plane.dist+0.125
+			for axis := 0; axis < 3; axis++ {
+				d1 += from[axis] * plane.normal[axis]
+				d2 += to[axis] * plane.normal[axis]
+			}
+			if d1 > 0 {
+				startOutside = true
+			}
+			if d1 > 0 && d2 > 0 {
+				outside = true
+				break
+			}
+			if d1 <= 0 && d2 <= 0 {
+				continue
+			}
+			fraction := d1 / (d1 - d2)
+			if d1 > d2 {
+				enter = math.Max(enter, fraction)
+			} else {
+				leave = math.Min(leave, fraction)
+			}
+		}
+		if !outside && (!startOutside || enter < leave && enter < 1 && leave > 0) {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *CollisionMap) groundDrop(origin Vec3, maxDrop float64) (float64, bool) {
+	feet := origin[2] - 24
+	start, end := origin, origin
+	end[2] = feet - maxDrop - 2
+	best := math.Inf(1)
+	for _, index := range m.worldBrushes {
+		brush := m.brushes[index]
+		if brush.contents&1 == 0 {
+			continue
+		}
+		enter, leave := 0.0, 1.0
+		outside := false
+		groundNormal := Vec3{}
+		for side := brush.first; side < brush.first+brush.count; side++ {
+			plane := m.planes[m.sides[side]]
+			d1, d2 := -plane.dist+0.125, -plane.dist+0.125
+			for axis := 0; axis < 3; axis++ {
+				d1 += start[axis] * plane.normal[axis]
+				d2 += end[axis] * plane.normal[axis]
+			}
+			if d1 > 0 && d2 > 0 {
+				outside = true
+				break
+			}
+			if d1 <= 0 && d2 <= 0 {
+				continue
+			}
+			fraction := d1 / (d1 - d2)
+			if d1 > d2 {
+				if fraction >= enter {
+					enter, groundNormal = fraction, plane.normal
+				}
+			} else {
+				leave = math.Min(leave, fraction)
+			}
+		}
+		if !outside && enter < leave && enter >= 0 && enter <= 1 && groundNormal[2] >= 0.7 {
+			drop := origin[2] + enter*(end[2]-origin[2]) - feet
+			if drop <= maxDrop+0.125 && drop < best {
+				best = math.Max(0, drop)
+			}
+		}
+	}
+	return best, !math.IsInf(best, 1)
 }
 
 func readMapAsset(root, name string) ([]byte, string, error) {

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$AssetsRoot = 'F:\src\quake2\q2coopbot-runtime-vanilla\baseq2',
+    [string]$AssetsRoot = 'F:\src\quake2\assets\baseq2',
     [string]$AASRoot = '',
     [string]$ServerExe = 'F:\src\quake2\yquake2\build\codex-speed-test\release\q2ded.exe',
     [string]$GameDll = 'F:\src\quake2\yquake2\build\codex-speed-test\release\baseq2\game.dll',
