@@ -46,6 +46,7 @@ type ConfigFile struct {
 		TeleportAfterFrames       int    `json:"teleport_after_frames"`
 		TeleportReturn            string `json:"teleport_return"`
 		TeleportReturnAfterFrames int    `json:"teleport_return_after_frames"`
+		JumpAfterTeleportFrames   int    `json:"jump_after_teleport_frames"`
 		SpawnMap                  string `json:"spawn_map"`
 		SpawnSoldier              string `json:"spawn_soldier"`
 		SpawnClass                string `json:"spawn_class"`
@@ -125,6 +126,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestTeleportMap, cfg.TestTeleport = file.Test.TeleportMap, file.Test.Teleport
 	cfg.TestTeleportAfter, cfg.TestTeleportAfterFrames = file.Test.TeleportAfter, file.Test.TeleportAfterFrames
 	cfg.TestTeleportReturn, cfg.TestTeleportReturnAfterFrames = file.Test.TeleportReturn, file.Test.TeleportReturnAfterFrames
+	cfg.TestJumpAfterTeleportFrames = file.Test.JumpAfterTeleportFrames
 	cfg.TestSpawnMap, cfg.TestSpawnSoldier, cfg.TestSpawnClass = file.Test.SpawnMap, file.Test.SpawnSoldier, file.Test.SpawnClass
 	cfg.TestGapStart, cfg.TestGapFrames = file.Test.ObservationGapStart, file.Test.ObservationGapFrames
 	cfg.TestLineCross, cfg.TestHoldPosition = file.Test.LineCross, file.Test.HoldPosition

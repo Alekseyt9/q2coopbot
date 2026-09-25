@@ -79,27 +79,31 @@ type Frame struct {
 	Entities    map[int]Entity
 }
 type SoundEvent struct {
-	Index    byte   `json:"index"`
-	Name     string `json:"name,omitempty"`
-	Entity   int    `json:"entity,omitempty"`
-	Channel  int    `json:"channel,omitempty"`
-	Position *Vec3  `json:"position,omitempty"`
+	Index       byte    `json:"index"`
+	Name        string  `json:"name,omitempty"`
+	Entity      int     `json:"entity,omitempty"`
+	Channel     int     `json:"channel,omitempty"`
+	Attenuation float64 `json:"attenuation"`
+	Position    *Vec3   `json:"position,omitempty"`
 }
+
+const playerSkinsConfigBase = 32 + 5*256 // CS_PLAYERSKINS in protocol 34.
 type Decoder struct {
-	Config         map[int]string
-	Baselines      map[int]Entity
-	Frames         map[int]Frame
-	Commands       []string
-	Sounds         []SoundEvent
-	Map            string
-	PlayerNumber   int
-	lastTeammate   *Vec3
-	lastTeammateAt int
-	lastMap        string
-	Errors         int
-	LastError      string
-	ServerdataSeen bool
-	Spawncount     int
+	Config             map[int]string
+	Baselines          map[int]Entity
+	Frames             map[int]Frame
+	Commands           []string
+	Sounds             []SoundEvent
+	Map                string
+	PlayerNumber       int
+	lastTeammate       *Vec3
+	lastTeammateAt     int
+	lastTeammateEntity int
+	lastMap            string
+	Errors             int
+	LastError          string
+	ServerdataSeen     bool
+	Spawncount         int
 }
 
 func NewDecoder() *Decoder {
@@ -404,12 +408,14 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 		case 6:
 		case 12:
 			d.ServerdataSeen = true
+			d.Sounds = nil
 			d.Config = map[int]string{}
 			d.Baselines = map[int]Entity{}
 			d.Frames = map[int]Frame{}
 			d.Map = ""
 			d.lastTeammate = nil
 			d.lastTeammateAt = 0
+			d.lastTeammateEntity = 0
 			d.lastMap = ""
 			_, e = r.long()
 			if e != nil {
@@ -448,6 +454,11 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 				return frames, e
 			}
 			d.Config[int(idx)] = value
+			if d.lastTeammateEntity > 0 && int(idx) == playerSkinsConfigBase+d.lastTeammateEntity-1 {
+				d.lastTeammate = nil
+				d.lastTeammateAt = 0
+				d.lastTeammateEntity = 0
+			}
 			if idx == 33 && strings.HasPrefix(value, "maps/") && strings.HasSuffix(value, ".bsp") {
 				d.Map = strings.TrimSuffix(strings.TrimPrefix(value, "maps/"), ".bsp")
 			}
@@ -527,12 +538,22 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 			if flags&^byte(31) != 0 {
 				return frames, fmt.Errorf("unsupported sound flags %d", flags)
 			}
-			sound := SoundEvent{Index: index, Name: d.Config[288+int(index)]}
-			for _, bit := range []byte{1, 2, 16} {
-				if flags&bit != 0 {
-					if e = r.skip(1); e != nil {
-						return frames, e
-					}
+			sound := SoundEvent{Index: index, Name: d.Config[288+int(index)], Attenuation: 1}
+			if flags&1 != 0 {
+				if e = r.skip(1); e != nil {
+					return frames, e
+				}
+			}
+			if flags&2 != 0 {
+				attenuation, err := r.byte()
+				if err != nil {
+					return frames, err
+				}
+				sound.Attenuation = float64(attenuation) / 64
+			}
+			if flags&16 != 0 {
+				if e = r.skip(1); e != nil {
+					return frames, e
 				}
 			}
 			if flags&8 != 0 {
@@ -592,22 +613,24 @@ type Mover struct {
 	Origin Vec3 `json:"origin"`
 }
 type Snapshot struct {
-	Map               string       `json:"map"`
-	Frame             int          `json:"frame"`
-	Self              Vec3         `json:"self"`
-	OnGround          bool         `json:"on_ground"`
-	Teammate          *Vec3        `json:"teammate,omitempty"`
-	LastTeammate      *Vec3        `json:"last_teammate,omitempty"`
-	TeammateAgeFrames *int         `json:"teammate_age_frames,omitempty"`
-	Health            int16        `json:"health"`
-	Armor             int16        `json:"armor"`
-	Ammo              int16        `json:"ammo"`
-	Weapon            string       `json:"weapon"`
-	DeltaAngles       [3]int16     `json:"delta_angles"`
-	Enemies           []Object     `json:"enemies"`
-	Pickups           []Object     `json:"pickups"`
-	Movers            []Mover      `json:"movers,omitempty"`
-	Sounds            []SoundEvent `json:"sounds,omitempty"`
+	Map                string       `json:"map"`
+	Frame              int          `json:"frame"`
+	Self               Vec3         `json:"self"`
+	OnGround           bool         `json:"on_ground"`
+	Teammate           *Vec3        `json:"teammate,omitempty"`
+	TeammateEntity     int          `json:"teammate_entity,omitempty"`
+	LastTeammate       *Vec3        `json:"last_teammate,omitempty"`
+	LastTeammateEntity int          `json:"last_teammate_entity,omitempty"`
+	TeammateAgeFrames  *int         `json:"teammate_age_frames,omitempty"`
+	Health             int16        `json:"health"`
+	Armor              int16        `json:"armor"`
+	Ammo               int16        `json:"ammo"`
+	Weapon             string       `json:"weapon"`
+	DeltaAngles        [3]int16     `json:"delta_angles"`
+	Enemies            []Object     `json:"enemies"`
+	Pickups            []Object     `json:"pickups"`
+	Movers             []Mover      `json:"movers,omitempty"`
+	Sounds             []SoundEvent `json:"sounds,omitempty"`
 }
 
 func (d *Decoder) Snapshot(f Frame) Snapshot {
@@ -615,6 +638,7 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 	if d.lastMap != d.Map || f.Number < d.lastTeammateAt {
 		d.lastTeammate = nil
 		d.lastTeammateAt = 0
+		d.lastTeammateEntity = 0
 		d.lastMap = d.Map
 	}
 	maxclients, _ := strconv.Atoi(d.Config[30])
@@ -630,8 +654,9 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 	for _, entity := range f.Entities {
 		if entity.Number > 0 && entity.Number <= maxclients && entity.Number != d.PlayerNumber && entity.Model == 255 {
 			p := entity.Origin
-			if s.Teammate == nil || entity.Number < maxclients {
+			if s.TeammateEntity == 0 || entity.Number < s.TeammateEntity {
 				s.Teammate = &p
+				s.TeammateEntity = entity.Number
 			}
 		}
 	}
@@ -639,11 +664,13 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 		p := *s.Teammate
 		d.lastTeammate = &p
 		d.lastTeammateAt = f.Number
+		d.lastTeammateEntity = s.TeammateEntity
 	}
 	if d.lastTeammate != nil {
 		p := *d.lastTeammate
 		age := f.Number - d.lastTeammateAt
 		s.LastTeammate = &p
+		s.LastTeammateEntity = d.lastTeammateEntity
 		s.TeammateAgeFrames = &age
 	}
 	for _, entity := range f.Entities {

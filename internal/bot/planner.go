@@ -21,6 +21,8 @@ type World struct {
 	GeometryStatus string            `json:"geometry_status"`
 	Goal           string            `json:"goal"`
 	SearchTarget   *quake.Vec3       `json:"search_target,omitempty"`
+	TeammateSound  *TeammateSoundCue `json:"teammate_sound,omitempty"`
+	TeammateMotion *TeammateMotion   `json:"teammate_motion,omitempty"`
 	Strategy       *StrategyDecision `json:"strategy,omitempty"`
 	Tactic         *TacticalDecision `json:"tactic,omitempty"`
 	Route          []quake.Waypoint  `json:"route,omitempty"`
@@ -65,6 +67,7 @@ type Planner struct {
 	lastSeenSelf          quake.Vec3
 	lastSeenSelfKnown     bool
 	searchApproachStarted bool
+	teammateSoundCue      *TeammateSoundCue
 }
 
 // setTestGroundEdgeGoal bypasses route selection only for the live edge fixture.
@@ -167,6 +170,7 @@ func (p *Planner) setMap(name, root string) {
 	p.probeProgressFrame = 0
 	p.lastSeenSelfKnown = false
 	p.searchApproachStarted = false
+	p.teammateSoundCue = nil
 	p.observed = false
 	p.lastProgress = time.Time{}
 	p.detourUntil = time.Time{}
@@ -251,6 +255,8 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 	}
 	p.World.Snapshot = s
+	p.updateTeammateSoundCue(s)
+	p.updateTeammateMotion(s)
 	p.World.Updated = time.Now()
 	if p.decision != nil && time.Since(p.decision.At) < 8*time.Second {
 		p.World.Strategy = p.decision

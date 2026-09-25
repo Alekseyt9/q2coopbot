@@ -24,15 +24,16 @@ type MapEntity struct {
 	Map        string `json:"map,omitempty"`
 }
 type MapInfo struct {
-	Name      string      `json:"name"`
-	BSPSource string      `json:"bsp_source"`
-	Planes    int         `json:"planes"`
-	Nodes     int         `json:"nodes"`
-	Leaves    int         `json:"leaves"`
-	Brushes   int         `json:"brushes"`
-	Entities  []MapEntity `json:"entities"`
-	Models    []BSPModel  `json:"-"`
-	collision *CollisionMap
+	Name       string      `json:"name"`
+	BSPSource  string      `json:"bsp_source"`
+	Planes     int         `json:"planes"`
+	Nodes      int         `json:"nodes"`
+	Leaves     int         `json:"leaves"`
+	Brushes    int         `json:"brushes"`
+	Entities   []MapEntity `json:"entities"`
+	Models     []BSPModel  `json:"-"`
+	collision  *CollisionMap
+	visibility *bspVisibility
 }
 
 type BSPModel struct{ Min, Max, Origin Vec3 }
@@ -546,6 +547,10 @@ func LoadMap(root, name string) (MapInfo, error) {
 	if e != nil {
 		return MapInfo{}, e
 	}
+	visibilityData, e := lump(3, 0)
+	if e != nil {
+		return MapInfo{}, e
+	}
 	nodes, e := lump(4, 28)
 	if e != nil {
 		return MapInfo{}, e
@@ -652,5 +657,6 @@ func LoadMap(root, name string) (MapInfo, error) {
 	if e = walk(int(int32(binary.LittleEndian.Uint32(models[36:])))); e != nil {
 		return MapInfo{}, e
 	}
-	return MapInfo{Name: name, BSPSource: source, Planes: len(planes) / 20, Nodes: len(nodes) / 28, Leaves: len(leaves) / 28, Brushes: len(brushes) / 12, Entities: parseMapEntities(string(entities)), Models: modelBounds, collision: c}, nil
+	return MapInfo{Name: name, BSPSource: source, Planes: len(planes) / 20, Nodes: len(nodes) / 28, Leaves: len(leaves) / 28, Brushes: len(brushes) / 12, Entities: parseMapEntities(string(entities)), Models: modelBounds, collision: c,
+		visibility: parseBSPVisibility(visibilityData, nodes, leaves, c.planes)}, nil
 }

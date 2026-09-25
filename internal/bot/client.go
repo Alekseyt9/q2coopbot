@@ -69,6 +69,7 @@ type Client struct {
 	testTeleportReturnPosition    quake.Vec3
 	testTeleportReturnAfterFrames int
 	testTeleportReturnSent        bool
+	testJumpAfterTeleportFrames   int
 	testSpawnMap                  string
 	testSpawnClass                string
 	testSpawnPosition             quake.Vec3
@@ -459,6 +460,12 @@ func (c *Client) run(ctx context.Context) error {
 				cmd = quake.UserCmd{}
 				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_idle"}
 			}
+			if c.testJumpAfterTeleportFrames > 0 && c.testTeleportAfterSent &&
+				c.latestFrame-c.testTeleportAfterSentFrame >= c.testJumpAfterTeleportFrames &&
+				c.latestFrame-c.testTeleportAfterSentFrame < c.testJumpAfterTeleportFrames+4 {
+				cmd.Up = 400
+				c.planner.World.Command.MoveSource = "test_jump"
+			}
 			if c.framePaced {
 				cmd.Msec = 100
 				if safetyStop {
@@ -488,6 +495,7 @@ func (c *Client) run(ctx context.Context) error {
 					RelativeFrame     int                `json:"relative_frame"`
 					ClientSequence    uint32             `json:"client_sequence"`
 					Self              quake.Vec3         `json:"self"`
+					SelfEntity        int                `json:"self_entity"`
 					Teammate          *quake.Vec3        `json:"teammate,omitempty"`
 					LastTeammate      *quake.Vec3        `json:"last_teammate,omitempty"`
 					TeammateAgeFrames *int               `json:"teammate_age_frames,omitempty"`
@@ -495,6 +503,8 @@ func (c *Client) run(ctx context.Context) error {
 					OnGround          bool               `json:"on_ground"`
 					Goal              string             `json:"goal"`
 					SearchTarget      *quake.Vec3        `json:"search_target,omitempty"`
+					TeammateSound     *TeammateSoundCue  `json:"teammate_sound,omitempty"`
+					TeammateMotion    *TeammateMotion    `json:"teammate_motion,omitempty"`
 					Navigation        string             `json:"navigation"`
 					GeometryStatus    string             `json:"geometry_status"`
 					Elevator          string             `json:"elevator,omitempty"`
@@ -508,11 +518,13 @@ func (c *Client) run(ctx context.Context) error {
 					Frame: frame, ObservationFrame: c.planner.World.Snapshot.Frame,
 					ObservationAgeMS: now.Sub(c.planner.World.Updated).Milliseconds(),
 					RelativeFrame:    frame - c.firstMoveFrame, ClientSequence: clientSequence,
-					Self: c.planner.World.Snapshot.Self, Teammate: c.planner.World.Snapshot.Teammate,
+					Self: c.planner.World.Snapshot.Self, SelfEntity: c.decoder.PlayerNumber, Teammate: c.planner.World.Snapshot.Teammate,
 					LastTeammate:      c.planner.World.Snapshot.LastTeammate,
 					TeammateAgeFrames: c.planner.World.Snapshot.TeammateAgeFrames,
 					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround,
 					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
+					TeammateSound:  c.planner.World.TeammateSound,
+					TeammateMotion: c.planner.World.TeammateMotion,
 					Navigation:     c.planner.World.Navigation,
 					GeometryStatus: c.planner.World.GeometryStatus,
 					Elevator:       c.planner.World.Elevator, Movers: c.planner.World.Snapshot.Movers,

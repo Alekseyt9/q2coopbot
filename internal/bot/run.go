@@ -28,6 +28,7 @@ type Config struct {
 	TestTeleportAfterFrames           int
 	TestTeleportReturn                string
 	TestTeleportReturnAfterFrames     int
+	TestJumpAfterTeleportFrames       int
 	TestSpawnMap, TestSpawnSoldier    string
 	TestSpawnClass                    string
 	Port, GameFrames, TestChangeAfter int
@@ -148,6 +149,9 @@ func Run(ctx context.Context, cfg Config) error {
 			return err
 		}
 	}
+	if cfg.TestJumpAfterTeleportFrames != 0 && (!cfg.FramePaced || !cfg.Idle || cfg.TestTeleportAfter == "" || cfg.TestJumpAfterTeleportFrames < 1 || cfg.TestTeleportReturn != "") {
+		return fmt.Errorf("test.jump_after_teleport_frames requires idle client, test.teleport_after and no teleport_return")
+	}
 	var teleportReturnPosition quake.Vec3
 	if cfg.TestTeleportReturn != "" || cfg.TestTeleportReturnAfterFrames != 0 {
 		if cfg.TestTeleportAfter == "" || cfg.TestTeleportReturnAfterFrames < 1 {
@@ -198,7 +202,8 @@ func Run(ctx context.Context, cfg Config) error {
 		testTeleportMap: cfg.TestTeleportMap, testTeleportPosition: teleportPosition,
 		testTeleportAfterPosition: teleportAfterPosition, testTeleportAfterFrames: cfg.TestTeleportAfterFrames,
 		testTeleportReturnPosition: teleportReturnPosition, testTeleportReturnAfterFrames: cfg.TestTeleportReturnAfterFrames,
-		testSpawnMap: cfg.TestSpawnMap, testSpawnPosition: spawnPosition,
+		testJumpAfterTeleportFrames: cfg.TestJumpAfterTeleportFrames,
+		testSpawnMap:                cfg.TestSpawnMap, testSpawnPosition: spawnPosition,
 		testSpawnClass: cfg.TestSpawnClass,
 		testGapStart:   cfg.TestGapStart, testGapFrames: cfg.TestGapFrames,
 		testLineCross:       cfg.TestLineCross,

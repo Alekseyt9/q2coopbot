@@ -28,6 +28,7 @@ param(
     [switch]$TeammateMemoryTrial,
     [switch]$TeammateSearchTrial,
     [switch]$ReacquireTeammate,
+    [switch]$HiddenPlayerSoundTrial,
     [string]$BSPFailureTrial = '',
     [string]$OutputRoot = ''
 )
@@ -94,6 +95,7 @@ if ($TeammateSearchTrial -and ($Map -ne 'base1' -or $TransitionMap -ne 'base2' -
     throw '-TeammateSearchTrial requires at least 70 frames, synchronized base1 to base2 transition and no other gameplay trial.'
 }
 if ($ReacquireTeammate -and -not $TeammateSearchTrial) { throw '-ReacquireTeammate requires -TeammateSearchTrial.' }
+if ($HiddenPlayerSoundTrial -and (-not $TeammateSearchTrial -or $ReacquireTeammate)) { throw '-HiddenPlayerSoundTrial requires -TeammateSearchTrial without -ReacquireTeammate.' }
 if ($BSPFailureTrial -and ($BSPFailureTrial -notin @('unavailable', 'incomplete') -or
     $Map -ne 'base1' -or $TransitionMap -or -not $SynchronizedStart -or
     $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $ObservationGapTrial -or
@@ -210,8 +212,9 @@ foreach ($scale in $Timescales) {
             $humanConfig.output.trace_jsonl = $humanTracePath
             $humanConfig.test.teleport_map = 'base2'
             $humanConfig.test.teleport = '320,1940,-144'
-            $humanConfig.test.teleport_after = '194,2080,-144'
+            $humanConfig.test.teleport_after = $(if ($HiddenPlayerSoundTrial) { '191,2111,-103' } else { '194,2080,-144' })
             $humanConfig.test.teleport_after_frames = 3
+            if ($HiddenPlayerSoundTrial) { $humanConfig.test.jump_after_teleport_frames = 25 }
             if ($ReacquireTeammate) {
                 $humanConfig.test.teleport_return = '400,1840,-144'
                 $humanConfig.test.teleport_return_after_frames = 15
@@ -397,6 +400,24 @@ foreach ($scale in $Timescales) {
         $soundEvents = 0
         $soundExplicitPositions = 0
         $soundEntityOnly = 0
+        $hiddenPlayerJumpSounds = 0
+        $hiddenPlayerJumpPositions = 0
+        $hiddenPlayerJumpEntity = $null
+        $hiddenPlayerJumpFrame = $null
+        $soundCueFrames = 0
+        $soundCueZeroAge = 0
+        $soundCueMaxAge = -1
+        $soundCueWrongEntity = 0
+        $soundCueInvalid = 0
+        $soundCueExpiredFrames = 0
+        $soundPHSPossibleClusters = $null
+        $soundPHSTotalClusters = $null
+        $motionFrames = 0
+        $motionInvalid = 0
+        $motionExpiredFrames = 0
+        $motionAtSoundNearby = $null
+        $motionAtSoundTotal = $null
+        $motionAtSoundRadius = $null
         foreach ($line in Get-Content -LiteralPath $tracePath) {
             $entry = $line | ConvertFrom-Json
             $sent["$($entry.spawncount):$($entry.client_sequence)"] = $entry.sent_command
@@ -405,6 +426,53 @@ foreach ($scale in $Timescales) {
                 $soundEvents++
                 if ($null -ne $sound.position) { $soundExplicitPositions++ }
                 elseif ($sound.entity -gt 0) { $soundEntityOnly++ }
+                if ($HiddenPlayerSoundTrial -and $entry.map -eq 'base2' -and $null -eq $entry.teammate -and
+                    $sound.name -match '(^|/)\*?jump1\.wav$' -and $sound.entity -gt 0) {
+                    $hiddenPlayerJumpSounds++
+                    $hiddenPlayerJumpEntity = [int]$sound.entity
+                    $hiddenPlayerJumpFrame = [int]$entry.frame
+                    if ($null -ne $sound.position) { $hiddenPlayerJumpPositions++ }
+                }
+            }
+            if ($HiddenPlayerSoundTrial -and $entry.map -eq 'base2') {
+                if ($null -ne $entry.teammate_motion) {
+                    $motionFrames++
+                    $expectedRadius = 32 + 40 * [int]$entry.teammate_motion.age_frames
+                    if ($null -ne $entry.teammate -or
+                        $entry.teammate_motion.age_frames -ne $entry.teammate_age_frames -or
+                        $entry.teammate_motion.radius -ne $expectedRadius -or
+                        $entry.teammate_motion.nearby_ground_areas -gt $entry.teammate_motion.total_ground_areas -or
+                        $entry.teammate_motion.method -ne 'conditional_horizontal_radius') {
+                        $motionInvalid++
+                    }
+                } elseif ($null -eq $entry.teammate -and $entry.teammate_age_frames -gt 40) {
+                    $motionExpiredFrames++
+                }
+                if ($null -ne $entry.teammate_sound) {
+                    $soundCueFrames++
+                    $soundCueMaxAge = [math]::Max($soundCueMaxAge, [int]$entry.teammate_sound.age_frames)
+                    if ($entry.teammate_sound.age_frames -eq 0) { $soundCueZeroAge++ }
+                    if ($entry.teammate_sound.age_frames -eq 0 -and $null -ne $entry.teammate_sound.phs_total_clusters) {
+                        $soundPHSPossibleClusters = [int]$entry.teammate_sound.phs_possible_clusters
+                        $soundPHSTotalClusters = [int]$entry.teammate_sound.phs_total_clusters
+                    }
+                    if ($entry.teammate_sound.age_frames -eq 0 -and $null -ne $entry.teammate_motion) {
+                        $motionAtSoundNearby = [int]$entry.teammate_motion.nearby_ground_areas
+                        $motionAtSoundTotal = [int]$entry.teammate_motion.total_ground_areas
+                        $motionAtSoundRadius = [double]$entry.teammate_motion.radius
+                    }
+                    if ($null -ne $hiddenPlayerJumpEntity -and $entry.teammate_sound.entity -ne $hiddenPlayerJumpEntity) {
+                        $soundCueWrongEntity++
+                    }
+                    if ($null -ne $entry.teammate -or $entry.teammate_sound.age_frames -lt 0 -or
+                        $entry.teammate_sound.age_frames -gt 10 -or $null -ne $entry.teammate_sound.position -or
+                        $null -ne $entry.teammate_sound.source_areas) {
+                        $soundCueInvalid++
+                    }
+                } elseif ($null -ne $hiddenPlayerJumpFrame -and $entry.frame -gt $hiddenPlayerJumpFrame + 10 -and
+                    $null -eq $entry.teammate) {
+                    $soundCueExpiredFrames++
+                }
             }
             if ($null -ne $entry.teammate) { $teammateSeenInTrace = $true }
             if ($TransitionMap -and $entry.map -eq $TransitionMap -and $null -ne $entry.teammate) {
@@ -611,13 +679,43 @@ foreach ($scale in $Timescales) {
         $humanAtTop = $false
         $memoryHumanBehindWall = $false
         $memoryHumanReturned = $false
+        $humanEntity = $null
+        $humanJumpCommands = 0
+        $humanJumpMaxZ = [double]::NegativeInfinity
         if (($TeammateMemoryTrial -or $TeammateSearchTrial) -and (Test-Path -LiteralPath $humanTracePath)) {
             foreach ($line in Get-Content -LiteralPath $humanTracePath) {
                 $entry = $line | ConvertFrom-Json
-                if ($entry.map -eq 'base2' -and [math]::Abs($entry.self[0] - 194) -lt 16 -and
-                    [math]::Abs($entry.self[1] - 2080) -lt 16) { $memoryHumanBehindWall = $true }
+                if ($HiddenPlayerSoundTrial -and $entry.map -eq 'base2') {
+                    $humanEntity = [int]$entry.self_entity
+                    if ($entry.sent_command.Up -gt 0) { $humanJumpCommands++ }
+                    if ([math]::Abs($entry.self[0] - 191) -lt 16 -and [math]::Abs($entry.self[1] - 2111) -lt 16) {
+                        $humanJumpMaxZ = [math]::Max($humanJumpMaxZ, [double]$entry.self[2])
+                    }
+                }
+                $hiddenX = $(if ($HiddenPlayerSoundTrial) { 191 } else { 194 })
+                $hiddenY = $(if ($HiddenPlayerSoundTrial) { 2111 } else { 2080 })
+                if ($entry.map -eq 'base2' -and [math]::Abs($entry.self[0] - $hiddenX) -lt 16 -and
+                    [math]::Abs($entry.self[1] - $hiddenY) -lt 16) { $memoryHumanBehindWall = $true }
                 if ($entry.map -eq 'base2' -and [math]::Abs($entry.self[0] - 400) -lt 16 -and
                     [math]::Abs($entry.self[1] - 1840) -lt 16) { $memoryHumanReturned = $true }
+            }
+        }
+        $motionOutsideFrames = 0
+        if ($HiddenPlayerSoundTrial -and (Test-Path -LiteralPath $humanTracePath)) {
+            $humanByFrame = @{}
+            foreach ($line in Get-Content -LiteralPath $humanTracePath) {
+                $humanEntry = $line | ConvertFrom-Json
+                if ($humanEntry.map -eq 'base2') { $humanByFrame[[int]$humanEntry.frame] = $humanEntry }
+            }
+            foreach ($line in Get-Content -LiteralPath $tracePath) {
+                $botEntry = $line | ConvertFrom-Json
+                if ($null -eq $botEntry.teammate_motion -or -not $humanByFrame.ContainsKey([int]$botEntry.frame)) { continue }
+                $humanEntry = $humanByFrame[[int]$botEntry.frame]
+                $dx = [double]$humanEntry.self[0] - [double]$botEntry.last_teammate[0]
+                $dy = [double]$humanEntry.self[1] - [double]$botEntry.last_teammate[1]
+                if ([math]::Sqrt($dx * $dx + $dy * $dy) -gt [double]$botEntry.teammate_motion.radius) {
+                    $motionOutsideFrames++
+                }
             }
         }
         if ($ElevatorTrial -and (Test-Path -LiteralPath $humanTracePath)) {
@@ -744,6 +842,19 @@ foreach ($scale in $Timescales) {
             search_reacquired_frames = $searchReacquiredFrames
             probe_completed_frames = $probeCompletedFrames
             sound_events = $soundEvents; sound_explicit_positions = $soundExplicitPositions; sound_entity_only = $soundEntityOnly
+            hidden_player_sound_trial = [bool]$HiddenPlayerSoundTrial
+            hidden_player_jump_sounds = $hiddenPlayerJumpSounds; hidden_player_jump_positions = $hiddenPlayerJumpPositions
+            hidden_player_jump_entity = $hiddenPlayerJumpEntity; hidden_player_jump_frame = $hiddenPlayerJumpFrame
+            sound_cue_frames = $soundCueFrames; sound_cue_zero_age = $soundCueZeroAge
+            sound_cue_max_age = $soundCueMaxAge; sound_cue_wrong_entity = $soundCueWrongEntity
+            sound_cue_invalid = $soundCueInvalid; sound_cue_expired_frames = $soundCueExpiredFrames
+            sound_phs_possible_clusters = $soundPHSPossibleClusters; sound_phs_total_clusters = $soundPHSTotalClusters
+            motion_frames = $motionFrames; motion_invalid = $motionInvalid; motion_expired_frames = $motionExpiredFrames
+            motion_at_sound_nearby = $motionAtSoundNearby; motion_at_sound_total = $motionAtSoundTotal
+            motion_at_sound_radius = $motionAtSoundRadius
+            motion_hidden_teleport_outside_frames = $motionOutsideFrames
+            human_entity = $humanEntity; human_jump_commands = $humanJumpCommands
+            human_jump_max_z = $(if ($humanJumpMaxZ -ne [double]::NegativeInfinity) { $humanJumpMaxZ } else { $null })
             reacquire_teammate = [bool]$ReacquireTeammate
             memory_human_returned = $memoryHumanReturned
             reacquired_follow_move_frames = $reacquiredFollowMoveFrames; probe_after_reacquire = $probeAfterReacquire
@@ -865,6 +976,21 @@ if ($TeammateSearchTrial -and @($results | Where-Object {
     $_.search_wait_move_frames -ne 0
 }).Count -gt 0) {
     throw "Teammate last-seen search trial failed: $summary"
+}
+if ($HiddenPlayerSoundTrial -and @($results | Where-Object {
+    -not $_.memory_human_behind_wall -or $_.human_jump_commands -lt 1 -or $_.human_jump_max_z -lt -90 -or
+    $_.hidden_player_jump_sounds -lt 1 -or $_.hidden_player_jump_entity -ne $_.human_entity -or
+    $_.hidden_player_jump_positions -ne 0 -or $_.sound_cue_frames -lt 1 -or
+    $_.sound_cue_zero_age -lt 1 -or $_.sound_cue_max_age -gt 10 -or
+    $_.sound_cue_wrong_entity -ne 0 -or $_.sound_cue_invalid -ne 0 -or
+    $_.sound_cue_expired_frames -lt 1 -or
+    $_.sound_phs_possible_clusters -lt 1 -or
+    $_.sound_phs_total_clusters -le $_.sound_phs_possible_clusters -or
+    $_.motion_frames -lt 1 -or $_.motion_invalid -ne 0 -or $_.motion_expired_frames -lt 1 -or
+    $_.motion_at_sound_nearby -lt 1 -or $_.motion_at_sound_total -lt $_.motion_at_sound_nearby -or
+    $_.motion_hidden_teleport_outside_frames -lt 1
+}).Count -gt 0) {
+    throw "Hidden player sound trial did not confirm a bounded activity cue: $summary"
 }
 if ($DoorPassTrial -and @($results | Where-Object {
     $_.door_pass_blocked_frames -lt 1 -or $_.door_pass_open_move_frames -lt 1 -or

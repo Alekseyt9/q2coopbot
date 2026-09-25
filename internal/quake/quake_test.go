@@ -96,17 +96,42 @@ func TestSnapshotSeparatesVisibleAndLastSeenTeammate(t *testing.T) {
 	d.Config[30] = "4"
 	position := Vec3{32, -16, 24}
 	visible := d.Snapshot(Frame{Number: 10, Entities: map[int]Entity{2: {Number: 2, Model: 255, Origin: position}}})
-	if visible.Teammate == nil || visible.LastTeammate == nil || visible.TeammateAgeFrames == nil || *visible.TeammateAgeFrames != 0 {
+	if visible.Teammate == nil || visible.TeammateEntity != 2 || visible.LastTeammate == nil || visible.LastTeammateEntity != 2 ||
+		visible.TeammateAgeFrames == nil || *visible.TeammateAgeFrames != 0 {
 		t.Fatalf("visible teammate memory=%+v", visible)
 	}
 	hidden := d.Snapshot(Frame{Number: 13, Entities: map[int]Entity{}})
-	if hidden.Teammate != nil || hidden.LastTeammate == nil || *hidden.LastTeammate != position || hidden.TeammateAgeFrames == nil || *hidden.TeammateAgeFrames != 3 {
+	if hidden.Teammate != nil || hidden.LastTeammate == nil || hidden.LastTeammateEntity != 2 || *hidden.LastTeammate != position ||
+		hidden.TeammateAgeFrames == nil || *hidden.TeammateAgeFrames != 3 {
 		t.Fatalf("PVS loss was treated as current visibility: %+v", hidden)
 	}
 	d.Map = "base2"
 	changed := d.Snapshot(Frame{Number: 1, Entities: map[int]Entity{}})
 	if changed.Teammate != nil || changed.LastTeammate != nil || changed.TeammateAgeFrames != nil {
 		t.Fatalf("old-map teammate survived transition: %+v", changed)
+	}
+}
+
+func TestTeammateSlotUpdateInvalidatesHiddenIdentity(t *testing.T) {
+	d := NewDecoder()
+	d.Map, d.PlayerNumber = "base2", 1
+	d.Config[30] = "4"
+	visible := d.Snapshot(Frame{Number: 10, Entities: map[int]Entity{
+		3: {Number: 3, Model: 255, Origin: Vec3{90, 0, 24}},
+		2: {Number: 2, Model: 255, Origin: Vec3{40, 0, 24}},
+	}})
+	if visible.TeammateEntity != 2 || *visible.Teammate != (Vec3{40, 0, 24}) {
+		t.Fatalf("teammate selection was not stable: %+v", visible)
+	}
+	packet := []byte{13}
+	packet = binary.LittleEndian.AppendUint16(packet, playerSkinsConfigBase+1)
+	packet = append(packet, []byte("replacement\\male/grunt\x00")...)
+	if _, err := d.Parse(packet); err != nil {
+		t.Fatal(err)
+	}
+	hidden := d.Snapshot(Frame{Number: 11, Entities: map[int]Entity{}})
+	if hidden.LastTeammate != nil || hidden.LastTeammateEntity != 0 {
+		t.Fatalf("old player's slot survived replacement: %+v", hidden)
 	}
 }
 
@@ -119,7 +144,7 @@ func TestSoundPacketDistinguishesEntityFromExplicitPosition(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(d.Sounds) != 1 || d.Sounds[0].Entity != 2 || d.Sounds[0].Channel != 3 ||
-		d.Sounds[0].Position != nil || d.Sounds[0].Name != "player/step.wav" {
+		d.Sounds[0].Position != nil || d.Sounds[0].Name != "player/step.wav" || d.Sounds[0].Attenuation != 1 {
 		t.Fatalf("entity-relative sound invented a position: %+v", d.Sounds)
 	}
 	positioned := []byte{9, 1 | 2 | 4 | 8 | 16, 7, 255, 64, 5}
@@ -132,6 +157,14 @@ func TestSoundPacketDistinguishesEntityFromExplicitPosition(t *testing.T) {
 	}
 	if len(d.Sounds) != 1 || d.Sounds[0].Position == nil || *d.Sounds[0].Position != (Vec3{100, -20, 24}) {
 		t.Fatalf("explicit sound position was lost: %+v", d.Sounds)
+	}
+	if d.Sounds[0].Attenuation != 1 {
+		t.Fatalf("attenuation not decoded: %+v", d.Sounds)
+	}
+	global := []byte{9, 2 | 8, 7, 0}
+	global = binary.LittleEndian.AppendUint16(global, 2<<3)
+	if _, err := d.Parse(global); err != nil || len(d.Sounds) != 1 || d.Sounds[0].Attenuation != 0 {
+		t.Fatalf("global sound attenuation: sounds=%+v err=%v", d.Sounds, err)
 	}
 	if _, err := d.Parse([]byte{9, 4, 7, 0}); err == nil {
 		t.Fatal("truncated sound position was accepted")
