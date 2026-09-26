@@ -33,3 +33,24 @@ func TestPHSPossibleSourcesInvertsSourceToListenerMask(t *testing.T) {
 		t.Fatal("malformed VIS row accepted")
 	}
 }
+
+func TestPointPVSUsesObserverRowAndRejectsMalformedRows(t *testing.T) {
+	vis := make([]byte, 24)
+	binary.LittleEndian.PutUint32(vis, 2)
+	binary.LittleEndian.PutUint32(vis[4:], 20)
+	binary.LittleEndian.PutUint32(vis[8:], 22)
+	binary.LittleEndian.PutUint32(vis[12:], 21)
+	binary.LittleEndian.PutUint32(vis[16:], 23)
+	vis[20], vis[21], vis[22], vis[23] = 1, 3, 3, 3
+	nodes, leaves := make([]byte,28), make([]byte,56)
+	binary.LittleEndian.PutUint32(nodes[4:], ^uint32(0))
+	binary.LittleEndian.PutUint32(nodes[8:], ^uint32(1))
+	binary.LittleEndian.PutUint16(leaves[32:],1)
+	m := &MapInfo{visibility:parseBSPVisibility(vis,nodes,leaves,[]bspPlane{{normal:Vec3{1,0,0}}})}
+	a,b := Vec3{10,0,0},Vec3{-10,0,0}
+	if possible,known:=m.PointPVS(a,b); !known || possible {t.Fatal("PHS or reversed PVS row used")}
+	if possible,known:=m.PointPVS(b,a); !known || !possible {t.Fatal("asymmetric observer row ignored")}
+	m.visibility.data[20]=0; m.visibility.data[21]=0
+	if _,known:=m.PointPVS(a,b);known{t.Fatal("zero length RLE run accepted")}
+	if _,known:=(&MapInfo{}).PointPVS(a,b);known{t.Fatal("missing VIS treated as known")}
+}

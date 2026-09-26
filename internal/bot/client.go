@@ -369,7 +369,7 @@ func (c *Client) run(ctx context.Context) error {
 			continue
 		}
 		if c.begun && c.testTeleportSent && !c.testTeleportAfterSent && c.testTeleportAfterFrames > 0 &&
-			c.planner.World.Map == c.testTeleportMap && c.frameReady && c.latestFrame-c.testTeleportSentFrame >= c.testTeleportAfterFrames {
+			c.planner.World.Map == c.testTeleportMap && c.frameReady && c.testScenarioAge(c.latestFrame) >= c.testTeleportAfterFrames {
 			p := c.testTeleportAfterPosition
 			if err := c.command(fmt.Sprintf("teleport %g %g %g", p[0], p[1], p[2])); err != nil {
 				return err
@@ -377,7 +377,11 @@ func (c *Client) run(ctx context.Context) error {
 			c.testTeleportAfterSent = true
 			c.testTeleportAfterSentFrame = c.latestFrame
 			log.Printf("scenario second test teleport map=%s target=%v", c.testTeleportMap, p)
-			continue
+			// Shared-clock trials must still send and record this frame's usercmd.
+			// Waiting for another packet can otherwise skip the teleport frame.
+			if c.testScenarioFrameOrigin == 0 {
+				continue
+			}
 		}
 		if c.begun && c.testTeleportAfterSent && !c.testTeleportReturnSent && c.testTeleportReturnAfterFrames > 0 &&
 			c.planner.World.Map == c.testTeleportMap && c.frameReady && c.latestFrame-c.testTeleportAfterSentFrame >= c.testTeleportReturnAfterFrames {
@@ -525,6 +529,7 @@ func (c *Client) run(ctx context.Context) error {
 					Goal              string             `json:"goal"`
 					SearchTarget      *quake.Vec3        `json:"search_target,omitempty"`
 					SearchAttempt     *SearchAttempt     `json:"search_attempt,omitempty"`
+					SearchRoute       *SearchRouteCheck  `json:"search_route,omitempty"`
 					TeammateSound     *TeammateSoundCue  `json:"teammate_sound,omitempty"`
 					TeammateMotion    *TeammateMotion    `json:"teammate_motion,omitempty"`
 					TeammateEvidence  *TeammateEvidence  `json:"teammate_evidence,omitempty"`
@@ -547,6 +552,7 @@ func (c *Client) run(ctx context.Context) error {
 					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround,
 					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
 					SearchAttempt:    c.planner.World.SearchAttempt,
+					SearchRoute:      c.planner.World.SearchRoute,
 					TeammateSound:    c.planner.World.TeammateSound,
 					TeammateMotion:   c.planner.World.TeammateMotion,
 					TeammateEvidence: c.planner.World.TeammateEvidence,

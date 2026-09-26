@@ -4,6 +4,7 @@ param(
     [string]$RuntimeRoot = (Join-Path (Split-Path -Parent $PSScriptRoot) 'workspace\runtime\q2go'),
     [int]$Port = 28520,
     [int[]]$Timescales = @(1, 2),
+    [ValidateSet('wait', 'approach')][string]$Baseline = 'wait',
     [switch]$ReportOnly,
     [string]$OutputRoot = ''
 )
@@ -13,6 +14,7 @@ if ($ReportOnly -and -not $OutputRoot) { throw '-ReportOnly requires an existing
 if ($ReportOnly) {
     $previousReport = Get-Content -LiteralPath (Join-Path $OutputRoot 'comparison.json') -Raw | ConvertFrom-Json
     $scenario = $previousReport.fixture
+    if ($previousReport.baseline) { $Baseline = $previousReport.baseline }
     $Timescales = @($previousReport.pairs | ForEach-Object { [int]$_.timescale })
 } else {
     $scenario = Get-Content -LiteralPath $Fixture -Raw | ConvertFrom-Json
@@ -42,7 +44,8 @@ function Measure-Run($summary, $mode) {
         $humanConfig.test.walk_after_frames -ne $scenario.walk_after_frames -or $humanConfig.test.walk_frames -ne $scenario.walk_frames -or
         $humanConfig.test.scenario_frame_origin -ne $scenario.frame_origin -or $botConfig.test.scenario_frame_origin -ne $scenario.frame_origin -or
         $botConfig.test.teleport -ne $scenario.bot_origin -or $botConfig.test.setup_hold_frames -ne $scenario.bot_hold_frames -or
-        [bool]$botConfig.test.disable_search -ne ($mode -eq 'wait')) {
+        [bool]$botConfig.test.disable_search -ne ($mode -eq 'wait') -or
+        [bool]$botConfig.test.disable_probe -ne ($mode -eq 'approach')) {
         throw 'Recorded client configs do not match the comparison fixture.'
     }
     if (-not $summary.aas_loaded -or $summary.geometry_status -ne 'ready') { throw 'Search comparison requires AAS and complete BSP geometry.' }
@@ -70,6 +73,10 @@ function Measure-Run($summary, $mode) {
         throw 'Fixture lacks confirmed visibility before walking and subsequent loss.'
     }
     $reacquired = @($evaluation | Where-Object { $_.frame -gt $firstLoss.frame -and $null -ne $_.teammate } | Select-Object -First 1)
+    $probes = @($evaluation | Where-Object { $_.goal -eq 'probe_last_seen' })
+    for ($i=0; $i -lt $evaluation.Count; $i++) {
+        if ($evaluation[$i].frame -ne $evaluationStart+$i) { throw 'Evaluation frame gap or duplicate.' }
+    }
     $travel = 0.0
     for ($i = 1; $i -lt $evaluation.Count; $i++) {
         $travel += [math]::Sqrt([math]::Pow($evaluation[$i].self[0] - $evaluation[$i-1].self[0], 2) +
@@ -77,6 +84,7 @@ function Measure-Run($summary, $mode) {
     }
     $hiddenMoves = @($hidden | Where-Object { $_.sent_command.Forward -ne 0 -or $_.sent_command.Side -ne 0 -or $_.sent_command.Up -ne 0 }).Count
     if ($mode -eq 'wait' -and ($summary.search_attempts -ne 0 -or $hiddenMoves -ne 0)) { throw 'Waiting baseline issued search or movement.' }
+    if ($mode -eq 'approach' -and $summary.search_attempts -ne 0) { throw 'Approach baseline performed a viewpoint attempt.' }
     if ($summary.search_attempt_invalid -ne 0) { throw 'Invalid search-attempt telemetry.' }
     return [pscustomobject]@{
         mode = $mode; timescale = $summary.timescale; map = $scenario.map
@@ -88,7 +96,12 @@ function Measure-Run($summary, $mode) {
         hidden_frames = $hidden.Count; hidden_move_frames = $hiddenMoves
         approach_frames = @($evaluation | Where-Object { $_.goal -eq 'search_last_seen' }).Count
         unreachable_approach_frames = @($evaluation | Where-Object { $_.goal -eq 'search_last_seen' -and $_.navigation -eq 'unreachable' }).Count
+        search_route_reasons = @($evaluation | Where-Object { $null -ne $_.search_route } | Group-Object { $_.search_route.reason } | ForEach-Object { [pscustomobject]@{ reason = $_.Name; frames = $_.Count } })
+        first_search_route = @($evaluation | Where-Object { $null -ne $_.search_route } | Select-Object -First 1)[0].search_route
         probe_attempts = $summary.search_attempts; attempt_details = $summary.search_attempt_details
+        first_probe_frame = $(if ($probes.Count) { $probes[0].frame } else { $null })
+        probe_visibility = $(if ($probes.Count) { $probes[0].search_attempt.visibility } else { $null })
+        evaluation_trace = @($evaluation | Select-Object frame,self,sent_command)
         reacquired = $reacquired.Count -gt 0
         reacquire_after_loss_frames = $(if ($reacquired.Count) { $reacquired[0].frame - $firstLoss.frame } else { $null })
         bot_travel_horizontal = $travel
@@ -102,12 +115,13 @@ function Measure-Run($summary, $mode) {
 }
 
 $runs = [System.Collections.Generic.List[object]]::new()
-foreach ($mode in @('search', 'wait')) {
+foreach ($mode in @('search', $Baseline)) {
     $options = @{
         RuntimeRoot = $RuntimeRoot; Map = $scenario.map; GameFrames = 100
         Timescales = $Timescales; Port = $Port + $runs.Count
         SynchronizedStart = $true; UnlimitedLoopbackRate = $true
         SearchFixture = $Fixture; SearchWaitBaseline = ($mode -eq 'wait')
+        SearchApproachOnly = ($mode -eq 'approach')
         OutputRoot = (Join-Path $OutputRoot $mode)
     }
     if (-not $ReportOnly) { & (Join-Path $PSScriptRoot 'run_speed_trial.ps1') @options }
@@ -118,7 +132,7 @@ foreach ($mode in @('search', 'wait')) {
 $pairs = @($Timescales | ForEach-Object {
     $scale = $_
     $search = @($runs | Where-Object { $_.mode -eq 'search' -and $_.timescale -eq $scale })[0]
-    $wait = @($runs | Where-Object { $_.mode -eq 'wait' -and $_.timescale -eq $scale })[0]
+    $wait = @($runs | Where-Object { $_.mode -eq $Baseline -and $_.timescale -eq $scale })[0]
     $maxDelta = 0.0
     for ($i = 0; $i -lt $search.human_walk_positions.Count; $i++) {
         $maxDelta = [math]::Max($maxDelta, (Distance $search.human_walk_positions[$i] $wait.human_walk_positions[$i]))
@@ -127,8 +141,21 @@ $pairs = @($Timescales | ForEach-Object {
         $null -ne $search.human_position_at_release -and $null -ne $wait.human_position_at_release -and
         (Distance $search.human_position_at_release $wait.human_position_at_release) -le 0.25 -and
         $search.loss_age_at_start -eq $wait.loss_age_at_start
+    $prefixDelta = 0.0; $prefixCommandsEqual = $true
+    if ($Baseline -eq 'approach') {
+        for ($i=0; $i -lt $search.evaluation_trace.Count; $i++) {
+            $a=$search.evaluation_trace[$i]; $b=$wait.evaluation_trace[$i]
+            if ($null -ne $search.first_probe_frame -and $a.frame -gt $search.first_probe_frame) { break }
+            $prefixDelta=[math]::Max($prefixDelta,(Distance $a.self $b.self))
+            if (($null -eq $search.first_probe_frame -or $a.frame -lt $search.first_probe_frame) -and
+                (($a.sent_command | ConvertTo-Json -Compress) -ne ($b.sent_command | ConvertTo-Json -Compress))) { $prefixCommandsEqual=$false }
+        }
+        $comparable = $comparable -and $prefixDelta -le 0.25 -and $prefixCommandsEqual
+    }
     [pscustomobject]@{
         timescale = $scale; comparable = $comparable; human_path_max_delta = $maxDelta
+        baseline = $Baseline; baseline_reacquired = $wait.reacquired
+        pre_probe_bot_max_delta = $prefixDelta; pre_probe_commands_equal = $prefixCommandsEqual
         search_reacquired = $search.reacquired; wait_reacquired = $wait.reacquired
         conclusion = $(if (-not $comparable) { 'inconclusive_fixture_mismatch' }
             elseif (-not $search.reacquired -and -not $wait.reacquired) { 'no_reacquisition_in_either_arm' }
@@ -136,7 +163,7 @@ $pairs = @($Timescales | ForEach-Object {
             else { 'compare_reacquisition_timing' })
     }
 })
-$report = [ordered]@{ fixture = $scenario; scope = 'scripted_walk_comparison'; runs = @($runs.ToArray()); pairs = $pairs }
+$report = [ordered]@{ fixture = $scenario; baseline = $Baseline; scope = 'scripted_walk_comparison'; runs = @($runs.ToArray()); pairs = $pairs }
 $reportPath = Join-Path $OutputRoot 'comparison.json'
 $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $reportPath -Encoding UTF8
 $pairs | Format-Table -AutoSize

@@ -37,6 +37,7 @@ type ConfigFile struct {
 	} `json:"output"`
 	Test struct {
 		DisableSearch                bool   `json:"disable_search"`
+		DisableProbe                 bool   `json:"disable_probe"`
 		SetupHoldFrames              int    `json:"setup_hold_frames"`
 		ScenarioFrameOrigin          int    `json:"scenario_frame_origin"`
 		WalkTarget                   string `json:"walk_target"`
@@ -132,6 +133,7 @@ func LoadConfig(path string) (Config, error) {
 	}
 	cfg.TestTeleportMap, cfg.TestTeleport = file.Test.TeleportMap, file.Test.Teleport
 	cfg.TestDisableSearch = file.Test.DisableSearch
+	cfg.TestDisableProbe = file.Test.DisableProbe
 	cfg.TestSetupHoldFrames = file.Test.SetupHoldFrames
 	cfg.TestScenarioFrameOrigin = file.Test.ScenarioFrameOrigin
 	cfg.TestWalkTarget, cfg.TestWalkAfterFrames, cfg.TestWalkFrames = file.Test.WalkTarget, file.Test.WalkAfterFrames, file.Test.WalkFrames

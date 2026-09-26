@@ -9,17 +9,27 @@ import (
 // SearchAttempt records one bounded test of a viewpoint near the last sighting.
 // It never asserts that the teammate is at the target.
 type SearchAttempt struct {
-	Entity              int         `json:"entity"`
-	LastSeenFrame       int         `json:"last_seen_frame"`
-	Target              *quake.Vec3 `json:"target,omitempty"`
-	Basis               string      `json:"basis"`
-	ExpectedObservation string      `json:"expected_observation"`
-	Attempt             int         `json:"attempt"`
-	MaxAttempts         int         `json:"max_attempts"`
-	StartFrame          int         `json:"start_frame"`
-	EndFrame            int         `json:"end_frame,omitempty"`
-	State               string      `json:"state"`
-	Outcome             string      `json:"outcome,omitempty"`
+	Entity              int               `json:"entity"`
+	LastSeenFrame       int               `json:"last_seen_frame"`
+	Target              *quake.Vec3       `json:"target,omitempty"`
+	Basis               string            `json:"basis"`
+	ExpectedObservation string            `json:"expected_observation"`
+	Attempt             int               `json:"attempt"`
+	MaxAttempts         int               `json:"max_attempts"`
+	StartFrame          int               `json:"start_frame"`
+	EndFrame            int               `json:"end_frame,omitempty"`
+	State               string            `json:"state"`
+	Outcome             string            `json:"outcome,omitempty"`
+	Visibility          *SearchVisibility `json:"visibility,omitempty"`
+}
+
+type SearchRouteCheck struct {
+	FromArea        int      `json:"from_area"`
+	ToArea          int      `json:"to_area"`
+	GraphRouteFound bool     `json:"graph_route_found"`
+	Travel          *float64 `json:"travel_horizontal_units,omitempty"`
+	Limit           float64  `json:"limit_horizontal_units"`
+	Reason          string   `json:"reason"`
 }
 
 func (p *Planner) finishSearchAttempt(frame int, outcome string) {
@@ -72,16 +82,16 @@ func (p *Planner) hiddenTeammateGoal(s quake.Snapshot) (quake.Vec3, string, bool
 		p.searchApproachStarted = true
 		return *s.LastTeammate, "search_last_seen", true
 	}
-	if !p.searchApproachStarted {
+	if !p.searchApproachStarted || p.TestDisableProbe {
 		return quake.Vec3{}, "", false
 	}
 	if !p.probeAttempted {
 		p.probeAttempted = true
-		if viewpoint, ok := p.selectSearchViewpoint(s); ok {
+		if viewpoint, visibility, ok := p.selectSearchViewpoint(s); ok {
 			p.searchAttempt = &SearchAttempt{Entity: s.LastTeammateEntity,
 				LastSeenFrame: s.Frame - *s.TeammateAgeFrames, Target: &viewpoint,
 				Basis: "last_seen_aas_viewpoint", ExpectedObservation: "teammate_visible_in_current_snapshot",
-				Attempt: 1, MaxAttempts: 1, StartFrame: s.Frame, State: "active"}
+				Attempt: 1, MaxAttempts: 1, StartFrame: s.Frame, State: "active", Visibility: visibility}
 			p.probeTarget = &viewpoint
 			p.probeLastSelf = s.Self
 			p.probeProgressFrame = s.Frame
@@ -100,25 +110,39 @@ func (p *Planner) hiddenTeammateGoal(s quake.Snapshot) (quake.Vec3, string, bool
 }
 
 func safeSearchRoute(route []quake.Waypoint, from, goal quake.Vec3, maxTravel float64) (float64, bool) {
+	travel, reason := checkSearchRoute(route, from, goal, maxTravel)
+	return travel, reason == "ready"
+}
+
+func checkSearchRoute(route []quake.Waypoint, from, goal quake.Vec3, maxTravel float64) (float64, string) {
 	travel, at := 0.0, from
+	reason := "ready"
 	for _, waypoint := range route {
-		if waypoint.Jump || waypoint.Kind == 11 || waypoint.ElevatorPhase != "" {
-			return 0, false
+		if waypoint.Jump {
+			reason = "requires_jump"
+		}
+		if waypoint.Kind == 11 || waypoint.ElevatorPhase != "" {
+			reason = "requires_elevator"
 		}
 		travel += quake.Horizontal(at, waypoint.Position)
 		at = waypoint.Position
 	}
 	travel += quake.Horizontal(at, goal)
-	return travel, travel <= maxTravel
+	if reason == "ready" && travel > maxTravel {
+		reason = "distance_budget_exceeded"
+	}
+	return travel, reason
 }
 
-func (p *Planner) selectSearchViewpoint(s quake.Snapshot) (quake.Vec3, bool) {
+func (p *Planner) selectSearchViewpoint(s quake.Snapshot) (quake.Vec3, *SearchVisibility, bool) {
 	if p.Nav == nil || p.World.Geometry == nil || s.LastTeammate == nil {
-		return quake.Vec3{}, false
+		return quake.Vec3{}, nil, false
 	}
 	last := *s.LastTeammate
 	best := math.Inf(1)
 	var chosen quake.Vec3
+	var visibility *SearchVisibility
+	samples := p.searchVisibilitySamples(s)
 	for i := 1; i < len(p.Nav.Areas); i++ {
 		area := p.Nav.Areas[i]
 		candidate := area.Center
@@ -136,7 +160,7 @@ func (p *Planner) selectSearchViewpoint(s quake.Snapshot) (quake.Vec3, bool) {
 			!p.World.Geometry.PlayerMoveClear(candidate, candidate) {
 			continue
 		}
-		route, ok := p.Nav.Route(s.Self, candidate)
+		route, ok := p.Nav.SearchRoute(s.Self, candidate)
 		if !ok {
 			continue
 		}
@@ -144,14 +168,14 @@ func (p *Planner) selectSearchViewpoint(s quake.Snapshot) (quake.Vec3, bool) {
 		if !safe || !p.searchRouteDoorsClear(s.Movers, s.Self, route, candidate) {
 			continue
 		}
-		// Prefer a nearby different area without moving arbitrarily far from
-		// the last observation. Ties remain stable in AAS area order.
-		score := travel + fromLast*0.5
+		gain := newVisibleSamples(samples, candidate, p.World.Geometry.ClearShot)
+		score := searchViewpointScore(travel, fromLast, gain)
 		if score < best {
 			best, chosen = score, candidate
+			visibility = &SearchVisibility{HiddenSamples: len(samples), NewlyVisible: gain}
 		}
 	}
-	return chosen, !math.IsInf(best, 1)
+	return chosen, visibility, !math.IsInf(best, 1)
 }
 
 // AAS reachability does not encode current door state. Check short segments

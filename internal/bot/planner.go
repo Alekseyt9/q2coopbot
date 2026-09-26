@@ -12,6 +12,7 @@ import (
 )
 
 type World struct {
+	SearchRoute      *SearchRouteCheck `json:"search_route,omitempty"`
 	Map              string            `json:"map"`
 	Geometry         *quake.MapInfo    `json:"geometry,omitempty"`
 	AASLoaded        bool              `json:"aas_loaded"`
@@ -34,6 +35,7 @@ type World struct {
 	Updated          time.Time         `json:"updated"`
 }
 type Planner struct {
+	TestDisableProbe      bool
 	testSetupHold         bool
 	TestDisableSearch     bool
 	Nav                   *quake.Navigator
@@ -282,6 +284,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	p.World.Goal = "wait_for_teammate"
 	p.World.SearchTarget = nil
 	p.World.SearchAttempt = nil
+	p.World.SearchRoute = nil
 	p.World.Route = nil
 	p.World.Elevator = ""
 	p.hasGoal = false
@@ -395,17 +398,38 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.routeAt = now
 		p.target = goal
 		p.routeIndex = 0
-		p.route, p.routeOK = p.Nav.Route(s.Self, goal)
+		if searching {
+			p.route, p.routeOK = p.Nav.SearchRoute(s.Self, goal)
+			if !p.routeOK {
+				// Retain diagnostics for a graph path requiring forbidden travel;
+				// the search-policy check below still prevents its execution.
+				p.route, p.routeOK = p.Nav.Route(s.Self, goal)
+			}
+		} else {
+			p.route, p.routeOK = p.Nav.Route(s.Self, goal)
+		}
 		p.routeKnown = true
 	}
-	if p.routeOK && searching {
+	if p.routeOK {
+		for p.routeIndex < len(p.route) && p.route[p.routeIndex].Kind != 11 && quake.Horizontal(s.Self, p.route[p.routeIndex].Position) <= 10 && math.Abs(s.Self[2]-p.route[p.routeIndex].Position[2]) <= 64 {
+			p.routeIndex++
+		}
+	}
+	routeOK := p.routeOK
+	if searching {
 		maxTravel := 640.0
 		if p.World.Goal == "probe_last_seen" {
 			maxTravel = 320
 		}
-		_, p.routeOK = safeSearchRoute(p.route, s.Self, goal, maxTravel)
+		check := &SearchRouteCheck{FromArea: p.Nav.AreaFor(s.Self), ToArea: p.Nav.AreaFor(goal), GraphRouteFound: p.routeOK, Limit: maxTravel, Reason: "route_missing"}
+		if p.routeOK {
+			travel, reason := checkSearchRoute(p.route[p.routeIndex:], s.Self, goal, maxTravel)
+			check.Travel, check.Reason = &travel, reason
+			routeOK = reason == "ready"
+		}
+		p.World.SearchRoute = check
 	}
-	if searching && p.World.Goal == "probe_last_seen" && !p.routeOK {
+	if searching && p.World.Goal == "probe_last_seen" && !routeOK {
 		p.finishSearchAttempt(s.Frame, "route_unavailable")
 		p.probeTarget = nil
 		p.World.SearchAttempt = p.searchAttempt
@@ -415,10 +439,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.hasGoal = false
 		return
 	}
-	if p.routeOK {
-		for p.routeIndex < len(p.route) && p.route[p.routeIndex].Kind != 11 && quake.Horizontal(s.Self, p.route[p.routeIndex].Position) <= 10 && math.Abs(s.Self[2]-p.route[p.routeIndex].Position[2]) <= 64 {
-			p.routeIndex++
-		}
+	if routeOK {
 		p.World.Route = p.route[p.routeIndex:]
 		p.World.Navigation = "ready"
 	} else {

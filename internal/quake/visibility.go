@@ -77,8 +77,15 @@ func (v *bspVisibility) phsContains(source, listener int) (bool, bool) {
 	if source < 0 || source >= len(v.phsOffsets) || listener < 0 || listener >= len(v.phsOffsets) {
 		return false, false
 	}
+	return v.visRowContains(v.phsOffsets[source], listener)
+}
+
+func (v *bspVisibility) visRowContains(offset, target int) (bool, bool) {
+	if offset < 4+len(v.phsOffsets)*8 || offset >= len(v.data) || target < 0 || target >= len(v.phsOffsets) {
+		return false, false
+	}
 	rowBytes := (len(v.phsOffsets) + 7) / 8
-	read, at := 0, v.phsOffsets[source]
+	read, at := 0, offset
 	matched := false
 	for read < rowBytes {
 		if at >= len(v.data) {
@@ -94,12 +101,27 @@ func (v *bspVisibility) phsContains(source, listener int) (bool, bool) {
 			at++
 			continue
 		}
-		if read == listener/8 && b&(1<<uint(listener%8)) != 0 {
+		if read == target/8 && b&(1<<uint(target%8)) != 0 {
 			matched = true
 		}
 		read++
 	}
 	return matched, true
+}
+
+// PointPVS is an authoring diagnostic, not the server's entity visibility test.
+// It omits fat-PVS expansion, entity bounds and dynamic area portals.
+func (m *MapInfo) PointPVS(from, to Vec3) (possible, known bool) {
+	if m == nil || m.visibility == nil {
+		return false, false
+	}
+	v := m.visibility
+	source, target := v.pointCluster(from), v.pointCluster(to)
+	if source < 0 || target < 0 {
+		return false, false
+	}
+	offset := int(int32(binary.LittleEndian.Uint32(v.data[4+source*8:])))
+	return v.visRowContains(offset, target)
 }
 
 // PHSPossibleSources counts source clusters that could reach this listener

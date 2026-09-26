@@ -19,6 +19,7 @@ import (
 
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
+	TestDisableProbe                    bool
 	TestScenarioFrameOrigin             int
 	TestSetupHoldFrames                 int
 	TestDisableSearch                   bool
@@ -80,8 +81,8 @@ func transitionMapArgument(destination, previous string) (string, error) {
 }
 
 func Run(ctx context.Context, cfg Config) error {
-	if cfg.TestDisableSearch && !cfg.FramePaced {
-		return fmt.Errorf("test.disable_search requires run.frame_paced")
+	if (cfg.TestDisableSearch || cfg.TestDisableProbe) && !cfg.FramePaced {
+		return fmt.Errorf("test.disable_search and test.disable_probe require run.frame_paced")
 	}
 	walkTarget, err := validateTestWalk(cfg)
 	if err != nil {
@@ -242,6 +243,7 @@ func Run(ctx context.Context, cfg Config) error {
 		testButtonAutoGoal:  cfg.TestButtonAutoGoal,
 	}
 	client.planner.TestDisableSearch = cfg.TestDisableSearch
+	client.planner.TestDisableProbe = cfg.TestDisableProbe
 	if cfg.TracePath != "" {
 		client.traceFile, err = os.Create(cfg.TracePath)
 		if err != nil {

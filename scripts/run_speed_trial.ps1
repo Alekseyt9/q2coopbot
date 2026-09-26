@@ -33,6 +33,8 @@ param(
     [switch]$HiddenPlayerSoundTrial,
     [string]$SearchFixture = '',
     [switch]$SearchWaitBaseline,
+    [switch]$SearchApproachOnly,
+    [switch]$SearchSynchronizedSetup,
     [string]$BSPFailureTrial = '',
     [string]$OutputRoot = ''
 )
@@ -41,6 +43,9 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $fixture = $null
 if ($SearchWaitBaseline -and -not $SearchFixture) { throw '-SearchWaitBaseline requires -SearchFixture.' }
+if ($SearchSynchronizedSetup -and -not $TeammateSearchTrial) { throw 'Search synchronized setup requires -TeammateSearchTrial.' }
+if ($SearchApproachOnly -and -not $SearchFixture -and (-not $TeammateSearchTrial -or -not $HiddenPlayerSoundTrial)) { throw '-SearchApproachOnly requires -SearchFixture or the hidden-sound search trial.' }
+if ($SearchApproachOnly -and $SearchWaitBaseline) { throw 'Choose either approach-only or waiting baseline.' }
 if ($SearchFixture) {
     $fixture = Get-Content -LiteralPath $SearchFixture -Raw | ConvertFrom-Json
     $fixtureMap = if ($TransitionMap) { $TransitionMap } else { $Map }
@@ -259,6 +264,7 @@ foreach ($scale in $Timescales) {
             $humanConfig.test.line_cross = $true
         }
         if ($LeaveTeammateOnTransition) { $humanConfig.test.exit_on_reconnect = $true }
+        if ($SearchSynchronizedSetup) { $humanConfig.test.scenario_frame_origin = 40 }
         if ($fixture) {
             $humanConfig.output.trace_jsonl = $humanTracePath
             $humanConfig.test.teleport_map = $fixture.map
@@ -328,6 +334,11 @@ foreach ($scale in $Timescales) {
         if ($BSPFailureTrial -eq 'incomplete') { $botConfig.test.partial_bsp = $true }
         if ($NoAASTrial) { $botConfig.test.no_aas = $true }
         if ($FriendlyFireTrial) { $botConfig.test.hold_position = $true }
+        if ($SearchApproachOnly) { $botConfig.test.disable_probe = $true }
+        if ($SearchSynchronizedSetup) {
+            $botConfig.test.scenario_frame_origin = 40
+            $botConfig.test.setup_hold_frames = 4
+        }
         if ($fixture) {
             $botConfig.test.teleport_map = $fixture.map
             $botConfig.test.teleport = $fixture.bot_origin
@@ -954,7 +965,9 @@ foreach ($scale in $Timescales) {
             search_attempt_details = @($searchAttemptDetails.Values | Sort-Object start_frame)
             search_fixture_name = $(if ($fixture) { $fixture.name } else { $null })
             search_disabled = [bool]$SearchWaitBaseline
-            human_trace_jsonl = $(if ($fixture) { $humanTracePath } else { $null })
+            search_probe_disabled = [bool]$SearchApproachOnly
+            search_synchronized_setup = [bool]$SearchSynchronizedSetup
+            human_trace_jsonl = $(if (Test-Path -LiteralPath $humanTracePath) { $humanTracePath } else { $null })
             search_return_scripted = [bool]$ReacquireTeammate
             search_return_after_frames = $(if ($ReacquireTeammate) { $SearchReturnAfterFrames } else { $null })
             search_expected_outcome = $SearchExpectedOutcome
@@ -1089,14 +1102,18 @@ if ($TeammateMemoryTrial -and @($results | Where-Object {
 if ($TeammateSearchTrial -and @($results | Where-Object {
     -not $_.memory_human_behind_wall -or $_.search_frames -lt 1 -or $_.search_move_frames -lt 1 -or $_.search_fire_frames -ne 0 -or
     $null -eq $_.search_start_x -or $null -eq $_.search_max_x -or
-    $_.probe_frames -lt 2 -or $_.probe_move_frames -lt 2 -or $_.probe_fire_frames -ne 0 -or
-    $_.search_attempts -ne 1 -or $_.search_attempt_invalid -ne 0 -or
-    $(if ($SearchExpectedOutcome -eq 'reacquired') {
-        $_.search_attempt_reacquired -ne 1 -or $_.search_attempt_not_seen -ne 0
+    $(if ($SearchApproachOnly) {
+        $_.probe_frames -ne 0 -or $_.search_attempts -ne 0 -or $null -ne $_.probe_target -or $_.search_wait_at_point -lt 1
     } else {
-        $_.search_attempt_not_seen -ne 1 -or $_.search_attempt_reacquired -ne 0 -or $_.probe_completed_frames -lt 1
+        $_.probe_frames -lt 2 -or $_.probe_move_frames -lt 2 -or $_.probe_fire_frames -ne 0 -or
+        $_.search_attempts -ne 1 -or $_.search_attempt_invalid -ne 0 -or
+        $(if ($SearchExpectedOutcome -eq 'reacquired') {
+            $_.search_attempt_reacquired -ne 1 -or $_.search_attempt_not_seen -ne 0
+        } else {
+            $_.search_attempt_not_seen -ne 1 -or $_.search_attempt_reacquired -ne 0 -or $_.probe_completed_frames -lt 1
+        }) -or
+        $null -eq $_.probe_target -or $_.probe_target_changes -ne 0
     }) -or
-    $null -eq $_.probe_target -or $_.probe_target_changes -ne 0 -or
     $(if ($ReacquireTeammate) {
         -not $_.memory_human_returned -or $_.search_reacquired_frames -lt 3 -or
         $_.reacquired_follow_move_frames -lt 1 -or $_.probe_after_reacquire -ne 0 -or
