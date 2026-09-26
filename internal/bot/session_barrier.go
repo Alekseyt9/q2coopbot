@@ -7,18 +7,11 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
-	"syscall"
+	"q2coopbot/internal/harness/coord"
 	"time"
 )
 
-type sessionReady struct {
-	Map        string `json:"map"`
-	Generation int    `json:"generation"`
-	Phase      int    `json:"phase"`
-	Frame      int    `json:"frame"`
-	Role       string `json:"role"`
-}
+type sessionReady = coord.Ready
 
 func (c *Client) sessionBarrier(now time.Time) error {
 	if c.sessionDefinition == nil || !c.sessionDefinition.ReadinessBarrier || !c.begun || !c.frameReady || c.sessionMap == "" || c.sessionStartFrame != 0 {
@@ -86,29 +79,8 @@ func (c *Client) sessionBarrier(now time.Time) error {
 	return nil
 }
 
-func readSessionReady(path string) (sessionReady, error) {
-	var r sessionReady
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if runtime.GOOS == "windows" && (errors.Is(err, syscall.Errno(32)) || errors.Is(err, syscall.Errno(33))) {
-			// A short Windows sharing/lock conflict is retried by the existing
-			// nonblocking coordination loop and remains bounded by its watchdog.
-			return r, errors.Join(os.ErrNotExist, err)
-		}
-		return r, err
-	}
-	err = json.Unmarshal(data, &r)
-	return r, err
-}
+func readSessionReady(path string) (sessionReady, error) { return coord.Read(path) }
 
 func sessionBarrierStart(a, b sessionReady, mapName string, generation, phase int) (int, error) {
-	for _, r := range []sessionReady{a, b} {
-		if r.Map != mapName || r.Generation != generation || r.Phase != phase || r.Frame < 1 || r.Frame > 100000 || r.Role != "actor" && r.Role != "observer" {
-			return 0, fmt.Errorf("session readiness identity mismatch")
-		}
-	}
-	if a.Role == b.Role {
-		return 0, fmt.Errorf("session readiness requires both roles")
-	}
-	return max(a.Frame, b.Frame) + 10, nil
+	return coord.Start(a, b, mapName, generation, phase)
 }

@@ -8,27 +8,45 @@ import (
 	"net"
 	"net/netip"
 	"time"
+
+	"q2coopbot/internal/quake"
 )
 
 type Config struct {
-	Listen     string `json:"listen"`
-	Server     string `json:"server"`
-	AfterMS    int    `json:"after_ms"`
-	DurationMS int    `json:"duration_ms"`
+	Listen        string `json:"listen"`
+	Server        string `json:"server"`
+	AfterMS       int    `json:"after_ms"`
+	DurationMS    int    `json:"duration_ms"`
+	DecodeQuake   bool   `json:"decode_quake,omitempty"`
+	ArmBarrierDir string `json:"arm_barrier_dir,omitempty"`
+	ArmPhase      int    `json:"arm_phase,omitempty"`
+}
+
+type GameFrame struct {
+	Map        string `json:"map"`
+	Generation int    `json:"spawncount"`
+	Frame      int    `json:"frame"`
 }
 
 type Event struct {
-	ElapsedMS int64   `json:"elapsed_ms"`
-	Direction string  `json:"direction"`
-	Action    string  `json:"action"`
-	Bytes     int     `json:"bytes"`
-	Sequence  *uint32 `json:"sequence,omitempty"`
-	Stage     string  `json:"stage"`
+	ElapsedMS   int64            `json:"elapsed_ms"`
+	Direction   string           `json:"direction"`
+	Action      string           `json:"action"`
+	Bytes       int              `json:"bytes"`
+	Sequence    *uint32          `json:"sequence,omitempty"`
+	Stage       string           `json:"stage"`
+	Frames      []GameFrame      `json:"frames,omitempty"`
+	DecodeError string           `json:"decode_error,omitempty"`
+	Control     string           `json:"control,omitempty"`
+	Barrier     *BarrierEvidence `json:"barrier,omitempty"`
 }
 
 // AfterMS starts at the first server datagram, not process startup or a game
 // frame. Duration is wall time and does not scale with server timescale.
 func (c Config) Validate() error {
+	if c.ArmBarrierDir != "" && (!c.DecodeQuake || c.ArmPhase < 0 || c.ArmPhase > 15) || c.ArmBarrierDir == "" && c.ArmPhase != 0 {
+		return fmt.Errorf("invalid readiness barrier configuration")
+	}
 	var endpoints []netip.AddrPort
 	for _, address := range []string{c.Listen, c.Server} {
 		a, err := netip.ParseAddrPort(address)
@@ -105,6 +123,8 @@ func Serve(ctx context.Context, c Config, emit func(Event) error, ready func(str
 	}
 	var peer *net.UDPAddr
 	var started time.Time
+	decoder := quake.NewDecoder()
+	var serverSequence uint32
 	for {
 		select {
 		case <-ctx.Done():
@@ -120,21 +140,55 @@ func Serve(ctx context.Context, c Config, emit func(Event) error, ready func(str
 				if peer.String() != p.from.String() {
 					return fmt.Errorf("relay client endpoint changed")
 				}
-			} else if started.IsZero() {
+			} else if started.IsZero() && c.ArmBarrierDir == "" {
 				started = time.Now()
 			}
 			e := Event{Direction: p.direction, Bytes: len(p.data), Action: "forward", Stage: "unarmed"}
-			if !started.IsZero() {
-				elapsed := time.Since(started)
-				e.ElapsedMS = elapsed.Milliseconds()
-				e.Stage = stage(elapsed, c)
-			}
 			if len(p.data) >= 4 {
 				v := binary.LittleEndian.Uint32(p.data[:4])
 				if v != 0xffffffff {
 					v &= 0x7fffffff
 					e.Sequence = &v
 				}
+			}
+			if c.DecodeQuake && p.direction == "server_to_client" && e.Sequence != nil && *e.Sequence > serverSequence {
+				serverSequence = *e.Sequence
+				if len(p.data) < 8 {
+					e.DecodeError = "short server netchan header"
+				} else {
+					payload := p.data[8:]
+					// svc_disconnect may precede a final print message in the
+					// server's reliable buffer. It has no payload of its own.
+					if len(payload) > 0 && payload[0] == 7 {
+						e.Control = "disconnect"
+						payload = payload[1:]
+					}
+					frames, decodeErr := decoder.Parse(payload)
+					if decodeErr != nil {
+						e.DecodeError = decodeErr.Error()
+					} else {
+						for _, f := range frames {
+							e.Frames = append(e.Frames, GameFrame{Map: decoder.Map, Generation: decoder.Spawncount, Frame: f.Number})
+						}
+					}
+				}
+			}
+			if started.IsZero() && c.ArmBarrierDir != "" {
+				for _, f := range e.Frames {
+					e.Barrier, err = barrierAt(c, f)
+					if err != nil {
+						return err
+					}
+					if e.Barrier != nil {
+						started = time.Now()
+						break
+					}
+				}
+			}
+			if !started.IsZero() {
+				elapsed := time.Since(started)
+				e.ElapsedMS = elapsed.Milliseconds()
+				e.Stage = stage(elapsed, c)
 			}
 			if e.Stage == "blackout" {
 				e.Action = "drop"

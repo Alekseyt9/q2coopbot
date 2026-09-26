@@ -44,6 +44,9 @@ func run() error {
 	if cfg.RunMS < 1 || cfg.RunMS > 600000 || cfg.Events == "" {
 		return fmt.Errorf("invalid run_ms or events path")
 	}
+	if cfg.ArmBarrierDir != "" && !filepath.IsAbs(cfg.ArmBarrierDir) {
+		cfg.ArmBarrierDir = filepath.Join(filepath.Dir(*path), cfg.ArmBarrierDir)
+	}
 	output := cfg.Events
 	if !filepath.IsAbs(output) {
 		output = filepath.Join(filepath.Dir(*path), output)

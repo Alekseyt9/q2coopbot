@@ -94,4 +94,7 @@ func TestRealUDPBlackoutAndRecovery(t *testing.T) {
 			}
 		}
 	}
+	if r := Analyze(Config{Listen: address, Server: server.LocalAddr().String(), AfterMS: 30, DurationMS: 80}, events, 500, true); !r.Accepted {
+		t.Fatal(r)
+	}
 }
