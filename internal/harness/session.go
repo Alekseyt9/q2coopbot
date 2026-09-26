@@ -27,9 +27,10 @@ type Phase struct {
 }
 
 type ObserverRespawn struct {
-	AfterFrames    int `json:"after_frames"`
-	TimeoutFrames  int `json:"timeout_frames"`
-	RecoveryFrames int `json:"recovery_frames"`
+	PolicyOnly     bool `json:"policy_only,omitempty"`
+	AfterFrames    int  `json:"after_frames"`
+	TimeoutFrames  int  `json:"timeout_frames"`
+	RecoveryFrames int  `json:"recovery_frames"`
 }
 
 func LoadSession(path string) (Session, error) {

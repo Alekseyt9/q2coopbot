@@ -20,6 +20,8 @@ import (
 
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
+	TestInitialHealth                   int
+	TestChangeEntry                     string
 	TestSession                         string
 	TestSessionRole                     string
 	TestScenarioResult                  string
@@ -124,6 +126,14 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if cfg.TestScenarioFrameOrigin < 0 || cfg.TestScenarioFrameOrigin > 100000 || cfg.TestScenarioFrameOrigin > 0 && (!cfg.FramePaced || cfg.TestTeleport == "") {
 		return fmt.Errorf("test.scenario_frame_origin requires frame pacing, initial teleport and 0..100000 frame")
+	}
+	if cfg.TestInitialHealth < 0 || cfg.TestInitialHealth > 100 || cfg.TestInitialHealth > 0 && (!cfg.FramePaced || cfg.TestTeleport == "") {
+		return fmt.Errorf("initial_health requires frame pacing, teleport, and 1..100 health")
+	}
+	if cfg.TestChangeEntry != "" {
+		if _, err := transitionMapArgument(cfg.TestChangeMap, cfg.TestChangeEntry); err != nil {
+			return err
+		}
 	}
 	if cfg.TestSetupHoldFrames < 0 || cfg.TestSetupHoldFrames > 1000 || cfg.TestSetupHoldFrames > 0 && (!cfg.FramePaced || cfg.TestTeleport == "") {
 		return fmt.Errorf("test.setup_hold_frames requires frame pacing, initial teleport and 0..1000 frames")
@@ -257,6 +267,8 @@ func Run(ctx context.Context, cfg Config) error {
 		session:                 sessionRunner,
 		testScenarioFrameOrigin: cfg.TestScenarioFrameOrigin,
 		testSetupHoldFrames:     cfg.TestSetupHoldFrames,
+		testInitialHealth:       cfg.TestInitialHealth,
+		testChangeEntry:         cfg.TestChangeEntry,
 		testWalkTarget:          walkTarget, testWalkAfterFrames: cfg.TestWalkAfterFrames, testWalkFrames: cfg.TestWalkFrames,
 		testWalkRoute: cfg.TestWalkRoute,
 		conn:          conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,

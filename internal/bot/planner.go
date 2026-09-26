@@ -35,6 +35,7 @@ type World struct {
 	Updated          time.Time         `json:"updated"`
 }
 type Planner struct {
+	deathFrame            int
 	jump                  *jumpFlight
 	TestDisableProbe      bool
 	testSetupHold         bool
@@ -166,6 +167,7 @@ func (p *Planner) setMap(name, root string) {
 	p.World = World{Map: name, Navigation: "aas_missing", GeometryStatus: "unavailable"}
 	p.Nav = nil
 	p.button = nil
+	p.deathFrame = 0
 	p.jump = nil
 	p.buttonCooldown = 0
 	p.failures = 0
@@ -267,6 +269,14 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 	}
 	previous := p.World.Snapshot
+	if previous.Health <= 0 && s.Health > 0 {
+		p.deathFrame = 0
+		p.routeKnown = false
+		p.jump = nil
+		p.elevator = nil
+		p.button = nil
+		p.lastProgress = time.Time{}
+	}
 	p.World.Snapshot = s
 	// Drop the interaction before any early return from hidden-player search.
 	p.validateButtonOwner(s)
@@ -500,7 +510,14 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 	}
 	if s.Health <= 0 {
 		p.jump = nil
-		p.World.Command.LimitReason = "dead"
+		if p.deathFrame == 0 || s.Frame < p.deathFrame {
+			p.deathFrame = s.Frame
+		}
+		p.World.Command.LimitReason = "respawn_wait"
+		if age := s.Frame - p.deathFrame; age >= 10 && age%5 == 0 {
+			cmd.Buttons = 1
+			p.World.Command.LimitReason = "respawn_request"
+		}
 		return cmd
 	}
 	if p.World.GeometryStatus == "unavailable" || p.World.GeometryStatus == "incomplete" {

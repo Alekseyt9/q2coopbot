@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "episodes": [
+    {
+      "id": "base1-stairs",
+      "title": "Остановка у ступеней при сопровождении",
+      "map": "base1",
+      "status": "fix_in_progress",
+      "reproduction": "ready",
+      "scenario": "scripts/scenarios/base1-stairs.json",
+      "evidence": "workspace/artifacts/stair-human-20260926/trace.jsonl",
+      "symptom": "Ступени распознавались как static_hull_blocked; бот топтался и терял маршрут.",
+      "missing_setup": [],
+      "acceptance": {
+        "min": [
+          -1900,
+          1760,
+          88
+        ],
+        "max": [
+          -1780,
+          1860,
+          145
+        ],
+        "required_event": "",
+        "follow_after_event": false
+      },
+      "expected_result": "Живой бот поднимается по лестнице и оказывается на опоре рядом с игроком."
+    },
+    {
+      "id": "base2-bridge",
+      "title": "Недолёт через разрыв моста",
+      "map": "base2",
+      "status": "verified_1x_2x",
+      "reproduction": "ready",
+      "scenario": "scripts/scenarios/base2-bridge.json",
+      "evidence": "workspace/artifacts/base2-bridge-human-20260926/trace.jsonl",
+      "symptom": "После случайного отталкивания маршрут в воздухе исчезает, движение прекращается, бот падает вниз.",
+      "missing_setup": [],
+      "acceptance": {
+        "min": [
+          440,
+          120,
+          18
+        ],
+        "max": [
+          555,
+          205,
+          42
+        ],
+        "required_event": "jump_landed",
+        "follow_after_event": true
+      },
+      "expected_result": "Запланированный прыжок, живое приземление на дальней стороне, затем движение сопровождения."
+    },
+    {
+      "id": "base2-health-blocked",
+      "title": "Недоступная аптечка удерживает бота на месте",
+      "map": "base2",
+      "status": "open",
+      "reproduction": "observation_only",
+      "scenario": "scripts/scenarios/live-stuck-20260926-180355.json",
+      "evidence": "workspace/artifacts/live-stuck-20260926-180355/trace.jsonl",
+      "symptom": "recover_health, здоровье 36, static_hull_blocked в точке [290.5,1744.125,24.125].",
+      "missing_setup": [
+        "Здоровье бота 36",
+        "Состояние аптечек",
+        "Положение механизма модели 24"
+      ],
+      "acceptance": null,
+      "expected_result": "Получение достижимой аптечки либо ограниченный отказ и возврат к сопровождению."
+    },
+    {
+      "id": "base2-no-respawn",
+      "title": "Бот не возрождается после смерти",
+      "map": "base2",
+      "status": "open",
+      "reproduction": "observation_only",
+      "scenario": "",
+      "evidence": "workspace/artifacts/live-death-20260926-180836/trace.jsonl",
+      "symptom": "Здоровье -12, постоянный dead и пустые команды. Тестовое возрождение не включено в обычную политику.",
+      "missing_setup": [
+        "Контролируемая смерть обычного бота без test_observer_respawn",
+        "Автоматический критерий возрождения и восстановления контакта"
+      ],
+      "acceptance": null,
+      "expected_result": "Самостоятельное возрождение после разрешённой сервером задержки и восстановление сопровождения."
+    },
+    {
+      "id": "base3-stuck-20260926-181438",
+      "title": "Повторное застревание в живой игре",
+      "map": "base3",
+      "status": "open",
+      "reproduction": "observation_only",
+      "scenario": "",
+      "evidence": "workspace/artifacts/live-stuck-20260926-181438/trace.jsonl",
+      "symptom": "frame=1179; self=1453,75,1402,5,-807,875; health=100; goal=follow_teammate; reason=static_hull_blocked",
+      "missing_setup": [
+        "Уточнить отличие от предыдущих эпизодов по сохранённой трассе",
+        "Восстановить здоровье, предметы и состояние карты"
+      ],
+      "acceptance": null,
+      "expected_result": "Бот выходит из застревания либо ограниченно отказывается от недоступной цели и восстанавливает сопровождение"
+    }
+  ]
+}

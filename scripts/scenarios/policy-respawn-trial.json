@@ -1,0 +1,7 @@
+{
+  "port": 29160,
+  "session": "policy-respawn-session.json",
+  "runtime_root": "../../workspace/runtime/q2go",
+  "timescale": 2,
+  "tail_frames": 5
+}

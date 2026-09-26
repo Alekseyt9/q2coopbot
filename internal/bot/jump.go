@@ -13,6 +13,8 @@ type jumpFlight struct {
 	frame         int
 	airborne      bool
 	speed         float64
+	runup         quake.Vec3
+	phase         int // 0: retreat; 1: accelerate; 2: takeoff/flight
 }
 
 func (p *Planner) planGapJump() bool {
@@ -23,6 +25,22 @@ func (p *Planner) planGapJump() bool {
 	// Prefer the nearest supported point along the remaining route, rather
 	// than the endpoint of a walk-off reach, which may still be over a gap.
 	candidates := append([]quake.Waypoint(nil), p.World.Route...)
+	for _, wp := range p.World.Route {
+		if wp.Kind == 11 {
+			break
+		}
+		if d := quake.Horizontal(s.Self, wp.Position); d < 48 || d > 180 {
+			continue
+		}
+		for _, dx := range []float64{0, -24, 24} {
+			for _, dy := range []float64{-24, 24, 0} {
+				at := wp.Position
+				at[0] += dx
+				at[1] += dy
+				candidates = append(candidates, quake.Waypoint{Position: at})
+			}
+		}
+	}
 	for i := 0; i+1 < len(p.World.Route); i++ {
 		a, b := p.World.Route[i], p.World.Route[i+1]
 		if a.Kind == 11 || b.Kind == 11 {
@@ -69,6 +87,12 @@ func (p *Planner) planGapJump() bool {
 		if !supported {
 			continue
 		}
+		if p.Nav == nil {
+			continue
+		}
+		if _, ok := p.Nav.Route(landing, p.goalPoint); !ok {
+			continue
+		}
 		// Standard Quake II jump: vertical impulse 270, gravity 800.
 		duration := (270 + math.Sqrt(270*270-1600*(landing[2]-s.Self[2]))) / 800
 		speed := d / duration
@@ -89,7 +113,24 @@ func (p *Planner) planGapJump() bool {
 		if !clear {
 			continue
 		}
-		p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: speed}
+		back := s.Self
+		back[0] -= (landing[0] - s.Self[0]) / d * 48
+		back[1] -= (landing[1] - s.Self[1]) / d * 48
+		prev = s.Self
+		for i := 1; i <= 6; i++ {
+			at := s.Self
+			at[0] += (back[0] - s.Self[0]) * float64(i) / 6
+			at[1] += (back[1] - s.Self[1]) * float64(i) / 6
+			if g.GroundMoveHazardStep(p.Nav, prev, at[0]-prev[0], at[1]-prev[1], 8) != "" || g.DoorMoveHazard(s.Movers, prev, at[0]-prev[0], at[1]-prev[1]) != "" {
+				clear = false
+				break
+			}
+			prev = at
+		}
+		if !clear {
+			continue
+		}
+		p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: 280, runup: back}
 		return true
 	}
 	return false
@@ -101,11 +142,40 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 		return cmd, false
 	}
 	s := p.World.Snapshot
-	if s.Health <= 0 || s.Frame < j.frame || s.Frame-j.frame > 15 || quake.Distance(s.Self, j.from) > 256 {
+	if s.Health <= 0 || s.Frame < j.frame || s.Frame-j.frame > 35 || quake.Distance(s.Self, j.from) > 256 {
 		p.jump = nil
 		p.routeKnown = false
 		p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", Skill: "gap_jump", LimitReason: "jump_aborted"}
 		return cmd, true
+	}
+	if j.phase < 2 {
+		if !s.OnGround {
+			p.jump = nil
+			p.routeKnown = false
+			p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", Skill: "gap_jump", LimitReason: "runup_lost_ground"}
+			return cmd, true
+		}
+		if j.phase == 0 && quake.Horizontal(s.Self, j.runup) < 8 {
+			j.phase = 1
+		}
+		if j.phase == 1 && quake.Horizontal(s.Self, j.from) <= 22 {
+			j.phase = 2
+		}
+		if j.phase < 2 {
+			target := j.runup
+			reason := "jump_prepare"
+			if j.phase == 1 {
+				target = j.from
+				reason = "jump_runup"
+			}
+			speed := 280.0
+			if j.phase == 0 {
+				speed = math.Min(speed, quake.Horizontal(s.Self, target)*10)
+			}
+			cmd = worldMove(cmd, s, target[0]-s.Self[0], target[1]-s.Self[1], speed, false)
+			p.World.Command = CommandDecision{MoveSource: "gap_jump", AimSource: "route", Skill: "gap_jump", LimitReason: reason}
+			return cmd, true
+		}
 	}
 	if !s.OnGround {
 		j.airborne = true

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "name": "base3-stuck-human-repro",
+  "map": "base3",
+  "start_frame": 40,
+  "game_frames": 220,
+  "actor_origin": [
+    1150.375,
+    1293.5,
+    -807.875
+  ],
+  "bot_origin": [
+    1453.75,
+    1402.5,
+    -807.875
+  ],
+  "expect": {},
+  "steps": [
+    {
+      "action": "wait",
+      "id": "wait-for-bot",
+      "frames": 170
+    }
+  ],
+  "map_entry": "base2a"
+}

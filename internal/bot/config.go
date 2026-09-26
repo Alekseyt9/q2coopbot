@@ -36,6 +36,8 @@ type ConfigFile struct {
 		StopFile   string `json:"stop_file"`
 	} `json:"output"`
 	Test struct {
+		InitialHealth                int    `json:"initial_health"`
+		ChangeEntry                  string `json:"change_entry"`
 		Session                      string `json:"session"`
 		SessionRole                  string `json:"session_role"`
 		ScenarioResult               string `json:"scenario_result"`
@@ -146,6 +148,8 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestDisableSearch = file.Test.DisableSearch
 	cfg.TestDisableProbe = file.Test.DisableProbe
 	cfg.TestSetupHoldFrames = file.Test.SetupHoldFrames
+	cfg.TestInitialHealth = file.Test.InitialHealth
+	cfg.TestChangeEntry = file.Test.ChangeEntry
 	cfg.TestScenarioFrameOrigin = file.Test.ScenarioFrameOrigin
 	cfg.TestWalkTarget, cfg.TestWalkAfterFrames, cfg.TestWalkFrames = file.Test.WalkTarget, file.Test.WalkAfterFrames, file.Test.WalkFrames
 	cfg.TestWalkRoute = file.Test.WalkRoute

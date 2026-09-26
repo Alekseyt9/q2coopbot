@@ -31,7 +31,7 @@ func (s *observerRespawnState) tick(f *harness.ObserverRespawn, start, frame int
 		if s.deathFrame == 0 {
 			s.deathFrame = frame
 		}
-		return false, (frame-s.deathFrame)%2 == 0, nil
+		return false, !f.PolicyOnly && (frame-s.deathFrame)%2 == 0, nil
 	}
 	if s.deathFrame > 0 {
 		s.done = true

@@ -11,6 +11,7 @@ type ObserverCycleReport struct {
 
 func checkObserverCycle(f ObserverRespawn, start int, rows []Trace) ObserverCycleReport {
 	r := ObserverCycleReport{Stimulus: "scripted_kill_and_respawn", Reason: "observer_cycle_incomplete"}
+	if f.PolicyOnly {r.Stimulus="scripted_kill_policy_respawn"}
 	target := start + f.AfterFrames
 	kills := 0
 	for _, row := range rows {
@@ -32,7 +33,9 @@ func checkObserverCycle(f ObserverRespawn, start int, rows []Trace) ObserverCycl
 			r.Reason = "invalid_scripted_respawn_command"
 			return r
 		}
-		if *row.Health <= 0 && row.Command.Buttons != 0 && !row.ObserverRespawn {
+		if f.PolicyOnly && row.ObserverRespawn {r.Reason="scripted_respawn_forbidden";return r}
+		policyRequest:=f.PolicyOnly && row.Command.Buttons==1 && row.Arbitration.LimitReason=="respawn_request"
+		if *row.Health <= 0 && row.Command.Buttons != 0 && !row.ObserverRespawn && !policyRequest {
 			r.Reason = "unmarked_respawn_command"
 			return r
 		}

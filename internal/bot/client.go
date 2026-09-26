@@ -74,6 +74,8 @@ type Client struct {
 	name                             string
 	idle                             bool
 	testChangeMap                    string
+	testChangeEntry                  string
+	testInitialHealth                int
 	testChangeAfter                  int
 	testRconPassword                 string
 	testChangeSent                   bool
@@ -428,6 +430,11 @@ func (c *Client) run(ctx context.Context) error {
 				return err
 			}
 			c.testTeleportSent = true
+			if c.testInitialHealth > 0 {
+				if err := c.command(fmt.Sprintf("give health %d", c.testInitialHealth)); err != nil {
+					return err
+				}
+			}
 			c.testTeleportSentFrame = c.latestFrame
 			log.Printf("scenario test teleport map=%s target=%v", c.testTeleportMap, p)
 			continue
@@ -483,7 +490,11 @@ func (c *Client) run(ctx context.Context) error {
 		if c.begun && c.framePaced && c.testChangeMap != "" && !c.testChangeSent &&
 			c.firstMoveFrame >= 0 && c.lastMoveFrame-c.firstMoveFrame >= c.testChangeAfter &&
 			c.latestFrame > c.lastMoveFrame {
-			mapArg, err := transitionMapArgument(c.testChangeMap, c.lastObservedMap)
+			entry := c.lastObservedMap
+			if c.testChangeEntry != "" {
+				entry = c.testChangeEntry
+			}
+			mapArg, err := transitionMapArgument(c.testChangeMap, entry)
 			if err != nil {
 				return err
 			}

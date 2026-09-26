@@ -20,6 +20,8 @@ type Step struct {
 	Route   bool        `json:"route,omitempty"`
 }
 type Scenario struct {
+	BotHealth   int          `json:"bot_health,omitempty"`
+	MapEntry    string       `json:"map_entry,omitempty"`
 	Expect      Expectations `json:"expect"`
 	Version     int          `json:"version"`
 	Name        string       `json:"name"`
@@ -67,6 +69,12 @@ func Load(path string) (Scenario, error) {
 }
 
 func (s Scenario) Validate() error {
+	if s.BotHealth < 0 || s.BotHealth > 100 {
+		return fmt.Errorf("bot_health must be 0 (default) or 1..100")
+	}
+	if s.MapEntry != "" && !regexp.MustCompile(`^[a-zA-Z0-9_]+$`).MatchString(s.MapEntry) {
+		return fmt.Errorf("invalid map_entry")
+	}
 	if len(s.Expect.MapSequence) > 0 {
 		if len(s.Expect.MapSequence) < 2 || len(s.Expect.MapSequence) > 16 || s.Expect.MapSequence[len(s.Expect.MapSequence)-1] != s.Map {
 			return fmt.Errorf("map_sequence requires 2..16 maps ending at scenario map")

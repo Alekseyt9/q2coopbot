@@ -370,6 +370,8 @@ foreach ($scale in $Timescales) {
         if ($SearchApproachOnly) { $botConfig.test.disable_probe = $true }
         if ($actorScenarioDefinition) {
             $botConfig.test.teleport_map = $actorScenarioDefinition.map
+			if ($actorScenarioDefinition.bot_health) { $botConfig.test.initial_health=[int]$actorScenarioDefinition.bot_health }
+			if ($actorScenarioDefinition.map_entry) { $botConfig.test.change_entry=$actorScenarioDefinition.map_entry }
             $botConfig.test.teleport = ($actorScenarioDefinition.bot_origin | ForEach-Object {([double]$_).ToString([cultureinfo]::InvariantCulture)}) -join ','
             $botConfig.test.scenario_frame_origin = $actorScenarioDefinition.start_frame
             $botConfig.test.setup_hold_frames = 1
