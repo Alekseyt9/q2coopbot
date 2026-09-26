@@ -15,10 +15,20 @@ type scenarioCompletion struct {
 }
 
 func (c *Client) publishScenarioCompletion() error {
-	if c.scenario == nil || c.scenarioResultPath == "" || c.scenarioResultSent {
+	if c.scenario == nil && c.session == nil || c.scenarioResultPath == "" || c.scenarioResultSent {
 		return nil
 	}
-	s := c.scenario.Status
+	var s harness.Status
+	if c.session != nil {
+		if c.session.Status.State != "completed" && c.session.Status.State != "failed" {
+			return nil
+		}
+		s = c.session.Status.Phase
+		s.State = c.session.Status.State
+		s.EndFrame = c.session.Status.Location.Frame
+	} else {
+		s = c.scenario.Status
+	}
 	if s.State != "completed" && s.State != "failed" {
 		return nil
 	}
@@ -64,6 +74,10 @@ func (c *Client) scenarioShouldStop() (bool, error) {
 }
 
 func (c *Client) scenarioStatus() *harness.Status {
+	if c.session != nil {
+		s := c.session.Status.Phase
+		return &s
+	}
 	if c.scenario == nil {
 		return nil
 	}

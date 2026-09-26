@@ -36,6 +36,8 @@ type ConfigFile struct {
 		StopFile   string `json:"stop_file"`
 	} `json:"output"`
 	Test struct {
+		Session                      string `json:"session"`
+		SessionRole                  string `json:"session_role"`
 		ScenarioResult               string `json:"scenario_result"`
 		ScenarioTailFrames           int    `json:"scenario_tail_frames"`
 		Scenario                     string `json:"scenario"`
@@ -139,6 +141,8 @@ func LoadConfig(path string) (Config, error) {
 	}
 	cfg.TestTeleportMap, cfg.TestTeleport = file.Test.TeleportMap, file.Test.Teleport
 	cfg.TestScenario = resolve(file.Test.Scenario)
+	cfg.TestSession = resolve(file.Test.Session)
+	cfg.TestSessionRole = file.Test.SessionRole
 	cfg.TestDisableSearch = file.Test.DisableSearch
 	cfg.TestDisableProbe = file.Test.DisableProbe
 	cfg.TestSetupHoldFrames = file.Test.SetupHoldFrames

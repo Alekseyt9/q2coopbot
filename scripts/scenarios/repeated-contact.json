@@ -1,6 +1,7 @@
 {
   "version": 1,
   "expect": {
+	"map_sequence": ["base1", "base2"],
     "contact_losses":2,"reacquisitions":2,"follow_resumptions":2,
     "invariants":["wait_has_no_movement","completed_search_stays_finished","visible_contact_clears_search"]
   },

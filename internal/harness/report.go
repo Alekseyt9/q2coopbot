@@ -32,20 +32,22 @@ type Event struct {
 	Kind  string `json:"kind"`
 }
 type Report struct {
-	Accepted          bool           `json:"accepted"`
-	Expectation       string         `json:"expectation"`
-	FailedStep        string         `json:"failed_step,omitempty"`
-	Checks            []Check        `json:"checks,omitempty"`
-	Context           []ContextFrame `json:"problem_context,omitempty"`
-	Metrics           Metrics        `json:"metrics"`
-	State             string         `json:"state"`
-	Reason            string         `json:"reason,omitempty"`
-	Frame             int            `json:"first_problem_frame,omitempty"`
-	Events            []Event        `json:"events"`
-	Losses            int            `json:"contact_losses"`
-	Reacquisitions    int            `json:"reacquisitions"`
-	FollowResumptions int            `json:"follow_resumptions"`
-	CompletedSteps    int            `json:"completed_steps"`
+	ProblemLocation   *FrameLocation  `json:"problem_location,omitempty"`
+	Timeline          SessionTimeline `json:"session_timeline"`
+	Accepted          bool            `json:"accepted"`
+	Expectation       string          `json:"expectation"`
+	FailedStep        string          `json:"failed_step,omitempty"`
+	Checks            []Check         `json:"checks,omitempty"`
+	Context           []ContextFrame  `json:"problem_context,omitempty"`
+	Metrics           Metrics         `json:"metrics"`
+	State             string          `json:"state"`
+	Reason            string          `json:"reason,omitempty"`
+	Frame             int             `json:"first_problem_frame,omitempty"`
+	Events            []Event         `json:"events"`
+	Losses            int             `json:"contact_losses"`
+	Reacquisitions    int             `json:"reacquisitions"`
+	FollowResumptions int             `json:"follow_resumptions"`
+	CompletedSteps    int             `json:"completed_steps"`
 }
 
 // Durations use server frames (10 Hz), independent of wall-clock acceleration.
@@ -85,6 +87,12 @@ func ReadTrace(path string) ([]Trace, error) {
 }
 func Analyze(s Scenario, actor, bot []Trace) Report {
 	r := analyze(s, actor, bot)
+	r.Timeline = SessionTimeline{Actor: traceTimeline(actor), Bot: traceTimeline(bot)}
+	if len(s.Expect.MapSequence) > 0 {
+		if reason, location := verifyMapSequence(s.Expect.MapSequence, r.Timeline); reason != "" {
+			r.State, r.Reason, r.ProblemLocation = "trace_invalid", reason, location
+		}
+	}
 	r.Accepted = r.State == "passed"
 	r.Expectation = "normal_completion"
 	if f := s.Expect.Failure; f != nil {
@@ -104,17 +112,22 @@ func analyze(s Scenario, actor, bot []Trace) Report {
 	r := Report{State: "fixture_failed", Reason: "scenario_incomplete"}
 	end := 0
 	fixtureFailed := false
-	for _, row := range actor {
+	for index, row := range actor {
 		if row.Scenario == nil {
 			continue
 		}
 		if row.Scenario.State == "failed" {
+			r.ProblemLocation = &FrameLocation{Row: index + 1, Map: row.Map, Generation: row.Generation, Frame: row.Frame}
 			r.FailedStep = row.Scenario.StepID
 			r.Frame = row.Frame
 			r.Reason = row.Scenario.Reason
 			end = row.Frame
 			r.CompletedSteps = row.Scenario.CompletedSteps
 			fixtureFailed = true
+			if row.Scenario.Reason == "map_generation_changed" {
+				r.State = "trace_invalid"
+				return r
+			}
 			break
 		}
 		if row.Scenario.State == "completed" {
@@ -128,9 +141,14 @@ func analyze(s Scenario, actor, bot []Trace) Report {
 	}
 	filter := func(rows []Trace) ([]Trace, error) {
 		var selected []Trace
-		for _, row := range rows {
+		lastIndex := -1
+		for index, row := range rows {
 			if row.Map == s.Map && row.Frame >= s.StartFrame && row.Frame <= end {
+				if lastIndex >= 0 && index != lastIndex+1 {
+					return nil, fmt.Errorf("scenario window interrupted at trace row %d", lastIndex+2)
+				}
 				selected = append(selected, row)
+				lastIndex = index
 			}
 		}
 		if len(selected) != end-s.StartFrame+1 {

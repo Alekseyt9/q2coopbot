@@ -31,6 +31,7 @@ type Scenario struct {
 	Steps       []Step       `json:"steps"`
 }
 type Expectations struct {
+	MapSequence       []string         `json:"map_sequence,omitempty"`
 	Failure           *ExpectedFailure `json:"failure,omitempty"`
 	Invariants        []string         `json:"invariants,omitempty"`
 	ContactLosses     int              `json:"contact_losses"`
@@ -66,6 +67,16 @@ func Load(path string) (Scenario, error) {
 }
 
 func (s Scenario) Validate() error {
+	if len(s.Expect.MapSequence) > 0 {
+		if len(s.Expect.MapSequence) < 2 || len(s.Expect.MapSequence) > 16 || s.Expect.MapSequence[len(s.Expect.MapSequence)-1] != s.Map {
+			return fmt.Errorf("map_sequence requires 2..16 maps ending at scenario map")
+		}
+		for _, name := range s.Expect.MapSequence {
+			if !regexp.MustCompile(`^[a-zA-Z0-9_]+$`).MatchString(name) {
+				return fmt.Errorf("invalid map_sequence map %q", name)
+			}
+		}
+	}
 	seenChecks := map[string]bool{}
 	for _, name := range s.Expect.Invariants {
 		if !knownInvariant(name) || seenChecks[name] {

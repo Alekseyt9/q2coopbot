@@ -198,7 +198,8 @@ foreach ($scale in $Timescales) {
     $tracePath = Join-Path $OutputRoot "$name-trace.jsonl"
     $worldPath = Join-Path $OutputRoot "$name-world.json"
     $appliedPath = Join-Path $OutputRoot "$name-applied.jsonl"
-    $args = "+set game baseq2 +set dedicated 1 +set coop 1 +set deathmatch 0 +set maxclients 4 +set port $runPort +set timescale $scale +map $Map"
+    # Bind the test server to loopback; Yamagi's default "localhost" binds all interfaces.
+    $args = "+set ip 127.0.0.1 +set noipx 1 +set game baseq2 +set dedicated 1 +set coop 1 +set deathmatch 0 +set maxclients 4 +set port $runPort +set timescale $scale +map $Map"
     $rconPassword = if ($TransitionMap) { [guid]::NewGuid().ToString('N') } else { '' }
     if ($TransitionMap) { $args = "+set rcon_password $rconPassword $args" }
     if ($UnlimitedLoopbackRate) { $args = "+set sv_test_unlimited_loopback 1 $args" }
@@ -217,6 +218,13 @@ foreach ($scale in $Timescales) {
             Start-Sleep -Milliseconds 100
         }
         if ((Get-Date) -ge $readyUntil) { throw "Server startup timed out: $stdout" }
+        $serverEndpoints = @(Get-NetUDPEndpoint -OwningProcess $server.Id -ErrorAction SilentlyContinue)
+        if (-not ($serverEndpoints | Where-Object { $_.LocalPort -eq $runPort -and $_.LocalAddress -eq '127.0.0.1' })) {
+            throw 'Test server did not bind its expected loopback UDP endpoint.'
+        }
+        if ($serverEndpoints | Where-Object { $_.LocalAddress -notin @('127.0.0.1', '::1') }) {
+            throw 'Test server opened a non-loopback UDP endpoint.'
+        }
         $totalFrames = $GameFrames + $(if ($TransitionMap) { $TransitionAfterFrames + 20 } else { 0 })
         $wallLimit = [int][math]::Ceiling($totalFrames / (10.0 * $scale) * 3 + 20)
         if ($WallLimitSeconds -gt 0) { $wallLimit = $WallLimitSeconds }

@@ -20,6 +20,8 @@ import (
 
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
+	TestSession                         string
+	TestSessionRole                     string
 	TestScenarioResult                  string
 	TestScenarioTailFrames              int
 	TestScenario                        string
@@ -86,10 +88,14 @@ func transitionMapArgument(destination, previous string) (string, error) {
 }
 
 func Run(ctx context.Context, cfg Config) error {
-	if cfg.TestScenario != "" && cfg.TestScenarioTailFrames != 0 {
+	sessionDefinition, sessionRunner, err := configureSession(&cfg)
+	if err != nil {
+		return err
+	}
+	if (cfg.TestScenario != "" || sessionRunner != nil) && cfg.TestScenarioTailFrames != 0 {
 		return fmt.Errorf("scenario actor publishes completion; tail frames belong to the observing client")
 	}
-	if cfg.TestScenarioResult != "" && (!cfg.FramePaced || cfg.TestScenario == "" && (cfg.TestScenarioTailFrames < 2 || cfg.TestScenarioTailFrames > 1000)) {
+	if cfg.TestScenarioResult != "" && (!cfg.FramePaced || cfg.TestScenario == "" && sessionRunner == nil && (cfg.TestScenarioTailFrames < 2 || cfg.TestScenarioTailFrames > 1000)) {
 		return fmt.Errorf("scenario_result requires frame pacing and actor scenario or 2..1000 tail frames")
 	}
 	if cfg.TestScenarioResult == "" && cfg.TestScenarioTailFrames != 0 {
@@ -247,6 +253,8 @@ func Run(ctx context.Context, cfg Config) error {
 	client := &Client{
 		scenarioResultPath: cfg.TestScenarioResult, scenarioTailFrames: cfg.TestScenarioTailFrames,
 		scenario:                scenario,
+		sessionDefinition:       sessionDefinition,
+		session:                 sessionRunner,
 		testScenarioFrameOrigin: cfg.TestScenarioFrameOrigin,
 		testSetupHoldFrames:     cfg.TestSetupHoldFrames,
 		testWalkTarget:          walkTarget, testWalkAfterFrames: cfg.TestWalkAfterFrames, testWalkFrames: cfg.TestWalkFrames,
