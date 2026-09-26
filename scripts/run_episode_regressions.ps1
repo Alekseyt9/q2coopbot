@@ -16,6 +16,7 @@ foreach ($episode in $registry.episodes) {
     if ($episode.reproduction -notin @('ready','observation_only')) { throw "Invalid reproduction: $($episode.id)" }
     if ($episode.reproduction -eq 'ready' -and (!$episode.scenario -or !$episode.acceptance -or $episode.missing_setup.Count)) { throw "Incomplete ready episode: $($episode.id)" }
     if ($episode.scenario -and !(Test-Path (Join-Path $repo $episode.scenario))) { throw "Missing scenario: $($episode.id)" }
+	if ($episode.asset) { if ((Get-FileHash (Join-Path $repo $episode.asset.path)).Hash -ne $episode.asset.sha256) {throw "Asset hash mismatch: $($episode.id)"} }
 }
 if ($List) { $registry.episodes | Select-Object id,status,reproduction,title; return }
 foreach ($name in $Id) { if (!$seen.ContainsKey($name)) { throw "Unknown episode: $name" } }
@@ -30,6 +31,9 @@ Push-Location $repo
 try {
     & go build -o $exe ./cmd/q2coopbot
     if ($LASTEXITCODE) { throw 'Build failed' }
+	$reporter=Join-Path $out 'q2scenario-report.exe'
+	& go build -o $reporter ./cmd/q2scenario-report
+	if ($LASTEXITCODE) {throw 'Reporter build failed'}
     $results = @()
     foreach ($episode in $selected) {
         foreach ($scale in $Timescales) {
@@ -38,22 +42,38 @@ try {
             try {
                 $scenario = Join-Path $repo $episode.scenario
                 $definition = Get-Content $scenario -Raw | ConvertFrom-Json
+				if ($episode.kind -eq 'session') {
+					New-Item -ItemType Directory $trial|Out-Null
+					$trialConfig=Join-Path $trial 'trial.json'
+					@{session=$scenario;runtime_root=(Join-Path $repo 'workspace/runtime/q2go');port=$Port;timescale=$scale;tail_frames=5}|ConvertTo-Json|Set-Content $trialConfig
+					& (Join-Path $PSScriptRoot 'run_session_trial.ps1') -Config $trialConfig -PreparedOutput $trial -ClientExe $exe -ReporterExe $reporter|Out-Host
+					$report=Get-Content (Join-Path $trial 'report.json') -Raw|ConvertFrom-Json
+					if (!$report.accepted) {throw 'Session rejected'}
+					$passed=$true;$reason='accepted'
+				} else {
                 if ($definition.map -ne $episode.map) { throw 'Scenario map mismatch' }
                 $args = @{ActorScenario=$scenario;SynchronizedStart=$true;UnlimitedLoopbackRate=$true;GameFrames=$definition.game_frames;Timescales=@($scale);Port=$Port;OutputRoot=$trial;ClientExe=$exe}
                 if ($episode.map -ne 'base1') { $args.TransitionMap = $episode.map }
                 & (Join-Path $PSScriptRoot 'run_speed_trial.ps1') @args | Out-Host
                 $rows = @(Get-Content (Join-Path $trial "scale-$scale-port-$Port-trace.jsonl") | ForEach-Object { ConvertFrom-Json $_ } | Where-Object map -eq $episode.map)
                 $accept = $episode.acceptance
+				if ($definition.bot_health) {
+					$setup=@($rows|Where-Object { $_.health -eq $definition.bot_health -and [math]::Abs($_.self[0]-$definition.bot_origin[0]) -lt 16 -and [math]::Abs($_.self[1]-$definition.bot_origin[1]) -lt 16 })
+					if (!$setup.Count) {throw 'Initial bot health/position not observed'}
+				}
                 $eventFrame = -1; $landed = $false; $followed = !$accept.follow_after_event
                 foreach ($row in $rows) {
                     if ($accept.required_event -and $row.arbitration.limit_reason -eq $accept.required_event -and $row.health -gt 0) { $eventFrame = $row.frame }
                     $inside = $row.health -gt 0 -and $row.on_ground
+					if ($accept.min_health) {$inside=$inside -and $row.health -ge $accept.min_health}
+					if ($accept.goal) {$inside=$inside -and $row.goal -eq $accept.goal}
                     for ($axis=0; $axis -lt 3; $axis++) { $inside = $inside -and $row.self[$axis] -ge $accept.min[$axis] -and $row.self[$axis] -le $accept.max[$axis] }
                     if ($inside -and (!$accept.required_event -or $eventFrame -ge 0)) { $landed = $true }
                     if ($landed -and $row.frame -gt $eventFrame -and $row.health -gt 0 -and $row.goal -eq 'follow_teammate' -and ($row.sent_command.Forward -ne 0 -or $row.sent_command.Side -ne 0)) { $followed = $true }
                 }
                 $passed = $landed -and $followed
                 $reason = if ($passed) {'accepted'} elseif (!$landed) {'landing_or_arrival_not_observed'} else {'follow_not_resumed'}
+				}
             } catch { $reason = $_.Exception.Message }
             $results += [pscustomobject]@{id=$episode.id;timescale=$scale;accepted=$passed;reason=$reason;artifacts=$trial}
             $results | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $out 'report.json')

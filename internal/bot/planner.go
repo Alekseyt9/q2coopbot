@@ -5,6 +5,7 @@ import (
 	"log"
 	"math"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -35,49 +36,53 @@ type World struct {
 	Updated          time.Time         `json:"updated"`
 }
 type Planner struct {
-	deathFrame            int
-	jump                  *jumpFlight
-	TestDisableProbe      bool
-	testSetupHold         bool
-	TestDisableSearch     bool
-	Nav                   *quake.Navigator
-	AASDir                string
-	GameClock             bool
-	TestNoAAS             bool
-	TestNoBSP             bool
-	TestPartialBSP        bool
-	TestHideDoor53        bool
-	button                *buttonTask
-	buttonCooldown        int
-	World                 World
-	lastSelf              quake.Vec3
-	lastProgress          time.Time
-	routeAt               time.Time
-	target                quake.Vec3
-	route                 []quake.Waypoint
-	routeIndex            int
-	routeKnown            bool
-	routeOK               bool
-	lastObserved          quake.Vec3
-	observed              bool
-	detourUntil           time.Time
-	detourSide            int16
-	failures              int
-	goalPoint             quake.Vec3
-	hasGoal               bool
-	decision              *StrategyDecision
-	tactic                *TacticalDecision
-	elevator              *elevatorRide
-	probeTarget           *quake.Vec3
-	searchAttempt         *SearchAttempt
-	probeAttempted        bool
-	probeProgressFrame    int
-	probeLastSelf         quake.Vec3
-	lastSeenSelf          quake.Vec3
-	lastSeenSelfKnown     bool
-	searchApproachStarted bool
-	teammateSoundCue      *TeammateSoundCue
-	teammateEvidence      *TeammateEvidence
+	healthActive             bool
+	healthTarget, healthLast quake.Vec3
+	healthAt                 int
+	healthBanned             map[quake.Vec3]int
+	deathFrame               int
+	jump                     *jumpFlight
+	TestDisableProbe         bool
+	testSetupHold            bool
+	TestDisableSearch        bool
+	Nav                      *quake.Navigator
+	AASDir                   string
+	GameClock                bool
+	TestNoAAS                bool
+	TestNoBSP                bool
+	TestPartialBSP           bool
+	TestHideDoor53           bool
+	button                   *buttonTask
+	buttonCooldown           int
+	World                    World
+	lastSelf                 quake.Vec3
+	lastProgress             time.Time
+	routeAt                  time.Time
+	target                   quake.Vec3
+	route                    []quake.Waypoint
+	routeIndex               int
+	routeKnown               bool
+	routeOK                  bool
+	lastObserved             quake.Vec3
+	observed                 bool
+	detourUntil              time.Time
+	detourSide               int16
+	failures                 int
+	goalPoint                quake.Vec3
+	hasGoal                  bool
+	decision                 *StrategyDecision
+	tactic                   *TacticalDecision
+	elevator                 *elevatorRide
+	probeTarget              *quake.Vec3
+	searchAttempt            *SearchAttempt
+	probeAttempted           bool
+	probeProgressFrame       int
+	probeLastSelf            quake.Vec3
+	lastSeenSelf             quake.Vec3
+	lastSeenSelfKnown        bool
+	searchApproachStarted    bool
+	teammateSoundCue         *TeammateSoundCue
+	teammateEvidence         *TeammateEvidence
 }
 
 // setTestGroundEdgeGoal bypasses route selection only for the live edge fixture.
@@ -168,6 +173,8 @@ func (p *Planner) setMap(name, root string) {
 	p.Nav = nil
 	p.button = nil
 	p.deathFrame = 0
+	p.healthActive = false
+	p.healthBanned = nil
 	p.jump = nil
 	p.buttonCooldown = 0
 	p.failures = 0
@@ -269,7 +276,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 	}
 	previous := p.World.Snapshot
-	if previous.Health <= 0 && s.Health > 0 {
+	if previous.Frame > 0 && previous.Health <= 0 && s.Health > 0 {
 		p.deathFrame = 0
 		p.routeKnown = false
 		p.jump = nil
@@ -278,6 +285,14 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.lastProgress = time.Time{}
 	}
 	p.World.Snapshot = s
+	s.Pickups = append([]quake.Object(nil), s.Pickups...)
+	sort.Slice(s.Pickups, func(i, j int) bool {
+		a, b := quake.Distance(s.Self, s.Pickups[i].Origin), quake.Distance(s.Self, s.Pickups[j].Origin)
+		if a == b {
+			return s.Pickups[i].ID < s.Pickups[j].ID
+		}
+		return a < b
+	})
 	// Drop the interaction before any early return from hidden-player search.
 	p.validateButtonOwner(s)
 	p.updateTeammateSoundCue(s)
@@ -343,8 +358,8 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		if searching {
 			break
 		}
-		if s.Health < 45 && strings.Contains(pickup.Class, "health") && quake.Horizontal(s.Self, pickup.Origin) < 300 {
-			goal = pickup.Origin
+		if s.Health < 45 && strings.Contains(pickup.Class, "health") && quake.Horizontal(s.Self, pickup.Origin) < 300 && p.healthAllowed(pickup.Origin, s.Frame) {
+			goal = healthStand(pickup.Origin)
 			p.World.Goal = "recover_health"
 			break
 		}
@@ -360,8 +375,8 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		switch p.World.Strategy.Choice {
 		case "recover":
 			for _, pickup := range s.Pickups {
-				if strings.Contains(pickup.Class, "health") && quake.Horizontal(s.Self, pickup.Origin) < 300 {
-					goal = pickup.Origin
+				if strings.Contains(pickup.Class, "health") && quake.Horizontal(s.Self, pickup.Origin) < 300 && p.healthAllowed(pickup.Origin, s.Frame) {
+					goal = healthStand(pickup.Origin)
 					p.World.Goal = "recover_health"
 					break
 				}
@@ -381,13 +396,14 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	}
 	if !searching && p.World.Tactic != nil && p.World.Tactic.Action == "recover" {
 		for _, pickup := range s.Pickups {
-			if strings.Contains(pickup.Class, "health") && quake.Horizontal(s.Self, pickup.Origin) < 300 {
-				goal = pickup.Origin
+			if strings.Contains(pickup.Class, "health") && quake.Horizontal(s.Self, pickup.Origin) < 300 && p.healthAllowed(pickup.Origin, s.Frame) {
+				goal = healthStand(pickup.Origin)
 				p.World.Goal = "recover_health"
 				break
 			}
 		}
 	}
+	goal = p.budgetHealthGoal(s, goal)
 	p.goalPoint = goal
 	// A button is a subtask of following this player, not an override for a
 	// newly selected health objective or an already restored close contact.
@@ -656,6 +672,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		}
 	}
 	speed := 400.0
+	if !jump && cmd.Up == 0 {
+		speed = math.Min(speed, math.Hypot(dx, dy)*10)
+	}
 	if p.World.Goal == "touch_button" {
 		speed = 80
 	} else if p.World.Goal == "probe_last_seen" {

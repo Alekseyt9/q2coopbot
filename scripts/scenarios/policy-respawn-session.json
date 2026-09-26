@@ -44,7 +44,7 @@
         "name": "before-transition",
         "map": "base2",
         "start_frame": 40,
-        "game_frames": 100,
+        "game_frames": 220,
         "actor_origin": [
           320,
           1940,
@@ -58,11 +58,17 @@
         "expect": {},
         "steps": [
           {
-            "id": "settle",
-            "action": "wait",
-            "frames": 5
+            "frames": 110,
+            "id": "observe-base2-respawn",
+            "action": "wait"
           }
         ]
+      },
+      "observer_respawn_cycle": {
+        "recovery_frames": 5,
+        "policy_only": true,
+        "after_frames": 60,
+        "timeout_frames": 40
       }
     }
   ],

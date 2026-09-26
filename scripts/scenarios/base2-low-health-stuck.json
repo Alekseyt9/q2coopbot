@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "base2-low-health-stuck",
+  "map": "base2",
+  "start_frame": 40,
+  "game_frames": 220,
+  "bot_health": 7,
+  "actor_origin": [
+    106,
+    -448.5,
+    8.125
+  ],
+  "bot_origin": [
+    140.625,
+    -748.375,
+    8.125
+  ],
+  "expect": {},
+  "steps": [
+    {
+      "action": "wait",
+      "frames": 170,
+      "id": "wait-for-bot"
+    }
+  ],
+  "bot_invulnerable": true
+}

@@ -76,6 +76,7 @@ type Client struct {
 	testChangeMap                    string
 	testChangeEntry                  string
 	testInitialHealth                int
+	testInvulnerable                 bool
 	testChangeAfter                  int
 	testRconPassword                 string
 	testChangeSent                   bool
@@ -431,6 +432,11 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			c.testTeleportSent = true
 			if c.testInitialHealth > 0 {
+				if c.testInvulnerable {
+					if err := c.command("god"); err != nil {
+						return err
+					}
+				}
 				if err := c.command(fmt.Sprintf("give health %d", c.testInitialHealth)); err != nil {
 					return err
 				}

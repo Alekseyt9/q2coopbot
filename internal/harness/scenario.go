@@ -20,17 +20,18 @@ type Step struct {
 	Route   bool        `json:"route,omitempty"`
 }
 type Scenario struct {
-	BotHealth   int          `json:"bot_health,omitempty"`
-	MapEntry    string       `json:"map_entry,omitempty"`
-	Expect      Expectations `json:"expect"`
-	Version     int          `json:"version"`
-	Name        string       `json:"name"`
-	Map         string       `json:"map"`
-	StartFrame  int          `json:"start_frame"`
-	GameFrames  int          `json:"game_frames"`
-	ActorOrigin quake.Vec3   `json:"actor_origin"`
-	BotOrigin   quake.Vec3   `json:"bot_origin"`
-	Steps       []Step       `json:"steps"`
+	BotInvulnerable bool         `json:"bot_invulnerable,omitempty"`
+	BotHealth       int          `json:"bot_health,omitempty"`
+	MapEntry        string       `json:"map_entry,omitempty"`
+	Expect          Expectations `json:"expect"`
+	Version         int          `json:"version"`
+	Name            string       `json:"name"`
+	Map             string       `json:"map"`
+	StartFrame      int          `json:"start_frame"`
+	GameFrames      int          `json:"game_frames"`
+	ActorOrigin     quake.Vec3   `json:"actor_origin"`
+	BotOrigin       quake.Vec3   `json:"bot_origin"`
+	Steps           []Step       `json:"steps"`
 }
 type Expectations struct {
 	MapSequence       []string         `json:"map_sequence,omitempty"`

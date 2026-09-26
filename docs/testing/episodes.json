@@ -57,50 +57,119 @@
       "id": "base2-health-blocked",
       "title": "Недоступная аптечка удерживает бота на месте",
       "map": "base2",
-      "status": "open",
-      "reproduction": "observation_only",
-      "scenario": "scripts/scenarios/live-stuck-20260926-180355.json",
+      "status": "fix_in_progress",
+      "reproduction": "ready",
+      "scenario": "scripts/scenarios/base2-health-blocked.json",
       "evidence": "workspace/artifacts/live-stuck-20260926-180355/trace.jsonl",
       "symptom": "recover_health, здоровье 36, static_hull_blocked в точке [290.5,1744.125,24.125].",
-      "missing_setup": [
-        "Здоровье бота 36",
-        "Состояние аптечек",
-        "Положение механизма модели 24"
-      ],
-      "acceptance": null,
+      "missing_setup": [],
+      "acceptance": {
+        "goal": "cover_teammate",
+        "max": [
+          72,
+          2230,
+          50
+        ],
+        "required_event": "",
+        "min_health": 37,
+        "follow_after_event": false,
+        "min": [
+          -128,
+          2040,
+          0
+        ]
+      },
       "expected_result": "Получение достижимой аптечки либо ограниченный отказ и возврат к сопровождению."
     },
     {
       "id": "base2-no-respawn",
       "title": "Бот не возрождается после смерти",
       "map": "base2",
-      "status": "open",
-      "reproduction": "observation_only",
-      "scenario": "",
+      "status": "fix_in_progress",
+      "reproduction": "ready",
+      "scenario": "scripts/scenarios/policy-respawn-session.json",
       "evidence": "workspace/artifacts/live-death-20260926-180836/trace.jsonl",
       "symptom": "Здоровье -12, постоянный dead и пустые команды. Тестовое возрождение не включено в обычную политику.",
-      "missing_setup": [
-        "Контролируемая смерть обычного бота без test_observer_respawn",
-        "Автоматический критерий возрождения и восстановления контакта"
-      ],
-      "acceptance": null,
-      "expected_result": "Самостоятельное возрождение после разрешённой сервером задержки и восстановление сопровождения."
+      "missing_setup": [],
+      "acceptance": {
+        "session": "policy_respawn"
+      },
+      "expected_result": "Самостоятельное возрождение после разрешённой сервером задержки и восстановление сопровождения.",
+      "kind": "session"
     },
     {
       "id": "base3-stuck-20260926-181438",
       "title": "Повторное застревание в живой игре",
       "map": "base3",
+      "status": "fix_in_progress",
+      "reproduction": "ready",
+      "scenario": "scripts/scenarios/base3-stuck.json",
+      "evidence": "workspace/artifacts/live-stuck-20260926-181438/trace.jsonl",
+      "symptom": "frame=1179; self=1453,75,1402,5,-807,875; health=100; goal=follow_teammate; reason=static_hull_blocked",
+      "missing_setup": [],
+      "acceptance": {
+        "follow_after_event": false,
+        "min": [
+          1050,
+          1190,
+          -835
+        ],
+        "max": [
+          1250,
+          1390,
+          -780
+        ],
+        "required_event": "",
+        "goal": "cover_teammate"
+      },
+      "expected_result": "Бот выходит из застревания либо ограниченно отказывается от недоступной цели и восстанавливает сопровождение",
+      "asset": {
+        "path": "workspace/runtime/q2go/baseq2/maps/base3.aas",
+        "sha256": "0EEDB66F2F12367DEAB1DFC9241DBFAFAC77558F2EA230239F9F226F92989054"
+      }
+    },
+    {
+      "id": "base2-stuck-20260926-182855",
+      "title": "Застревание, дополнительное наблюдение",
+      "map": "base2",
+      "status": "fix_in_progress",
+      "reproduction": "ready",
+      "scenario": "scripts/scenarios/base2-low-health-stuck.json",
+      "evidence": "workspace/artifacts/live-stuck-20260926-182855/trace.jsonl",
+      "symptom": "frame=2038; self=140,625,-748,375,8,125; health=7; goal=recover_health; reason=no_movement_goal",
+      "missing_setup": [],
+      "acceptance": {
+        "goal": "cover_teammate",
+        "max": [
+          206,
+          -348,
+          32
+        ],
+        "required_event": "",
+        "min_health": 8,
+        "follow_after_event": false,
+        "min": [
+          6,
+          -548,
+          -8
+        ]
+      },
+      "expected_result": "Навигационная проверка с 7 здоровья и отключённым уроном: получить аптечку и восстановить сопровождение. Выживание в бою проверяется отдельно."
+    },
+    {
+      "id": "bunk1-stuck-20260926-183318",
+      "title": "Застревание, дополнительное наблюдение",
+      "map": "bunk1",
       "status": "open",
       "reproduction": "observation_only",
       "scenario": "",
-      "evidence": "workspace/artifacts/live-stuck-20260926-181438/trace.jsonl",
-      "symptom": "frame=1179; self=1453,75,1402,5,-807,875; health=100; goal=follow_teammate; reason=static_hull_blocked",
+      "evidence": "workspace/artifacts/live-stuck-20260926-183318/trace.jsonl",
+      "symptom": "frame=1340; self=31,625,-385,75,24,125; health=74; goal=wait_for_teammate; reason=no_movement_goal",
       "missing_setup": [
-        "Уточнить отличие от предыдущих эпизодов по сохранённой трассе",
-        "Восстановить здоровье, предметы и состояние карты"
+        "Проверить причину и воспроизведение по сохранённой трассе"
       ],
       "acceptance": null,
-      "expected_result": "Бот выходит из застревания либо ограниченно отказывается от недоступной цели и восстанавливает сопровождение"
+      "expected_result": "Восстановление сопровождения без бесконечного застревания"
     }
   ]
 }

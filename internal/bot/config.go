@@ -36,6 +36,7 @@ type ConfigFile struct {
 		StopFile   string `json:"stop_file"`
 	} `json:"output"`
 	Test struct {
+		Invulnerable                 bool   `json:"invulnerable"`
 		InitialHealth                int    `json:"initial_health"`
 		ChangeEntry                  string `json:"change_entry"`
 		Session                      string `json:"session"`
@@ -149,6 +150,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestDisableProbe = file.Test.DisableProbe
 	cfg.TestSetupHoldFrames = file.Test.SetupHoldFrames
 	cfg.TestInitialHealth = file.Test.InitialHealth
+	cfg.TestInvulnerable = file.Test.Invulnerable
 	cfg.TestChangeEntry = file.Test.ChangeEntry
 	cfg.TestScenarioFrameOrigin = file.Test.ScenarioFrameOrigin
 	cfg.TestWalkTarget, cfg.TestWalkAfterFrames, cfg.TestWalkFrames = file.Test.WalkTarget, file.Test.WalkAfterFrames, file.Test.WalkFrames

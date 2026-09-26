@@ -11,9 +11,13 @@ type ObserverCycleReport struct {
 
 func checkObserverCycle(f ObserverRespawn, start int, rows []Trace) ObserverCycleReport {
 	r := ObserverCycleReport{Stimulus: "scripted_kill_and_respawn", Reason: "observer_cycle_incomplete"}
-	if f.PolicyOnly {r.Stimulus="scripted_kill_policy_respawn"}
+	if f.PolicyOnly {
+		r.Stimulus = "scripted_kill_policy_respawn"
+	}
 	target := start + f.AfterFrames
 	kills := 0
+	policyRequests := 0
+	recoveredContact := false
 	for _, row := range rows {
 		if row.ObserverKill {
 			kills++
@@ -33,8 +37,14 @@ func checkObserverCycle(f ObserverRespawn, start int, rows []Trace) ObserverCycl
 			r.Reason = "invalid_scripted_respawn_command"
 			return r
 		}
-		if f.PolicyOnly && row.ObserverRespawn {r.Reason="scripted_respawn_forbidden";return r}
-		policyRequest:=f.PolicyOnly && row.Command.Buttons==1 && row.Arbitration.LimitReason=="respawn_request"
+		if f.PolicyOnly && row.ObserverRespawn {
+			r.Reason = "scripted_respawn_forbidden"
+			return r
+		}
+		policyRequest := f.PolicyOnly && row.Command.Buttons == 1 && row.Arbitration.LimitReason == "respawn_request"
+		if policyRequest {
+			policyRequests++
+		}
 		if *row.Health <= 0 && row.Command.Buttons != 0 && !row.ObserverRespawn && !policyRequest {
 			r.Reason = "unmarked_respawn_command"
 			return r
@@ -60,6 +70,9 @@ func checkObserverCycle(f ObserverRespawn, start int, rows []Trace) ObserverCycl
 		}
 		if r.RespawnFrame > 0 && row.Frame > r.RespawnFrame && row.Frame <= r.RespawnFrame+f.RecoveryFrames {
 			r.RecoveryFrames++
+			if row.Teammate != nil && (row.Goal == "follow_teammate" || row.Goal == "cover_teammate") {
+				recoveredContact = true
+			}
 		}
 	}
 	if kills != 1 {
@@ -75,6 +88,10 @@ func checkObserverCycle(f ObserverRespawn, start int, rows []Trace) ObserverCycl
 		return r
 	}
 	if r.RecoveryFrames < f.RecoveryFrames {
+		return r
+	}
+	if f.PolicyOnly && (policyRequests == 0 || !recoveredContact) {
+		r.Reason = "policy_respawn_contact_not_verified"
 		return r
 	}
 	r.Passed = true

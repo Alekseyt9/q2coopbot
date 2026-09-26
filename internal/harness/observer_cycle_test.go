@@ -56,3 +56,26 @@ func TestMotionExcludesDeathAndRespawnJump(t *testing.T) {
 		t.Fatal(r)
 	}
 }
+
+func TestPolicyRespawnRejectsScriptedCommands(t *testing.T) {
+	f := ObserverRespawn{AfterFrames: 1, TimeoutFrames: 6, RecoveryFrames: 3, PolicyOnly: true}
+	rows := cycleFixture()
+	if r := checkObserverCycle(f, 50, rows); r.Passed {
+		t.Fatal("scripted respawn accepted as policy")
+	}
+	for i := range rows {
+		rows[i].Teammate = &quake.Vec3{}
+		rows[i].Goal = "cover_teammate"
+		if rows[i].ObserverRespawn {
+			rows[i].ObserverRespawn = false
+			rows[i].Arbitration.LimitReason = "respawn_request"
+		}
+	}
+	if r := checkObserverCycle(f, 50, rows); !r.Passed || r.Stimulus != "scripted_kill_policy_respawn" {
+		t.Fatal(r)
+	}
+	rows[3].Arbitration.LimitReason = ""
+	if r := checkObserverCycle(f, 50, rows); r.Passed {
+		t.Fatal("unidentified command accepted")
+	}
+}
