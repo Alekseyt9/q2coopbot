@@ -1,0 +1,84 @@
+{
+  "id": "bunk1-open-door-short-approach",
+  "title": "Короткая точка маршрута между открытыми створками",
+  "map": "bunk1",
+  "status": "open",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/bunk1-open-door-short-approach.json",
+  "evidence": "workspace/artifacts/episode-regressions-20260927-013504-479/bunk1-stuck-20260926-183318-x2/scale-2-port-29410-trace.jsonl frame240",
+  "symptom": "Открытая створка125 блокирует проверку40 единиц за точкой маршрута в15 единицах от бота.",
+  "missing_setup": [],
+  "acceptance": {
+    "max": [
+      150,
+      -48,
+      40
+    ],
+    "setup_checkpoints": [
+      {
+        "id": "lowered-door-and-open-passage",
+        "self": [
+          110.75,
+          -243.125,
+          24.125
+        ],
+        "teammate": [
+          70.375,
+          -121,
+          24.125
+        ],
+        "movers": [
+          {
+            "origin": [
+              0,
+              0,
+              -122
+            ],
+            "model": 118
+          },
+          {
+            "origin": [
+              -58,
+              0,
+              0
+            ],
+            "model": 125
+          },
+          {
+            "origin": [
+              58,
+              0,
+              0
+            ],
+            "model": 135
+          },
+          {
+            "origin": [
+              0,
+              -10,
+              0
+            ],
+            "model": 126
+          }
+        ],
+        "min_frame": 139,
+        "max_frame": 140
+      }
+    ],
+    "min": [
+      0,
+      -195,
+      18
+    ],
+    "follow_after_event": false,
+    "goal": "cover_teammate",
+    "required_move_reason": "door_short_approach"
+  },
+  "expected_result": "Восстановление сопровождения без бесконечного застревания",
+  "asset": {
+    "sha256": "4BAEC5D9CE778B499D3583533C40BC74C2D5152A1A1851F1E3A4822ED0E8DB61",
+    "path": "workspace/runtime/q2go/baseq2/maps/bunk1.aas"
+  },
+  "fix_notes": "Проверять короткий подход16 единиц полным корпусом и ограничивать скорость80; старый guard40 запрещал движение до точки поворота.",
+  "verification": ""
+}

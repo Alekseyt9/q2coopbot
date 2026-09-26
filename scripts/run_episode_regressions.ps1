@@ -72,6 +72,11 @@ try {
                 $accept = $episode.acceptance
 				Assert-EpisodeSetup $rows $accept
 				$stageFrame = -1
+				if ($accept.required_move_reason) {
+					$moveEvent=@($rows|Where-Object { $_.arbitration.move_limit_reason -eq $accept.required_move_reason -and $_.health -gt 0 -and ($_.sent_command.Forward -ne 0 -or $_.sent_command.Side -ne 0) }|Select-Object -First 1)
+					if (!$moveEvent.Count) {throw 'Required guarded movement not observed'}
+					$stageFrame=$moveEvent[0].frame
+				}
 				if ($accept.health_after_damage) {
 					if (@($rows | Where-Object test_health_masked).Count) { throw 'Natural health test used a perception mask' }
 					$initial=@($rows|Where-Object { $_.health -eq 100 -and @($_.pickups|Where-Object class -eq 'item_health').Count }|Select-Object -First 1)

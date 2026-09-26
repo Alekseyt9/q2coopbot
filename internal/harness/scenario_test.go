@@ -9,6 +9,54 @@ func fixture() Scenario {
 	return Scenario{Version: 1, Name: "test", Map: "base2", StartFrame: 40, GameFrames: 100, Steps: []Step{{ID: "wait", Action: "wait", Frames: 2}}}
 }
 
+func TestReleaseOriginRequiresPreparation(t *testing.T) {
+	s := fixture()
+	at := quake.Vec3{10, 20, 24}
+	s.BotReleaseOrigin = &at
+	if s.Validate() == nil {
+		t.Fatal("release placement without hold accepted")
+	}
+	s.BotReleaseFrame = 50
+	if err := s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	s.BotReleaseFrame = 49
+	if s.Validate() == nil {
+		t.Fatal("too short preparation accepted")
+	}
+}
+
+func TestScriptedTeammateShotStopsAtDeadlineAndGap(t *testing.T) {
+	s := fixture()
+	s.Steps = []Step{{ID: "damage", Action: "shoot_teammate", Frames: 3}}
+	if err := s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	r := New(s)
+	for f := 40; f < 43; f++ {
+		if !r.Tick(input(f)).ShootTeammate {
+			t.Fatal("shot not emitted")
+		}
+		if r.Tick(input(f)).ShootTeammate {
+			t.Fatal("duplicate shot")
+		}
+	}
+	if r.Tick(input(43)).ShootTeammate {
+		t.Fatal("shot beyond deadline")
+	}
+	r = New(s)
+	r.Tick(input(40))
+	if r.Tick(input(42)).ShootTeammate {
+		t.Fatal("shot after frame gap")
+	}
+	for _, n := range []int{0, 41} {
+		s.Steps[0].Frames = n
+		if s.Validate() == nil {
+			t.Fatal("unbounded shot interval")
+		}
+	}
+}
+
 func TestHealthMaskIntervalValidation(t *testing.T) {
 	for _, span := range [][]int{{40}, {39, 60}, {60, 60}, {60, 101}, {40, 60, 80}} {
 		s := fixture()

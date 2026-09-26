@@ -711,7 +711,18 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		}
 	}
 	if s.OnGround {
-		if hazard := p.World.Geometry.DoorMoveHazard(s.Movers, s.Self, dx, dy); hazard != "" {
+		hazard := p.World.Geometry.DoorMoveHazard(s.Movers, s.Self, dx, dy)
+		// A short waypoint before a turn need not clear a full-speed tick
+		// beyond that turn. Keep both static and dynamic hull checks, and
+		// use half the checked distance as the requested 100 ms movement.
+		if hazard != "" && cmd.Up == 0 && p.World.Command.MoveSource == "route" && math.Hypot(dx, dy) <= 24 && p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, 16) == "" {
+			if _, shortHazard := p.World.Geometry.DoorMoveBlockStep(s.Movers, s.Self, dx, dy, 16); shortHazard == "" {
+				hazard = ""
+				moveSpeedLimit = math.Min(moveSpeedLimit, 80)
+				p.World.Command.MoveLimitReason = "door_short_approach"
+			}
+		}
+		if hazard != "" {
 			cmd.Up = 0
 			p.World.Command.MoveSource = "none"
 			p.World.Command.MoveLimitReason = hazard

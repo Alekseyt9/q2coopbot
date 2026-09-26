@@ -31,6 +31,7 @@
     "health-armor-resource-memory.json",
     "base1-armor-memory-missing.json",
     "base1-health-memory-return.json",
-    "base1-health-after-damage.json"
+    "base1-health-after-damage.json",
+    "bunk1-open-door-short-approach.json"
   ]
 }

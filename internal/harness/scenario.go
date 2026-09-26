@@ -20,6 +20,7 @@ type Step struct {
 	Route   bool        `json:"route,omitempty"`
 }
 type Scenario struct {
+	BotReleaseOrigin    *quake.Vec3  `json:"bot_release_origin,omitempty"`
 	BotHideHealthFrames []int        `json:"bot_hide_health_frames,omitempty"`
 	BotReleaseFrame     int          `json:"bot_release_frame,omitempty"`
 	ActorHealth         int          `json:"actor_health,omitempty"`
@@ -121,6 +122,9 @@ func (s Scenario) Validate() error {
 			}
 		}
 		return true
+	}
+	if s.BotReleaseOrigin != nil && (!finite(*s.BotReleaseOrigin) || s.BotReleaseFrame < s.StartFrame+10) {
+		return fmt.Errorf("bot_release_origin requires finite coordinates and at least 10 setup frames")
 	}
 	if !finite(s.ActorOrigin) || !finite(s.BotOrigin) {
 		return fmt.Errorf("invalid initial position")

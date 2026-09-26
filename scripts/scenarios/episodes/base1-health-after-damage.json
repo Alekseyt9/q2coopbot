@@ -1,13 +1,30 @@
 {
-  "id":"base1-health-after-damage",
-  "title":"Сохранил аптечку здоровым и вернулся после урона",
-  "status":"open",
-  "reproduction":"ready",
-  "map":"base1",
-  "scenario":"scripts/scenarios/base1-health-after-damage.json",
-  "evidence":"Без маски предметов; тестовый актор стреляет из Blaster, урон вычисляет сервер.",
-  "symptom":"Нужна проверка памяти между первоначальным наблюдением и последующим дефицитом здоровья.",
-  "missing_setup":[],
-  "expected_result":"Бот оставляет аптечку при100 HP, уходит, получает урон, выбирает запомненную аптечку и лечится.",
-  "acceptance":{"health_after_damage":true,"goal":"cover_teammate","min_health":45,"min":[790,0,-180],"max":[950,160,-150],"follow_after_event":false}
+  "id": "base1-health-after-damage",
+  "title": "Сохранил аптечку здоровым и вернулся после урона",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "map": "base1",
+  "scenario": "scripts/scenarios/base1-health-after-damage.json",
+  "evidence": "Без маски предметов; тестовый актор стреляет из Blaster, урон вычисляет сервер.",
+  "symptom": "Нужна проверка памяти между первоначальным наблюдением и последующим дефицитом здоровья.",
+  "missing_setup": [],
+  "expected_result": "Бот оставляет аптечку при100 HP, уходит, получает урон, выбирает запомненную аптечку и лечится.",
+  "acceptance": {
+    "health_after_damage": true,
+    "goal": "cover_teammate",
+    "min_health": 45,
+    "min": [
+      790,
+      0,
+      -180
+    ],
+    "max": [
+      950,
+      160,
+      -150
+    ],
+    "follow_after_event": false
+  },
+  "verification": "workspace/artifacts/episode-regressions-20260927-022631-670/report.json",
+  "limitations": "К моменту выбора лечения аптечки снова наблюдаются. Подтверждены сохранение припасов, уход, поздний серверный урон, лечение и возврат; выбор исключительно по памяти без повторного наблюдения этим сценарием не принят."
 }

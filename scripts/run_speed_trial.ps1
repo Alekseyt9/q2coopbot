@@ -391,6 +391,10 @@ foreach ($scale in $Timescales) {
 			if ($actorScenarioDefinition.bot_release_frame) {
 				$botConfig.test.setup_hold_frames = [int]$actorScenarioDefinition.bot_release_frame - [int]$actorScenarioDefinition.start_frame
 			}
+			if ($actorScenarioDefinition.bot_release_origin) {
+				$botConfig.test.teleport_after = ($actorScenarioDefinition.bot_release_origin | ForEach-Object {([double]$_).ToString([cultureinfo]::InvariantCulture)}) -join ','
+				$botConfig.test.teleport_after_frames = [int]$actorScenarioDefinition.bot_release_frame - [int]$actorScenarioDefinition.start_frame - 5
+			}
             if ($ScenarioTailFrames) { $botConfig.test.scenario_result=$scenarioResultPath; $botConfig.test.scenario_tail_frames=$ScenarioTailFrames }
         }
         if ($SearchSynchronizedSetup) {

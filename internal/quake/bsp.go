@@ -168,14 +168,19 @@ func (m *MapInfo) DoorMoveHazard(movers []Mover, origin Vec3, dx, dy float64) st
 
 // DoorMoveBlock also returns the brush model responsible for the obstruction.
 func (m *MapInfo) DoorMoveBlock(movers []Mover, origin Vec3, dx, dy float64) (int, string) {
+	return m.DoorMoveBlockStep(movers, origin, dx, dy, 40)
+}
+
+// DoorMoveBlockStep checks the whole player hull along a bounded movement.
+// Callers using less than a full-speed tick must also limit movement speed.
+func (m *MapInfo) DoorMoveBlockStep(movers []Mover, origin Vec3, dx, dy, step float64) (int, string) {
 	if m == nil {
 		return 0, ""
 	}
 	distance := math.Hypot(dx, dy)
-	if distance < 0.001 {
+	if distance < 0.001 || step <= 0 {
 		return 0, ""
 	}
-	step := 40.0
 	next := Vec3{origin[0] + dx/distance*step, origin[1] + dy/distance*step, origin[2]}
 	observed := make(map[int]Mover, len(movers))
 	for _, mover := range movers {
@@ -420,7 +425,7 @@ func (m *CollisionMap) groundDrop(origin Vec3, maxDrop float64) (float64, bool) 
 			}
 		}
 		if !outside && enter < leave && enter >= 0 && enter <= 1 && groundNormal[2] >= 0.7 {
-				drop := feet - (origin[2] + enter*(end[2]-origin[2]))
+			drop := feet - (origin[2] + enter*(end[2]-origin[2]))
 			if drop <= maxDrop+0.125 && drop < best {
 				best = math.Max(0, drop)
 			}

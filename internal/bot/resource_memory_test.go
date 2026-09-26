@@ -120,3 +120,57 @@ func TestResourceMemoryBase1ReturnAndMissing(t *testing.T) {
 		t.Fatal("memory bypasses navigation evidence")
 	}
 }
+
+func TestBase1HealthRejectsExpensiveUpperFloor(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires local base1 assets")
+	}
+	g, err := quake.LoadMap(root, "base1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(filepath.Join(root, "maps/base1.aas"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &Planner{Nav: n, World: World{Geometry: &g}}
+	upper := quake.Object{Class: "item_health", Origin: quake.Vec3{1128, -96, -40.875}}
+	lower := quake.Object{Class: "item_health", Origin: quake.Vec3{1056, 344, -176.875}}
+	s := quake.Snapshot{Frame: 100, Health: 40, Self: quake.Vec3{940, 75, -167.875}, Pickups: []quake.Object{upper, lower}}
+	at, ok := p.healthGoal(s)
+	if !ok || at != healthStand(lower.Origin) {
+		t.Fatalf("goal=%v ok=%v", at, ok)
+	}
+}
+
+func TestBase1MemoryBeyondObservationPreservesRouteBudget(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires local base1 assets")
+	}
+	g, err := quake.LoadMap(root, "base1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(filepath.Join(root, "maps/base1.aas"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mate := quake.Vec3{960, 248, -167.875}
+	item := quake.Object{ID: 180, Class: "item_health", Origin: quake.Vec3{1056, 344, -176.875}}
+	p := &Planner{Nav: n, World: World{Geometry: &g}, resources: map[int]*ResourceMemory{180: {Item: item, State: "unknown", LastSeen: 10}}}
+	s := quake.Snapshot{Frame: 20, Health: 40, OnGround: true, Self: quake.Vec3{960, -40, -167.875}, Teammate: &mate}
+	if quake.Distance(s.Self, item.Origin) <= 384 {
+		t.Fatal("fixture is still within observation radius")
+	}
+	// This location is within the expanded radius, but its walking route
+	// exceeds the route budget. Euclidean proximity alone must not admit it.
+	if len(p.rememberedCandidates(s)) != 0 {
+		t.Fatal("expanded radius bypassed the walking route budget")
+	}
+	s.Self[1] = -200
+	if len(p.rememberedCandidates(s)) != 0 {
+		t.Fatal("distant return accepted")
+	}
+}
