@@ -20,6 +20,10 @@ import (
 )
 
 type Client struct {
+	scenarioResultPath               string
+	scenarioTailFrames               int
+	scenarioResultSent               bool
+	scenarioCompletion               *scenarioCompletion
 	scenario                         *harness.Runner
 	scenarioPath                     testWalkPath
 	conn                             *net.UDPConn
@@ -443,6 +447,19 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			return nil
 		}
+		if c.framePaced && c.frameReady && c.scenarioResultPath != "" && c.scenario == nil {
+			stop, err := c.scenarioShouldStop()
+			if err != nil {
+				return err
+			}
+			if stop {
+				log.Printf("scenario_stop_frame=%d scenario_terminal_frame=%d", c.lastMoveFrame, c.scenarioCompletion.EndFrame)
+				if c.connected {
+					_ = c.command("disconnect")
+				}
+				return nil
+			}
+		}
 		if c.begun && (!c.framePaced && now.After(c.nextMove) || c.framePaced && c.frameReady && c.latestFrame > c.lastMoveFrame || c.needsSafetyStop(now)) {
 			frame := c.latestFrame
 			safetyStop := c.needsSafetyStop(now)
@@ -489,16 +506,31 @@ func (c *Client) run(ctx context.Context) error {
 				if d.NewStep {
 					c.scenarioPath = testWalkPath{}
 				}
+				if c.scenario.Status.State == "running" {
+					c.scenario.Status.MovementReason = ""
+				}
 				if d.Place != nil {
 					v := *d.Place
 					if err := c.command(fmt.Sprintf("teleport %g %g %g", v[0], v[1], v[2])); err != nil {
 						return err
 					}
 				}
+				if d.Kill {
+					if err := c.command("kill"); err != nil {
+						return err
+					}
+				}
+				if d.Respawn {
+					cmd.Buttons = 1
+				}
 				if d.Walk != nil {
-					cmd = testWalkCommand(s, *d.Walk, c.planner.World.Geometry, c.planner.Nav)
+					cmd, c.scenario.Status.MovementReason = testWalkDiagnostic(s, *d.Walk, c.planner.World.Geometry, c.planner.Nav)
 					if d.Route {
 						cmd = c.scenarioPath.command(s, *d.Walk, c.planner.World.Geometry, c.planner.Nav)
+						c.scenario.Status.MovementReason = c.scenarioPath.reason
+						if d.NewStep {
+							c.scenario.RejectRoute(c.scenarioPath.reason)
+						}
 					}
 				}
 				c.planner.World.Command = CommandDecision{MoveSource: "test_scenario", AimSource: "none", LimitReason: c.scenario.Status.State}
@@ -551,6 +583,7 @@ func (c *Client) run(ctx context.Context) error {
 					Self              quake.Vec3         `json:"self"`
 					SelfEntity        int                `json:"self_entity"`
 					Teammate          *quake.Vec3        `json:"teammate,omitempty"`
+					TeammateEntity    int                `json:"teammate_entity,omitempty"`
 					LastTeammate      *quake.Vec3        `json:"last_teammate,omitempty"`
 					TeammateAgeFrames *int               `json:"teammate_age_frames,omitempty"`
 					Health            int16              `json:"health"`
@@ -577,6 +610,7 @@ func (c *Client) run(ctx context.Context) error {
 					ObservationAgeMS: now.Sub(c.planner.World.Updated).Milliseconds(),
 					RelativeFrame:    frame - c.firstMoveFrame, ClientSequence: clientSequence,
 					Self: c.planner.World.Snapshot.Self, SelfEntity: c.decoder.PlayerNumber, Teammate: c.planner.World.Snapshot.Teammate,
+					TeammateEntity:    c.planner.World.Snapshot.TeammateEntity,
 					LastTeammate:      c.planner.World.Snapshot.LastTeammate,
 					TeammateAgeFrames: c.planner.World.Snapshot.TeammateAgeFrames,
 					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround,
@@ -607,6 +641,9 @@ func (c *Client) run(ctx context.Context) error {
 			c.moves++
 			if c.framePaced && !safetyStop {
 				c.lastMoveFrame = frame
+				if err := c.publishScenarioCompletion(); err != nil {
+					return err
+				}
 			} else {
 				c.nextMove = c.nextMove.Add(50 * time.Millisecond)
 				if c.nextMove.Before(now.Add(-250 * time.Millisecond)) {

@@ -1,6 +1,9 @@
 {
   "version": 1,
-  "expect": {"contact_losses":2,"reacquisitions":2,"follow_resumptions":2},
+  "expect": {
+    "contact_losses":2,"reacquisitions":2,"follow_resumptions":2,
+    "invariants":["wait_has_no_movement","completed_search_stays_finished","visible_contact_clears_search"]
+  },
   "name": "repeated-contact-scripted-placement",
   "map": "base2",
   "start_frame": 40,

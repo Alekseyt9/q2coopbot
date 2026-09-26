@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "base2-natural-corridor-return",
+  "map": "base2",
+  "start_frame": 40,
+  "game_frames": 260,
+  "actor_origin": [320,1940,-144],
+  "bot_origin": [194,1940,-144],
+  "expect": {"invariants":["visible_contact_clears_search"]},
+  "steps": [
+    {"id":"settle","action":"wait","frames":3},
+    {"id":"walk-out","action":"walk","target":[400,1840,-167],"timeout_frames":40,"route":true},
+    {"id":"wait-out","action":"wait","frames":12},
+    {"id":"return-side","action":"walk","target":[360,1840,-167],"timeout_frames":30},
+    {"id":"walk-back","action":"walk","target":[360,1940,-167],"timeout_frames":40},
+    {"id":"return-home","action":"walk","target":[320,1940,-167],"timeout_frames":30},
+    {"id":"wait-back","action":"wait","frames":12}
+  ]
+}

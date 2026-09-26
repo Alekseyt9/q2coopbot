@@ -27,6 +27,34 @@ func TestWalkScenarioRequiresIsolatedFramePacedActor(t *testing.T) {
 	}
 }
 
+func TestRoutePreflightReasons(t *testing.T) {
+	s := quake.Snapshot{Map: "test", Frame: 40, Health: 100, OnGround: true}
+	p := testWalkPath{}
+	if cmd := p.command(s, quake.Vec3{}, nil, nil); cmd.Forward != 0 || p.reason != "aas_unavailable" {
+		t.Fatal(p.reason, cmd)
+	}
+	nav := &quake.Navigator{Areas: []quake.Area{{}, {Min: quake.Vec3{-10, -10, -10}, Max: quake.Vec3{10, 10, 10}}}, Edges: make([][]quake.Edge, 2)}
+	far := quake.Vec3{10000, 10000, 10000}
+	p.command(s, quake.Vec3{11, 0, 0}, nil, nav)
+	if p.reason != "route_target_outside_aas" {
+		t.Fatal("nearest-area fallback accepted fixture point", p.reason)
+	}
+	p.command(s, far, nil, nav)
+	if p.reason != "route_target_outside_aas" {
+		t.Fatal(p.reason)
+	}
+	s.Self = far
+	p.command(s, quake.Vec3{}, nil, nav)
+	if p.reason != "route_start_outside_aas" {
+		t.Fatal(p.reason)
+	}
+	s.Self = quake.Vec3{}
+	p.command(s, quake.Vec3{}, nil, nav)
+	if p.reason != "geometry_unavailable" || !p.ready {
+		t.Fatal(p.reason)
+	}
+}
+
 func TestSearchBaselineStillFollowsVisiblePlayer(t *testing.T) {
 	p, s, _ := searchAttemptFixture()
 	p.TestDisableSearch, p.searchAttempt, p.probeTarget = true, nil, nil

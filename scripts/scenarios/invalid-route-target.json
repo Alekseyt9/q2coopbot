@@ -1,0 +1,14 @@
+{
+  "version":1,
+  "name":"base2-route-target-outside-aas",
+  "map":"base2",
+  "start_frame":40,
+  "game_frames":100,
+  "actor_origin":[320,1940,-144],
+  "bot_origin":[194,1940,-144],
+  "expect":{"failure":{"reason":"route_target_outside_aas","step_id":"invalid-walk","min_frame":44,"max_frame":44}},
+  "steps":[
+    {"id":"settle","action":"wait","frames":3},
+    {"id":"invalid-walk","action":"walk","route":true,"target":[400,1840,-168],"timeout_frames":40}
+  ]
+}

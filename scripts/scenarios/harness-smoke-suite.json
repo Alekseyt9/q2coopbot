@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "scenarios": ["repeated-contact.json", "natural-follow.json", "blocked-return.json", "invalid-route-target.json", "respawn-cycle.json"],
+  "timescales": [2],
+  "repetitions": 2,
+  "parallelism": 2,
+  "tail_frames": 5,
+  "base_port": 28810,
+  "runtime_root": "../../workspace/runtime/q2go"
+}

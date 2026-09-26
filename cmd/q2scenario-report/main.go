@@ -65,8 +65,8 @@ func run() error {
 		return err
 	}
 	fmt.Println(string(data))
-	if r.State != "passed" {
-		return fmt.Errorf("scenario %s: %s", r.State, r.Reason)
+	if !r.Accepted {
+		return fmt.Errorf("scenario %s: %s (%s)", r.State, r.Reason, r.Expectation)
 	}
 	return nil
 }

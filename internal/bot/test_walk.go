@@ -32,6 +32,7 @@ func validateTestWalk(cfg Config) (quake.Vec3, error) {
 }
 
 type testWalkPath struct {
+	reason    string
 	route     []quake.Waypoint
 	next      int
 	ready     bool
@@ -40,17 +41,28 @@ type testWalkPath struct {
 }
 
 func (p *testWalkPath) command(s quake.Snapshot, target quake.Vec3, geometry *quake.MapInfo, nav *quake.Navigator) quake.UserCmd {
-	if nav == nil {
-		return quake.UserCmd{}
-	}
 	if p.mapName != s.Map || s.Frame < p.lastFrame {
 		*p = testWalkPath{mapName: s.Map, lastFrame: s.Frame}
 	}
+	p.reason = ""
+	if nav == nil {
+		p.reason = "aas_unavailable"
+		return quake.UserCmd{}
+	}
 	p.lastFrame = s.Frame
 	if !p.ready {
+		if nav.ExactAreaFor(target) < 0 {
+			p.reason = "route_target_outside_aas"
+			return quake.UserCmd{}
+		}
+		if nav.ExactAreaFor(s.Self) < 0 {
+			p.reason = "route_start_outside_aas"
+			return quake.UserCmd{}
+		}
 		var ok bool
 		p.route, ok = nav.SearchRoute(s.Self, target)
 		if !ok {
+			p.reason = "route_unavailable"
 			return quake.UserCmd{}
 		}
 		p.ready = true
@@ -59,21 +71,39 @@ func (p *testWalkPath) command(s quake.Snapshot, target quake.Vec3, geometry *qu
 		p.next++
 	}
 	if p.next < len(p.route) {
-		return testWalkCommand(s, p.route[p.next].Position, geometry, nav)
+		cmd, reason := testWalkDiagnostic(s, p.route[p.next].Position, geometry, nav)
+		p.reason = reason
+		return cmd
 	}
-	return testWalkCommand(s, target, geometry, nav)
+	cmd, reason := testWalkDiagnostic(s, target, geometry, nav)
+	p.reason = reason
+	return cmd
 }
 
 func testWalkCommand(s quake.Snapshot, target quake.Vec3, geometry *quake.MapInfo, nav *quake.Navigator) quake.UserCmd {
+	cmd, _ := testWalkDiagnostic(s, target, geometry, nav)
+	return cmd
+}
+
+func testWalkDiagnostic(s quake.Snapshot, target quake.Vec3, geometry *quake.MapInfo, nav *quake.Navigator) (quake.UserCmd, string) {
 	cmd := quake.UserCmd{}
-	if s.Health <= 0 || !s.OnGround || geometry == nil || !geometry.MovementComplete() {
-		return cmd
+	if s.Health <= 0 {
+		return cmd, "actor_dead"
+	}
+	if !s.OnGround {
+		return cmd, "not_grounded"
+	}
+	if geometry == nil || !geometry.MovementComplete() {
+		return cmd, "geometry_unavailable"
 	}
 	dx, dy := target[0]-s.Self[0], target[1]-s.Self[1]
 	distance := math.Hypot(dx, dy)
-	if distance <= 12 || geometry.GroundMoveHazardStep(nav, s.Self, dx, dy, math.Min(30, distance)) != "" {
-		return cmd
+	if distance <= 12 {
+		return cmd, "within_horizontal_tolerance"
+	}
+	if reason := geometry.GroundMoveHazardStep(nav, s.Self, dx, dy, math.Min(30, distance)); reason != "" {
+		return cmd, reason
 	}
 	cmd.Pitch = -s.DeltaAngles[0]
-	return worldMove(cmd, s, dx, dy, math.Min(300, distance*10), false)
+	return worldMove(cmd, s, dx, dy, math.Min(300, distance*10), false), ""
 }

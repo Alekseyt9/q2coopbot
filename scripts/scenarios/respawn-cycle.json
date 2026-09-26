@@ -1,0 +1,19 @@
+{
+  "version":1,
+  "name":"base2-two-actor-respawns",
+  "map":"base2",
+  "start_frame":40,
+  "game_frames":260,
+  "actor_origin":[320,1940,-144],
+  "bot_origin":[194,1940,-144],
+  "expect":{"contact_losses":2,"reacquisitions":2,"follow_resumptions":2,"invariants":["visible_contact_clears_search","respawned_actor_followed"]},
+  "steps":[
+    {"id":"initial-grace","action":"wait","frames":30},
+    {"id":"respawn-1","action":"respawn_cycle","timeout_frames":40},
+    {"id":"return-1","action":"place","target":[400,1840,-144],"timeout_frames":8},
+    {"id":"second-grace","action":"wait","frames":55},
+    {"id":"respawn-2","action":"respawn_cycle","timeout_frames":40},
+    {"id":"return-2","action":"place","target":[194,1940,-144],"timeout_frames":8},
+    {"id":"settle","action":"wait","frames":10}
+  ]
+}

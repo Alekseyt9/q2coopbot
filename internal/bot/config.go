@@ -36,6 +36,8 @@ type ConfigFile struct {
 		StopFile   string `json:"stop_file"`
 	} `json:"output"`
 	Test struct {
+		ScenarioResult               string `json:"scenario_result"`
+		ScenarioTailFrames           int    `json:"scenario_tail_frames"`
 		Scenario                     string `json:"scenario"`
 		DisableSearch                bool   `json:"disable_search"`
 		DisableProbe                 bool   `json:"disable_probe"`
@@ -121,6 +123,8 @@ func LoadConfig(path string) (Config, error) {
 	cfg.GameDir, cfg.AASDir = resolve(file.Client.GameDir), resolve(file.Client.AASDir)
 	cfg.WorldFile, cfg.TracePath, cfg.StopFile = resolve(file.Output.WorldJSON), resolve(file.Output.TraceJSONL), resolve(file.Output.StopFile)
 	cfg.FramePaced, cfg.GameFrames = file.Run.FramePaced, file.Run.GameFrames
+	cfg.TestScenarioResult = resolve(file.Test.ScenarioResult)
+	cfg.TestScenarioTailFrames = file.Test.ScenarioTailFrames
 	if file.Run.Duration != "" {
 		cfg.Duration, err = time.ParseDuration(file.Run.Duration)
 		if err != nil || cfg.Duration < 0 {

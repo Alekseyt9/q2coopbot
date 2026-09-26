@@ -34,6 +34,7 @@ param(
     [switch]$HiddenPlayerSoundTrial,
     [string]$SearchFixture = '',
     [string]$ActorScenario = '',
+    [int]$ScenarioTailFrames = 0,
     [switch]$SearchWaitBaseline,
     [switch]$SearchApproachOnly,
     [switch]$SearchSynchronizedSetup,
@@ -43,6 +44,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+if ($ScenarioTailFrames -ne 0 -and (-not $ActorScenario -or $ScenarioTailFrames -lt 2 -or $ScenarioTailFrames -gt 1000)) { throw 'Scenario tail requires an actor scenario and 2..1000 frames.' }
 $fixture = $null
 $actorScenarioDefinition = $null
 if ($ActorScenario) {
@@ -185,6 +187,8 @@ foreach ($scale in $Timescales) {
     $runPort = $Port + $index
     if (Get-NetUDPEndpoint -LocalPort $runPort -ErrorAction SilentlyContinue) { throw "UDP port $runPort is in use." }
     $name = "scale-$scale-port-$runPort"
+    $scenarioResultPath = Join-Path $OutputRoot "$name-scenario-completion.json"
+    if ($ScenarioTailFrames -and (Test-Path -LiteralPath $scenarioResultPath)) {throw 'Scenario completion already exists; use a fresh output directory.'}
     $stdout = Join-Path $OutputRoot "$name-server.log"
     $stderr = Join-Path $OutputRoot "$name-server.err.log"
     $humanLog = Join-Path $OutputRoot "$name-human.log"
@@ -280,6 +284,7 @@ foreach ($scale in $Timescales) {
         if ($actorScenarioDefinition) {
             $humanConfig.output.trace_jsonl = $humanTracePath
             $humanConfig.test.scenario = $ActorScenario
+            if ($ScenarioTailFrames) { $humanConfig.test.scenario_result = $scenarioResultPath }
             $humanConfig.test.teleport_map = $actorScenarioDefinition.map
             $humanConfig.test.teleport = ($actorScenarioDefinition.actor_origin | ForEach-Object {([double]$_).ToString([cultureinfo]::InvariantCulture)}) -join ','
         }
@@ -360,6 +365,7 @@ foreach ($scale in $Timescales) {
             $botConfig.test.teleport = ($actorScenarioDefinition.bot_origin | ForEach-Object {([double]$_).ToString([cultureinfo]::InvariantCulture)}) -join ','
             $botConfig.test.scenario_frame_origin = $actorScenarioDefinition.start_frame
             $botConfig.test.setup_hold_frames = 1
+            if ($ScenarioTailFrames) { $botConfig.test.scenario_result=$scenarioResultPath; $botConfig.test.scenario_tail_frames=$ScenarioTailFrames }
         }
         if ($SearchSynchronizedSetup) {
             $botConfig.test.scenario_frame_origin = 40
@@ -387,6 +393,17 @@ foreach ($scale in $Timescales) {
         if ($LASTEXITCODE -ne 0) { throw "Go bot failed: $botLog" }
         $final = Get-Content -LiteralPath $botLog | Select-String 'finished connected=' | Select-Object -Last 1
         if (-not $final) { throw "Go bot did not finish: $botLog" }
+        $earlyStop = $false
+        $stopEvidence = Get-Content -LiteralPath $botLog | Select-String 'scenario_stop_frame=(\d+) scenario_terminal_frame=(\d+)' | Select-Object -Last 1
+        if ($stopEvidence) {
+            if (-not $ScenarioTailFrames) {throw 'Unexpected early scenario stop.'}
+            $completion = Get-Content -LiteralPath $scenarioResultPath -Raw | ConvertFrom-Json
+            $match=$stopEvidence.Matches[0]
+            if ([int]$match.Groups[2].Value -ne $completion.end_frame -or [int]$match.Groups[1].Value -lt $completion.end_frame+$ScenarioTailFrames) {throw 'Scenario stop did not cover required tail.'}
+            $lastBotRow=Get-Content -LiteralPath $tracePath -Tail 1 | ConvertFrom-Json
+            if ($lastBotRow.frame -ne [int]$match.Groups[1].Value -or $lastBotRow.map -ne $completion.map -or $lastBotRow.spawncount -ne $completion.generation) {throw 'Scenario completion does not match final bot trace.'}
+            $earlyStop=$true
+        }
         $fields = @{}
         foreach ($key in @('game_frames', 'frame_gaps', 'server_suppressed', 'game_fps', 'wall_s', 'decode_errors')) {
             if ($final.Line -notmatch "\b$key=([0-9.]+)") { throw "Missing $key in $botLog" }
@@ -914,6 +931,8 @@ foreach ($scale in $Timescales) {
             transition_requested = [bool]$TransitionMap; transition_observed = $TransitionMap -and $observedMaps.Count -ge 2 -and $observedMaps[0] -eq $Map -and $observedMaps[$observedMaps.Count - 1] -eq $TransitionMap
             transition_timeout = $transitionTimedOut
             game_frames = [int]$fields.game_frames
+            scenario_early_stop = $earlyStop
+            scenario_tail_frames = $ScenarioTailFrames
             frame_gaps = [int]$fields.frame_gaps; server_suppressed = [int]$fields.server_suppressed
             game_fps = [double]::Parse($fields.game_fps, [cultureinfo]::InvariantCulture)
             wall_seconds = [double]::Parse($fields.wall_s, [cultureinfo]::InvariantCulture)
@@ -1047,7 +1066,7 @@ if ($RequireTransitionAAS -and @($results | Where-Object {
 }).Count -gt 0) {
     throw "Transition map AAS route was not ready: $summary"
 }
-if (@($results | Where-Object { $_.game_frames -lt $GameFrames -or $_.frame_gaps -gt 0 -or $_.decode_errors -gt 0 -or -not $_.teammate_seen }).Count -gt 0) {
+if (@($results | Where-Object { ($_.game_frames -lt $GameFrames -and -not $_.scenario_early_stop) -or $_.frame_gaps -gt 0 -or $_.decode_errors -gt 0 -or -not $_.teammate_seen }).Count -gt 0) {
     throw "Speed trial failed observation gate: $summary"
 }
 if ($SynchronizedStart -and @($results | Where-Object { $_.matched_applied_commands -ne $_.sent_commands -or $_.applied_new_commands -ne $_.sent_commands }).Count -gt 0) {

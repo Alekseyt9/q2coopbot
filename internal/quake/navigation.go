@@ -182,6 +182,33 @@ func (n *Navigator) AreaFor(p Vec3) int {
 	return -1
 }
 
+// ExactAreaFor validates a fixture point without the legacy nearest-area
+// fallback used by routing. A BSP-backed AAS uses its authoritative area tree.
+func (n *Navigator) ExactAreaFor(p Vec3) int {
+	for _, v := range p {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return -1
+		}
+	}
+	if n.areaTree != nil {
+		return n.areaTree.areaFor(p)
+	}
+	for i := 1; i < len(n.Areas); i++ {
+		a := n.Areas[i]
+		inside := true
+		for j := range p {
+			if p[j] < a.Min[j] || p[j] > a.Max[j] {
+				inside = false
+				break
+			}
+		}
+		if inside {
+			return i
+		}
+	}
+	return -1
+}
+
 // GroundedNear only trusts areas that actually contain the point (allowing
 // small BSP/AAS rounding differences), unlike AreaFor's route fallback.
 func (n *Navigator) GroundedNear(p Vec3) bool {

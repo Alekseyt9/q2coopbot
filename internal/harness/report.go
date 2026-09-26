@@ -10,39 +10,59 @@ import (
 )
 
 type Trace struct {
-	Map        string        `json:"map"`
-	Generation int           `json:"spawncount"`
-	Frame      int           `json:"frame"`
-	Teammate   *quake.Vec3   `json:"teammate"`
-	Goal       string        `json:"goal"`
-	Command    quake.UserCmd `json:"sent_command"`
-	Scenario   *Status       `json:"scenario"`
+	SelfEntity        int             `json:"self_entity"`
+	TeammateEntity    int             `json:"teammate_entity,omitempty"`
+	Health            *int16          `json:"health,omitempty"`
+	OnGround          *bool           `json:"on_ground,omitempty"`
+	Enemies           []ObservedEnemy `json:"enemies,omitempty"`
+	Self              *quake.Vec3     `json:"self,omitempty"`
+	TeammateAgeFrames *int            `json:"teammate_age_frames,omitempty"`
+	SearchTarget      *quake.Vec3     `json:"search_target,omitempty"`
+	SearchAttempt     *SearchAttempt  `json:"search_attempt,omitempty"`
+	Map               string          `json:"map"`
+	Generation        int             `json:"spawncount"`
+	Frame             int             `json:"frame"`
+	Teammate          *quake.Vec3     `json:"teammate"`
+	Goal              string          `json:"goal"`
+	Command           quake.UserCmd   `json:"sent_command"`
+	Scenario          *Status         `json:"scenario"`
 }
 type Event struct {
 	Frame int    `json:"frame"`
 	Kind  string `json:"kind"`
 }
 type Report struct {
-	Metrics Metrics `json:"metrics"`
-	State             string  `json:"state"`
-	Reason            string  `json:"reason,omitempty"`
-	Frame             int     `json:"first_problem_frame,omitempty"`
-	Events            []Event `json:"events"`
-	Losses            int     `json:"contact_losses"`
-	Reacquisitions    int     `json:"reacquisitions"`
-	FollowResumptions int     `json:"follow_resumptions"`
-	CompletedSteps    int     `json:"completed_steps"`
+	Accepted          bool           `json:"accepted"`
+	Expectation       string         `json:"expectation"`
+	FailedStep        string         `json:"failed_step,omitempty"`
+	Checks            []Check        `json:"checks,omitempty"`
+	Context           []ContextFrame `json:"problem_context,omitempty"`
+	Metrics           Metrics        `json:"metrics"`
+	State             string         `json:"state"`
+	Reason            string         `json:"reason,omitempty"`
+	Frame             int            `json:"first_problem_frame,omitempty"`
+	Events            []Event        `json:"events"`
+	Losses            int            `json:"contact_losses"`
+	Reacquisitions    int            `json:"reacquisitions"`
+	FollowResumptions int            `json:"follow_resumptions"`
+	CompletedSteps    int            `json:"completed_steps"`
 }
 
 // Durations use server frames (10 Hz), independent of wall-clock acceleration.
 type Metrics struct {
-	Frames int `json:"analyzed_frames"`
-	VisibleFrames int `json:"visible_frames"`
-	MovingCommandFrames int `json:"moving_command_frames"`
-	GoalFrames map[string]int `json:"goal_frames"`
-	RecoveryFrames []int `json:"contact_recovery_frames"`
-	FollowDelayFrames []int `json:"follow_delay_frames"`
-	GameSeconds float64 `json:"game_seconds"`
+	CompanionLifecycle  []CompanionCycle     `json:"companion_lifecycle,omitempty"`
+	ActorLifecycle      []Event              `json:"actor_lifecycle,omitempty"`
+	ActorDiagnostics    *MovementDiagnostics `json:"actor_diagnostics"`
+	WalkSteps           []WalkMetrics        `json:"walk_steps,omitempty"`
+	ActorMotion         *MotionMetrics       `json:"actor_motion"`
+	BotMotion           *MotionMetrics       `json:"bot_motion"`
+	Frames              int                  `json:"analyzed_frames"`
+	VisibleFrames       int                  `json:"visible_frames"`
+	MovingCommandFrames int                  `json:"moving_command_frames"`
+	GoalFrames          map[string]int       `json:"goal_frames"`
+	RecoveryFrames      []int                `json:"contact_recovery_frames"`
+	FollowDelayFrames   []int                `json:"follow_delay_frames"`
+	GameSeconds         float64              `json:"game_seconds"`
 }
 
 func ReadTrace(path string) ([]Trace, error) {
@@ -64,16 +84,38 @@ func ReadTrace(path string) ([]Trace, error) {
 	return rows, s.Err()
 }
 func Analyze(s Scenario, actor, bot []Trace) Report {
+	r := analyze(s, actor, bot)
+	r.Accepted = r.State == "passed"
+	r.Expectation = "normal_completion"
+	if f := s.Expect.Failure; f != nil {
+		r.Accepted = r.State == "fixture_failed" && r.Reason == f.Reason && r.FailedStep == f.StepID && r.Frame >= f.MinFrame && r.Frame <= f.MaxFrame && r.Metrics.Frames > 0
+		r.Expectation = "expected_failure_mismatch"
+		if r.Accepted {
+			r.Accepted = matchesStallEvidence(f, r.Metrics.ActorDiagnostics)
+		}
+		if r.Accepted {
+			r.Expectation = "expected_failure_matched"
+		}
+	}
+	return r
+}
+
+func analyze(s Scenario, actor, bot []Trace) Report {
 	r := Report{State: "fixture_failed", Reason: "scenario_incomplete"}
 	end := 0
+	fixtureFailed := false
 	for _, row := range actor {
 		if row.Scenario == nil {
 			continue
 		}
 		if row.Scenario.State == "failed" {
+			r.FailedStep = row.Scenario.StepID
 			r.Frame = row.Frame
 			r.Reason = row.Scenario.Reason
-			return r
+			end = row.Frame
+			r.CompletedSteps = row.Scenario.CompletedSteps
+			fixtureFailed = true
+			break
 		}
 		if row.Scenario.State == "completed" {
 			end = row.Scenario.EndFrame
@@ -81,7 +123,7 @@ func Analyze(s Scenario, actor, bot []Trace) Report {
 			break
 		}
 	}
-	if end < s.StartFrame || r.CompletedSteps != len(s.Steps) {
+	if end < s.StartFrame || end > s.GameFrames || !fixtureFailed && r.CompletedSteps != len(s.Steps) {
 		return r
 	}
 	filter := func(rows []Trace) ([]Trace, error) {
@@ -117,14 +159,26 @@ func Analyze(s Scenario, actor, bot []Trace) Report {
 		r.State, r.Reason = "trace_invalid", "actor/bot generation mismatch"
 		return r
 	}
-	r.Metrics = Metrics{Frames: len(rows), GameSeconds: float64(len(rows))/10, GoalFrames: map[string]int{}, RecoveryFrames: []int{}, FollowDelayFrames: []int{}}
+	r.Metrics = Metrics{Frames: len(rows), GameSeconds: float64(len(rows)) / 10, GoalFrames: map[string]int{}, RecoveryFrames: []int{}, FollowDelayFrames: []int{}}
+	r.Metrics.ActorMotion = measureMotion(s, actorRows, true)
+	if r.Metrics.ActorMotion != nil {
+		r.Metrics.ActorDiagnostics = diagnoseMovement(s, actorRows)
+	}
+	r.Metrics.BotMotion = measureMotion(s, rows, false)
+	r.Metrics.WalkSteps = measureWalks(s, actorRows)
+	r.Metrics.ActorLifecycle = actorLifecycle(actorRows)
+	r.Metrics.CompanionLifecycle = companionLifecycle(actorRows, rows)
 	lossFrame, recoveryFrame := 0, 0
 	seen, lost, awaitFollow := false, false, false
 	for _, row := range rows {
 		visible := row.Teammate != nil
 		r.Metrics.GoalFrames[row.Goal]++
-		if visible { r.Metrics.VisibleFrames++ }
-		if row.Command.Forward != 0 || row.Command.Side != 0 { r.Metrics.MovingCommandFrames++ }
+		if visible {
+			r.Metrics.VisibleFrames++
+		}
+		if row.Command.Forward != 0 || row.Command.Side != 0 {
+			r.Metrics.MovingCommandFrames++
+		}
 		if seen && !visible && !lost {
 			lost = true
 			awaitFollow = false
@@ -150,8 +204,35 @@ func Analyze(s Scenario, actor, bot []Trace) Report {
 			r.Events = append(r.Events, Event{row.Frame, "following_resumed"})
 		}
 	}
+	if fixtureFailed {
+		if !checkLifecycle(s, actorRows, rows, &r) {
+			return r
+		}
+		addContext(&r, actorRows, rows, len(rows)-1)
+		return r
+	}
 	r.State = "passed"
 	r.Reason = ""
+	for _, step := range s.Steps {
+		if step.Action == "respawn_cycle" {
+			var window []Trace
+			for _, row := range actorRows {
+				if row.Scenario != nil && row.Scenario.StepID == step.ID {
+					window = append(window, row)
+				}
+			}
+			events := actorLifecycle(window)
+			if len(events) < 2 || events[0].Kind != "actor_died" || events[1].Kind != "actor_respawned" {
+				r.State = "trace_invalid"
+				r.Reason = "respawn lifecycle evidence missing: " + step.ID
+				r.Frame = end
+				return r
+			}
+		}
+	}
+	if !checkLifecycle(s, actorRows, rows, &r) {
+		return r
+	}
 	if r.Losses < s.Expect.ContactLosses || r.Reacquisitions < s.Expect.Reacquisitions || r.FollowResumptions < s.Expect.FollowResumptions {
 		r.State = "behavior_failed"
 		r.Reason = "contact cycle expectations not met"

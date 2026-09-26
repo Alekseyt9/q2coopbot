@@ -31,9 +31,20 @@ type Scenario struct {
 	Steps       []Step       `json:"steps"`
 }
 type Expectations struct {
-	ContactLosses     int `json:"contact_losses"`
-	Reacquisitions    int `json:"reacquisitions"`
-	FollowResumptions int `json:"follow_resumptions"`
+	Failure           *ExpectedFailure `json:"failure,omitempty"`
+	Invariants        []string         `json:"invariants,omitempty"`
+	ContactLosses     int              `json:"contact_losses"`
+	Reacquisitions    int              `json:"reacquisitions"`
+	FollowResumptions int              `json:"follow_resumptions"`
+}
+
+type ExpectedFailure struct {
+	MinStallFrames int    `json:"min_stall_frames,omitempty"`
+	NearbyKind     string `json:"nearby_kind,omitempty"`
+	Reason         string `json:"reason"`
+	StepID         string `json:"step_id"`
+	MinFrame       int    `json:"min_frame"`
+	MaxFrame       int    `json:"max_frame"`
 }
 
 func Load(path string) (Scenario, error) {
@@ -55,7 +66,16 @@ func Load(path string) (Scenario, error) {
 }
 
 func (s Scenario) Validate() error {
-	if s.StartFrame > s.GameFrames { return fmt.Errorf("start exceeds game_frames") }
+	seenChecks := map[string]bool{}
+	for _, name := range s.Expect.Invariants {
+		if !knownInvariant(name) || seenChecks[name] {
+			return fmt.Errorf("unknown or duplicate invariant %q", name)
+		}
+		seenChecks[name] = true
+	}
+	if s.StartFrame > s.GameFrames {
+		return fmt.Errorf("start exceeds game_frames")
+	}
 	if s.Expect.ContactLosses < 0 || s.Expect.Reacquisitions < 0 || s.Expect.FollowResumptions < 0 {
 		return fmt.Errorf("negative expectation")
 	}
@@ -81,6 +101,11 @@ func (s Scenario) Validate() error {
 		}
 		ids[step.ID] = true
 		switch step.Action {
+		case "respawn_cycle":
+			if step.Timeout < 1 || step.Timeout > 1000 || step.Target != nil || step.Frames != 0 || step.Route {
+				return fmt.Errorf("invalid respawn cycle %s", step.ID)
+			}
+			budget += step.Timeout + 1
 		case "wait":
 			if step.Frames < 1 || step.Frames > 1000 || step.Timeout != 0 || step.Target != nil || step.Route {
 				return fmt.Errorf("invalid wait step %s", step.ID)
@@ -98,10 +123,35 @@ func (s Scenario) Validate() error {
 	if budget > s.GameFrames {
 		return fmt.Errorf("scenario deadlines exceed game_frames")
 	}
+	if f := s.Expect.Failure; f != nil {
+		if f.MinStallFrames != 0 && (f.MinStallFrames < 3 || f.MinStallFrames > s.GameFrames) || f.NearbyKind != "" && f.NearbyKind != "teammate" && f.NearbyKind != "enemy" || f.NearbyKind != "" && f.MinStallFrames < 3 {
+			return fmt.Errorf("invalid expected stall evidence")
+		}
+		if f.MinStallFrames > 0 && f.Reason != "step_timeout" {
+			return fmt.Errorf("stall evidence requires timeout")
+		}
+		if f.Reason != "step_timeout" && !routeFailure(f.Reason) || !ids[f.StepID] || f.MinFrame < s.StartFrame || f.MaxFrame < f.MinFrame || f.MaxFrame > s.GameFrames {
+			return fmt.Errorf("invalid expected failure")
+		}
+		for _, step := range s.Steps {
+			if step.ID == f.StepID && routeFailure(f.Reason) && (step.Action != "walk" || !step.Route) {
+				return fmt.Errorf("route failure requires routed walking")
+			}
+			if step.ID == f.StepID && step.Timeout == 0 {
+				return fmt.Errorf("expected timeout requires a timed step")
+			}
+		}
+		if s.Expect.ContactLosses != 0 || s.Expect.Reacquisitions != 0 || s.Expect.FollowResumptions != 0 {
+			return fmt.Errorf("expected failure cannot include contact cycle expectations")
+		}
+	}
 	return nil
 }
 
 type Status struct {
+	DeathFrame     int    `json:"death_frame,omitempty"`
+	RespawnFrame   int    `json:"respawn_frame,omitempty"`
+	MovementReason string `json:"movement_reason,omitempty"`
 	State          string `json:"state"`
 	StepID         string `json:"step_id,omitempty"`
 	StepIndex      int    `json:"step_index"`
@@ -110,6 +160,22 @@ type Status struct {
 	EndFrame       int    `json:"end_frame,omitempty"`
 	Reason         string `json:"reason,omitempty"`
 }
+
+func routeFailure(reason string) bool {
+	switch reason {
+	case "aas_unavailable", "route_target_outside_aas", "route_start_outside_aas", "route_unavailable":
+		return true
+	}
+	return false
+}
+
+// RejectRoute records a failed preflight at the current step before movement.
+func (r *Runner) RejectRoute(reason string) {
+	if r.Status.State == "running" && routeFailure(reason) {
+		r.fail(r.lastFrame, reason)
+	}
+}
+
 type Input struct {
 	Frame, Generation int
 	Map               string
@@ -118,9 +184,10 @@ type Input struct {
 	Health            int16
 }
 type Decision struct {
-	Place, Walk *quake.Vec3
-	Route       bool
-	NewStep     bool
+	Kill, Respawn bool
+	Place, Walk   *quake.Vec3
+	Route         bool
+	NewStep       bool
 }
 type Runner struct {
 	Scenario              Scenario
@@ -164,13 +231,13 @@ func (r *Runner) Tick(in Input) Decision {
 		}
 	}
 	r.lastFrame = in.Frame
-	if in.Health <= 0 {
-		return r.fail(in.Frame, "actor_dead")
-	}
 	if r.enter {
 		r.Status.StepIndex = r.Status.CompletedSteps
 	}
 	step := r.Scenario.Steps[r.Status.StepIndex]
+	if in.Health <= 0 && (step.Action != "respawn_cycle" || r.enter) {
+		return r.fail(in.Frame, "actor_dead")
+	}
 	d := Decision{}
 	if r.enter {
 		r.enter = false
@@ -180,9 +247,25 @@ func (r *Runner) Tick(in Input) Decision {
 		if step.Action == "place" {
 			d.Place = step.Target
 		}
+		r.Status.DeathFrame = 0
+		r.Status.RespawnFrame = 0
+		if step.Action == "respawn_cycle" {
+			d.Kill = true
+		}
 	}
 	elapsed := in.Frame - r.Status.StepStart
 	done := step.Action == "wait" && elapsed >= step.Frames
+	if step.Action == "respawn_cycle" {
+		if in.Health <= 0 {
+			if r.Status.DeathFrame == 0 {
+				r.Status.DeathFrame = in.Frame
+			}
+			d.Respawn = (in.Frame-r.Status.DeathFrame)%2 == 0
+		} else if r.Status.DeathFrame > 0 {
+			r.Status.RespawnFrame = in.Frame
+			done = true
+		}
+	}
 	if step.Target != nil && elapsed > 0 {
 		distance := math.Sqrt(math.Pow(in.Self[0]-step.Target[0], 2) + math.Pow(in.Self[1]-step.Target[1], 2) + math.Pow(in.Self[2]-step.Target[2], 2))
 		done = distance <= 16 && (step.Action == "place" || in.OnGround)

@@ -20,6 +20,8 @@ import (
 
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
+	TestScenarioResult                  string
+	TestScenarioTailFrames              int
 	TestScenario                        string
 	TestDisableProbe                    bool
 	TestScenarioFrameOrigin             int
@@ -84,6 +86,15 @@ func transitionMapArgument(destination, previous string) (string, error) {
 }
 
 func Run(ctx context.Context, cfg Config) error {
+	if cfg.TestScenario != "" && cfg.TestScenarioTailFrames != 0 {
+		return fmt.Errorf("scenario actor publishes completion; tail frames belong to the observing client")
+	}
+	if cfg.TestScenarioResult != "" && (!cfg.FramePaced || cfg.TestScenario == "" && (cfg.TestScenarioTailFrames < 2 || cfg.TestScenarioTailFrames > 1000)) {
+		return fmt.Errorf("scenario_result requires frame pacing and actor scenario or 2..1000 tail frames")
+	}
+	if cfg.TestScenarioResult == "" && cfg.TestScenarioTailFrames != 0 {
+		return fmt.Errorf("scenario_tail_frames requires scenario_result")
+	}
 	var scenario *harness.Runner
 	if cfg.TestScenario != "" {
 		if !cfg.FramePaced || !cfg.Idle || cfg.TestTeleport == "" || cfg.TestTeleportAfter != "" || cfg.TestWalkTarget != "" || cfg.TestLineCross || cfg.TestJumpAfterTeleportFrames != 0 || cfg.TestJumpAgainAfterTeleportFrames != 0 || cfg.TestHoldPosition || cfg.TestGapFrames != 0 || cfg.TestSpawnSoldier != "" {
@@ -234,6 +245,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer conn.Close()
 	client := &Client{
+		scenarioResultPath: cfg.TestScenarioResult, scenarioTailFrames: cfg.TestScenarioTailFrames,
 		scenario:                scenario,
 		testScenarioFrameOrigin: cfg.TestScenarioFrameOrigin,
 		testSetupHoldFrames:     cfg.TestSetupHoldFrames,
