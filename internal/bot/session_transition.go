@@ -2,6 +2,7 @@ package bot
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,7 +11,7 @@ import (
 func writeSessionSignal(path string, r sessionReady) error {
 	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("stale session transition signal")
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -51,7 +52,7 @@ func (c *Client) sessionTransitionBarrier() (pause, ready bool, err error) {
 			c.sessionTransitionRequested = true
 		}
 		ack, err := readSessionReady(path("observer"))
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return true, false, nil
 		}
 		if err != nil {
@@ -63,7 +64,7 @@ func (c *Client) sessionTransitionBarrier() (pause, ready bool, err error) {
 		return true, c.latestFrame > c.lastMoveFrame, nil
 	}
 	request, err := readSessionReady(path("actor"))
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return false, false, nil
 	}
 	if err != nil {
@@ -84,7 +85,7 @@ func (c *Client) sessionTransitionBarrier() (pause, ready bool, err error) {
 	}
 	if c.sessionTransitionAcked && c.sessionPhase+1 < len(c.sessionDefinition.Phases) && c.sessionDefinition.Phases[c.sessionPhase+1].Entry == "reconnect" {
 		release, err := readSessionReady(path("release"))
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return true, false, nil
 		}
 		if err != nil {

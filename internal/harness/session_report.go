@@ -134,14 +134,15 @@ func AnalyzeSession(s Session, actor, bot []Trace) SessionReport {
 		r.Reason = "session_incomplete"
 		return r
 	}
-	if len(s.Invariants) > 0 {
-		r.TransitionChecks = checkSearchTransitions(bot)
-		if len(r.TransitionChecks) == 0 {
+	for _, name := range s.Invariants {
+		checks := checkSearchBoundary(bot, name)
+		r.TransitionChecks = append(r.TransitionChecks, checks...)
+		if len(checks) == 0 {
 			r.State = "behavior_failed"
-			r.Reason = "invariant_not_exercised: search_reset_on_transition"
+			r.Reason = "invariant_not_exercised: " + name
 			return r
 		}
-		for _, check := range r.TransitionChecks {
+		for _, check := range checks {
 			if !check.Passed {
 				r.State = "behavior_failed"
 				r.Reason = "search_state_after_transition"

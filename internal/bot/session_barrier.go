@@ -48,7 +48,7 @@ func (c *Client) sessionBarrier(now time.Time) error {
 		}
 		if _, err := os.Stat(path(role)); err == nil {
 			return fmt.Errorf("stale session readiness file: use a fresh run directory")
-		} else if !os.IsNotExist(err) {
+		} else if !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 		data, _ := json.Marshal(sessionReady{Map: c.sessionMap, Generation: c.spawncount, Phase: c.sessionPhase, Frame: c.latestFrame, Role: role})
@@ -62,14 +62,14 @@ func (c *Client) sessionBarrier(now time.Time) error {
 		c.sessionReadySent = true
 	}
 	a, err := readSessionReady(path(role))
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
 	b, err := readSessionReady(path(other))
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {

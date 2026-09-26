@@ -51,8 +51,12 @@ func LoadSession(path string) (Session, error) {
 }
 
 func (s Session) Validate() error {
-	if len(s.Invariants) > 1 || len(s.Invariants) == 1 && s.Invariants[0] != "search_reset_on_transition" {
-		return fmt.Errorf("unknown or duplicate session invariant")
+	seen := map[string]bool{}
+	for _, name := range s.Invariants {
+		if seen[name] || name != "search_reset_on_transition" && name != "search_reset_on_reconnect" {
+			return fmt.Errorf("unknown or duplicate session invariant")
+		}
+		seen[name] = true
 	}
 	if s.Version != 1 || s.Name == "" || len(s.Phases) < 2 || len(s.Phases) > 16 || s.TransitionTimeoutMS < 100 || s.TransitionTimeoutMS > 120000 {
 		return fmt.Errorf("invalid session header")

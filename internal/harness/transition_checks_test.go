@@ -5,6 +5,27 @@ import (
 	"testing"
 )
 
+func TestReconnectSearchCheckCannotBeSatisfiedByMapChange(t *testing.T) {
+	rows := []Trace{{Map: "base2", Generation: 7, Connection: 1, Frame: 50, Goal: "probe_last_seen"}, {Map: "base2", Generation: 7, Connection: 2, Frame: 80, Goal: "wait_for_teammate"}}
+	checks := checkSearchBoundary(rows, "search_reset_on_reconnect")
+	if len(checks) != 1 || !checks[0].Passed || checks[0].After.Connection != 2 {
+		t.Fatal(checks)
+	}
+	rows[1].SearchAttempt = &SearchAttempt{State: "completed"}
+	if checkSearchBoundary(rows, "search_reset_on_reconnect")[0].Passed {
+		t.Fatal("old attempt survived reconnect")
+	}
+	rows[1].Generation = 8
+	if len(checkSearchBoundary(rows, "search_reset_on_reconnect")) != 0 {
+		t.Fatal("map transition substituted for reconnect")
+	}
+	rows[1].Generation = 7
+	rows[0].Goal = "wait_for_teammate"
+	if len(checkSearchBoundary(rows, "search_reset_on_reconnect")) != 0 {
+		t.Fatal("unexercised search accepted")
+	}
+}
+
 func TestSearchTransitionRequiresExerciseAndClearNewDecision(t *testing.T) {
 	s, a, b := sessionReportTraces()
 	s.Invariants = []string{"search_reset_on_transition"}

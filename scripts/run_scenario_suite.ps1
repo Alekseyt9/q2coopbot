@@ -68,16 +68,18 @@ foreach ($definition in $definitions) {
 $worker = {
     param($task,$runner,$client,$reporter)
     $ErrorActionPreference = 'Stop'
-    $result = [ordered]@{ state='infrastructure_failed'; port=$task.port; timescale=$task.scale; repeat=$task.repeat; directory=$task.dir; fixture_fingerprint=$task.fixtureFingerprint; started_utc=[datetime]::UtcNow.ToString('o') }
+    $result = [ordered]@{ state='infrastructure_failed'; accepted=$false; port=$task.port; timescale=$task.scale; repeat=$task.repeat; directory=$task.dir; fixture_fingerprint=$task.fixtureFingerprint; started_utc=[datetime]::UtcNow.ToString('o') }
     $result.kind=$task.kind
     try {
         if($task.kind -eq 'session') {
             $sessionRunner=Join-Path (Split-Path -Parent $runner) 'run_session_trial.ps1'
-            & $sessionRunner -Config $task.sessionConfig -PreparedOutput $task.dir -ClientExe $client -ReporterExe $reporter *> (Join-Path $task.dir 'runner.log')
+            & $sessionRunner -Config $task.sessionConfig -PreparedOutput $task.dir -ClientExe $client -ReporterExe $reporter -ReturnRejectedReport *> (Join-Path $task.dir 'runner.log')
             $reportPath=Join-Path $task.dir 'report.json'
             $report=Get-Content $reportPath -Raw | ConvertFrom-Json
             $result.state=$report.state
             $result.accepted=$report.accepted
+            $result.reason=$report.reason
+            $result.problem_location=$report.problem_location
             $result.expectation='normal_completion'
             $phaseMetrics=[ordered]@{}
             for($phase=0;$phase -lt $report.phases.Count;$phase++) {$phaseMetrics["phase_$phase"]=$report.phases[$phase].report.metrics}
@@ -104,7 +106,7 @@ $worker = {
         $result.speed=[ordered]@{ wall_seconds=$summary.wall_seconds; game_fps=$summary.game_fps; measured_speedup=([double]$summary.game_fps/10); frame_gaps=$summary.frame_gaps; decode_errors=$summary.decode_errors; sent_commands=$summary.sent_commands; matched_applied_commands=$summary.matched_applied_commands }
         $result.report=$reportPath
         }
-    } catch { $result.error=$_.Exception.Message }
+    } catch { $result.state='infrastructure_failed'; $result.accepted=$false; $result.error=$_.Exception.Message }
     $result.finished_utc=[datetime]::UtcNow.ToString('o')
     $result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $task.dir 'result.json') -Encoding utf8
     [pscustomobject]$result

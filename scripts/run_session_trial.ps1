@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$Config,[string]$PreparedOutput,[string]$ClientExe,[string]$ReporterExe)
+param([Parameter(Mandatory)][string]$Config,[string]$PreparedOutput,[string]$ClientExe,[string]$ReporterExe,[switch]$ReturnRejectedReport)
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 $configPath=(Resolve-Path -LiteralPath $Config).Path
@@ -9,6 +9,7 @@ foreach($key in $cfg.PSObject.Properties.Name) {if($key -notin @('session','runt
 $tail=if($null -eq $cfg.tail_frames) {5} else {[int]$cfg.tail_frames}
 if($tail -lt 2 -or $tail -gt 1000) {throw 'Session tail_frames must be 2..1000'}
 if(($PreparedOutput -or $ClientExe -or $ReporterExe) -and -not ($PreparedOutput -and $ClientExe -and $ReporterExe)) {throw 'Prepared run requires output and both prebuilt executables'}
+if($ReturnRejectedReport -and -not $PreparedOutput) {throw 'ReturnRejectedReport is reserved for prepared suite runs'}
 if($cfg.port -lt 1024 -or $cfg.port -gt 65534 -or $cfg.timescale -notin @(1,2)) {throw 'Invalid port/timescale'}
 if(Get-NetUDPEndpoint -LocalPort $cfg.port -ErrorAction SilentlyContinue) {throw 'Session port is occupied'}
 function Resolve-TrialPath([string]$Path) {
@@ -82,10 +83,15 @@ try {
     $reportConfig=Join-Path $out 'report-config.json'
     @{session=$snapshot;actor_trace='actor.jsonl';bot_trace='observer.jsonl';server_log='server.log';output='report.json'} | ConvertTo-Json | Set-Content -LiteralPath $reportConfig -Encoding utf8
     & $reporter --config $reportConfig *> (Join-Path $out 'reporter.log')
-    if($LASTEXITCODE) {throw "Session analysis failed; inspect $out"}
+    $reportExit=$LASTEXITCODE
+    $report=Get-Content -LiteralPath (Join-Path $out 'report.json') -Raw | ConvertFrom-Json
+    if($report.accepted -isnot [bool] -or $report.state -notin @('passed','behavior_failed','fixture_failed','trace_invalid') -or
+        ($report.accepted -and ($reportExit -ne 0 -or $report.state -ne 'passed')) -or
+        (-not $report.accepted -and ($reportExit -ne 1 -or $report.state -eq 'passed'))) {throw 'Invalid session analyzer verdict or exit code'}
     $executionTimer.Stop()
     @{orchestration_wall_seconds=$executionTimer.Elapsed.TotalSeconds;tail_frames=$tail} | ConvertTo-Json | Set-Content (Join-Path $out 'session-timing.json') -Encoding utf8
-    Write-Output "Session accepted: $out"
+    if(-not $report.accepted -and -not $ReturnRejectedReport) {throw "Session analysis rejected: $($report.reason); inspect $out"}
+    Write-Output "Session $($report.state): $out"
 } finally {
     $env:Q2COOPBOT_TEST_RCON=$oldRcon
     foreach($process in @($observer,$actor,$server)) {if($process -and -not $process.HasExited) {Stop-Process -Id $process.Id -ErrorAction SilentlyContinue}}
