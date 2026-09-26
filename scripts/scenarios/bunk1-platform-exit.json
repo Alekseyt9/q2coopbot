@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "bot_origin": [
+    -969,
+    -65.5,
+    232.125
+  ],
+  "map": "bunk1",
+  "bot_invulnerable": true,
+  "expect": {},
+  "start_frame": 40,
+  "name": "bunk1-raised-platform-exit",
+  "actor_origin": [
+    -780,
+    -64,
+    232.125
+  ],
+  "game_frames": 300,
+  "bot_health": 60,
+  "steps": [
+    {
+      "frames": 250,
+      "id": "wait-for-bot",
+      "action": "wait"
+    }
+  ],
+  "map_entry": "start"
+}

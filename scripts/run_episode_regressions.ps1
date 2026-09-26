@@ -68,6 +68,12 @@ try {
                 & (Join-Path $PSScriptRoot 'run_speed_trial.ps1') @args | Out-Host
                 $rows = @(Get-Content (Join-Path $trial "scale-$scale-port-$Port-trace.jsonl") | ForEach-Object { ConvertFrom-Json $_ } | Where-Object map -eq $episode.map)
                 $accept = $episode.acceptance
+				$stageFrame = -1
+				foreach ($stage in $accept.required_elevator_stages) {
+					$match = @($rows | Where-Object { $_.frame -gt $stageFrame -and $_.elevator -eq $stage } | Select-Object -First 1)
+					if (!$match.Count) { throw "Elevator stage not observed in order: $stage" }
+					$stageFrame = $match[0].frame
+				}
 				if ($accept.actor_health_checkpoints) {
 					$actorRows = @(Get-Content (Join-Path $trial "scale-$scale-port-$Port-human-trace.jsonl") | ForEach-Object { ConvertFrom-Json $_ } | Where-Object map -eq $episode.map)
 					$after = -1
@@ -89,7 +95,7 @@ try {
                 $eventFrame = -1; $landed = $false; $followed = !$accept.follow_after_event
                 foreach ($row in $rows) {
                     if ($accept.required_event -and $row.arbitration.limit_reason -eq $accept.required_event -and $row.health -gt 0) { $eventFrame = $row.frame }
-                    $inside = $row.health -gt 0 -and $row.on_ground
+                    $inside = $row.health -gt 0 -and $row.on_ground -and $row.frame -ge $stageFrame
 					if ($accept.min_health) {$inside=$inside -and $row.health -ge $accept.min_health}
 					if ($accept.goal) {$inside=$inside -and $row.goal -eq $accept.goal}
                     for ($axis=0; $axis -lt 3; $axis++) { $inside = $inside -and $row.self[$axis] -ge $accept.min[$axis] -and $row.self[$axis] -le $accept.max[$axis] }

@@ -584,6 +584,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		}
 		return cmd
 	}
+	if exit, active := p.platformExitCommand(cmd); active {
+		return exit
+	}
 	if p.World.Goal != "follow_teammate" && p.World.Goal != "recover_health" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
 		if p.World.Command.LimitReason == "" {
 			p.World.Command.LimitReason = "no_movement_goal"
@@ -612,7 +615,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 	}
 	dx, dy := target[0]-s.Self[0], target[1]-s.Self[1]
 	if s.OnGround && p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, 40) == "no_ground_support" {
-		if p.planGapJump() {
+		if p.planWalkOff() || p.planGapJump() {
 			flight, _ := p.jumpCommand(cmd)
 			return flight
 		}

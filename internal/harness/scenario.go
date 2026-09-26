@@ -20,6 +20,7 @@ type Step struct {
 	Route   bool        `json:"route,omitempty"`
 }
 type Scenario struct {
+	BotReleaseFrame int          `json:"bot_release_frame,omitempty"`
 	ActorHealth     int          `json:"actor_health,omitempty"`
 	BotInvulnerable bool         `json:"bot_invulnerable,omitempty"`
 	BotHealth       int          `json:"bot_health,omitempty"`
@@ -71,6 +72,9 @@ func Load(path string) (Scenario, error) {
 }
 
 func (s Scenario) Validate() error {
+	if s.BotReleaseFrame != 0 && (s.BotReleaseFrame <= s.StartFrame || s.BotReleaseFrame >= s.GameFrames) {
+		return fmt.Errorf("bot_release_frame must be between start_frame and game_frames")
+	}
 	if s.ActorHealth < 0 || s.ActorHealth > 100 {
 		return fmt.Errorf("actor_health must be 0 (default) or 1..100")
 	}
@@ -125,6 +129,11 @@ func (s Scenario) Validate() error {
 		}
 		ids[step.ID] = true
 		switch step.Action {
+		case "push":
+			if step.Target == nil || !finite(*step.Target) || step.Frames < 1 || step.Frames > 100 || step.Timeout != 0 || step.Route {
+				return fmt.Errorf("invalid push step %s", step.ID)
+			}
+			budget += step.Frames + 1
 		case "respawn_cycle":
 			if step.Timeout < 1 || step.Timeout > 1000 || step.Target != nil || step.Frames != 0 || step.Route {
 				return fmt.Errorf("invalid respawn cycle %s", step.ID)
@@ -210,6 +219,7 @@ type Input struct {
 	Health            int16
 }
 type Decision struct {
+	Push          *quake.Vec3
 	Kill, Respawn bool
 	Place, Walk   *quake.Vec3
 	Route         bool
@@ -280,7 +290,7 @@ func (r *Runner) Tick(in Input) Decision {
 		}
 	}
 	elapsed := in.Frame - r.Status.StepStart
-	done := step.Action == "wait" && elapsed >= step.Frames
+	done := (step.Action == "wait" || step.Action == "push") && elapsed >= step.Frames
 	if step.Action == "respawn_cycle" {
 		if in.Health <= 0 {
 			if r.Status.DeathFrame == 0 {
@@ -292,7 +302,7 @@ func (r *Runner) Tick(in Input) Decision {
 			done = true
 		}
 	}
-	if step.Target != nil && elapsed > 0 {
+	if (step.Action == "walk" || step.Action == "place") && step.Target != nil && elapsed > 0 {
 		distance := math.Sqrt(math.Pow(in.Self[0]-step.Target[0], 2) + math.Pow(in.Self[1]-step.Target[1], 2) + math.Pow(in.Self[2]-step.Target[2], 2))
 		done = distance <= 16 && (step.Action == "place" || in.OnGround)
 	}
@@ -312,6 +322,9 @@ func (r *Runner) Tick(in Input) Decision {
 	if step.Action == "walk" {
 		d.Walk = step.Target
 		d.Route = step.Route
+	}
+	if step.Action == "push" {
+		d.Push = step.Target
 	}
 	return d
 }

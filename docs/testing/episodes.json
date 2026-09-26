@@ -290,16 +290,34 @@
       "id": "bunk1-stuck-20260926-193319",
       "title": "Повторное застревание в живой игре",
       "map": "bunk1",
-      "status": "open",
-      "reproduction": "observation_only",
-      "scenario": "",
+      "status": "verified_1x_2x",
+      "reproduction": "ready",
+      "scenario": "scripts/scenarios/bunk1-ledge.json",
       "evidence": "workspace/artifacts/live-stuck-20260926-193319/trace.jsonl",
       "symptom": "Повторное застревание в живой игре (сообщение игрока). frame=953; self=293,125,-1023,5,24,125; health=98; goal=follow_teammate; navigation=direct_clear; reason=no_verified_landing",
-      "missing_setup": [
-        "Восстановить подход и динамические объекты; установить причину остановки"
-      ],
-      "acceptance": null,
-      "expected_result": "Бот восстанавливает сопровождение без бесконечной остановки"
+      "missing_setup": [],
+      "acceptance": {
+        "goal": "cover_teammate",
+        "follow_after_event": false,
+        "required_event": "drop_landed",
+        "min": [
+          460,
+          -1010,
+          -112
+        ],
+        "max": [
+          565,
+          -870,
+          -96
+        ]
+      },
+      "expected_result": "Бот восстанавливает сопровождение без бесконечной остановки",
+      "asset": {
+        "sha256": "4BAEC5D9CE778B499D3583533C40BC74C2D5152A1A1851F1E3A4822ED0E8DB61",
+        "path": "workspace/runtime/q2go/baseq2/maps/bunk1.aas"
+      },
+      "fix_notes": "Старый AAS не содержал пригодных переходов. Новый граф выявил блокировку walk-off reach защитой от падений. Добавлен ограниченный проверяемый спуск с торможением и сохранением управления до приземления.",
+      "verification": "workspace/artifacts/episode-regressions-20260926-204733-623/report.json"
     },
     {
       "id": "bunk1-weapon-pickup-20260926-193319",
@@ -338,7 +356,7 @@
       "id": "bunk1-stuck-20260926-194231",
       "title": "Повторное зависание бота в живой игре",
       "map": "bunk1",
-      "status": "open",
+      "status": "fixed_pending_e2e",
       "reproduction": "observation_only",
       "scenario": "",
       "evidence": "workspace/artifacts/live-stuck-20260926-194231/trace.jsonl",
@@ -347,7 +365,8 @@
         "Восстановить подход к месту и динамическое состояние; установить причину остановки"
       ],
       "acceptance": null,
-      "expected_result": "Восстановление сопровождения без бесконечного зависания"
+      "expected_result": "Восстановление сопровождения без бесконечного зависания",
+      "fix_notes": "Исправлен выход с поднятой платформы, когда статический AAS начинает маршрут на нижнем полу. Полное воспроизведение требует открытого моста *99 и состояния лифта *100; контроль выхода выделен отдельно."
     },
     {
       "id": "base2-elevator-runtime-aas-20260926",
@@ -421,6 +440,70 @@
       "kind": "weapon_switch",
       "verification_report": "workspace/artifacts/weapon-switch-20260926-200912/report.json",
       "fix_notes": "Функциональный E2E на base1: реальный расход последнего патрона Shotgun, обновление полного инвентаря, выбор Machinegun или Blaster и возобновление огня. Оба варианта прошли на 2x/1x. Историческая сцена bunk1 целиком не восстановлена. Текущий живой процесс пока без исправления."
+    },
+    {
+      "id": "base3-elevator-recovery",
+      "title": "Возврат к игроку с нижней площадки лифта base3",
+      "map": "base3",
+      "status": "verified_1x_2x",
+      "reproduction": "ready",
+      "scenario": "scripts/scenarios/base3-elevator-recovery.json",
+      "evidence": "workspace/artifacts/live-elevator-20260926-191435/trace.jsonl",
+      "symptom": "Контроль восстановления из сохранённой нижней точки; игрок ожидает на верхнем этаже. Не воспроизводит историю исходного срыва.",
+      "missing_setup": [],
+      "acceptance": {
+        "required_elevator_stages": [
+          "board",
+          "ride",
+          "exit",
+          "completed"
+        ],
+        "max": [
+          855,
+          -20,
+          -210
+        ],
+        "goal": "cover_teammate",
+        "min": [
+          735,
+          -150,
+          -250
+        ]
+      },
+      "expected_result": "Посадка, подъём, выход, затем живое прибытие к игроку на верхнем полу.",
+      "verification": "workspace/artifacts/episode-regressions-20260926-203200-587/report.json"
+    },
+    {
+      "id": "bunk1-raised-platform-exit",
+      "title": "Выход с поднятой платформы на верхний пол bunk1",
+      "map": "bunk1",
+      "status": "verified_1x_2x",
+      "reproduction": "ready",
+      "scenario": "scripts/scenarios/bunk1-platform-exit.json",
+      "evidence": "workspace/artifacts/bunk1-upper-20260926/baseline/summary.json",
+      "symptom": "На поднятом func_plat *100 маршрут начинается на нижнем полу; бот останавливается at_waypoint над точкой маршрута.",
+      "missing_setup": [],
+      "acceptance": {
+        "required_event": "platform_exit",
+        "max": [
+          -740,
+          -10,
+          240
+        ],
+        "follow_after_event": false,
+        "min": [
+          -890,
+          -120,
+          225
+        ],
+        "goal": "cover_teammate"
+      },
+      "expected_result": "Бот выходит на статический пол той же высоты и возвращается к сопровождению.",
+      "asset": {
+        "sha256": "4BAEC5D9CE778B499D3583533C40BC74C2D5152A1A1851F1E3A4822ED0E8DB61",
+        "path": "workspace/runtime/q2go/baseq2/maps/bunk1.aas"
+      },
+      "verification": "workspace/artifacts/episode-regressions-20260926-210006-886/report.json"
     }
   ]
 }

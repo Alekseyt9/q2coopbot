@@ -662,6 +662,12 @@ func (c *Client) run(ctx context.Context) error {
 				if d.Respawn {
 					cmd.Buttons = 1
 				}
+				if d.Push != nil {
+					// Scripted actor input: real server collision/touch handlers
+					// resolve the contact, independently of the bot's path guard.
+					cmd = worldMove(cmd, s, d.Push[0]-s.Self[0], d.Push[1]-s.Self[1], 100, false)
+					status.MovementReason = "scripted_push"
+				}
 				if d.Walk != nil {
 					cmd, status.MovementReason = testWalkDiagnostic(s, *d.Walk, c.planner.World.Geometry, c.planner.Nav)
 					if d.Route {

@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "bot_origin": [
+    293.125,
+    -1023.5,
+    24.125
+  ],
+  "map": "bunk1",
+  "bot_invulnerable": true,
+  "expect": {},
+  "start_frame": 40,
+  "name": "bunk1-ledge",
+  "actor_origin": [
+    519,
+    -932.5,
+    -103.875
+  ],
+  "game_frames": 240,
+  "bot_health": 98,
+  "steps": [
+    {
+      "frames": 190,
+      "id": "wait-for-bot",
+      "action": "wait"
+    }
+  ],
+  "map_entry": "start"
+}

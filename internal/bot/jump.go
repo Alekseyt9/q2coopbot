@@ -14,7 +14,8 @@ type jumpFlight struct {
 	airborne      bool
 	speed         float64
 	runup         quake.Vec3
-	phase         int // 0: retreat; 1: accelerate; 2: takeoff/flight
+	phase         int  // 0: retreat; 1: accelerate; 2: takeoff/flight
+	drop          bool // verified walk-off reach; never apply a jump impulse
 }
 
 func (p *Planner) planGapJump() bool {
@@ -142,10 +143,19 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 		return cmd, false
 	}
 	s := p.World.Snapshot
+	skill, prefix := "gap_jump", "jump"
+	if j.drop {
+		skill, prefix = "walk_off", "drop"
+	}
 	if s.Health <= 0 || s.Frame < j.frame || s.Frame-j.frame > 35 || quake.Distance(s.Self, j.from) > 256 {
 		p.jump = nil
 		p.routeKnown = false
-		p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", Skill: "gap_jump", LimitReason: "jump_aborted"}
+		p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", Skill: skill, LimitReason: prefix + "_aborted"}
+		return cmd, true
+	}
+	if j.drop && !j.airborne && s.OnGround && s.Frame-j.frame < 2 {
+		// Shed the approach velocity before stepping off: air braking is weak.
+		p.World.Command = CommandDecision{MoveSource: "none", Skill: skill, LimitReason: "drop_prepare"}
 		return cmd, true
 	}
 	if j.phase < 2 {
@@ -181,22 +191,22 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 		j.airborne = true
 	}
 	if j.airborne && s.OnGround {
-		reason := "jump_landed"
+		reason := prefix + "_landed"
 		if quake.Horizontal(s.Self, j.landing) > 32 || math.Abs(s.Self[2]-j.landing[2]) > 18 {
-			reason = "jump_missed"
+			reason = prefix + "_missed"
 		}
 		p.jump = nil
 		p.routeKnown = false
-		p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", Skill: "gap_jump", LimitReason: reason}
+		p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", Skill: skill, LimitReason: reason}
 		return cmd, true
 	}
 	dx, dy := j.landing[0]-s.Self[0], j.landing[1]-s.Self[1]
 	cmd = worldMove(cmd, s, dx, dy, math.Min(j.speed, math.Hypot(dx, dy)*10), false)
-	phase := "jump_flight"
-	if !j.airborne {
+	phase := prefix + "_flight"
+	if !j.airborne && !j.drop {
 		cmd.Up = 200
 		phase = "jump_takeoff"
 	}
-	p.World.Command = CommandDecision{MoveSource: "gap_jump", AimSource: "route", Skill: "gap_jump", LimitReason: phase}
+	p.World.Command = CommandDecision{MoveSource: skill, AimSource: "route", Skill: skill, LimitReason: phase}
 	return cmd, true
 }
