@@ -42,9 +42,24 @@ func (p *Planner) healthGoal(s quake.Snapshot) (quake.Vec3, bool) {
 			}
 		}
 	}
+	if p.healthActive {
+		for _, r := range p.resources {
+			if r.State == "unknown" && r.Item.Class == "item_health" && healthStand(r.Item.Origin) == p.healthTarget && usefulHealth(s, r.Item) && p.healthAllowed(r.Item.Origin, s.Frame) {
+				r.Attempted = true
+				return p.healthTarget, true
+			}
+		}
+	}
 	for _, item := range s.Pickups {
 		if item.Class == "item_health" && usefulHealth(s, item) && quake.Horizontal(s.Self, item.Origin) < 300 && p.healthAllowed(item.Origin, s.Frame) {
 			return healthStand(item.Origin), true
+		}
+	}
+	for _, item := range p.rememberedCandidates(s) {
+		if item.Class == "item_health" && usefulHealth(s, item) && p.healthAllowed(item.Origin, s.Frame) {
+			at := healthStand(item.Origin)
+			p.markResourceVisit(at)
+			return at, true
 		}
 	}
 	return quake.Vec3{}, false
@@ -61,13 +76,14 @@ func (p *Planner) budgetHealthGoal(s quake.Snapshot, goal quake.Vec3) quake.Vec3
 		p.healthActive = true
 		p.healthTarget = goal
 		p.healthAt = s.Frame
+		p.healthStarted = s.Frame
 		p.healthLast = s.Self
 	}
 	if quake.Distance(s.Self, p.healthLast) > 16 {
 		p.healthAt = s.Frame
 		p.healthLast = s.Self
 	}
-	if s.Frame-p.healthAt < 25 {
+	if s.Frame-p.healthAt < 25 && s.Frame-p.healthStarted < 100 {
 		return goal
 	}
 	if p.healthBanned == nil {

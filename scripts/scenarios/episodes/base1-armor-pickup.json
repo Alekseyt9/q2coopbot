@@ -23,5 +23,6 @@
   "scenario": "scripts/scenarios/base1-armor-pickup.json",
   "expected_result": "Подтверждённый рост инвентаря после collect_item, затем живое прибытие к игроку.",
   "map": "base1",
-  "status": "open"
+  "status": "verified_1x_2x",
+  "verification": "workspace/artifacts/episode-regressions-20260927-014632-692/report.json"
 }

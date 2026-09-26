@@ -23,15 +23,16 @@ var pickupSpecs = map[string]pickupSpec{
 }
 
 type PickupAttempt struct {
-	Entity  int        `json:"entity"`
-	Class   string     `json:"class"`
-	Name    string     `json:"name"`
-	Target  quake.Vec3 `json:"target"`
-	Started int        `json:"started_frame"`
-	Ended   int        `json:"end_frame,omitempty"`
-	State   string     `json:"state"`
-	Before  int        `json:"before"`
-	After   int        `json:"after,omitempty"`
+	FromMemory bool       `json:"from_memory,omitempty"`
+	Entity     int        `json:"entity"`
+	Class      string     `json:"class"`
+	Name       string     `json:"name"`
+	Target     quake.Vec3 `json:"target"`
+	Started    int        `json:"started_frame"`
+	Ended      int        `json:"end_frame,omitempty"`
+	State      string     `json:"state"`
+	Before     int        `json:"before"`
+	After      int        `json:"after,omitempty"`
 }
 type pickupTask struct {
 	attempt           PickupAttempt
@@ -93,7 +94,7 @@ func (p *Planner) finishPickup(s quake.Snapshot, state string) {
 	p.routeKnown = false
 }
 func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
-	allowed := s.Health >= 45 && s.Teammate != nil && quake.Horizontal(s.Self, *s.Teammate) < 384 &&
+	allowed := !p.testSetupHold && s.Health >= 45 && s.Teammate != nil && quake.Horizontal(s.Self, *s.Teammate) < 384 &&
 		(p.World.Goal == "follow_teammate" || p.World.Goal == "cover_teammate") && p.elevator == nil && p.button == nil && p.jump == nil
 	if p.pickup != nil {
 		t := p.pickup
@@ -117,7 +118,12 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		} else if t.missing == 0 {
 			t.missing = s.Frame
 		}
-		if t.missing != 0 && s.Frame-t.missing >= 5 {
+		checkingMemory := false
+		if r := p.resources[t.attempt.Entity]; r != nil && r.State == "unknown" && healthStand(r.Item.Origin) == t.attempt.Target {
+			checkingMemory = true
+			r.Attempted = true
+		}
+		if t.missing != 0 && s.Frame-t.missing >= 5 && !checkingMemory {
 			p.finishPickup(s, "unconfirmed")
 			return quake.Vec3{}, false
 		}
@@ -137,7 +143,9 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	}
 	best := math.Inf(1)
 	var selected *pickupTask
-	for _, item := range s.Pickups {
+	candidates := append([]quake.Object(nil), s.Pickups...)
+	candidates = append(candidates, p.rememberedCandidates(s)...)
+	for _, item := range candidates {
 		if !usefulPickup(s, item.Class) {
 			continue
 		}
@@ -145,28 +153,8 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		if s.Frame < p.pickupBanned[at] || quake.Distance(s.Self, at) > 256 || quake.Distance(*s.Teammate, at) > 384 {
 			continue
 		}
-		g := p.World.Geometry
-		if !g.PlayerMoveClear(at, at) {
-			continue
-		}
-		if _, ok := g.GroundDrop(at, 18); !ok && !p.Nav.GroundedNear(at) {
-			continue
-		}
-		route, ok := p.Nav.Route(s.Self, at)
+		cost, ok := p.resourceRoute(s.Self, at)
 		if !ok {
-			continue
-		}
-		cost, prev := 0.0, s.Self
-		for _, wp := range route {
-			if wp.Kind != 2 {
-				ok = false
-				break
-			}
-			cost += quake.Distance(prev, wp.Position)
-			prev = wp.Position
-		}
-		cost += quake.Distance(prev, at)
-		if !ok || cost > 512 {
 			continue
 		}
 		sp := pickupSpecs[item.Class]
@@ -181,6 +169,10 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		return quake.Vec3{}, false
 	}
 	p.pickup = selected
+	if r := p.resources[selected.attempt.Entity]; r != nil && r.State == "unknown" {
+		selected.attempt.FromMemory = true
+		p.markResourceVisit(selected.attempt.Target)
+	}
 	p.World.Pickup = &selected.attempt
 	p.routeKnown = false
 	return selected.attempt.Target, true

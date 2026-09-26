@@ -72,6 +72,21 @@ try {
                 $accept = $episode.acceptance
 				Assert-EpisodeSetup $rows $accept
 				$stageFrame = -1
+				if ($accept.memory_missing) {
+					$class = $accept.memory_missing
+					$observed = @($rows | Where-Object { @($_.resource_memory | Where-Object { $_.item.class -eq $class -and $_.state -eq 'observed' }).Count } | Select-Object -First 1)
+					$approach = @($rows | Where-Object { $_.pickup.class -eq $class -and $_.pickup.from_memory -and $_.pickup.state -eq 'approach' -and $_.goal -eq 'collect_item' } | Select-Object -First 1)
+					if (!$observed.Count -or !$approach.Count -or $observed[0].frame -ge $approach[0].frame) { throw 'Memory observation/approach missing' }
+					$entity = $approach[0].pickup.entity
+					$missing = @($rows | Where-Object { $_.frame -gt $approach[0].frame -and @($_.resource_memory | Where-Object { $_.item.id -eq $entity -and $_.state -eq 'unavailable' }).Count } | Select-Object -First 1)
+					if (!$missing.Count) { throw 'Missing resource not checked on arrival' }
+					if (@($rows | Where-Object { $_.pickup.entity -eq $entity -and ($_.pickup.state -eq 'confirmed' -or $_.pickup.started_frame -gt $missing[0].frame) }).Count) { throw 'False pickup confirmation or repeated missing-resource attempt' }
+					$actorRows = @(Get-Content (Join-Path $trial "scale-$scale-port-$Port-human-trace.jsonl") | ConvertFrom-Json)
+					$before = @($actorRows | Where-Object { $_.frame -le $observed[0].frame } | Select-Object -Last 1)
+					if (!$before.Count -or !$accept.actor_armor_gain -or !@($actorRows | Where-Object { $_.frame -gt $before[0].frame -and $_.frame -lt $approach[0].frame -and $_.armor -ge ($before[0].armor + $accept.actor_armor_gain) }).Count) { throw 'Actor armor pickup not confirmed' }
+					$stageFrame = $missing[0].frame
+					if ($rows[-1].frame - $stageFrame -lt 30) { throw 'Insufficient observation after missing-resource check' }
+				}
 				foreach ($class in $accept.inventory_pickups) {
 					$confirmed = @($rows | Where-Object {
 						$_.pickup.class -eq $class -and $_.pickup.state -eq 'confirmed' -and

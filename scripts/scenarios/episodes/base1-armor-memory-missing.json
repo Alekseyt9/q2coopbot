@@ -1,0 +1,20 @@
+{
+  "id": "base1-armor-memory-missing",
+  "title": "Проверка запомненной брони, которую забрал напарник",
+  "status": "open",
+  "reproduction": "ready",
+  "map": "base1",
+  "scenario": "scripts/scenarios/base1-armor-memory-missing.json",
+  "evidence": "Функциональный контроль памяти; бот наблюдает броню до подбора актором.",
+  "symptom": "Запомненный предмет может отсутствовать; нельзя подтверждать подбор или бесконечно возвращаться.",
+  "missing_setup": [],
+  "expected_result": "Подтверждён подбор брони актором; бот проверяет место по памяти, отмечает отсутствие и возвращается к игроку без ложного подтверждения и повторных попыток.",
+  "acceptance": {
+    "memory_missing": "item_armor_jacket",
+    "actor_armor_gain": 25,
+    "goal": "cover_teammate",
+    "min": [-405,-650,-90],
+    "max": [-240,-470,-50],
+    "follow_after_event": false
+  }
+}

@@ -37,6 +37,8 @@ type World struct {
 	Updated          time.Time         `json:"updated"`
 }
 type Planner struct {
+	resources                map[int]*ResourceMemory
+	healthStarted            int
 	pickup                   *pickupTask
 	pickupBanned             map[quake.Vec3]int
 	pickupNext               int
@@ -179,6 +181,7 @@ func (p *Planner) setMap(name, root string) {
 	p.deathFrame = 0
 	p.healthActive = false
 	p.healthBanned = nil
+	p.resources = nil
 	p.pickup, p.pickupBanned, p.pickupNext = nil, nil, 0
 	p.jump = nil
 	p.buttonCooldown = 0
@@ -261,6 +264,7 @@ func (p *Planner) setMap(name, root string) {
 }
 func (p *Planner) update(s quake.Snapshot, root string) {
 	p.setMap(s.Map, root)
+	p.observeResources(s)
 	if p.TestHideDoor53 && s.Map == "base2" {
 		visible := make([]quake.Mover, 0, len(s.Movers))
 		for _, mover := range s.Movers {

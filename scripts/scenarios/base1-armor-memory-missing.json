@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "name": "base1-armor-memory-missing",
+  "map": "base1",
+  "start_frame": 40,
+  "game_frames": 250,
+  "bot_release_frame": 90,
+  "actor_origin": [-300,-600,-79.875],
+  "bot_origin": [-300,-544,-79.875],
+  "bot_health": 100,
+  "bot_invulnerable": true,
+  "expect": {},
+  "steps": [
+    {"id":"remember-armor","action":"wait","frames":10},
+    {"id":"actor-takes-armor","action":"place","target":[-384,-544,-79.875],"timeout_frames":10},
+    {"id":"confirm-actor-pickup","action":"wait","frames":10},
+    {"id":"actor-returns","action":"place","target":[-300,-600,-79.875],"timeout_frames":10},
+    {"id":"wait-for-memory-check","action":"wait","frames":150}
+  ]
+}
