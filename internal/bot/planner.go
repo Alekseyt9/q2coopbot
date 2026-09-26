@@ -34,6 +34,8 @@ type World struct {
 	Updated          time.Time         `json:"updated"`
 }
 type Planner struct {
+	testSetupHold         bool
+	TestDisableSearch     bool
 	Nav                   *quake.Navigator
 	AASDir                string
 	GameClock             bool

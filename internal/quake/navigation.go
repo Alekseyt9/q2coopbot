@@ -30,8 +30,9 @@ type Waypoint struct {
 	ElevatorPhase string `json:"elevator_phase,omitempty"`
 }
 type Navigator struct {
-	Areas []Area
-	Edges [][]Edge
+	Areas    []Area
+	Edges    [][]Edge
+	areaTree *aasAreaTree
 }
 
 func vec(data []byte, at int) Vec3 {
@@ -123,6 +124,25 @@ func LoadAAS(path string) (*Navigator, error) {
 			}
 		}
 	}
+	optionalLump := func(index, size int) ([]byte, error) {
+		p := headerSize - 14*8 + index*8
+		if binary.LittleEndian.Uint32(header[p:]) == 0 && binary.LittleEndian.Uint32(header[p+4:]) == 0 {
+			return nil, nil
+		}
+		return lump(index, size)
+	}
+	planes, err := optionalLump(2, 20)
+	if err != nil {
+		return nil, err
+	}
+	nodes, err := optionalLump(10, 12)
+	if err != nil {
+		return nil, err
+	}
+	n.areaTree, err = parseAASAreaTree(planes, nodes, len(n.Areas))
+	if err != nil {
+		return nil, err
+	}
 	return n, nil
 }
 func Distance(a, b Vec3) float64 {
@@ -131,6 +151,9 @@ func Distance(a, b Vec3) float64 {
 }
 func Horizontal(a, b Vec3) float64 { return math.Hypot(a[0]-b[0], a[1]-b[1]) }
 func (n *Navigator) AreaFor(p Vec3) int {
+	if n.areaTree != nil {
+		return n.areaTree.areaFor(p)
+	}
 	best, score := -1, math.Inf(1)
 	nearby := -1
 	nearScore := math.Inf(1)

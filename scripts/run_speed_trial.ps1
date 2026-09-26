@@ -28,13 +28,36 @@ param(
     [switch]$TeammateMemoryTrial,
     [switch]$TeammateSearchTrial,
     [switch]$ReacquireTeammate,
+    [int]$SearchReturnAfterFrames = 15,
+    [ValidateSet('not_seen', 'reacquired')][string]$SearchExpectedOutcome = 'not_seen',
     [switch]$HiddenPlayerSoundTrial,
+    [string]$SearchFixture = '',
+    [switch]$SearchWaitBaseline,
     [string]$BSPFailureTrial = '',
     [string]$OutputRoot = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$fixture = $null
+if ($SearchWaitBaseline -and -not $SearchFixture) { throw '-SearchWaitBaseline requires -SearchFixture.' }
+if ($SearchFixture) {
+    $fixture = Get-Content -LiteralPath $SearchFixture -Raw | ConvertFrom-Json
+    $fixtureMap = if ($TransitionMap) { $TransitionMap } else { $Map }
+    if (-not $SynchronizedStart -or $fixture.map -ne $fixtureMap -or $GameFrames -lt 100 -or
+        $ElevatorTrial -or $CombatMoveTrial -or $ObservationGapTrial -or $FriendlyFireTrial -or
+        $GroundEdgeTrial -or $NoAASTrial -or $DoorTrial -or $DoorPassTrial -or $ButtonTrial -or
+        $ButtonAutoTrial -or $TeammateMemoryTrial -or $TeammateSearchTrial -or $BSPFailureTrial) {
+        throw '-SearchFixture requires a matching final map, synchronized start, at least 100 frames and no other gameplay trial.'
+    }
+    foreach ($field in @('name', 'bot_origin', 'human_origin', 'human_walk_target')) {
+        if (-not $fixture.$field) { throw "Search fixture is missing $field." }
+    }
+    if ($fixture.walk_after_frames -lt 25 -or $fixture.walk_frames -lt 1 -or
+        $fixture.walk_after_frames + $fixture.walk_frames + 10 -gt $GameFrames) {
+        throw 'Search fixture walking must finish at least 10 frames before the episode ends.'
+    }
+}
 if ($GameFrames -lt 10 -or $Port -lt 1024 -or $Port + $Timescales.Count -gt 65535 -or
     @($Timescales | Where-Object { $_ -lt 1 }).Count -gt 0) { throw 'Invalid frames, timescales or port range.' }
 if ($TransitionMap -and ($TransitionMap -notmatch '^[A-Za-z0-9_]+$' -or $TransitionMap -eq $Map -or
@@ -95,6 +118,9 @@ if ($TeammateSearchTrial -and ($Map -ne 'base1' -or $TransitionMap -ne 'base2' -
     throw '-TeammateSearchTrial requires at least 70 frames, synchronized base1 to base2 transition and no other gameplay trial.'
 }
 if ($ReacquireTeammate -and -not $TeammateSearchTrial) { throw '-ReacquireTeammate requires -TeammateSearchTrial.' }
+if ($SearchReturnAfterFrames -ne 15 -and -not $ReacquireTeammate) { throw '-SearchReturnAfterFrames requires -ReacquireTeammate.' }
+if ($SearchReturnAfterFrames -lt 1) { throw '-SearchReturnAfterFrames must be positive.' }
+if ($SearchExpectedOutcome -eq 'reacquired' -and -not $ReacquireTeammate) { throw '-SearchExpectedOutcome reacquired requires -ReacquireTeammate.' }
 if ($HiddenPlayerSoundTrial -and (-not $TeammateSearchTrial -or $ReacquireTeammate)) { throw '-HiddenPlayerSoundTrial requires -TeammateSearchTrial without -ReacquireTeammate.' }
 if ($BSPFailureTrial -and ($BSPFailureTrial -notin @('unavailable', 'incomplete') -or
     $Map -ne 'base1' -or $TransitionMap -or -not $SynchronizedStart -or
@@ -154,7 +180,7 @@ foreach ($scale in $Timescales) {
     $rconPassword = if ($TransitionMap) { [guid]::NewGuid().ToString('N') } else { '' }
     if ($TransitionMap) { $args = "+set rcon_password $rconPassword $args" }
     if ($UnlimitedLoopbackRate) { $args = "+set sv_test_unlimited_loopback 1 $args" }
-    if ($ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $GroundEdgeTrial -or $DoorTrial -or $DoorPassTrial -or $ButtonTrial -or $ButtonAutoTrial -or $TeammateMemoryTrial -or $TeammateSearchTrial) { $args = "+set cheats 1 $args" }
+    if ($ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $GroundEdgeTrial -or $DoorTrial -or $DoorPassTrial -or $ButtonTrial -or $ButtonAutoTrial -or $TeammateMemoryTrial -or $TeammateSearchTrial -or $SearchFixture) { $args = "+set cheats 1 $args" }
     if ($SynchronizedStart) { $args = "+set sv_test_trace_client GoCoopMate +set sv_test_start_client GoCoopMate $args" }
     $server = Start-Process -FilePath $ServerExe -ArgumentList $args -WorkingDirectory $RuntimeRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
     $human = $null
@@ -220,7 +246,7 @@ foreach ($scale in $Timescales) {
             }
             if ($ReacquireTeammate) {
                 $humanConfig.test.teleport_return = '400,1840,-144'
-                $humanConfig.test.teleport_return_after_frames = 15
+                $humanConfig.test.teleport_return_after_frames = $SearchReturnAfterFrames
             }
         }
         if ($CombatMoveTrial -or $FriendlyFireTrial) {
@@ -233,6 +259,15 @@ foreach ($scale in $Timescales) {
             $humanConfig.test.line_cross = $true
         }
         if ($LeaveTeammateOnTransition) { $humanConfig.test.exit_on_reconnect = $true }
+        if ($fixture) {
+            $humanConfig.output.trace_jsonl = $humanTracePath
+            $humanConfig.test.teleport_map = $fixture.map
+            $humanConfig.test.teleport = $fixture.human_origin
+            $humanConfig.test.walk_target = $fixture.human_walk_target
+            $humanConfig.test.walk_after_frames = [int]$fixture.walk_after_frames
+            $humanConfig.test.walk_frames = [int]$fixture.walk_frames
+            $humanConfig.test.scenario_frame_origin = [int]$fixture.frame_origin
+        }
         $humanConfig | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $humanConfigPath -Encoding UTF8
         $human = Start-Process -FilePath $botExe -ArgumentList "--config `"$humanConfigPath`"" -WorkingDirectory $repoRoot -RedirectStandardOutput $humanLog -RedirectStandardError $humanErr -WindowStyle Hidden -PassThru
         $humanUntil = (Get-Date).AddSeconds(20)
@@ -293,6 +328,13 @@ foreach ($scale in $Timescales) {
         if ($BSPFailureTrial -eq 'incomplete') { $botConfig.test.partial_bsp = $true }
         if ($NoAASTrial) { $botConfig.test.no_aas = $true }
         if ($FriendlyFireTrial) { $botConfig.test.hold_position = $true }
+        if ($fixture) {
+            $botConfig.test.teleport_map = $fixture.map
+            $botConfig.test.teleport = $fixture.bot_origin
+            $botConfig.test.disable_search = [bool]$SearchWaitBaseline
+            $botConfig.test.setup_hold_frames = [int]$fixture.bot_hold_frames
+            $botConfig.test.scenario_frame_origin = [int]$fixture.frame_origin
+        }
         if ($ObservationGapTrial) {
             $botConfig.test.observation_gap_start = 1
             $botConfig.test.observation_gap_frames = 12
@@ -402,6 +444,8 @@ foreach ($scale in $Timescales) {
         $probeCompletedFrames = 0
         $searchAttemptStarts = @{}
         $searchAttemptOutcomes = @{}
+        $searchAttemptDetails = @{}
+        $searchAttemptLastSelf = @{}
         $searchAttemptInvalid = 0
         $soundEvents = 0
         $soundExplicitPositions = 0
@@ -486,11 +530,39 @@ foreach ($scale in $Timescales) {
                 }
             }
             if ($null -ne $entry.teammate) { $teammateSeenInTrace = $true }
-            if ($TeammateSearchTrial -and $null -ne $entry.search_attempt) {
+            if (($TeammateSearchTrial -or $SearchFixture) -and $null -ne $entry.search_attempt) {
                 $attempt = $entry.search_attempt
-                $attemptKey = "$($attempt.entity):$($attempt.last_seen_frame):$($attempt.start_frame)"
+                $attemptKey = "$($entry.spawncount):$($entry.map):$($attempt.entity):$($attempt.last_seen_frame):$($attempt.start_frame)"
                 $searchAttemptStarts[$attemptKey] = $true
                 if ($attempt.state -eq 'completed') { $searchAttemptOutcomes[$attemptKey] = $attempt.outcome }
+                if (-not $searchAttemptDetails.ContainsKey($attemptKey)) {
+                    $searchAttemptDetails[$attemptKey] = [pscustomobject]@{
+                        map = $entry.map; spawncount = $entry.spawncount
+                        start_frame = $attempt.start_frame; end_frame = $null
+                        duration_frames = 0; travel_horizontal_units = 0.0
+                        state = 'active'; outcome = $null; visible_at_end = $null
+                    }
+                }
+                $detail = $searchAttemptDetails[$attemptKey]
+                if ($detail.state -eq 'active') {
+                    if ($searchAttemptLastSelf.ContainsKey($attemptKey)) {
+                        $previousSelf = $searchAttemptLastSelf[$attemptKey]
+                        $detail.travel_horizontal_units += [math]::Sqrt(
+                            [math]::Pow($entry.self[0] - $previousSelf[0], 2) +
+                            [math]::Pow($entry.self[1] - $previousSelf[1], 2))
+                    }
+                    $searchAttemptLastSelf[$attemptKey] = $entry.self
+                    $detail.duration_frames = [int]$entry.frame - [int]$attempt.start_frame
+                    if ($attempt.state -eq 'completed') {
+                        $detail.state = 'completed'; $detail.outcome = $attempt.outcome
+                        $detail.end_frame = $attempt.end_frame
+                        $detail.visible_at_end = $null -ne $entry.teammate
+                        if ($attempt.end_frame -ne $entry.frame -or
+                            ($attempt.outcome -eq 'reacquired' -and -not $detail.visible_at_end)) {
+                            $searchAttemptInvalid++
+                        }
+                    }
+                }
                 if ($attempt.attempt -ne 1 -or $attempt.max_attempts -ne 1 -or
                     $attempt.basis -ne 'last_seen_aas_viewpoint' -or
                     $attempt.expected_observation -ne 'teammate_visible_in_current_snapshot') {
@@ -879,6 +951,13 @@ foreach ($scale in $Timescales) {
             search_attempt_not_seen = @($searchAttemptOutcomes.Values | Where-Object { $_ -eq 'not_seen' }).Count
             search_attempt_reacquired = @($searchAttemptOutcomes.Values | Where-Object { $_ -eq 'reacquired' }).Count
             search_attempt_invalid = $searchAttemptInvalid
+            search_attempt_details = @($searchAttemptDetails.Values | Sort-Object start_frame)
+            search_fixture_name = $(if ($fixture) { $fixture.name } else { $null })
+            search_disabled = [bool]$SearchWaitBaseline
+            human_trace_jsonl = $(if ($fixture) { $humanTracePath } else { $null })
+            search_return_scripted = [bool]$ReacquireTeammate
+            search_return_after_frames = $(if ($ReacquireTeammate) { $SearchReturnAfterFrames } else { $null })
+            search_expected_outcome = $SearchExpectedOutcome
             search_reacquired_frames = $searchReacquiredFrames
             probe_completed_frames = $probeCompletedFrames
             sound_events = $soundEvents; sound_explicit_positions = $soundExplicitPositions; sound_entity_only = $soundEntityOnly
@@ -1011,9 +1090,13 @@ if ($TeammateSearchTrial -and @($results | Where-Object {
     -not $_.memory_human_behind_wall -or $_.search_frames -lt 1 -or $_.search_move_frames -lt 1 -or $_.search_fire_frames -ne 0 -or
     $null -eq $_.search_start_x -or $null -eq $_.search_max_x -or
     $_.probe_frames -lt 2 -or $_.probe_move_frames -lt 2 -or $_.probe_fire_frames -ne 0 -or
-    $_.search_attempts -ne 1 -or $_.search_attempt_not_seen -ne 1 -or
-    $_.search_attempt_reacquired -ne 0 -or $_.search_attempt_invalid -ne 0 -or
-    $null -eq $_.probe_target -or $_.probe_target_changes -ne 0 -or $_.probe_completed_frames -lt 1 -or
+    $_.search_attempts -ne 1 -or $_.search_attempt_invalid -ne 0 -or
+    $(if ($SearchExpectedOutcome -eq 'reacquired') {
+        $_.search_attempt_reacquired -ne 1 -or $_.search_attempt_not_seen -ne 0
+    } else {
+        $_.search_attempt_not_seen -ne 1 -or $_.search_attempt_reacquired -ne 0 -or $_.probe_completed_frames -lt 1
+    }) -or
+    $null -eq $_.probe_target -or $_.probe_target_changes -ne 0 -or
     $(if ($ReacquireTeammate) {
         -not $_.memory_human_returned -or $_.search_reacquired_frames -lt 3 -or
         $_.reacquired_follow_move_frames -lt 1 -or $_.probe_after_reacquire -ne 0 -or

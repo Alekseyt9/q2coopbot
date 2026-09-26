@@ -79,6 +79,11 @@ type Client struct {
 	testGapFrames                    int
 	testLineCross                    bool
 	testHoldPosition                 bool
+	testWalkTarget                   quake.Vec3
+	testWalkAfterFrames              int
+	testWalkFrames                   int
+	testSetupHoldFrames              int
+	testScenarioFrameOrigin          int
 	testGroundEdgeProbe              bool
 	testDoorProbe                    bool
 	testDoorPassProbe                bool
@@ -234,6 +239,8 @@ func (c *Client) handle(packet []byte) {
 			}
 			relativeFrame := f.Number - c.firstMoveFrame
 			if c.firstMoveFrame < 0 || c.testGapFrames == 0 || relativeFrame < c.testGapStart || relativeFrame >= c.testGapStart+c.testGapFrames {
+				c.planner.testSetupHold = c.testSetupHoldFrames > 0 && s.Map == c.testTeleportMap &&
+					(!c.testTeleportSent || c.testScenarioAge(s.Frame) < c.testSetupHoldFrames)
 				c.planner.update(s, c.root)
 			}
 			if c.frames%50 == 0 {
@@ -457,11 +464,22 @@ func (c *Client) run(ctx context.Context) error {
 				cmd.Forward, cmd.Side, cmd.Up = 0, 0, 0
 				c.planner.World.Command.MoveSource = "test_hold"
 			}
+			if c.planner.testSetupHold {
+				cmd = quake.UserCmd{}
+				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_setup_hold"}
+			}
 			if c.idle {
 				cmd = quake.UserCmd{}
 				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_idle"}
 			}
 			jumpAge := c.latestFrame - c.testTeleportAfterSentFrame
+			if !safetyStop && c.testTeleportSent && c.planner.World.Map == c.testTeleportMap && c.testWalkFrames > 0 {
+				age := c.testScenarioAge(frame)
+				if age >= c.testWalkAfterFrames && age < c.testWalkAfterFrames+c.testWalkFrames {
+					cmd = testWalkCommand(c.planner.World.Snapshot, c.testWalkTarget, c.planner.World.Geometry, c.planner.Nav)
+					c.planner.World.Command = CommandDecision{MoveSource: "test_walk", AimSource: "test_walk"}
+				}
+			}
 			if c.testTeleportAfterSent && (c.testJumpAfterTeleportFrames > 0 &&
 				jumpAge >= c.testJumpAfterTeleportFrames && jumpAge < c.testJumpAfterTeleportFrames+4 ||
 				c.testJumpAgainAfterTeleportFrames > 0 && jumpAge >= c.testJumpAgainAfterTeleportFrames &&

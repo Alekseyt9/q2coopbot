@@ -1,0 +1,12 @@
+{
+  "name": "base1-walk-out-of-view",
+  "map": "base1",
+  "bot_origin": "1005,-130,-167",
+  "human_origin": "861,-16,-167",
+  "human_walk_target": "889,389,-167",
+  "bot_hold_frames": 40,
+  "frame_origin": 40,
+  "evaluation_frames": 40,
+  "walk_after_frames": 25,
+  "walk_frames": 30
+}

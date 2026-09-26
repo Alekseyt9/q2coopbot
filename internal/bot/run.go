@@ -19,33 +19,38 @@ import (
 
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
-	Host, Name, GameDir, AASDir       string
-	WorldFile, TracePath, StopFile    string
-	System1Model, System2Model        string
-	TestChangeMap, TestRCONPassword   string
-	TestTeleportMap, TestTeleport     string
-	TestTeleportAfter                 string
-	TestTeleportAfterFrames           int
-	TestTeleportReturn                string
-	TestTeleportReturnAfterFrames     int
-	TestJumpAfterTeleportFrames       int
-	TestJumpAgainAfterTeleportFrames  int
-	TestSpawnMap, TestSpawnSoldier    string
-	TestSpawnClass                    string
-	Port, GameFrames, TestChangeAfter int
-	TestGapStart, TestGapFrames       int
-	Duration                          time.Duration
-	FramePaced, Idle, ExitOnReconnect bool
-	TestLineCross                     bool
-	TestHoldPosition                  bool
-	TestGroundEdgeProbe               bool
-	TestNoAAS                         bool
-	TestDoorProbe                     bool
-	TestDoorPassProbe                 bool
-	TestButtonProbe                   bool
-	TestButtonAutoGoal                bool
-	TestNoBSP, TestPartialBSP         bool
-	TestHideDoor53                    bool
+	TestScenarioFrameOrigin             int
+	TestSetupHoldFrames                 int
+	TestDisableSearch                   bool
+	TestWalkTarget                      string
+	TestWalkAfterFrames, TestWalkFrames int
+	Host, Name, GameDir, AASDir         string
+	WorldFile, TracePath, StopFile      string
+	System1Model, System2Model          string
+	TestChangeMap, TestRCONPassword     string
+	TestTeleportMap, TestTeleport       string
+	TestTeleportAfter                   string
+	TestTeleportAfterFrames             int
+	TestTeleportReturn                  string
+	TestTeleportReturnAfterFrames       int
+	TestJumpAfterTeleportFrames         int
+	TestJumpAgainAfterTeleportFrames    int
+	TestSpawnMap, TestSpawnSoldier      string
+	TestSpawnClass                      string
+	Port, GameFrames, TestChangeAfter   int
+	TestGapStart, TestGapFrames         int
+	Duration                            time.Duration
+	FramePaced, Idle, ExitOnReconnect   bool
+	TestLineCross                       bool
+	TestHoldPosition                    bool
+	TestGroundEdgeProbe                 bool
+	TestNoAAS                           bool
+	TestDoorProbe                       bool
+	TestDoorPassProbe                   bool
+	TestButtonProbe                     bool
+	TestButtonAutoGoal                  bool
+	TestNoBSP, TestPartialBSP           bool
+	TestHideDoor53                      bool
 }
 
 func parseTestTeleport(value string) (quake.Vec3, error) {
@@ -75,6 +80,19 @@ func transitionMapArgument(destination, previous string) (string, error) {
 }
 
 func Run(ctx context.Context, cfg Config) error {
+	if cfg.TestDisableSearch && !cfg.FramePaced {
+		return fmt.Errorf("test.disable_search requires run.frame_paced")
+	}
+	walkTarget, err := validateTestWalk(cfg)
+	if err != nil {
+		return err
+	}
+	if cfg.TestScenarioFrameOrigin < 0 || cfg.TestScenarioFrameOrigin > 100000 || cfg.TestScenarioFrameOrigin > 0 && (!cfg.FramePaced || cfg.TestTeleport == "") {
+		return fmt.Errorf("test.scenario_frame_origin requires frame pacing, initial teleport and 0..100000 frame")
+	}
+	if cfg.TestSetupHoldFrames < 0 || cfg.TestSetupHoldFrames > 1000 || cfg.TestSetupHoldFrames > 0 && (!cfg.FramePaced || cfg.TestTeleport == "") {
+		return fmt.Errorf("test.setup_hold_frames requires frame pacing, initial teleport and 0..1000 frames")
+	}
 	if cfg.GameDir == "" {
 		return fmt.Errorf("client.game_dir is required")
 	}
@@ -198,6 +216,9 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer conn.Close()
 	client := &Client{
+		testScenarioFrameOrigin: cfg.TestScenarioFrameOrigin,
+		testSetupHoldFrames:     cfg.TestSetupHoldFrames,
+		testWalkTarget:          walkTarget, testWalkAfterFrames: cfg.TestWalkAfterFrames, testWalkFrames: cfg.TestWalkFrames,
 		conn: conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
 		decoder: quake.NewDecoder(), planner: &Planner{AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53},
 		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name,
@@ -220,6 +241,7 @@ func Run(ctx context.Context, cfg Config) error {
 		testButtonProbe:     cfg.TestButtonProbe,
 		testButtonAutoGoal:  cfg.TestButtonAutoGoal,
 	}
+	client.planner.TestDisableSearch = cfg.TestDisableSearch
 	if cfg.TracePath != "" {
 		client.traceFile, err = os.Create(cfg.TracePath)
 		if err != nil {

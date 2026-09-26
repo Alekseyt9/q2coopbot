@@ -36,6 +36,12 @@ type ConfigFile struct {
 		StopFile   string `json:"stop_file"`
 	} `json:"output"`
 	Test struct {
+		DisableSearch                bool   `json:"disable_search"`
+		SetupHoldFrames              int    `json:"setup_hold_frames"`
+		ScenarioFrameOrigin          int    `json:"scenario_frame_origin"`
+		WalkTarget                   string `json:"walk_target"`
+		WalkAfterFrames              int    `json:"walk_after_frames"`
+		WalkFrames                   int    `json:"walk_frames"`
 		Idle                         bool   `json:"idle"`
 		ExitOnReconnect              bool   `json:"exit_on_reconnect"`
 		ChangeMap                    string `json:"change_map"`
@@ -125,6 +131,10 @@ func LoadConfig(path string) (Config, error) {
 		cfg.TestChangeAfter = 20
 	}
 	cfg.TestTeleportMap, cfg.TestTeleport = file.Test.TeleportMap, file.Test.Teleport
+	cfg.TestDisableSearch = file.Test.DisableSearch
+	cfg.TestSetupHoldFrames = file.Test.SetupHoldFrames
+	cfg.TestScenarioFrameOrigin = file.Test.ScenarioFrameOrigin
+	cfg.TestWalkTarget, cfg.TestWalkAfterFrames, cfg.TestWalkFrames = file.Test.WalkTarget, file.Test.WalkAfterFrames, file.Test.WalkFrames
 	cfg.TestTeleportAfter, cfg.TestTeleportAfterFrames = file.Test.TeleportAfter, file.Test.TeleportAfterFrames
 	cfg.TestTeleportReturn, cfg.TestTeleportReturnAfterFrames = file.Test.TeleportReturn, file.Test.TeleportReturnAfterFrames
 	cfg.TestJumpAfterTeleportFrames = file.Test.JumpAfterTeleportFrames

@@ -34,6 +34,9 @@ func (p *Planner) finishSearchAttempt(frame int, outcome string) {
 // hiddenTeammateGoal permits one short approach to a confirmed position and
 // one nearby viewpoint. Neither point is treated as the teammate's position.
 func (p *Planner) hiddenTeammateGoal(s quake.Snapshot) (quake.Vec3, string, bool) {
+	if p.TestDisableSearch || p.testSetupHold {
+		return quake.Vec3{}, "", false
+	}
 	if p.searchAttempt != nil && s.TeammateAgeFrames != nil &&
 		(p.searchAttempt.Entity != s.LastTeammateEntity ||
 			p.searchAttempt.LastSeenFrame != s.Frame-*s.TeammateAgeFrames) {
