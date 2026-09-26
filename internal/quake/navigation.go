@@ -217,7 +217,7 @@ func (n *Navigator) GroundedNear(p Vec3) bool {
 	}
 	for i := 1; i < len(n.Areas); i++ {
 		a := n.Areas[i]
-		if a.Flags&1 == 0 {
+		if a.Flags&1 == 0 || p[2]-a.Min[2] > 24 {
 			continue
 		}
 		outside := 0.0

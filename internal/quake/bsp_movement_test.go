@@ -2,6 +2,16 @@ package quake
 
 import "testing"
 
+func TestGroundedAreaDoesNotSupportAirAboveItsFloor(t *testing.T) {
+	n := &Navigator{Areas: []Area{{}, {Min: Vec3{0, 0, 24}, Max: Vec3{100, 100, 400}, Flags: 1}}}
+	if !n.GroundedNear(Vec3{50, 50, 24}) {
+		t.Fatal("floor rejected")
+	}
+	if n.GroundedNear(Vec3{50, 50, 240}) {
+		t.Fatal("area volume mistaken for ground support")
+	}
+}
+
 func TestGroundMoveClimbsOnlySupportedStepsWithHeadroom(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

@@ -12,11 +12,14 @@ func (p *Planner) planWalkOff() bool {
 		return false
 	}
 	r := p.World.Route
+	for len(r) > 2 && r[0].Kind == 2 && quake.Horizontal(s.Self, r[0].Position) <= 64 {
+		r = r[1:]
+	}
 	if len(r) < 2 || r[0].Kind != 7 || r[1].Kind != 7 || r[0].ToArea != r[1].ToArea || quake.Horizontal(s.Self, r[0].Position) > 64 {
 		return false
 	}
 	end := r[1].Position
-	if dz := s.Self[2] - end[2]; dz < 24 || dz > 160 {
+	if dz := s.Self[2] - end[2]; dz < 24 || dz > 240 || dz > 160 && s.Health < 40 {
 		return false
 	}
 	for _, offset := range []quake.Vec3{{}, {24, 0, 0}, {-24, 0, 0}, {0, 24, 0}, {0, -24, 0}} {
@@ -46,7 +49,7 @@ func (p *Planner) planWalkOff() bool {
 			at := s.Self
 			at[0] += (landing[0] - s.Self[0]) * float64(i) / 12
 			at[1] += (landing[1] - s.Self[1]) * float64(i) / 12
-			drop, ok := g.GroundDrop(at, 160)
+			drop, ok := g.GroundDrop(at, 240)
 			// Keep the probe just above the BSP/AAS floor rounding boundary.
 			at[2] -= drop - 0.5
 			area := p.Nav.AreaFor(at)

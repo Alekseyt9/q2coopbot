@@ -9,6 +9,51 @@ func fixture() Scenario {
 	return Scenario{Version: 1, Name: "test", Map: "base2", StartFrame: 40, GameFrames: 100, Steps: []Step{{ID: "wait", Action: "wait", Frames: 2}}}
 }
 
+func TestPushRunsFixedFramesAndStopsOnDiscontinuity(t *testing.T) {
+	target := quake.Vec3{}
+	s := fixture()
+	s.Steps = []Step{{ID: "button", Action: "push", Target: &target, Frames: 3}}
+	if err := s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	r := New(s)
+	for frame := 40; frame < 43; frame++ {
+		if r.Tick(input(frame)).Push == nil {
+			t.Fatalf("stopped early at %d", frame)
+		}
+		if r.Tick(input(frame)).Push != nil {
+			t.Fatal("repeated frame repeated input")
+		}
+	}
+	if r.Tick(input(43)).Push != nil || r.Status.State != "completed" {
+		t.Fatal("push did not finish")
+	}
+	r = New(s)
+	r.Tick(input(40))
+	if r.Tick(input(42)).Push != nil || r.Status.Reason != "frame_discontinuity" {
+		t.Fatal("unsafe input after missing frame")
+	}
+}
+
+func TestPushAndReleaseValidation(t *testing.T) {
+	target := quake.Vec3{}
+	for _, frames := range []int{0, 1, 3, 101} {
+		s := fixture()
+		s.GameFrames = 500
+		s.Steps = []Step{{ID: "button", Action: "push", Target: &target, Frames: frames}}
+		if (s.Validate() == nil) != (frames >= 1 && frames <= 100) {
+			t.Fatalf("frames %d", frames)
+		}
+	}
+	for _, release := range []int{0, 40, 41, 99, 100} {
+		s := fixture()
+		s.BotReleaseFrame = release
+		if (s.Validate() == nil) != (release == 0 || release > 40 && release < 100) {
+			t.Fatalf("release %d", release)
+		}
+	}
+}
+
 func TestActorHealthBounds(t *testing.T) {
 	for _, hp := range []int{-1, 0, 1, 50, 100, 101} {
 		s := fixture()

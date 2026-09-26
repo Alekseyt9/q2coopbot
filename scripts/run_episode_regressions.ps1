@@ -6,6 +6,7 @@ param(
     [int]$Port = 29200
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'check_episode_setup.ps1')
 $repo = Split-Path -Parent $PSScriptRoot
 $registry = Get-Content (Join-Path $repo 'docs/testing/episodes.json') -Raw | ConvertFrom-Json
 if ($registry.version -ne 1) { throw 'Unsupported episode registry version' }
@@ -68,6 +69,7 @@ try {
                 & (Join-Path $PSScriptRoot 'run_speed_trial.ps1') @args | Out-Host
                 $rows = @(Get-Content (Join-Path $trial "scale-$scale-port-$Port-trace.jsonl") | ForEach-Object { ConvertFrom-Json $_ } | Where-Object map -eq $episode.map)
                 $accept = $episode.acceptance
+				Assert-EpisodeSetup $rows $accept
 				$stageFrame = -1
 				foreach ($stage in $accept.required_elevator_stages) {
 					$match = @($rows | Where-Object { $_.frame -gt $stageFrame -and $_.elevator -eq $stage } | Select-Object -First 1)

@@ -362,7 +362,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	}
 	if searching { /* the last known point is a search target, not a visible teammate */
 	} else if p.World.Goal == "recover_health" { /* keep health objective */
-	} else if quake.Horizontal(s.Self, goal) < 100 && math.Abs(s.Self[2]-goal[2]) < 40 {
+	} else if quake.Horizontal(s.Self, goal) < 100 && math.Abs(s.Self[2]-goal[2]) < 40 && !p.bridgeNeedsApproach(goal) {
 		p.World.Goal = "cover_teammate"
 	} else {
 		p.World.Goal = "follow_teammate"
@@ -434,7 +434,10 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 				p.route, p.routeOK = p.Nav.Route(s.Self, goal)
 			}
 		} else {
-			p.route, p.routeOK = p.Nav.Route(s.Self, goal)
+			p.route, p.routeOK = p.bridgeRoute()
+			if !p.routeOK {
+				p.route, p.routeOK = p.Nav.Route(s.Self, goal)
+			}
 		}
 		p.routeKnown = true
 	}
@@ -587,6 +590,13 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 	if exit, active := p.platformExitCommand(cmd); active {
 		return exit
 	}
+	if bridge, active := p.bridgeCommand(cmd); active {
+		return bridge
+	}
+	if p.planWalkOff() {
+		flight, _ := p.jumpCommand(quake.UserCmd{Yaw: cmd.Yaw})
+		return flight
+	}
 	if p.World.Goal != "follow_teammate" && p.World.Goal != "recover_health" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
 		if p.World.Command.LimitReason == "" {
 			p.World.Command.LimitReason = "no_movement_goal"
@@ -613,8 +623,20 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		}
 		return cmd
 	}
+	moveSpeedLimit := 400.0
+	// Brake before turns leading into a walk-off reach. The movement guard
+	// checks the requested direction, but momentum survives a sharp turn.
+	for _, wp := range p.World.Route {
+		if wp.Kind == 11 {
+			break
+		}
+		if wp.Kind == 7 && quake.Horizontal(s.Self, wp.Position) < 256 && math.Abs(s.Self[2]-wp.Position[2]) < 32 {
+			moveSpeedLimit = 120
+			break
+		}
+	}
 	dx, dy := target[0]-s.Self[0], target[1]-s.Self[1]
-	if s.OnGround && p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, 40) == "no_ground_support" {
+	if s.OnGround && p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, math.Min(moveSpeedLimit/10, math.Hypot(dx, dy))) == "no_ground_support" {
 		if p.planWalkOff() || p.planGapJump() {
 			flight, _ := p.jumpCommand(cmd)
 			return flight
@@ -637,9 +659,8 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 			p.World.Command.MoveSource = "detour"
 		}
 	}
-	moveSpeedLimit := 400.0
 	if s.OnGround && cmd.Up == 0 {
-		probeStep := 40.0
+		probeStep := math.Min(moveSpeedLimit/10, math.Hypot(dx, dy))
 		if p.World.Goal == "touch_button" {
 			probeStep = 8
 		} else if p.World.Goal == "probe_last_seen" {
