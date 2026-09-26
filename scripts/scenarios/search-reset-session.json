@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "name": "search-reset-across-maps",
+  "transition_timeout_ms": 10000,
+  "phases": [
+    {
+      "id": "base1",
+      "scenario": {
+        "version": 1,
+        "name": "after-transition",
+        "map": "base1",
+        "start_frame": 40,
+        "game_frames": 100,
+        "actor_origin": [
+          160,
+          -224,
+          34
+        ],
+        "bot_origin": [
+          32,
+          -224,
+          34
+        ],
+        "expect": {},
+        "steps": [
+          {
+            "id": "settle",
+            "action": "wait",
+            "frames": 10
+          }
+        ]
+      }
+    },
+    {
+      "id": "base2",
+      "scenario": {
+        "version": 1,
+        "name": "before-transition",
+        "map": "base2",
+        "start_frame": 40,
+        "game_frames": 100,
+        "actor_origin": [
+          320,
+          1940,
+          -144
+        ],
+        "bot_origin": [
+          194,
+          1940,
+          -144
+        ],
+        "expect": {},
+        "steps": [
+          {
+            "id": "contact",
+            "action": "wait",
+            "frames": 3
+          },
+          {
+            "target": [
+              191,
+              2111,
+              -103
+            ],
+            "id": "hide",
+            "timeout_frames": 8,
+            "action": "place"
+          },
+          {
+            "id": "search",
+            "action": "wait",
+            "frames": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "base1-return",
+      "scenario": {
+        "version": 1,
+        "name": "after-transition",
+        "map": "base1",
+        "start_frame": 40,
+        "game_frames": 100,
+        "actor_origin": [
+          160,
+          -224,
+          34
+        ],
+        "bot_origin": [
+          32,
+          -224,
+          34
+        ],
+        "expect": {},
+        "steps": [
+          {
+            "id": "settle",
+            "action": "wait",
+            "frames": 10
+          }
+        ]
+      }
+    }
+  ],
+  "readiness_barrier": true,
+  "invariants": [
+    "search_reset_on_transition"
+  ]
+}

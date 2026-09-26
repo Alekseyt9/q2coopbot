@@ -23,6 +23,9 @@ func configureSession(cfg *Config) (*harness.Session, *harness.SessionRunner, er
 		return nil, nil, fmt.Errorf("test.session cannot combine with legacy setup, reconnect exit or gameplay probes")
 	}
 	actor := cfg.TestSessionRole == "actor"
+	if cfg.TestScenarioResult == "" {
+		return nil, nil, fmt.Errorf("test.session requires scenario_result for transition coordination")
+	}
 	if actor != cfg.Idle || actor && cfg.TestRCONPassword == "" {
 		return nil, nil, fmt.Errorf("session actor requires idle and RCON; observer must run bot policy")
 	}
@@ -78,6 +81,7 @@ func (c *Client) prepareSessionPhase() error {
 	}
 	c.testTeleportSent = false
 	c.sessionReadySent, c.sessionStartFrame = false, 0
+	c.sessionTransitionRequested, c.sessionTransitionAcked = false, false
 	c.sessionSetupAt = time.Now()
 	c.scenarioPath = testWalkPath{}
 	return nil

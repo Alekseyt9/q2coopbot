@@ -20,6 +20,8 @@ import (
 )
 
 type Client struct {
+	sessionTransitionRequested       bool
+	sessionTransitionAcked           bool
 	sessionReadySent                 bool
 	sessionStartFrame                int
 	sessionSetupAt                   time.Time
@@ -388,7 +390,11 @@ func (c *Client) run(ctx context.Context) error {
 				return fmt.Errorf("session: %s", c.session.Status.Reason)
 			}
 		}
-		if c.sessionPendingMap != "" && c.frameReady && c.latestFrame > c.lastMoveFrame {
+		pause, ready, err := c.sessionTransitionBarrier()
+		if err != nil {
+			return err
+		}
+		if ready {
 			mapArg, err := transitionMapArgument(c.sessionPendingMap, c.planner.World.Map)
 			if err != nil {
 				return err
@@ -397,6 +403,9 @@ func (c *Client) run(ctx context.Context) error {
 				return err
 			}
 			c.sessionPendingMap = ""
+			continue
+		}
+		if pause {
 			continue
 		}
 		if c.begun && c.testTeleportMap != "" && !c.testTeleportSent && c.planner.World.Map == c.testTeleportMap && c.frameReady {

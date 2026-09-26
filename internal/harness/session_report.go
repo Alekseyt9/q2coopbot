@@ -10,12 +10,13 @@ type PhaseReport struct {
 }
 
 type SessionReport struct {
-	Commands *CommandProof   `json:"observer_commands,omitempty"`
-	Accepted bool            `json:"accepted"`
-	State    string          `json:"state"`
-	Reason   string          `json:"reason,omitempty"`
-	Timeline SessionTimeline `json:"session_timeline"`
-	Phases   []PhaseReport   `json:"phases"`
+	TransitionChecks []TransitionCheck `json:"transition_checks,omitempty"`
+	Commands         *CommandProof     `json:"observer_commands,omitempty"`
+	Accepted         bool              `json:"accepted"`
+	State            string            `json:"state"`
+	Reason           string            `json:"reason,omitempty"`
+	Timeline         SessionTimeline   `json:"session_timeline"`
+	Phases           []PhaseReport     `json:"phases"`
 }
 
 // AnalyzeSession never combines equal frame numbers from different generations.
@@ -105,6 +106,21 @@ func AnalyzeSession(s Session, actor, bot []Trace) SessionReport {
 		r.State = "fixture_failed"
 		r.Reason = "session_incomplete"
 		return r
+	}
+	if len(s.Invariants) > 0 {
+		r.TransitionChecks = checkSearchTransitions(bot)
+		if len(r.TransitionChecks) == 0 {
+			r.State = "behavior_failed"
+			r.Reason = "invariant_not_exercised: search_reset_on_transition"
+			return r
+		}
+		for _, check := range r.TransitionChecks {
+			if !check.Passed {
+				r.State = "behavior_failed"
+				r.Reason = "search_state_after_transition"
+				return r
+			}
+		}
 	}
 	r.Accepted, r.State = true, "passed"
 	return r

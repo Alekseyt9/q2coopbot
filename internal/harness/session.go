@@ -11,11 +11,12 @@ import (
 // Session retains a separate frame budget and behavior expectations per map.
 // A transition is requested only after the preceding phase completed its steps.
 type Session struct {
-	ReadinessBarrier    bool    `json:"readiness_barrier,omitempty"`
-	Version             int     `json:"version"`
-	Name                string  `json:"name"`
-	TransitionTimeoutMS int     `json:"transition_timeout_ms"`
-	Phases              []Phase `json:"phases"`
+	Invariants          []string `json:"invariants,omitempty"`
+	ReadinessBarrier    bool     `json:"readiness_barrier,omitempty"`
+	Version             int      `json:"version"`
+	Name                string   `json:"name"`
+	TransitionTimeoutMS int      `json:"transition_timeout_ms"`
+	Phases              []Phase  `json:"phases"`
 }
 
 type Phase struct {
@@ -42,6 +43,9 @@ func LoadSession(path string) (Session, error) {
 }
 
 func (s Session) Validate() error {
+	if len(s.Invariants) > 1 || len(s.Invariants) == 1 && s.Invariants[0] != "search_reset_on_transition" {
+		return fmt.Errorf("unknown or duplicate session invariant")
+	}
 	if s.Version != 1 || s.Name == "" || len(s.Phases) < 2 || len(s.Phases) > 16 || s.TransitionTimeoutMS < 100 || s.TransitionTimeoutMS > 120000 {
 		return fmt.Errorf("invalid session header")
 	}

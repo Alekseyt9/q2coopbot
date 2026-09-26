@@ -10,9 +10,13 @@ $configPath = (Resolve-Path -LiteralPath $Config).Path
 $base = Split-Path -Parent $configPath
 $cfg = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
 foreach ($key in $cfg.PSObject.Properties.Name) {
-    if ($key -notin @('version','scenarios','timescales','repetitions','parallelism','base_port','runtime_root','tail_frames')) { throw "Unknown suite field: $key" }
+    if ($key -notin @('version','scenarios','sessions','timescales','repetitions','parallelism','base_port','runtime_root','tail_frames')) { throw "Unknown suite field: $key" }
 }
-if ($cfg.version -ne 1 -or $cfg.parallelism -lt 1 -or $cfg.parallelism -gt 8 -or $cfg.repetitions -lt 1 -or $cfg.repetitions -gt 100 -or @($cfg.scenarios).Count -lt 1 -or @($cfg.timescales).Count -lt 1) { throw 'Invalid suite configuration.' }
+$definitions=@()
+foreach($path in $cfg.scenarios) {if($path) {$definitions+=@{path=$path;kind='scenario'}}}
+foreach($path in $cfg.sessions) {if($path) {$definitions+=@{path=$path;kind='session'}}}
+if ($cfg.version -ne 1 -or $cfg.parallelism -lt 1 -or $cfg.parallelism -gt 8 -or $cfg.repetitions -lt 1 -or $cfg.repetitions -gt 100 -or $definitions.Count -lt 1 -or @($cfg.timescales).Count -lt 1) { throw 'Invalid suite configuration.' }
+if(@($definitions | Where-Object kind -eq 'session').Count -gt 0 -and $cfg.tail_frames -lt 2) {throw 'Session suites require tail_frames >= 2'}
 foreach ($scale in $cfg.timescales) { if ($scale -notin @(1,2)) { throw 'Only validated timescales 1 and 2 are supported.' } }
 $sourceRuntime = (Resolve-Path -LiteralPath (Join-Path $base $cfg.runtime_root)).Path
 $output = Join-Path $repo ('workspace/artifacts/scenario-suite-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
@@ -29,8 +33,8 @@ try {
 } finally { Pop-Location }
 $tasks = @()
 if ($null -ne $cfg.tail_frames -and $cfg.tail_frames -ne 0 -and ($cfg.tail_frames -lt 2 -or $cfg.tail_frames -gt 1000)) {throw 'tail_frames must be zero or 2..1000.'}
-foreach ($scenarioFile in $cfg.scenarios) {
-    $scenario = (Resolve-Path -LiteralPath (Join-Path $base $scenarioFile)).Path
+foreach ($definition in $definitions) {
+    $scenario = (Resolve-Path -LiteralPath (Join-Path $base $definition.path)).Path
     foreach ($scale in $cfg.timescales) {
         for ($repeat = 1; $repeat -le $cfg.repetitions; $repeat++) {
             $port = [int]$cfg.base_port + $tasks.Count
@@ -52,7 +56,12 @@ foreach ($scenarioFile in $cfg.scenarios) {
             }
             $snapshot = Join-Path $dir 'scenario.json'
             Copy-Item -LiteralPath $scenario -Destination $snapshot
-            $tasks += [pscustomobject]@{ scenario=$snapshot; scale=$scale; repeat=$repeat; port=$port; dir=$dir; runtime=$runtime; tail=[int]$cfg.tail_frames }
+            $sessionConfig=$null
+            if($definition.kind -eq 'session') {
+                $sessionConfig=Join-Path $dir 'session-trial-config.json'
+                @{session=$snapshot;runtime_root=$runtime;port=$port;timescale=$scale;tail_frames=[int]$cfg.tail_frames} | ConvertTo-Json | Set-Content $sessionConfig -Encoding utf8
+            }
+            $tasks += [pscustomobject]@{ kind=$definition.kind; sessionConfig=$sessionConfig; scenario=$snapshot; scale=$scale; repeat=$repeat; port=$port; dir=$dir; runtime=$runtime; tail=[int]$cfg.tail_frames }
         }
     }
 }
@@ -60,7 +69,22 @@ $worker = {
     param($task,$runner,$client,$reporter)
     $ErrorActionPreference = 'Stop'
     $result = [ordered]@{ state='infrastructure_failed'; port=$task.port; timescale=$task.scale; repeat=$task.repeat; directory=$task.dir; fixture_fingerprint=$task.fixtureFingerprint; started_utc=[datetime]::UtcNow.ToString('o') }
+    $result.kind=$task.kind
     try {
+        if($task.kind -eq 'session') {
+            $sessionRunner=Join-Path (Split-Path -Parent $runner) 'run_session_trial.ps1'
+            & $sessionRunner -Config $task.sessionConfig -PreparedOutput $task.dir -ClientExe $client -ReporterExe $reporter *> (Join-Path $task.dir 'runner.log')
+            $reportPath=Join-Path $task.dir 'report.json'
+            $report=Get-Content $reportPath -Raw | ConvertFrom-Json
+            $result.state=$report.state
+            $result.accepted=$report.accepted
+            $result.expectation='normal_completion'
+            $phaseMetrics=[ordered]@{}
+            for($phase=0;$phase -lt $report.phases.Count;$phase++) {$phaseMetrics["phase_$phase"]=$report.phases[$phase].report.metrics}
+            $result.metrics=@{phases=$phaseMetrics;observer_commands=$report.observer_commands}
+            $result.speed=Get-Content (Join-Path $task.dir 'session-timing.json') -Raw | ConvertFrom-Json
+            $result.report=$reportPath
+        } else {
         $s = Get-Content -LiteralPath $task.scenario -Raw | ConvertFrom-Json
         $args = @{ RuntimeRoot=$task.runtime; ClientExe=$client; ActorScenario=$task.scenario; GameFrames=$s.game_frames; Timescales=@($task.scale); Port=$task.port; OutputRoot=$task.dir; SynchronizedStart=$true; UnlimitedLoopbackRate=$true }
         if ($s.map -ne 'base1') { $args.TransitionMap=$s.map; $args.TransitionAfterFrames=10 }
@@ -79,6 +103,7 @@ $worker = {
         $result.early_stop=$summary.scenario_early_stop
         $result.speed=[ordered]@{ wall_seconds=$summary.wall_seconds; game_fps=$summary.game_fps; measured_speedup=([double]$summary.game_fps/10); frame_gaps=$summary.frame_gaps; decode_errors=$summary.decode_errors; sent_commands=$summary.sent_commands; matched_applied_commands=$summary.matched_applied_commands }
         $result.report=$reportPath
+        }
     } catch { $result.error=$_.Exception.Message }
     $result.finished_utc=[datetime]::UtcNow.ToString('o')
     $result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $task.dir 'result.json') -Encoding utf8
@@ -87,6 +112,7 @@ $worker = {
 $artifactPaths = @($client,$reporter,(Join-Path $output 'suite-config.json'))
 foreach ($task in $tasks) {
     $artifactPaths += $task.scenario
+    if($task.sessionConfig) {$artifactPaths += $task.sessionConfig}
     $artifactPaths += @(Get-ChildItem -LiteralPath $task.runtime -Recurse -File | ForEach-Object FullName)
 }
 $artifactRecords = @(Get-HarnessFileRecords -Root $output -Paths $artifactPaths)
@@ -96,6 +122,7 @@ foreach ($task in $tasks) {
     $fixtureRecords=@($artifactRecords | Where-Object { $_.path.StartsWith($runtimePrefix) } | ForEach-Object { [pscustomobject]@{path=$_.path.Substring($runtimePrefix.Length);sha256=$_.sha256} })
     $scenarioHash=($artifactRecords | Where-Object path -eq ($relativeRun+'/scenario.json')).sha256
     $fixtureRecords+=@([pscustomobject]@{path='scenario';sha256=$scenarioHash},[pscustomobject]@{path='timescale';sha256=[string]$task.scale},[pscustomobject]@{path='tail_frames';sha256=[string]$task.tail})
+    if($task.kind -eq 'session') {$fixtureRecords+=@([pscustomobject]@{path='kind';sha256='session'})}
     $task | Add-Member fixtureFingerprint (Get-HarnessFingerprint -Records $fixtureRecords)
 }
 $gitRevision = & git -C $repo rev-parse HEAD
@@ -142,7 +169,7 @@ $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath -E
 $verificationTimer.Stop()
 $passed = @($results | Where-Object accepted -eq $true).Count
 $expectedFailures = @($results | Where-Object expectation -eq 'expected_failure_matched').Count
-$fps = @($results | Where-Object speed | ForEach-Object { $_.speed.game_fps })
+$fps = @($results | Where-Object {$null -ne $_.speed.game_fps} | ForEach-Object { $_.speed.game_fps })
 $stats = $fps | Measure-Object -Minimum -Maximum -Average
 $summary = [ordered]@{ runs=$tasks.Count; passed=$passed; expected_failures=$expectedFailures; failed=($tasks.Count-$passed); parallelism=$cfg.parallelism; execution_wall_seconds=$timer.Elapsed.TotalSeconds; episodes_per_minute=($tasks.Count*60/$timer.Elapsed.TotalSeconds); game_fps_min=$stats.Minimum; game_fps_max=$stats.Maximum; game_fps_mean=$stats.Average; results=$results }
 $summary.manifest=$manifestPath

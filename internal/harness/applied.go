@@ -36,7 +36,7 @@ func ReadAppliedCommands(path string) ([]AppliedCommand, error) {
 		var r AppliedCommand
 		c := &r.Command
 		n, err := fmt.Sscanf(text, "sv_test_applied_cmd spawncount=%d frame=%d seq=%d kind=%s pitch=%d yaw=%d roll=%d forward=%d side=%d up=%d buttons=%d impulse=%d msec=%d light=%d", &r.Generation, &r.Frame, &r.Sequence, &r.Kind, &c.Pitch, &c.Yaw, &c.Roll, &c.Forward, &c.Side, &c.Up, &c.Buttons, &c.Impulse, &c.Msec, &c.Light)
-		if err != nil || n != 14 || len(strings.Fields(text)) != 15 || r.Generation < 0 || r.Frame < 0 || r.Sequence == 0 {
+		if err != nil || n != 14 || len(strings.Fields(text)) != 15 || r.Generation < 0 || r.Frame < 0 || r.Sequence == 0 || r.Kind != "new" && r.Kind != "old" && r.Kind != "oldest" && r.Kind != "last" {
 			return nil, fmt.Errorf("invalid applied command at server log line %d", line)
 		}
 		rows = append(rows, r)

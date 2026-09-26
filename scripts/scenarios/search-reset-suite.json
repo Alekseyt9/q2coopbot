@@ -1,0 +1,14 @@
+{
+  "timescales": [
+    2
+  ],
+  "base_port": 28940,
+  "sessions": [
+    "search-reset-session.json"
+  ],
+  "runtime_root": "../../workspace/runtime/q2go",
+  "version": 1,
+  "repetitions": 2,
+  "parallelism": 2,
+  "tail_frames": 5
+}

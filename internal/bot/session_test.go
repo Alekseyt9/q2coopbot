@@ -25,7 +25,7 @@ func TestConfigureSessionRoles(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, role := range []string{"actor", "observer"} {
-		cfg := Config{TestSession: path, TestSessionRole: role, FramePaced: true, Duration: time.Minute, Idle: role == "actor", TestRCONPassword: "test"}
+		cfg := Config{TestSession: path, TestSessionRole: role, TestScenarioResult: filepath.Join(t.TempDir(), "completion.json"), FramePaced: true, Duration: time.Minute, Idle: role == "actor", TestRCONPassword: "test"}
 		s, r, err := configureSession(&cfg)
 		if err != nil || s == nil || (r != nil) != (role == "actor") || cfg.TestTeleportMap != "base1" {
 			t.Fatal(s, r, err)

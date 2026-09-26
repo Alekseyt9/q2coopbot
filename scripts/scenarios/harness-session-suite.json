@@ -1,0 +1,11 @@
+{
+  "version":1,
+  "scenarios":["repeated-contact.json"],
+  "sessions":["two-map-session.json"],
+  "timescales":[2],
+  "repetitions":2,
+  "parallelism":2,
+  "base_port":28900,
+  "runtime_root":"../../workspace/runtime/q2go",
+  "tail_frames":5
+}
