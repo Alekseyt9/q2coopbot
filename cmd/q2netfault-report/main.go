@@ -24,12 +24,15 @@ func run() error {
 	}
 	defer f.Close()
 	var cfg struct {
-		Network             netfault.Config `json:"network"`
-		Events              string          `json:"events"`
-		Output              string          `json:"output"`
-		RecoveryMS          int             `json:"recovery_ms"`
-		RequireUpstreamLoss bool            `json:"require_upstream_loss"`
-		BotTrace            string          `json:"bot_trace"`
+		Network              netfault.Config `json:"network"`
+		Events               string          `json:"events"`
+		Output               string          `json:"output"`
+		RecoveryMS           int             `json:"recovery_ms"`
+		RequireUpstreamLoss  bool            `json:"require_upstream_loss"`
+		BotTrace             string          `json:"bot_trace"`
+		ActorTrace           string          `json:"actor_trace"`
+		FollowRecoveryFrames int             `json:"follow_recovery_frames"`
+		ServerLog            string          `json:"server_log"`
 	}
 	d := json.NewDecoder(f)
 	d.DisallowUnknownFields()
@@ -41,6 +44,12 @@ func run() error {
 	}
 	if cfg.Events == "" || cfg.Output == "" {
 		return fmt.Errorf("events and output required")
+	}
+	if cfg.ServerLog != "" && cfg.BotTrace == "" {
+		return fmt.Errorf("server_log requires bot_trace")
+	}
+	if (cfg.ActorTrace != "" || cfg.FollowRecoveryFrames != 0) && (cfg.ActorTrace == "" || cfg.BotTrace == "" || cfg.FollowRecoveryFrames < 1 || cfg.FollowRecoveryFrames > 1000) {
+		return fmt.Errorf("follow check requires actor_trace, bot_trace and follow_recovery_frames 1..1000")
 	}
 	resolve := func(p string) string {
 		if filepath.IsAbs(p) {
@@ -55,6 +64,12 @@ func run() error {
 	inputs := []string{resolve(cfg.Events), *path}
 	if cfg.BotTrace != "" {
 		inputs = append(inputs, resolve(cfg.BotTrace))
+	}
+	if cfg.ActorTrace != "" {
+		inputs = append(inputs, resolve(cfg.ActorTrace))
+	}
+	if cfg.ServerLog != "" {
+		inputs = append(inputs, resolve(cfg.ServerLog))
 	}
 	for _, input := range inputs {
 		inputPath, err := filepath.Abs(input)
@@ -73,7 +88,9 @@ func run() error {
 	rows, err := netfault.ReadEvents(resolve(cfg.Events))
 	var r struct {
 		netfault.Report
-		Game *harness.NetworkFramesReport `json:"game,omitempty"`
+		Game     *harness.NetworkFramesReport `json:"game,omitempty"`
+		Follow   *harness.NetworkFollowReport `json:"follow,omitempty"`
+		Commands *harness.NetworkCommandProof `json:"observer_commands,omitempty"`
 	}
 	if err != nil {
 		r.Report = netfault.Report{State: "trace_invalid", Reason: err.Error()}
@@ -93,6 +110,38 @@ func run() error {
 				r.Accepted = false
 				r.State = game.State
 				r.Reason = game.Reason
+			}
+			if r.Accepted && cfg.ServerLog != "" {
+				applied, appliedErr := harness.ReadAppliedCommands(resolve(cfg.ServerLog))
+				if appliedErr != nil {
+					r.Accepted = false
+					r.State = "trace_invalid"
+					r.Reason = appliedErr.Error()
+				} else {
+					proof := harness.VerifyNetworkCommands(rows, bot, applied)
+					r.Commands = &proof
+					if !proof.Accepted {
+						r.Accepted = false
+						r.State = "trace_invalid"
+						r.Reason = proof.Reason
+					}
+				}
+			}
+			if r.Accepted && cfg.ActorTrace != "" {
+				actor, actorErr := harness.ReadTrace(resolve(cfg.ActorTrace))
+				if actorErr != nil {
+					r.Accepted = false
+					r.State = "trace_invalid"
+					r.Reason = actorErr.Error()
+				} else {
+					follow := harness.VerifyNetworkFollow(rows, bot, actor, cfg.FollowRecoveryFrames)
+					r.Follow = &follow
+					if !follow.Accepted {
+						r.Accepted = false
+						r.State = follow.State
+						r.Reason = follow.Reason
+					}
+				}
 			}
 		}
 	}

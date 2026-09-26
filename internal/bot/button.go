@@ -7,13 +7,27 @@ import (
 )
 
 type buttonTask struct {
-	doorModel   int
-	buttonModel int
-	initial     quake.Vec3
-	stand       quake.Vec3
-	touch       quake.Vec3
-	phase       string
-	started     int
+	doorModel      int
+	buttonModel    int
+	initial        quake.Vec3
+	stand          quake.Vec3
+	touch          quake.Vec3
+	phase          string
+	started        int
+	teammateEntity int
+}
+
+func (p *Planner) cancelButtonTask(frame int) {
+	if p.button != nil {
+		p.button = nil
+		p.buttonCooldown = frame + 30
+	}
+}
+
+func (p *Planner) validateButtonOwner(s quake.Snapshot) {
+	if p.button != nil && (s.Health <= 0 || s.Teammate == nil || s.TeammateEntity != p.button.teammateEntity) {
+		p.cancelButtonTask(s.Frame)
+	}
 }
 
 func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
@@ -94,7 +108,7 @@ func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
 		return nil
 	}
 	return &buttonTask{doorModel: model, buttonModel: button.Model, initial: doorOrigin,
-		stand: chosen[0], touch: chosen[1], phase: "approach", started: s.Frame}
+		stand: chosen[0], touch: chosen[1], phase: "approach", started: s.Frame, teammateEntity: s.TeammateEntity}
 }
 
 func (p *Planner) applyButtonTask(s quake.Snapshot) {

@@ -1,0 +1,14 @@
+{
+  "session": "network-follow-session.json",
+  "runtime_root": "../../workspace/runtime/q2go",
+  "server_port": 29060,
+  "proxy_port": 29061,
+  "timescale": 2,
+  "run_ms": 12000,
+  "after_ms": 1000,
+  "duration_ms": 1000,
+  "arm_phase": 0,
+  "recovery_ms": 500,
+  "follow_recovery_frames": 30,
+  "require_upstream_loss": false
+}

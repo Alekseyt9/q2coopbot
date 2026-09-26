@@ -28,6 +28,7 @@ func VerifyNetworkFrames(events []netfault.Event, rows []Trace) NetworkFramesRep
 	type delivery struct {
 		forwarded, dropped bool
 		stage              string
+		barrier            bool
 	}
 	packets := map[netfault.GameFrame]delivery{}
 	for i, e := range events {
@@ -43,6 +44,9 @@ func VerifyNetworkFrames(events []netfault.Event, rows []Trace) NetworkFramesRep
 				return r
 			}
 			p := packets[f]
+			if e.Barrier != nil {
+				p.barrier = true
+			}
 			if e.Action == "drop" {
 				if e.Stage != "blackout" {
 					r.Reason = "frame dropped outside blackout"
@@ -69,6 +73,10 @@ func VerifyNetworkFrames(events []netfault.Event, rows []Trace) NetworkFramesRep
 		p := packets[key(row.Frame)]
 		if !p.forwarded {
 			r.Reason = "observed frame has no forwarded proxy packet"
+			return r
+		}
+		if p.barrier && row.SessionStartFrame != row.Frame {
+			r.Reason = "proxy readiness does not match client phase start"
 			return r
 		}
 		if i > 0 {

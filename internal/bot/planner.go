@@ -266,6 +266,8 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	}
 	previous := p.World.Snapshot
 	p.World.Snapshot = s
+	// Drop the interaction before any early return from hidden-player search.
+	p.validateButtonOwner(s)
 	p.updateTeammateSoundCue(s)
 	p.updateTeammateMotion(s)
 	p.updateTeammateEvidence(previous, s)
@@ -375,6 +377,11 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 	}
 	p.goalPoint = goal
+	// A button is a subtask of following this player, not an override for a
+	// newly selected health objective or an already restored close contact.
+	if p.World.Goal != "follow_teammate" {
+		p.cancelButtonTask(s.Frame)
+	}
 	if p.Nav == nil {
 		if p.World.Geometry.HasCollision() && quake.Horizontal(s.Self, goal) < 256 && math.Abs(s.Self[2]-goal[2]) < 40 {
 			from, to := s.Self, goal
