@@ -20,6 +20,9 @@ import (
 )
 
 type Client struct {
+	weaponSwitch                     weaponSwitch
+	inventoryWatch                   inventoryWatch
+	testWeaponSwitchFixture          string
 	sessionConnection                int
 	connection                       int
 	sessionObserverCycle             observerRespawnState
@@ -230,6 +233,8 @@ func (c *Client) handle(packet []byte) {
 		c.firstMoveFrame = -1
 		c.lastMoveFrame = -1
 		c.planner.setMap("", c.root)
+		c.weaponSwitch = weaponSwitch{}
+		c.inventoryWatch = inventoryWatch{}
 		c.seenCommands = map[string]bool{}
 		command := fmt.Sprintf("configstrings %d 0", c.spawncount)
 		c.seenCommands["cmd "+command] = true
@@ -441,6 +446,18 @@ func (c *Client) run(ctx context.Context) error {
 					return err
 				}
 			}
+			if c.testWeaponSwitchFixture != "" {
+				setup := []string{"give Shotgun", "give Shells 1"}
+				if c.testWeaponSwitchFixture == "stocked" {
+					setup = append(setup, "give Machinegun", "give Bullets 20")
+				}
+				setup = append(setup, "use Shotgun")
+				for _, command := range setup {
+					if err := c.command(command); err != nil {
+						return err
+					}
+				}
+			}
 			c.testTeleportSentFrame = c.latestFrame
 			log.Printf("scenario test teleport map=%s target=%v", c.testTeleportMap, p)
 			continue
@@ -554,6 +571,20 @@ func (c *Client) run(ctx context.Context) error {
 				c.planner.setTestButtonGoal()
 			}
 			cmd := c.planner.command(c.previous)
+			weaponRequest := ""
+			if !safetyStop && !c.idle && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
+				weaponRequest = c.weaponSwitch.command(c.planner.World.Snapshot)
+				if request := c.inventoryWatch.command(c.planner.World.Snapshot); request != "" {
+					if err := c.command(request); err != nil {
+						return err
+					}
+				}
+				if weaponRequest != "" {
+					if err := c.command(weaponRequest); err != nil {
+						return err
+					}
+				}
+			}
 			if (c.testGroundEdgeProbe || c.testDoorProbe || c.testDoorPassProbe || c.testButtonProbe) && c.testTeleportSent && !c.planner.World.Snapshot.OnGround {
 				cmd = quake.UserCmd{}
 				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_teleport_settling"}
@@ -680,46 +711,53 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			if c.traceFile != nil && c.framePaced {
 				entry := struct {
-					Connection        int                    `json:"connection"`
-					ObserverKill      bool                   `json:"test_observer_kill,omitempty"`
-					ObserverRespawn   bool                   `json:"test_observer_respawn,omitempty"`
-					SessionStartFrame int                    `json:"session_start_frame,omitempty"`
-					Session           *harness.SessionStatus `json:"session,omitempty"`
-					Map               string                 `json:"map"`
-					Spawncount        int                    `json:"spawncount"`
-					EpisodeFrame      int                    `json:"episode_frame"`
-					Frame             int                    `json:"frame"`
-					ObservationFrame  int                    `json:"observation_frame"`
-					ObservationAgeMS  int64                  `json:"observation_age_ms"`
-					RelativeFrame     int                    `json:"relative_frame"`
-					ClientSequence    uint32                 `json:"client_sequence"`
-					Self              quake.Vec3             `json:"self"`
-					SelfEntity        int                    `json:"self_entity"`
-					Teammate          *quake.Vec3            `json:"teammate,omitempty"`
-					TeammateEntity    int                    `json:"teammate_entity,omitempty"`
-					LastTeammate      *quake.Vec3            `json:"last_teammate,omitempty"`
-					TeammateAgeFrames *int                   `json:"teammate_age_frames,omitempty"`
-					Health            int16                  `json:"health"`
-					OnGround          bool                   `json:"on_ground"`
-					Goal              string                 `json:"goal"`
-					GoalPoint         *quake.Vec3            `json:"goal_point,omitempty"`
-					Route             []quake.Waypoint       `json:"route,omitempty"`
-					Pickups           []quake.Object         `json:"pickups,omitempty"`
-					Scenario          *harness.Status        `json:"scenario,omitempty"`
-					SearchTarget      *quake.Vec3            `json:"search_target,omitempty"`
-					SearchAttempt     *SearchAttempt         `json:"search_attempt,omitempty"`
-					SearchRoute       *SearchRouteCheck      `json:"search_route,omitempty"`
-					TeammateSound     *TeammateSoundCue      `json:"teammate_sound,omitempty"`
-					TeammateMotion    *TeammateMotion        `json:"teammate_motion,omitempty"`
-					TeammateEvidence  *TeammateEvidence      `json:"teammate_evidence,omitempty"`
-					Navigation        string                 `json:"navigation"`
-					GeometryStatus    string                 `json:"geometry_status"`
-					Elevator          string                 `json:"elevator,omitempty"`
-					Movers            []quake.Mover          `json:"movers,omitempty"`
-					Sounds            []quake.SoundEvent     `json:"sounds,omitempty"`
-					Enemies           []quake.Object         `json:"enemies,omitempty"`
-					Arbitration       CommandDecision        `json:"arbitration"`
-					Command           quake.UserCmd          `json:"sent_command"`
+					Connection         int                    `json:"connection"`
+					ObserverKill       bool                   `json:"test_observer_kill,omitempty"`
+					ObserverRespawn    bool                   `json:"test_observer_respawn,omitempty"`
+					SessionStartFrame  int                    `json:"session_start_frame,omitempty"`
+					Session            *harness.SessionStatus `json:"session,omitempty"`
+					Map                string                 `json:"map"`
+					Spawncount         int                    `json:"spawncount"`
+					EpisodeFrame       int                    `json:"episode_frame"`
+					Frame              int                    `json:"frame"`
+					ObservationFrame   int                    `json:"observation_frame"`
+					ObservationAgeMS   int64                  `json:"observation_age_ms"`
+					RelativeFrame      int                    `json:"relative_frame"`
+					ClientSequence     uint32                 `json:"client_sequence"`
+					Self               quake.Vec3             `json:"self"`
+					SelfEntity         int                    `json:"self_entity"`
+					Teammate           *quake.Vec3            `json:"teammate,omitempty"`
+					TeammateEntity     int                    `json:"teammate_entity,omitempty"`
+					LastTeammate       *quake.Vec3            `json:"last_teammate,omitempty"`
+					TeammateAgeFrames  *int                   `json:"teammate_age_frames,omitempty"`
+					Health             int16                  `json:"health"`
+					Ammo               int16                  `json:"ammo"`
+					Armor              int16                  `json:"armor"`
+					Weapon             string                 `json:"weapon"`
+					WeaponRequest      string                 `json:"weapon_request,omitempty"`
+					Inventory          []quake.InventoryItem  `json:"inventory,omitempty"`
+					InventoryKnown     bool                   `json:"inventory_known"`
+					InventoryAgeFrames int                    `json:"inventory_age_frames"`
+					OnGround           bool                   `json:"on_ground"`
+					Goal               string                 `json:"goal"`
+					GoalPoint          *quake.Vec3            `json:"goal_point,omitempty"`
+					Route              []quake.Waypoint       `json:"route,omitempty"`
+					Pickups            []quake.Object         `json:"pickups,omitempty"`
+					Scenario           *harness.Status        `json:"scenario,omitempty"`
+					SearchTarget       *quake.Vec3            `json:"search_target,omitempty"`
+					SearchAttempt      *SearchAttempt         `json:"search_attempt,omitempty"`
+					SearchRoute        *SearchRouteCheck      `json:"search_route,omitempty"`
+					TeammateSound      *TeammateSoundCue      `json:"teammate_sound,omitempty"`
+					TeammateMotion     *TeammateMotion        `json:"teammate_motion,omitempty"`
+					TeammateEvidence   *TeammateEvidence      `json:"teammate_evidence,omitempty"`
+					Navigation         string                 `json:"navigation"`
+					GeometryStatus     string                 `json:"geometry_status"`
+					Elevator           string                 `json:"elevator,omitempty"`
+					Movers             []quake.Mover          `json:"movers,omitempty"`
+					Sounds             []quake.SoundEvent     `json:"sounds,omitempty"`
+					Enemies            []quake.Object         `json:"enemies,omitempty"`
+					Arbitration        CommandDecision        `json:"arbitration"`
+					Command            quake.UserCmd          `json:"sent_command"`
 				}{
 					Connection:   c.connection,
 					ObserverKill: observerKill, ObserverRespawn: observerRespawn,
@@ -734,6 +772,9 @@ func (c *Client) run(ctx context.Context) error {
 					LastTeammate:      c.planner.World.Snapshot.LastTeammate,
 					TeammateAgeFrames: c.planner.World.Snapshot.TeammateAgeFrames,
 					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround,
+					Ammo: c.planner.World.Snapshot.Ammo, Armor: c.planner.World.Snapshot.Armor,
+					Weapon: c.planner.World.Snapshot.Weapon, WeaponRequest: weaponRequest,
+					Inventory: c.planner.World.Snapshot.Inventory, InventoryKnown: c.planner.World.Snapshot.InventoryKnown, InventoryAgeFrames: c.planner.World.Snapshot.InventoryAgeFrames,
 					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
 					Route: c.planner.World.Route, Pickups: c.planner.World.Snapshot.Pickups,
 					Scenario:         c.scenarioStatus(),

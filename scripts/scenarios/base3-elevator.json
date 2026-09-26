@@ -3,23 +3,68 @@
   "name": "base3-elevator-human-repro",
   "map": "base3",
   "start_frame": 40,
-  "game_frames": 220,
+  "game_frames": 300,
   "actor_origin": [
-    795.375,
-    -78.5,
-    -231.875
+    840.5,
+    383.375,
+    -423.875
   ],
   "bot_origin": [
-    833,
-    226.625,
+    830.25,
+    296.375,
     -423.875
   ],
   "expect": {},
   "steps": [
     {
+      "id": "ride-with-bot",
       "action": "wait",
+      "frames": 60
+    },
+    {
+      "id": "near-exit",
+      "action": "place",
+      "timeout_frames": 10,
+      "target": [
+        826.5,
+        228.75,
+        -231.875
+      ]
+    },
+    {
+      "id": "keep-cover",
+      "action": "wait",
+      "frames": 2
+    },
+    {
+      "id": "leave-cover-radius",
+      "action": "place",
+      "timeout_frames": 10,
+      "target": [
+        781.625,
+        183.875,
+        -231.875
+      ]
+    },
+    {
+      "id": "start-follow",
+      "action": "wait",
+      "frames": 3
+    },
+    {
+      "id": "wait-on-floor",
+      "action": "place",
+      "timeout_frames": 10,
+      "target": [
+        795.375,
+        -78.5,
+        -231.875
+      ]
+    },
+    {
       "id": "wait-for-bot",
-      "frames": 170
+      "action": "wait",
+      "frames": 140
     }
   ],
   "map_entry": "base2a",

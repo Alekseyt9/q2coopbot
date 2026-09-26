@@ -89,6 +89,10 @@ type SoundEvent struct {
 
 const playerSkinsConfigBase = 32 + 5*256 // CS_PLAYERSKINS in protocol 34.
 type Decoder struct {
+	Inventory          [256]int16
+	InventoryKnown     bool
+	InventoryFrame     int
+	latestFrame        int
 	Config             map[int]string
 	Baselines          map[int]Entity
 	Frames             map[int]Frame
@@ -407,6 +411,7 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 		switch op {
 		case 6:
 		case 12:
+			d.Inventory, d.InventoryKnown, d.InventoryFrame, d.latestFrame = [256]int16{}, false, 0, 0
 			d.ServerdataSeen = true
 			d.Sounds = nil
 			d.Config = map[int]string{}
@@ -478,6 +483,7 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 				return frames, e
 			}
 			frames = append(frames, f)
+			d.latestFrame = f.Number
 		case 10:
 			if e = r.skip(1); e != nil {
 				return frames, e
@@ -576,10 +582,15 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 			}
 			d.Sounds = append(d.Sounds, sound)
 		case 5:
-			e = r.skip(512)
+			data, err := r.take(512)
+			e = err
 			if e != nil {
 				return frames, e
 			}
+			for i := range d.Inventory {
+				d.Inventory[i] = int16(binary.LittleEndian.Uint16(data[i*2:]))
+			}
+			d.InventoryKnown, d.InventoryFrame = true, d.latestFrame
 		case 16:
 			size, e := r.short()
 			if e != nil {
@@ -613,28 +624,41 @@ type Mover struct {
 	Origin Vec3 `json:"origin"`
 }
 type Snapshot struct {
-	Map                string       `json:"map"`
-	Frame              int          `json:"frame"`
-	Self               Vec3         `json:"self"`
-	OnGround           bool         `json:"on_ground"`
-	Teammate           *Vec3        `json:"teammate,omitempty"`
-	TeammateEntity     int          `json:"teammate_entity,omitempty"`
-	LastTeammate       *Vec3        `json:"last_teammate,omitempty"`
-	LastTeammateEntity int          `json:"last_teammate_entity,omitempty"`
-	TeammateAgeFrames  *int         `json:"teammate_age_frames,omitempty"`
-	Health             int16        `json:"health"`
-	Armor              int16        `json:"armor"`
-	Ammo               int16        `json:"ammo"`
-	Weapon             string       `json:"weapon"`
-	DeltaAngles        [3]int16     `json:"delta_angles"`
-	Enemies            []Object     `json:"enemies"`
-	Pickups            []Object     `json:"pickups"`
-	Movers             []Mover      `json:"movers,omitempty"`
-	Sounds             []SoundEvent `json:"sounds,omitempty"`
+	Inventory          []InventoryItem `json:"inventory,omitempty"`
+	InventoryKnown     bool            `json:"inventory_known"`
+	InventoryAgeFrames int             `json:"inventory_age_frames"`
+	InventoryOpen      bool            `json:"inventory_open"`
+	Map                string          `json:"map"`
+	Frame              int             `json:"frame"`
+	Self               Vec3            `json:"self"`
+	OnGround           bool            `json:"on_ground"`
+	Teammate           *Vec3           `json:"teammate,omitempty"`
+	TeammateEntity     int             `json:"teammate_entity,omitempty"`
+	LastTeammate       *Vec3           `json:"last_teammate,omitempty"`
+	LastTeammateEntity int             `json:"last_teammate_entity,omitempty"`
+	TeammateAgeFrames  *int            `json:"teammate_age_frames,omitempty"`
+	Health             int16           `json:"health"`
+	Armor              int16           `json:"armor"`
+	Ammo               int16           `json:"ammo"`
+	Weapon             string          `json:"weapon"`
+	DeltaAngles        [3]int16        `json:"delta_angles"`
+	Enemies            []Object        `json:"enemies"`
+	Pickups            []Object        `json:"pickups"`
+	Movers             []Mover         `json:"movers,omitempty"`
+	Sounds             []SoundEvent    `json:"sounds,omitempty"`
 }
 
 func (d *Decoder) Snapshot(f Frame) Snapshot {
 	s := Snapshot{Map: d.Map, Frame: f.Number, Self: f.Origin, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles}
+	s.InventoryKnown, s.InventoryOpen = d.InventoryKnown, f.Stats[13]&2 != 0
+	if d.InventoryKnown {
+		s.InventoryAgeFrames = max(0, f.Number-d.InventoryFrame)
+		for id, count := range d.Inventory {
+			if count != 0 {
+				s.Inventory = append(s.Inventory, InventoryItem{ID: id, Name: d.Config[32+4*256+id], Count: int(count)})
+			}
+		}
+	}
 	if d.lastMap != d.Map || f.Number < d.lastTeammateAt {
 		d.lastTeammate = nil
 		d.lastTeammateAt = 0

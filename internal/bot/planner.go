@@ -420,6 +420,9 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.routeKnown = false
 	}
 	if !p.routeKnown || goalChanged || p.elevator == nil && now.Sub(p.routeAt) > 4*time.Second || teleported {
+		// A ride owns the board/exit pair of this route. A replacement route
+		// must not inherit its state or suppress subsequent route refreshes.
+		p.elevator = nil
 		p.routeAt = now
 		p.target = goal
 		p.routeIndex = 0
@@ -551,6 +554,11 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 	var enemy *quake.Object
 	best := math.Inf(1)
 	for i := range s.Enemies {
+		// Rank only confirmed lines of fire. A nearer enemy behind a wall
+		// must not hide a farther visible target from combat arbitration.
+		if s.Enemies[i].ClearShot == nil || !*s.Enemies[i].ClearShot {
+			continue
+		}
 		d := quake.Distance(s.Self, s.Enemies[i].Origin)
 		if d < best {
 			best = d

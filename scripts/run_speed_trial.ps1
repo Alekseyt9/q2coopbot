@@ -17,6 +17,7 @@ param(
     [switch]$SynchronizedStart,
     [switch]$ElevatorTrial,
     [switch]$CombatMoveTrial,
+	[ValidateSet('','blaster','stocked')][string]$WeaponSwitchTrial = '',
     [switch]$ObservationGapTrial,
     [switch]$FriendlyFireTrial,
     [switch]$GroundEdgeTrial,
@@ -43,6 +44,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if ($WeaponSwitchTrial -and -not $CombatMoveTrial) { throw 'WeaponSwitchTrial requires CombatMoveTrial' }
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if ($ScenarioTailFrames -ne 0 -and (-not $ActorScenario -or $ScenarioTailFrames -lt 2 -or $ScenarioTailFrames -gt 1000)) { throw 'Scenario tail requires an actor scenario and 2..1000 frames.' }
 $fixture = $null
@@ -368,6 +370,11 @@ foreach ($scale in $Timescales) {
         if ($BSPFailureTrial -eq 'incomplete') { $botConfig.test.partial_bsp = $true }
         if ($NoAASTrial) { $botConfig.test.no_aas = $true }
         if ($FriendlyFireTrial) { $botConfig.test.hold_position = $true }
+		if ($WeaponSwitchTrial) {
+			$botConfig.test.weapon_switch_fixture = $WeaponSwitchTrial
+			$botConfig.test.teleport_map = 'base1'
+			$botConfig.test.teleport = '32,-224,24'
+		}
         if ($SearchApproachOnly) { $botConfig.test.disable_probe = $true }
         if ($actorScenarioDefinition) {
             $botConfig.test.teleport_map = $actorScenarioDefinition.map

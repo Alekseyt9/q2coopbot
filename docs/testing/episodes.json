@@ -192,7 +192,7 @@
       "id": "base3-stairs-20260926-190951",
       "title": "Застревание на лестнице в живой игре",
       "map": "base3",
-      "status": "fixed_pending_e2e",
+      "status": "verified_1x_2x",
       "reproduction": "ready",
       "scenario": "scripts/scenarios/base3-stairs.json",
       "evidence": "workspace/artifacts/live-stairs-20260926-190951/trace.jsonl",
@@ -236,13 +236,14 @@
         "path": "workspace/runtime/q2go/baseq2/maps/base3.aas",
         "sha256": "0EEDB66F2F12367DEAB1DFC9241DBFAFAC77558F2EA230239F9F226F92989054"
       },
-      "fix_notes": "Воспроизведено после подбора игроком двух ближайших аптечек: переключение целей на границе 300 units. Удержание выбранной видимой аптечки до исчезновения или таймаута. Сценарий изолирует навигацию с bot_invulnerable=true."
+      "fix_notes": "Воспроизведено после подбора игроком двух ближайших аптечек: переключение целей на границе 300 units. Удержание выбранной видимой аптечки до исчезновения или таймаута. Сценарий изолирует навигацию с bot_invulnerable=true.",
+      "verification_report": "workspace/artifacts/episode-regressions-20260926-192807-520/report.json"
     },
     {
       "id": "base3-elevator-20260926-191435",
       "title": "Застревание перед лифтом в живой игре",
       "map": "base3",
-      "status": "open",
+      "status": "fixed_pending_e2e",
       "reproduction": "observation_only",
       "scenario": "scripts/scenarios/base3-elevator.json",
       "evidence": "workspace/artifacts/live-elevator-20260926-191435/trace.jsonl",
@@ -251,7 +252,9 @@
         "Восстановить подход к лифту, положение платформы и игрока, состояние кнопок и триггеров"
       ],
       "acceptance": null,
-      "expected_result": "Бот вызывает или дожидается лифта, садится на платформу и продолжает сопровождение."
+      "expected_result": "Бот вызывает или дожидается лифта, садится на платформу и продолжает сопровождение.",
+      "fix_notes": "Исправлено сохранение состояния elevator после замены маршрута; при начале посадки сбрасывается наземный detour. Replay сохранённой трассы до исправления выявляет orphan elevator на frame 3255; после исправления инвариант соблюдён. Сценарий с историей подъёма проходит на 2x, но полный исходный срыв/возврат под лифт пока не принят.",
+      "regression_test": "internal/bot/elevator_replay_test.go: TestRouteReplacementDropsOldElevator, TestElevatorLiveTraceAudit"
     },
     {
       "id": "base3-lost-20260926-192240",
@@ -267,6 +270,144 @@
       ],
       "acceptance": null,
       "expected_result": "После потери видимости бот обоснованно ищет игрока и восстанавливает сопровождение либо явно фиксирует причину отказа."
+    },
+    {
+      "id": "base2-stuck-20260926-192906",
+      "title": "Повторное застревание в живой игре",
+      "map": "base2",
+      "status": "open",
+      "reproduction": "observation_only",
+      "scenario": "",
+      "evidence": "workspace/artifacts/live-stuck-20260926-192906/trace.jsonl",
+      "symptom": "Игрок сообщает о новом застревании. frame=1503; self=-13,625,-415,75,-167,875; health=38; goal=wait_for_teammate; navigation=ready; reason=no_movement_goal; elevator=",
+      "missing_setup": [
+        "Восстановить подход к месту и состояние динамических объектов; установить причину остановки"
+      ],
+      "acceptance": null,
+      "expected_result": "Бот выходит из застревания и восстанавливает сопровождение либо явно прекращает недоступный манёвр."
+    },
+    {
+      "id": "bunk1-stuck-20260926-193319",
+      "title": "Повторное застревание в живой игре",
+      "map": "bunk1",
+      "status": "open",
+      "reproduction": "observation_only",
+      "scenario": "",
+      "evidence": "workspace/artifacts/live-stuck-20260926-193319/trace.jsonl",
+      "symptom": "Повторное застревание в живой игре (сообщение игрока). frame=953; self=293,125,-1023,5,24,125; health=98; goal=follow_teammate; navigation=direct_clear; reason=no_verified_landing",
+      "missing_setup": [
+        "Восстановить подход и динамические объекты; установить причину остановки"
+      ],
+      "acceptance": null,
+      "expected_result": "Бот восстанавливает сопровождение без бесконечной остановки"
+    },
+    {
+      "id": "bunk1-weapon-pickup-20260926-193319",
+      "title": "Бот не подбирает новое оружие",
+      "map": "bunk1",
+      "status": "open",
+      "reproduction": "observation_only",
+      "scenario": "",
+      "evidence": "workspace/artifacts/live-stuck-20260926-193319/trace.jsonl",
+      "symptom": "Бот не подбирает новое оружие (сообщение игрока). frame=953; self=293,125,-1023,5,24,125; health=98; goal=follow_teammate; navigation=direct_clear; reason=no_verified_landing",
+      "missing_setup": [
+        "Установить оружие и его положение; проверить распознавание, выбор цели подбора и подтверждение получения"
+      ],
+      "acceptance": null,
+      "expected_result": "Бот распознаёт достижимое полезное оружие, подбирает его и возвращается к сопровождению",
+      "fix_notes": "Текущий выбор предметов в planner ограничен здоровьем; модели оружия не классифицируются Snapshot как pickups. Требуется отдельная реализация распознавания и цели подбора оружия, не считать исправленным."
+    },
+    {
+      "id": "bunk1-no-fire-20260926-193729",
+      "title": "Бот не стреляет при видимых игроку монстрах",
+      "map": "bunk1",
+      "status": "fixed_pending_e2e",
+      "reproduction": "observation_only",
+      "scenario": "",
+      "evidence": "workspace/artifacts/live-no-fire-20260926-193729/trace.jsonl",
+      "symptom": "Сообщение игрока: монстры видимы, бот не стреляет. frame=3373; self=-381,875,-234,75,24,125; health=60; goal=follow_teammate; reason=no_verified_landing; observed_enemies=7; buttons=0",
+      "missing_setup": [
+        "Проверить видимость и прямую линию огня от бота, союзника на линии, оружие и патроны; воспроизвести состояние монстров"
+      ],
+      "acceptance": null,
+      "expected_result": "Бот стреляет по живому противнику при подтверждённой безопасной линии огня и доступном оружии.",
+      "fix_notes": "В 409 кадрах сохранённой трассы есть видимый враг ближе 650, но ближайший враг скрыт. Выбор цели теперь исключает неподтверждённую линию огня до ранжирования по расстоянию. Последний кадр с видимыми врагами дальше 650 этим не меняется. Нужен точный E2E с закрытым ближним и видимым дальним монстром.",
+      "regression_test": "internal/bot/combat_selection_test.go: TestCoveredNearestEnemyDoesNotHideVisibleTarget"
+    },
+    {
+      "id": "bunk1-stuck-20260926-194231",
+      "title": "Повторное зависание бота в живой игре",
+      "map": "bunk1",
+      "status": "open",
+      "reproduction": "observation_only",
+      "scenario": "",
+      "evidence": "workspace/artifacts/live-stuck-20260926-194231/trace.jsonl",
+      "symptom": "Сообщение игрока: бот опять завис. frame=6280; self=-969,-65,5,232,125; health=60; goal=follow_teammate; navigation=direct_clear; reason=no_verified_landing",
+      "missing_setup": [
+        "Восстановить подход к месту и динамическое состояние; установить причину остановки"
+      ],
+      "acceptance": null,
+      "expected_result": "Восстановление сопровождения без бесконечного зависания"
+    },
+    {
+      "id": "base2-elevator-runtime-aas-20260926",
+      "title": "Текущий AAS не строит маршрут контрольного лифта base2",
+      "map": "base2",
+      "status": "open",
+      "reproduction": "observation_only",
+      "scenario": "",
+      "evidence": "workspace/artifacts/elevator-route-owner-2x/summary.json",
+      "symptom": "ElevatorTrial с текущим runtime AAS: нет фаз лифта, маршрут недоступен; с архивным aas-base2-elevator-final-20260925 тест проходит. Текущий AAS: 3454 области / 4568 поддерживаемых переходов, архивный: 3456 / 4556.",
+      "missing_setup": [
+        "Закрепить воспроизведение ElevatorTrial в runner реестра и сопоставить изменения AAS/исходного BSP"
+      ],
+      "acceptance": null,
+      "expected_result": "Контрольный лифт проходит со штатным актуальным AAS, без подмены архивным."
+    },
+    {
+      "id": "bunk1-ammo-pickup-20260926-194648",
+      "title": "Бот не подбирает патроны",
+      "map": "bunk1",
+      "status": "open",
+      "reproduction": "observation_only",
+      "scenario": "",
+      "evidence": "workspace/artifacts/live-pickups-20260926-194648/trace.jsonl",
+      "symptom": "Сообщение игрока: бот не подбирает патроны. Контекст записи: frame=8763; self=-969,-65,5,232,125; health=60; goal=wait_for_teammate. Конкретный предмет и его доступность пока не установлены.",
+      "missing_setup": [
+        "Установить конкретные патроны и положение предмета; зафиксировать инвентарь, достижимость и подтверждение подбора"
+      ],
+      "acceptance": null,
+      "expected_result": "Бот выбирает полезные достижимые патроны с учётом запаса и лимитов, подтверждает подбор и возвращается к сопровождению."
+    },
+    {
+      "id": "bunk1-armor-pickup-20260926-194648",
+      "title": "Бот не подбирает броню",
+      "map": "bunk1",
+      "status": "open",
+      "reproduction": "observation_only",
+      "scenario": "",
+      "evidence": "workspace/artifacts/live-pickups-20260926-194648/trace.jsonl",
+      "symptom": "Сообщение игрока: бот не подбирает броню. Контекст записи: frame=8763; self=-969,-65,5,232,125; health=60; goal=wait_for_teammate. Конкретный предмет и его доступность пока не установлены.",
+      "missing_setup": [
+        "Установить конкретные броню и положение предмета; зафиксировать инвентарь, достижимость и подтверждение подбора"
+      ],
+      "acceptance": null,
+      "expected_result": "Бот выбирает полезные достижимые броню с учётом запаса и лимитов, подтверждает подбор и возвращается к сопровождению."
+    },
+    {
+      "id": "bunk1-empty-ammo-weapon-switch-20260926-194743",
+      "title": "Не переключается на другое оружие после исчерпания патронов",
+      "map": "bunk1",
+      "status": "open",
+      "reproduction": "observation_only",
+      "scenario": "",
+      "evidence": "workspace/artifacts/live-weapon-switch-20260926-194743/trace.jsonl",
+      "symptom": "Сообщение игрока: после исчерпания патронов бот не переключается на другое оружие. Контекст записи: frame=9294; self=-969,-65,5,232,125; health=60; goal=wait_for_teammate. Исчерпание патронов и состав инвентаря требуют отдельного подтверждения; историческая трасса не содержит этих полей.",
+      "missing_setup": [
+        "Зафиксировать активное оружие, остаток его патронов и доступный инвентарь; воспроизвести расход последнего патрона и подтвердить смену оружия сервером"
+      ],
+      "acceptance": null,
+      "expected_result": "После исчерпания патронов бот выбирает доступное оружие с боезапасом либо Blaster, подтверждает переключение и возобновляет огонь при безопасной линии."
     }
   ]
 }

@@ -20,6 +20,7 @@ import (
 
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
+	TestWeaponSwitchFixture             string
 	TestInvulnerable                    bool
 	TestInitialHealth                   int
 	TestChangeEntry                     string
@@ -130,6 +131,9 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if cfg.TestInvulnerable && (!cfg.FramePaced || cfg.TestTeleport == "") {
 		return fmt.Errorf("test invulnerability requires frame pacing and teleport")
+	}
+	if cfg.TestWeaponSwitchFixture != "" && (cfg.TestWeaponSwitchFixture != "blaster" && cfg.TestWeaponSwitchFixture != "stocked" || !cfg.FramePaced || cfg.TestTeleport == "") {
+		return fmt.Errorf("weapon_switch_fixture requires blaster/stocked, frame pacing and teleport")
 	}
 	if cfg.TestInitialHealth < 0 || cfg.TestInitialHealth > 100 || cfg.TestInitialHealth > 0 && (!cfg.FramePaced || cfg.TestTeleport == "") {
 		return fmt.Errorf("initial_health requires frame pacing, teleport, and 1..100 health")
@@ -272,6 +276,7 @@ func Run(ctx context.Context, cfg Config) error {
 		testScenarioFrameOrigin: cfg.TestScenarioFrameOrigin,
 		testSetupHoldFrames:     cfg.TestSetupHoldFrames,
 		testInitialHealth:       cfg.TestInitialHealth,
+		testWeaponSwitchFixture: cfg.TestWeaponSwitchFixture,
 		testInvulnerable:        cfg.TestInvulnerable,
 		testChangeEntry:         cfg.TestChangeEntry,
 		testWalkTarget:          walkTarget, testWalkAfterFrames: cfg.TestWalkAfterFrames, testWalkFrames: cfg.TestWalkFrames,

@@ -3,6 +3,7 @@ package bot
 import (
 	"log"
 	"math"
+	"time"
 
 	"q2coopbot/internal/quake"
 )
@@ -25,6 +26,8 @@ func (p *Planner) elevatorCommand(cmd quake.UserCmd, board quake.Waypoint) quake
 			model: board.Model, toArea: board.ToArea, gate: board.Position,
 			exit: p.route[p.routeIndex+1].Position, stage: "approach",
 		}
+		// A ground detour must not inject a jump after boarding starts.
+		p.detourUntil = time.Time{}
 	}
 	ride := p.elevator
 	setStage := func(stage string) {
