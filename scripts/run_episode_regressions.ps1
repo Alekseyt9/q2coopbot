@@ -72,6 +72,22 @@ try {
                 $accept = $episode.acceptance
 				Assert-EpisodeSetup $rows $accept
 				$stageFrame = -1
+				foreach ($class in $accept.inventory_pickups) {
+					$confirmed = @($rows | Where-Object {
+						$_.pickup.class -eq $class -and $_.pickup.state -eq 'confirmed' -and
+						$_.frame -eq $_.pickup.end_frame -and $_.inventory_known -and $_.inventory_age_frames -le 20 -and
+						$_.pickup.after -gt $_.pickup.before -and
+						@($_.inventory | Where-Object name -eq $_.pickup.name).Count -gt 0
+					} | Select-Object -First 1)
+					if (!$confirmed.Count) { throw "Inventory pickup not confirmed: $class" }
+					$event = $confirmed[0]
+					$approach = @($rows | Where-Object {
+						$_.pickup.entity -eq $event.pickup.entity -and $_.pickup.started_frame -eq $event.pickup.started_frame -and
+						$_.pickup.state -eq 'approach' -and $_.goal -eq 'collect_item' -and $_.frame -lt $event.frame
+					})
+					if (!$approach.Count) { throw "Autonomous pickup approach not observed: $class" }
+					$stageFrame = [math]::Max($stageFrame, $event.frame)
+				}
 				foreach ($stage in $accept.required_elevator_stages) {
 					$match = @($rows | Where-Object { $_.frame -gt $stageFrame -and $_.elevator -eq $stage } | Select-Object -First 1)
 					if (!$match.Count) { throw "Elevator stage not observed in order: $stage" }

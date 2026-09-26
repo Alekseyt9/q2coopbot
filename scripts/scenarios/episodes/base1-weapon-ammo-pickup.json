@@ -1,0 +1,30 @@
+{
+  "id": "base1-weapon-ammo-pickup",
+  "evidence": "Функциональный контроль политики подбора; не точное воспроизведение исторического bunk1.",
+  "title": "Подбор нового оружия, патронов и возврат к игроку",
+  "missing_setup": [],
+  "symptom": "Бот ранее выбирал только аптечки.",
+  "acceptance": {
+    "max": [
+      885,
+      165,
+      -150
+    ],
+    "follow_after_event": false,
+    "min": [
+      720,
+      0,
+      -175
+    ],
+    "goal": "cover_teammate",
+    "inventory_pickups": [
+      "weapon_shotgun",
+      "ammo_shells"
+    ]
+  },
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/base1-weapon-ammo-pickup.json",
+  "expected_result": "Подтверждённый рост инвентаря после collect_item, затем живое прибытие к игроку.",
+  "map": "base1",
+  "status": "open"
+}

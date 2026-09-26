@@ -1,5 +1,20 @@
 package quake
 
+// Baseq2 health amounts from the world model, not from a guessed entity name.
+func healthModelAmount(path string) int {
+	switch path {
+	case "models/items/healing/stimpack/tris.md2":
+		return 2
+	case "models/items/healing/medium/tris.md2":
+		return 10
+	case "models/items/healing/large/tris.md2":
+		return 25
+	case "models/items/mega_h/tris.md2":
+		return 100
+	}
+	return 0
+}
+
 // Baseq2 world models, distinct from held/view weapon models.
 var pickupModels = map[string]string{
 	"models/weapons/g_shotg/tris.md2":            "weapon_shotgun",

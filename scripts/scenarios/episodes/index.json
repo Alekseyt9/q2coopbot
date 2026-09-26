@@ -24,6 +24,10 @@
     "base3-elevator-recovery.json",
     "bunk1-raised-platform-exit.json",
     "enemy-crouch-aim.json",
-    "low-ceiling-crouch-traversal.json"
+    "low-ceiling-crouch-traversal.json",
+    "base1-weapon-ammo-pickup.json",
+    "base1-armor-pickup.json",
+    "weapon-ammo-economy.json",
+    "health-armor-resource-memory.json"
   ]
 }

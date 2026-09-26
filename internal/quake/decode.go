@@ -617,11 +617,12 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 }
 
 type Object struct {
-	ID        int    `json:"id"`
-	Class     string `json:"class"`
-	Origin    Vec3   `json:"origin"`
-	Frame     int    `json:"frame,omitempty"`
-	ClearShot *bool  `json:"clear_shot,omitempty"`
+	ID           int    `json:"id"`
+	Class        string `json:"class"`
+	Origin       Vec3   `json:"origin"`
+	Frame        int    `json:"frame,omitempty"`
+	ClearShot    *bool  `json:"clear_shot,omitempty"`
+	HealthAmount int    `json:"health_amount,omitempty"`
 }
 type Mover struct {
 	ID     int  `json:"id"`
@@ -723,10 +724,10 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 			s.Pickups = append(s.Pickups, Object{ID: entity.Number, Class: kind, Origin: entity.Origin, Frame: entity.Frame})
 		} else if strings.Contains(path, "/items/") && Distance(entity.Origin, f.Origin) < 384 {
 			kind := strings.SplitN(strings.SplitN(path, "/items/", 2)[1], "/", 2)[0]
-			if strings.Contains(kind, "heal") {
+			if strings.Contains(kind, "heal") || healthModelAmount(path) > 0 {
 				kind = "health"
 			}
-			s.Pickups = append(s.Pickups, Object{ID: entity.Number, Class: "item_" + kind, Origin: entity.Origin, Frame: entity.Frame})
+			s.Pickups = append(s.Pickups, Object{ID: entity.Number, Class: "item_" + kind, Origin: entity.Origin, Frame: entity.Frame, HealthAmount: healthModelAmount(path)})
 		}
 	}
 	return s

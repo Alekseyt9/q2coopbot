@@ -1,0 +1,27 @@
+{
+  "id": "base1-armor-pickup",
+  "evidence": "Функциональный контроль политики подбора; не точное воспроизведение исторического bunk1.",
+  "title": "Подбор брони и возврат к игроку",
+  "missing_setup": [],
+  "symptom": "Бот ранее выбирал только аптечки.",
+  "acceptance": {
+    "max": [
+      -240,
+      -470,
+      -50
+    ],
+    "follow_after_event": false,
+    "min": [
+      -405,
+      -610,
+      -90
+    ],
+    "goal": "cover_teammate",
+    "inventory_pickups": "item_armor_jacket"
+  },
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/base1-armor-pickup.json",
+  "expected_result": "Подтверждённый рост инвентаря после collect_item, затем живое прибытие к игроку.",
+  "map": "base1",
+  "status": "open"
+}

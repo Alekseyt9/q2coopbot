@@ -149,7 +149,7 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		if !g.PlayerMoveClear(at, at) {
 			continue
 		}
-		if _, ok := g.GroundDrop(at, 18); !ok {
+		if _, ok := g.GroundDrop(at, 18); !ok && !p.Nav.GroundedNear(at) {
 			continue
 		}
 		route, ok := p.Nav.Route(s.Self, at)

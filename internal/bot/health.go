@@ -10,19 +10,40 @@ func (p *Planner) healthAllowed(at quake.Vec3, frame int) bool {
 	return frame >= p.healthBanned[at]
 }
 
+// Ordinary baseq2 health is capped at 100. Don't spend a large kit on a
+// scratch, including when a strategic recovery request overrides following.
+// Critical health takes priority; unknown models use a conservative 25 HP.
+func usefulHealth(s quake.Snapshot, item quake.Object) bool {
+	if s.Health < 45 {
+		return true
+	}
+	if s.Health >= 100 {
+		return false
+	}
+	if item.HealthAmount == 2 || item.HealthAmount == 100 {
+		// Stimpack and mega health can exceed the ordinary maximum.
+		return true
+	}
+	amount := item.HealthAmount
+	if amount <= 0 {
+		amount = 25
+	}
+	return 100-int(s.Health) >= amount
+}
+
 // Keep an acquired pickup until it disappears or its progress budget expires.
 // Reapplying the 300-unit acquisition radius every frame can alternate a
 // downstairs pickup and an upstairs route on opposite sides of one step.
 func (p *Planner) healthGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	if p.healthActive {
 		for _, item := range s.Pickups {
-			if item.Class == "item_health" && healthStand(item.Origin) == p.healthTarget && p.healthAllowed(item.Origin, s.Frame) {
+			if item.Class == "item_health" && usefulHealth(s, item) && healthStand(item.Origin) == p.healthTarget && p.healthAllowed(item.Origin, s.Frame) {
 				return p.healthTarget, true
 			}
 		}
 	}
 	for _, item := range s.Pickups {
-		if item.Class == "item_health" && quake.Horizontal(s.Self, item.Origin) < 300 && p.healthAllowed(item.Origin, s.Frame) {
+		if item.Class == "item_health" && usefulHealth(s, item) && quake.Horizontal(s.Self, item.Origin) < 300 && p.healthAllowed(item.Origin, s.Frame) {
 			return healthStand(item.Origin), true
 		}
 	}

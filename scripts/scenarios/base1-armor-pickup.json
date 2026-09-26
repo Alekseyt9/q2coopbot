@@ -5,14 +5,14 @@
   "start_frame": 40,
   "game_frames": 180,
   "actor_origin": [
-    -320,
-    -544,
+    -300,
+    -600,
     -79.875
   ],
   "bot_origin": [
     -300,
     -544,
-    -71.875
+    -79.875
   ],
   "bot_health": 100,
   "bot_invulnerable": true,
