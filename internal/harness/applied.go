@@ -10,6 +10,7 @@ import (
 )
 
 type AppliedCommand struct {
+	Connection int
 	Generation int
 	Frame      int
 	Sequence   uint32
@@ -27,13 +28,20 @@ func ReadAppliedCommands(path string) ([]AppliedCommand, error) {
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 4096), 4*1024*1024)
 	line := 0
+	connection := 0
 	for scanner.Scan() {
 		line++
 		text := scanner.Text()
+		// The harness traces this named client only. A successful server-side
+		// connection, not a repeated handshake command, starts a new stream.
+		if text == "GoCoopMate connected" {
+			connection++
+		}
 		if !strings.HasPrefix(text, "sv_test_applied_cmd") {
 			continue
 		}
 		var r AppliedCommand
+		r.Connection = connection
 		c := &r.Command
 		n, err := fmt.Sscanf(text, "sv_test_applied_cmd spawncount=%d frame=%d seq=%d kind=%s pitch=%d yaw=%d roll=%d forward=%d side=%d up=%d buttons=%d impulse=%d msec=%d light=%d", &r.Generation, &r.Frame, &r.Sequence, &r.Kind, &c.Pitch, &c.Yaw, &c.Roll, &c.Forward, &c.Side, &c.Up, &c.Buttons, &c.Impulse, &c.Msec, &c.Light)
 		if err != nil || n != 14 || len(strings.Fields(text)) != 15 || r.Generation < 0 || r.Frame < 0 || r.Sequence == 0 || r.Kind != "new" && r.Kind != "old" && r.Kind != "oldest" && r.Kind != "last" {
@@ -45,14 +53,16 @@ func ReadAppliedCommands(path string) ([]AppliedCommand, error) {
 }
 
 type CommandProof struct {
-	Accepted         bool   `json:"accepted"`
-	Sent             int    `json:"sent"`
-	AppliedNew       int    `json:"applied_new"`
-	Matched          int    `json:"matched"`
-	RecoveryCommands int    `json:"recovery_commands"`
-	Reason           string `json:"reason,omitempty"`
-	Generation       int    `json:"problem_generation,omitempty"`
-	Sequence         uint32 `json:"problem_sequence,omitempty"`
+	Connection         int    `json:"problem_connection,omitempty"`
+	ConnectionIdentity bool   `json:"connection_identity_verified"`
+	Accepted           bool   `json:"accepted"`
+	Sent               int    `json:"sent"`
+	AppliedNew         int    `json:"applied_new"`
+	Matched            int    `json:"matched"`
+	RecoveryCommands   int    `json:"recovery_commands"`
+	Reason             string `json:"reason,omitempty"`
+	Generation         int    `json:"problem_generation,omitempty"`
+	Sequence           uint32 `json:"problem_sequence,omitempty"`
 }
 
 // VerifyAppliedCommands matches the entire observer trace, including setup and
@@ -60,19 +70,29 @@ type CommandProof struct {
 func VerifyAppliedCommands(sent []Trace, applied []AppliedCommand) CommandProof {
 	r := CommandProof{Sent: len(sent)}
 	type key struct {
+		connection int
 		generation int
 		sequence   uint32
 	}
 	setProblem := func(reason string, k key) {
 		if r.Reason == "" {
 			r.Reason = reason
+			r.Connection = k.connection
 			r.Generation = k.generation
 			r.Sequence = k.sequence
 		}
 	}
 	sentKeys := map[key]quake.UserCmd{}
 	for _, row := range sent {
-		k := key{row.Generation, row.ClientSequence}
+		if row.Connection > 0 {
+			r.ConnectionIdentity = true
+		}
+	}
+	for _, row := range sent {
+		k := key{row.Connection, row.Generation, row.ClientSequence}
+		if row.Connection < 0 || r.ConnectionIdentity && row.Connection == 0 {
+			setProblem("missing_connection_identity", k)
+		}
 		if row.ClientSequence == 0 {
 			setProblem("missing_client_sequence", k)
 		}
@@ -88,7 +108,11 @@ func VerifyAppliedCommands(sent []Trace, applied []AppliedCommand) CommandProof 
 			continue
 		}
 		r.AppliedNew++
-		k := key{row.Generation, row.Sequence}
+		connection := row.Connection
+		if !r.ConnectionIdentity {
+			connection = 0
+		}
+		k := key{connection, row.Generation, row.Sequence}
 		if _, ok := appliedKeys[k]; ok {
 			setProblem("duplicate_applied_sequence", k)
 		}
@@ -98,7 +122,7 @@ func VerifyAppliedCommands(sent []Trace, applied []AppliedCommand) CommandProof 
 		}
 	}
 	for _, row := range sent {
-		k := key{row.Generation, row.ClientSequence}
+		k := key{row.Connection, row.Generation, row.ClientSequence}
 		cmd, ok := appliedKeys[k]
 		if !ok {
 			setProblem("command_not_applied", k)

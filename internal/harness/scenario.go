@@ -188,6 +188,7 @@ func (r *Runner) RejectRoute(reason string) {
 }
 
 type Input struct {
+	Connection        int
 	PhaseStart        int
 	Frame, Generation int
 	Map               string

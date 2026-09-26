@@ -1,0 +1,14 @@
+{
+  "timescales": [
+    2
+  ],
+  "parallelism": 2,
+  "base_port": 28960,
+  "repetitions": 2,
+  "runtime_root": "../../workspace/runtime/q2go",
+  "version": 1,
+  "tail_frames": 5,
+  "sessions": [
+    "observer-respawn-session.json"
+  ]
+}

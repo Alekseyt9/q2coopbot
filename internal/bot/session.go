@@ -56,7 +56,7 @@ func (c *Client) prepareSessionPhase() error {
 		return nil
 	}
 	mapName := c.planner.World.Map
-	if c.sessionMap != "" && c.sessionGeneration == c.spawncount {
+	if c.sessionMap != "" && c.sessionGeneration == c.spawncount && c.sessionConnection == c.connection {
 		if c.sessionMap != mapName {
 			return fmt.Errorf("session map changed without generation")
 		}
@@ -74,6 +74,7 @@ func (c *Client) prepareSessionPhase() error {
 		return fmt.Errorf("session placement too late: frame %d, phase start %d", c.latestFrame, phase.StartFrame)
 	}
 	c.sessionPhase, c.sessionMap, c.sessionGeneration = index, mapName, c.spawncount
+	c.sessionConnection = c.connection
 	c.testTeleportMap = phase.Map
 	c.testTeleportPosition = phase.BotOrigin
 	if c.session != nil {
@@ -82,6 +83,7 @@ func (c *Client) prepareSessionPhase() error {
 	c.testTeleportSent = false
 	c.sessionReadySent, c.sessionStartFrame = false, 0
 	c.sessionTransitionRequested, c.sessionTransitionAcked = false, false
+	c.sessionObserverCycle = observerRespawnState{}
 	c.sessionSetupAt = time.Now()
 	c.scenarioPath = testWalkPath{}
 	return nil

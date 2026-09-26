@@ -5,6 +5,7 @@ import "fmt"
 // FrameLocation identifies a snapshot without conflating frames after a reload.
 // Row is one-based in the original JSONL trace, including setup and tail frames.
 type FrameLocation struct {
+	Connection int    `json:"connection,omitempty"`
 	Row        int    `json:"row"`
 	Map        string `json:"map"`
 	Generation int    `json:"generation"`
@@ -75,7 +76,7 @@ func traceTimeline(rows []Trace) TraceTimeline {
 	seen := map[int]bool{}
 	var previous FrameLocation
 	for i, row := range rows {
-		at := FrameLocation{Row: i + 1, Map: row.Map, Generation: row.Generation, Frame: row.Frame}
+		at := FrameLocation{Row: i + 1, Map: row.Map, Generation: row.Generation, Frame: row.Frame, Connection: row.Connection}
 		issue := func(kind string) {
 			v := TimelineIssue{Kind: kind, At: at}
 			if i > 0 {
@@ -87,12 +88,20 @@ func traceTimeline(rows []Trace) TraceTimeline {
 		if row.Map == "" || row.Frame < 0 {
 			issue("invalid_frame_identity")
 		}
-		newSegment := i == 0 || at.Map != previous.Map || at.Generation != previous.Generation
+		newSegment := i == 0 || at.Map != previous.Map || at.Generation != previous.Generation || at.Connection != previous.Connection
+		if i > 0 && at.Connection != previous.Connection {
+			if at.Generation == previous.Generation && at.Frame <= previous.Frame {
+				issue("frame_reversed_across_connection")
+			}
+			if at.Connection <= previous.Connection || previous.Connection == 0 {
+				issue("invalid_connection_sequence")
+			}
+		}
 		if newSegment {
 			if i > 0 {
-				if at.Generation == previous.Generation {
+				if at.Generation == previous.Generation && at.Map != previous.Map {
 					issue("map_changed_without_generation")
-				} else if seen[at.Generation] {
+				} else if at.Generation != previous.Generation && seen[at.Generation] {
 					issue("generation_revisited")
 				}
 			}

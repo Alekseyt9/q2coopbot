@@ -20,8 +20,16 @@ type Session struct {
 }
 
 type Phase struct {
-	ID       string   `json:"id"`
-	Scenario Scenario `json:"scenario"`
+	Entry           string           `json:"entry,omitempty"`
+	ObserverRespawn *ObserverRespawn `json:"observer_respawn_cycle,omitempty"`
+	ID              string           `json:"id"`
+	Scenario        Scenario         `json:"scenario"`
+}
+
+type ObserverRespawn struct {
+	AfterFrames    int `json:"after_frames"`
+	TimeoutFrames  int `json:"timeout_frames"`
+	RecoveryFrames int `json:"recovery_frames"`
 }
 
 func LoadSession(path string) (Session, error) {
@@ -50,7 +58,15 @@ func (s Session) Validate() error {
 		return fmt.Errorf("invalid session header")
 	}
 	ids := map[string]bool{}
-	for _, phase := range s.Phases {
+	for index, phase := range s.Phases {
+		if phase.Entry != "" && phase.Entry != "reconnect" || phase.Entry == "reconnect" && (index == 0 || phase.Scenario.Map != s.Phases[index-1].Scenario.Map) {
+			return fmt.Errorf("invalid phase entry %s", phase.ID)
+		}
+		if f := phase.ObserverRespawn; f != nil {
+			if !s.ReadinessBarrier || f.AfterFrames < 1 || f.TimeoutFrames < 2 || f.RecoveryFrames < 1 || f.AfterFrames+f.TimeoutFrames+f.RecoveryFrames > phase.Scenario.GameFrames-phase.Scenario.StartFrame {
+				return fmt.Errorf("invalid observer respawn cycle in phase %s", phase.ID)
+			}
+		}
 		if phase.ID == "" || ids[phase.ID] {
 			return fmt.Errorf("empty or duplicate phase id %q", phase.ID)
 		}
@@ -83,6 +99,7 @@ type SessionDecision struct {
 }
 
 type SessionRunner struct {
+	previousConnection int
 	definition         Session
 	Status             SessionStatus
 	phase              *Runner
@@ -131,23 +148,35 @@ func (r *SessionRunner) Tick(in Input, elapsed time.Duration) SessionDecision {
 		return r.fail("clock_reversed")
 	}
 	r.clockStarted, r.lastTime = true, elapsed
-	r.Status.Location = FrameLocation{Map: in.Map, Generation: in.Generation, Frame: in.Frame}
+	r.Status.Location = FrameLocation{Map: in.Map, Generation: in.Generation, Frame: in.Frame, Connection: in.Connection}
 	if r.Status.State == "waiting_map" {
 		if elapsed-r.transitionAt >= time.Duration(r.definition.TransitionTimeoutMS)*time.Millisecond {
 			return r.fail("map_transition_timeout")
 		}
 		next := r.definition.Phases[r.Status.PhaseIndex+1]
-		if in.Generation == r.previousGeneration {
-			if in.Map != r.previousMap {
-				return r.fail("map_changed_without_generation")
+		if next.Entry == "reconnect" {
+			if in.Generation != r.previousGeneration || in.Map != r.previousMap {
+				return r.fail("map_changed_during_reconnect")
 			}
-			return SessionDecision{}
-		}
-		if in.Map != next.Scenario.Map {
-			return r.fail("unexpected_transition_map")
-		}
-		if r.seenGenerations[in.Generation] {
-			return r.fail("generation_revisited")
+			if in.Connection == r.previousConnection {
+				return SessionDecision{}
+			}
+			if in.Connection <= r.previousConnection || r.previousConnection < 1 {
+				return r.fail("invalid_reconnect_identity")
+			}
+		} else {
+			if in.Generation == r.previousGeneration {
+				if in.Map != r.previousMap {
+					return r.fail("map_changed_without_generation")
+				}
+				return SessionDecision{}
+			}
+			if in.Map != next.Scenario.Map {
+				return r.fail("unexpected_transition_map")
+			}
+			if r.seenGenerations[in.Generation] {
+				return r.fail("generation_revisited")
+			}
 		}
 		r.Status.PhaseIndex++
 		r.Status.PhaseID = next.ID
@@ -156,15 +185,20 @@ func (r *SessionRunner) Tick(in Input, elapsed time.Duration) SessionDecision {
 		r.phase = New(next.Scenario)
 		r.seenGenerations[in.Generation] = true
 		r.previousMap, r.previousGeneration = in.Map, in.Generation
+		r.previousConnection = in.Connection
 	}
 	// Once a phase's generation has been observed, changes before StartFrame
 	// must not be silently accepted by the single-map runner's pending state.
 	if len(r.seenGenerations) > 0 && (in.Map != r.previousMap || in.Generation != r.previousGeneration) {
 		return r.fail("unexpected_phase_generation")
 	}
+	if len(r.seenGenerations) > 0 && in.Connection != r.previousConnection {
+		return r.fail("unexpected_phase_connection")
+	}
 	if len(r.seenGenerations) == 0 && in.Map == r.definition.Phases[0].Scenario.Map {
 		r.seenGenerations[in.Generation] = true
 		r.previousMap, r.previousGeneration = in.Map, in.Generation
+		r.previousConnection = in.Connection
 	}
 	if r.definition.ReadinessBarrier && !r.phase.started {
 		if in.PhaseStart == 0 {

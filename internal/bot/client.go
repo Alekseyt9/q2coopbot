@@ -20,6 +20,9 @@ import (
 )
 
 type Client struct {
+	sessionConnection                int
+	connection                       int
+	sessionObserverCycle             observerRespawnState
 	sessionTransitionRequested       bool
 	sessionTransitionAcked           bool
 	sessionReadySent                 bool
@@ -175,7 +178,7 @@ func (c *Client) reconnect() error {
 	c.lastHandshake = ""
 	c.handshakeAt = time.Now()
 	c.planner.setMap("", c.root)
-	log.Printf("server requested full reconnect")
+	log.Printf("full reconnect started")
 	return c.oob("getchallenge\n")
 }
 func (c *Client) handle(packet []byte) {
@@ -191,6 +194,7 @@ func (c *Client) handle(packet []byte) {
 			}
 		}
 		if strings.Contains(message, "client_connect") && !c.connected {
+			c.connection++
 			c.connected = true
 			_ = c.command("new")
 		}
@@ -395,6 +399,16 @@ func (c *Client) run(ctx context.Context) error {
 			return err
 		}
 		if ready {
+			if c.sessionDefinition.Phases[c.sessionPhase+1].Entry == "reconnect" {
+				if err := c.releaseSessionReconnect(); err != nil {
+					return err
+				}
+				if err := c.reconnect(); err != nil {
+					return err
+				}
+				c.sessionPendingMap = ""
+				continue
+			}
 			mapArg, err := transitionMapArgument(c.sessionPendingMap, c.planner.World.Map)
 			if err != nil {
 				return err
@@ -539,6 +553,24 @@ func (c *Client) run(ctx context.Context) error {
 				cmd = quake.UserCmd{}
 				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_idle"}
 			}
+			var observerKill, observerRespawn bool
+			if !safetyStop && c.sessionDefinition != nil && c.session == nil {
+				fault := c.sessionDefinition.Phases[c.sessionPhase].ObserverRespawn
+				var err error
+				observerKill, observerRespawn, err = c.sessionObserverCycle.tick(fault, c.sessionStartFrame, frame, c.planner.World.Snapshot.Health)
+				if err != nil {
+					return err
+				}
+				if observerKill {
+					if err := c.command("kill"); err != nil {
+						return err
+					}
+				}
+				if observerRespawn {
+					cmd.Buttons = 1
+					c.planner.World.Command.LimitReason = "test_observer_respawn"
+				}
+			}
 			if c.sessionDefinition != nil && c.sessionDefinition.ReadinessBarrier && (c.sessionStartFrame == 0 || frame < c.sessionStartFrame) {
 				cmd = quake.UserCmd{}
 				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "session_barrier"}
@@ -546,7 +578,7 @@ func (c *Client) run(ctx context.Context) error {
 			jumpAge := c.latestFrame - c.testTeleportAfterSentFrame
 			if (c.scenario != nil || c.session != nil) && !safetyStop {
 				s := c.planner.World.Snapshot
-				in := harness.Input{Frame: frame, Generation: c.spawncount, Map: s.Map, Self: s.Self, OnGround: s.OnGround, Health: s.Health, PhaseStart: c.sessionStartFrame}
+				in := harness.Input{Frame: frame, Generation: c.spawncount, Map: s.Map, Self: s.Self, OnGround: s.OnGround, Health: s.Health, PhaseStart: c.sessionStartFrame, Connection: c.connection}
 				var d harness.Decision
 				var status *harness.Status
 				if c.session != nil {
@@ -631,6 +663,9 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			if c.traceFile != nil && c.framePaced {
 				entry := struct {
+					Connection        int                    `json:"connection"`
+					ObserverKill      bool                   `json:"test_observer_kill,omitempty"`
+					ObserverRespawn   bool                   `json:"test_observer_respawn,omitempty"`
 					SessionStartFrame int                    `json:"session_start_frame,omitempty"`
 					Session           *harness.SessionStatus `json:"session,omitempty"`
 					Map               string                 `json:"map"`
@@ -666,6 +701,8 @@ func (c *Client) run(ctx context.Context) error {
 					Arbitration       CommandDecision        `json:"arbitration"`
 					Command           quake.UserCmd          `json:"sent_command"`
 				}{
+					Connection:   c.connection,
+					ObserverKill: observerKill, ObserverRespawn: observerRespawn,
 					SessionStartFrame: c.sessionStartFrame,
 					Session:           c.sessionStatus(),
 					Map:               c.planner.World.Map, Spawncount: c.spawncount, EpisodeFrame: c.moves,

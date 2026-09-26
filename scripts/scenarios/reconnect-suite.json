@@ -1,0 +1,14 @@
+{
+  "runtime_root": "../../workspace/runtime/q2go",
+  "sessions": [
+    "reconnect-session.json"
+  ],
+  "tail_frames": 5,
+  "version": 1,
+  "timescales": [
+    2
+  ],
+  "base_port": 28980,
+  "parallelism": 2,
+  "repetitions": 2
+}

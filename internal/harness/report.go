@@ -10,6 +10,9 @@ import (
 )
 
 type Trace struct {
+	Connection        int             `json:"connection,omitempty"`
+	ObserverKill      bool            `json:"test_observer_kill,omitempty"`
+	ObserverRespawn   bool            `json:"test_observer_respawn,omitempty"`
 	ClientSequence    uint32          `json:"client_sequence"`
 	SessionStartFrame int             `json:"session_start_frame,omitempty"`
 	Session           *SessionStatus  `json:"session,omitempty"`
@@ -120,7 +123,7 @@ func analyze(s Scenario, actor, bot []Trace) Report {
 			continue
 		}
 		if row.Scenario.State == "failed" {
-			r.ProblemLocation = &FrameLocation{Row: index + 1, Map: row.Map, Generation: row.Generation, Frame: row.Frame}
+			r.ProblemLocation = &FrameLocation{Row: index + 1, Map: row.Map, Generation: row.Generation, Frame: row.Frame, Connection: row.Connection}
 			r.FailedStep = row.Scenario.StepID
 			r.Frame = row.Frame
 			r.Reason = row.Scenario.Reason

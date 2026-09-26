@@ -2,10 +2,13 @@ package bot
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
 	"time"
 )
 
@@ -59,6 +62,9 @@ func (c *Client) sessionBarrier(now time.Time) error {
 		c.sessionReadySent = true
 	}
 	a, err := readSessionReady(path(role))
+	if os.IsNotExist(err) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -84,6 +90,11 @@ func readSessionReady(path string) (sessionReady, error) {
 	var r sessionReady
 	data, err := os.ReadFile(path)
 	if err != nil {
+		if runtime.GOOS == "windows" && (errors.Is(err, syscall.Errno(32)) || errors.Is(err, syscall.Errno(33))) {
+			// A short Windows sharing/lock conflict is retried by the existing
+			// nonblocking coordination loop and remains bounded by its watchdog.
+			return r, errors.Join(os.ErrNotExist, err)
+		}
 		return r, err
 	}
 	err = json.Unmarshal(data, &r)

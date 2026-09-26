@@ -59,6 +59,7 @@ func measureWalks(s Scenario, rows []Trace) []WalkMetrics {
 // Observed horizontal displacement, not planner intent. Low displacement is
 // diagnostic only: collisions, turning and scripted holds need context.
 type MotionMetrics struct {
+	ExcludedDeadIntervals      int     `json:"excluded_dead_intervals"`
 	ExcludedRespawnIntervals   int     `json:"excluded_respawn_intervals"`
 	PathUnits                  float64 `json:"horizontal_path_units"`
 	MeasuredIntervals          int     `json:"measured_intervals"`
@@ -92,6 +93,11 @@ func measureMotion(s Scenario, rows []Trace, actor bool) *MotionMetrics {
 	run := 0
 	for i := 1; i < len(rows); i++ {
 		prev, row := rows[i-1], rows[i]
+		if (prev.Health != nil && *prev.Health <= 0) || (row.Health != nil && *row.Health <= 0) {
+			m.ExcludedDeadIntervals++
+			run = 0
+			continue
+		}
 		if actor && prev.Scenario != nil && respawn[prev.Scenario.StepID] {
 			m.ExcludedRespawnIntervals++
 			run = 0

@@ -57,3 +57,16 @@ func TestAppliedLogRejectsMalformedAndOutOfRangeCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestAppliedLogCountsConnectionsNotHandshakeRetries(t *testing.T) {
+	command := "sv_test_applied_cmd spawncount=7 frame=42 seq=12 kind=new pitch=0 yaw=0 roll=0 forward=0 side=0 up=0 buttons=0 impulse=0 msec=100 light=0\n"
+	text := "GoCoopMate connected\nsv_test_client_cmd frame=1 seq=1 state=2 command=new\nsv_test_client_cmd frame=1 seq=2 state=2 command=new\n" + command + "TestHuman connected\nGoCoopMate connected\n" + command
+	path := filepath.Join(t.TempDir(), "server.log")
+	if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := ReadAppliedCommands(path)
+	if err != nil || len(rows) != 2 || rows[0].Connection != 1 || rows[1].Connection != 2 {
+		t.Fatal(rows, err)
+	}
+}

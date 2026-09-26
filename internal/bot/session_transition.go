@@ -82,5 +82,23 @@ func (c *Client) sessionTransitionBarrier() (pause, ready bool, err error) {
 		}
 		c.sessionTransitionAcked = true
 	}
+	if c.sessionTransitionAcked && c.sessionPhase+1 < len(c.sessionDefinition.Phases) && c.sessionDefinition.Phases[c.sessionPhase+1].Entry == "reconnect" {
+		release, err := readSessionReady(path("release"))
+		if os.IsNotExist(err) {
+			return true, false, nil
+		}
+		if err != nil {
+			return true, false, err
+		}
+		if !valid(release, "release") {
+			return true, false, fmt.Errorf("invalid reconnect release")
+		}
+		return true, false, c.reconnect()
+	}
 	return true, false, nil
+}
+
+func (c *Client) releaseSessionReconnect() error {
+	path := filepath.Join(c.scenarioResultPath+".barrier", fmt.Sprintf("%d-%d-transition-release.json", c.sessionPhase, c.spawncount))
+	return writeSessionSignal(path, sessionReady{Map: c.sessionMap, Generation: c.spawncount, Phase: c.sessionPhase, Frame: c.lastMoveFrame, Role: "release"})
 }

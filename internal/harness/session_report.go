@@ -3,10 +3,12 @@ package harness
 import "fmt"
 
 type PhaseReport struct {
-	ID         string `json:"id"`
-	Map        string `json:"map"`
-	Generation int    `json:"generation"`
-	Report     Report `json:"report"`
+	Connection    int                  `json:"connection,omitempty"`
+	ObserverCycle *ObserverCycleReport `json:"observer_respawn_cycle,omitempty"`
+	ID            string               `json:"id"`
+	Map           string               `json:"map"`
+	Generation    int                  `json:"generation"`
+	Report        Report               `json:"report"`
 }
 
 type SessionReport struct {
@@ -36,16 +38,30 @@ func AnalyzeSession(s Session, actor, bot []Trace) SessionReport {
 	}
 	for i, phase := range s.Phases {
 		generation := r.Timeline.Actor.Segments[i].First.Generation
-		selectRows := func(rows []Trace) []Trace {
+		if i > 0 {
+			for _, timeline := range []TraceTimeline{r.Timeline.Actor, r.Timeline.Bot} {
+				before, after := timeline.Segments[i-1].First, timeline.Segments[i].First
+				if phase.Entry == "reconnect" {
+					if before.Generation != after.Generation || before.Connection < 1 || after.Connection <= before.Connection {
+						r.Reason = "reconnect identity not observed"
+						return r
+					}
+				} else if before.Generation == after.Generation {
+					r.Reason = "new map generation not observed"
+					return r
+				}
+			}
+		}
+		selectRows := func(rows []Trace, connection int) []Trace {
 			var selected []Trace
 			for _, row := range rows {
-				if row.Map == phase.Scenario.Map && row.Generation == generation {
+				if row.Map == phase.Scenario.Map && row.Generation == generation && row.Connection == connection {
 					selected = append(selected, row)
 				}
 			}
 			return selected
 		}
-		a, b := selectRows(actor), selectRows(bot)
+		a, b := selectRows(actor, r.Timeline.Actor.Segments[i].First.Connection), selectRows(bot, r.Timeline.Bot.Segments[i].First.Connection)
 		definition := phase.Scenario
 		if s.ReadinessBarrier {
 			start := 0
@@ -84,7 +100,18 @@ func AnalyzeSession(s Session, actor, bot []Trace) SessionReport {
 			}
 		}
 		result := Analyze(definition, a, b)
-		r.Phases = append(r.Phases, PhaseReport{ID: phase.ID, Map: phase.Scenario.Map, Generation: generation, Report: result})
+		phaseReport := PhaseReport{ID: phase.ID, Map: phase.Scenario.Map, Generation: generation, Connection: r.Timeline.Actor.Segments[i].First.Connection, Report: result}
+		if phase.ObserverRespawn != nil {
+			cycle := checkObserverCycle(*phase.ObserverRespawn, definition.StartFrame, b)
+			phaseReport.ObserverCycle = &cycle
+			if !cycle.Passed {
+				result.Accepted = false
+				result.State = "behavior_failed"
+				result.Reason = cycle.Reason
+				phaseReport.Report = result
+			}
+		}
+		r.Phases = append(r.Phases, phaseReport)
 		if !result.Accepted {
 			r.State = result.State
 			r.Reason = "phase " + phase.ID + ": " + result.Reason
