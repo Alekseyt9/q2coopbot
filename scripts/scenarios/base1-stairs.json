@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "name": "base1-stairs-human-repro",
+  "map": "base1",
+  "start_frame": 40,
+  "game_frames": 180,
+  "actor_origin": [-1883.375,1816.75,120.125],
+  "bot_origin": [-1577.5,1788.25,-23.875],
+  "expect": {},
+  "steps": [{"id":"wait-at-top","action":"wait","frames":130}]
+}

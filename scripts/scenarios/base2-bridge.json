@@ -1,0 +1,11 @@
+{
+  "version":1,
+  "name":"base2-bridge-human-repro",
+  "map":"base2",
+  "start_frame":40,
+  "game_frames":180,
+  "actor_origin":[418.375,-76.875,24.125],
+  "bot_origin":[466.125,337.375,20.125],
+  "expect":{},
+  "steps":[{"id":"wait-across-bridge","action":"wait","frames":130}]
+}

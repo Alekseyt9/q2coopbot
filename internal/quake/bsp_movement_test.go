@@ -2,6 +2,47 @@ package quake
 
 import "testing"
 
+func TestGroundMoveClimbsOnlySupportedStepsWithHeadroom(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		height  float64
+		ceiling bool
+		want    string
+	}{
+		{"step16", 16, false, ""},
+		{"wall24", 24, false, "static_hull_blocked"},
+		{"low_ceiling", 16, true, "static_hull_blocked"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &CollisionMap{}
+			add := func(lo, hi Vec3) {
+				planes, brush := testBoxBrush(lo, hi, len(c.sides))
+				for range planes {
+					c.sides = append(c.sides, uint16(len(c.sides)))
+				}
+				c.planes = append(c.planes, planes...)
+				c.worldBrushes = append(c.worldBrushes, len(c.brushes))
+				c.brushes = append(c.brushes, brush)
+			}
+			add(Vec3{-100, -100, -20}, Vec3{100, 100, 0})
+			add(Vec3{20, -100, 0}, Vec3{100, 100, tc.height})
+			if tc.ceiling {
+				add(Vec3{-100, -100, 64}, Vec3{100, 100, 80})
+			}
+			m := &MapInfo{collision: c}
+			if got := m.GroundMoveHazard(nil, Vec3{0, 0, 24.125}, 1, 0); got != tc.want {
+				t.Fatalf("got %q want %q", got, tc.want)
+			}
+			if drop, ok := m.GroundDrop(Vec3{-50, 0, 40}, 18); !ok || drop < 15.9 || drop > 16.2 {
+				t.Fatalf("drop=%v ok=%v", drop, ok)
+			}
+			if _, ok := m.GroundDrop(Vec3{-50, 0, 50}, 18); ok {
+				t.Fatal("floor beyond drop limit accepted")
+			}
+		})
+	}
+}
+
 func testBoxBrush(mins, maxs Vec3, first int) ([]bspPlane, bspBrush) {
 	planes := []bspPlane{
 		{Vec3{1, 0, 0}, maxs[0]}, {Vec3{-1, 0, 0}, -mins[0]},

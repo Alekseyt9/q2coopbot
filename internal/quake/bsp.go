@@ -139,7 +139,19 @@ func (m *MapInfo) GroundMoveHazardStep(nav *Navigator, origin Vec3, dx, dy, step
 	}
 	next := Vec3{origin[0] + dx/distance*step, origin[1] + dy/distance*step, origin[2]}
 	if !m.PlayerMoveClear(origin, next) {
-		return "static_hull_blocked"
+		// Quake's ground movement can climb an 18-unit step. Check the
+		// entire raised hull sweep, including headroom and the landing.
+		raised, landing := origin, next
+		raised[2] += 18
+		landing[2] += 18
+		if !m.PlayerMoveClear(origin, raised) || !m.PlayerMoveClear(raised, landing) {
+			return "static_hull_blocked"
+		}
+		drop, ok := m.GroundDrop(landing, 18)
+		if !ok || drop >= 18 {
+			return "static_hull_blocked"
+		}
+		return ""
 	}
 	if _, ok := m.GroundDrop(next, 24); !ok && !nav.GroundedNear(next) {
 		return "no_ground_support"
@@ -405,7 +417,7 @@ func (m *CollisionMap) groundDrop(origin Vec3, maxDrop float64) (float64, bool) 
 			}
 		}
 		if !outside && enter < leave && enter >= 0 && enter <= 1 && groundNormal[2] >= 0.7 {
-			drop := origin[2] + enter*(end[2]-origin[2]) - feet
+				drop := feet - (origin[2] + enter*(end[2]-origin[2]))
 			if drop <= maxDrop+0.125 && drop < best {
 				best = math.Max(0, drop)
 			}

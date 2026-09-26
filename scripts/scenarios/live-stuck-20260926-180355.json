@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "live-stuck-20260926-180355",
+  "map": "base2",
+  "start_frame": 40,
+  "game_frames": 180,
+  "actor_origin": [
+    -28,
+    2148.875,
+    24.25
+  ],
+  "bot_origin": [
+    290.5,
+    1744.125,
+    24.125
+  ],
+  "expect": {},
+  "steps": [
+    {
+      "action": "wait",
+      "id": "wait-near-stuck-bot",
+      "frames": 130
+    }
+  ]
+}

@@ -35,6 +35,7 @@ type World struct {
 	Updated          time.Time         `json:"updated"`
 }
 type Planner struct {
+	jump                  *jumpFlight
 	TestDisableProbe      bool
 	testSetupHold         bool
 	TestDisableSearch     bool
@@ -165,6 +166,7 @@ func (p *Planner) setMap(name, root string) {
 	p.World = World{Map: name, Navigation: "aas_missing", GeometryStatus: "unavailable"}
 	p.Nav = nil
 	p.button = nil
+	p.jump = nil
 	p.buttonCooldown = 0
 	p.failures = 0
 	p.decision = nil
@@ -497,6 +499,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		return cmd
 	}
 	if s.Health <= 0 {
+		p.jump = nil
 		p.World.Command.LimitReason = "dead"
 		return cmd
 	}
@@ -504,6 +507,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		p.World.Command.LimitReason = "bsp_" + p.World.GeometryStatus
 		p.World.Command.MoveLimitReason = p.World.Command.LimitReason
 		return cmd
+	}
+	if flight, active := p.jumpCommand(cmd); active {
+		return flight
 	}
 	if p.elevator != nil && p.routeIndex < len(p.route) && p.route[p.routeIndex].ElevatorPhase == "board" {
 		cmd = p.elevatorCommand(cmd, p.route[p.routeIndex])
@@ -574,6 +580,15 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		return cmd
 	}
 	dx, dy := target[0]-s.Self[0], target[1]-s.Self[1]
+	if s.OnGround && p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, 40) == "no_ground_support" {
+		if p.planGapJump() {
+			flight, _ := p.jumpCommand(cmd)
+			return flight
+		}
+		p.World.Command.MoveLimitReason = "no_verified_landing"
+		p.World.Command.LimitReason = "no_verified_landing"
+		return cmd
+	}
 	p.World.Command.MoveSource = "route"
 	if jump || target[2]-s.Self[2] > 32 {
 		cmd.Up = 200
@@ -588,6 +603,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 			p.World.Command.MoveSource = "detour"
 		}
 	}
+	moveSpeedLimit := 400.0
 	if s.OnGround && cmd.Up == 0 {
 		probeStep := 40.0
 		if p.World.Goal == "touch_button" {
@@ -595,7 +611,14 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		} else if p.World.Goal == "probe_last_seen" {
 			probeStep = 16
 		}
-		if hazard := p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, probeStep); hazard != "" {
+		hazard := p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, probeStep)
+		// A full tick may span two stair risers. Slow down only when a
+		// shorter, fully checked ground step is available.
+		if hazard == "static_hull_blocked" && probeStep > 16 && p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, 16) == "" {
+			hazard = ""
+			moveSpeedLimit = 160
+		}
+		if hazard != "" {
 			p.World.Command.MoveSource = "none"
 			p.World.Command.MoveLimitReason = hazard
 			if p.World.Command.LimitReason == "" {
@@ -621,7 +644,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 	} else if p.World.Goal == "probe_last_seen" {
 		speed = 160
 	}
-	cmd = worldMove(cmd, s, dx, dy, speed, cmd.Buttons != 0)
+	cmd = worldMove(cmd, s, dx, dy, math.Min(speed, moveSpeedLimit), cmd.Buttons != 0)
 	if cmd.Buttons == 0 {
 		p.World.Command.AimSource = "route"
 	}
