@@ -452,10 +452,14 @@ func (c *Client) run(ctx context.Context) error {
 					setup = append(setup, "give Machinegun", "give Bullets 20")
 				}
 				setup = append(setup, "use Shotgun")
+				var payload []byte
 				for _, command := range setup {
-					if err := c.command(command); err != nil {
-						return err
-					}
+					payload = append(payload, 4)
+					payload = append(payload, command...)
+					payload = append(payload, 0)
+				}
+				if err := c.send(payload, true); err != nil {
+					return err
 				}
 			}
 			c.testTeleportSentFrame = c.latestFrame

@@ -11,8 +11,8 @@ foreach ($mode in @('blaster','stocked')) {
     foreach ($scale in $Timescales) {
         $path = @(Get-ChildItem $out -Filter "scale-$scale-port-*-trace.jsonl" | Where-Object Name -NotLike '*human*')[0].FullName
         $rows = @(Get-Content $path | ForEach-Object { ConvertFrom-Json $_ })
-        $loaded = @($rows | Where-Object { $_.weapon -like '*/v_shotg/*' -and $_.ammo -eq 1 -and ($_.sent_command.Buttons -band 1) } | Select-Object -First 1)
-        $empty = @($rows | Where-Object { $loaded.Count -and $_.frame -gt $loaded[0].frame -and $_.weapon -like '*/v_shotg/*' -and $_.ammo -eq 0 } | Select-Object -First 1)
+        $loaded = @($rows | Where-Object { $_.weapon -like '*/v_shotg/*' -and $_.ammo -eq 1 -and ($_.sent_command.Buttons -band 1) -and $_.inventory_known -and @($_.inventory | Where-Object { $_.name -eq 'Shells' -and $_.count -eq 1 }).Count } | Select-Object -First 1)
+        $empty = @($rows | Where-Object { $loaded.Count -and $_.frame -gt $loaded[0].frame -and $_.weapon -like '*/v_shotg/*' -and $_.ammo -eq 0 -and $_.inventory_known -and !@($_.inventory | Where-Object { $_.name -eq 'Shells' -and $_.count -gt 0 }).Count } | Select-Object -First 1)
         $expected = if ($mode -eq 'blaster') {'use Blaster'} else {'use Machinegun'}
         $request = @($rows | Where-Object { $empty.Count -and $_.frame -ge $empty[0].frame -and $_.weapon_request -eq $expected -and $_.inventory_known -and $_.inventory_age_frames -le 20 } | Select-Object -First 1)
         $firing = @($rows | Where-Object {

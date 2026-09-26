@@ -8,6 +8,21 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Replace the directory entry, not the contents of a potentially shared hard link.
+# Live sessions may still be using the previous AAS through another path.
+function Install-RuntimeAAS([string]$Source, [string]$Target) {
+    $temporary = $Target + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
+    try {
+        Copy-Item -LiteralPath $Source -Destination $temporary
+        if (Test-Path -LiteralPath $Target) {
+            [IO.File]::Replace($temporary, $Target, [NullString]::Value)
+        } else {
+            [IO.File]::Move($temporary, $Target)
+        }
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }
+    }
+}
 foreach ($path in @($AssetsRoot, $ServerExe, $GameDll)) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Required input is missing: $path" }
 }
@@ -65,11 +80,15 @@ if (-not (Test-Path -LiteralPath (Join-Path $baseq2 'pak0.pak'))) { throw 'pak0.
 $sourceMaps = Join-Path $AssetsRoot 'maps'
 if (Test-Path -LiteralPath $sourceMaps) {
     Get-ChildItem -LiteralPath $sourceMaps -Filter '*.aas' -File | ForEach-Object {
-        Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $maps $_.Name) -Force
+        $target = Join-Path $maps $_.Name
+        # Asset archives can contain older graphs. Updates must use explicit AASRoot.
+        if (-not (Test-Path -LiteralPath $target)) {
+            Install-RuntimeAAS $_.FullName $target
+        }
     }
 }
 foreach ($aas in $additionalAAS) {
-    Copy-Item -LiteralPath $aas.FullName -Destination (Join-Path $maps $aas.Name) -Force
+    Install-RuntimeAAS $aas.FullName (Join-Path $maps $aas.Name)
 }
 Copy-Item -LiteralPath $ServerExe -Destination (Join-Path $RuntimeRoot 'q2ded.exe') -Force
 Copy-Item -LiteralPath $GameDll -Destination (Join-Path $baseq2 'game.dll') -Force

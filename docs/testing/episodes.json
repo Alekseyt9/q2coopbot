@@ -353,16 +353,23 @@
       "id": "base2-elevator-runtime-aas-20260926",
       "title": "Текущий AAS не строит маршрут контрольного лифта base2",
       "map": "base2",
-      "status": "open",
-      "reproduction": "observation_only",
-      "scenario": "",
+      "status": "verified_1x_2x",
+      "reproduction": "ready",
+      "scenario": "scripts/scenarios/base2-elevator-control.json",
       "evidence": "workspace/artifacts/elevator-route-owner-2x/summary.json",
       "symptom": "ElevatorTrial с текущим runtime AAS: нет фаз лифта, маршрут недоступен; с архивным aas-base2-elevator-final-20260925 тест проходит. Текущий AAS: 3454 области / 4568 поддерживаемых переходов, архивный: 3456 / 4556.",
-      "missing_setup": [
-        "Закрепить воспроизведение ElevatorTrial в runner реестра и сопоставить изменения AAS/исходного BSP"
+      "missing_setup": [],
+      "acceptance": {
+        "elevator": "completed",
+        "regrouped_on_upper_floor": true
+      },
+      "expected_result": "Контрольный лифт проходит со штатным актуальным AAS, без подмены архивным.",
+      "kind": "elevator",
+      "verification": [
+        "workspace/artifacts/elevator-base2-refresh-2x/summary.json",
+        "workspace/artifacts/elevator-base2-refresh-1x/summary.json"
       ],
-      "acceptance": null,
-      "expected_result": "Контрольный лифт проходит со штатным актуальным AAS, без подмены архивным."
+      "resolution": "Runtime содержал AAS до поддержки лифта (0 переходов типа 11). Текущий bspc сгенерировал 1 переход; подготовка runtime сохраняет существующий AAS и заменяет его только через явный AASRoot, не меняя live hard links."
     },
     {
       "id": "bunk1-ammo-pickup-20260926-194648",
@@ -398,16 +405,22 @@
       "id": "bunk1-empty-ammo-weapon-switch-20260926-194743",
       "title": "Не переключается на другое оружие после исчерпания патронов",
       "map": "bunk1",
-      "status": "open",
-      "reproduction": "observation_only",
-      "scenario": "",
+      "status": "verified_1x_2x",
+      "reproduction": "ready",
+      "scenario": "scripts/run_weapon_switch_trial.ps1",
       "evidence": "workspace/artifacts/live-weapon-switch-20260926-194743/trace.jsonl",
       "symptom": "Сообщение игрока: после исчерпания патронов бот не переключается на другое оружие. Контекст записи: frame=9294; self=-969,-65,5,232,125; health=60; goal=wait_for_teammate. Исчерпание патронов и состав инвентаря требуют отдельного подтверждения; историческая трасса не содержит этих полей.",
-      "missing_setup": [
-        "Зафиксировать активное оружие, остаток его патронов и доступный инвентарь; воспроизвести расход последнего патрона и подтвердить смену оружия сервером"
-      ],
-      "acceptance": null,
-      "expected_result": "После исчерпания патронов бот выбирает доступное оружие с боезапасом либо Blaster, подтверждает переключение и возобновляет огонь при безопасной линии."
+      "missing_setup": [],
+      "acceptance": {
+        "weapon_switch": [
+          "blaster",
+          "stocked"
+        ]
+      },
+      "expected_result": "После исчерпания патронов бот выбирает доступное оружие с боезапасом либо Blaster, подтверждает переключение и возобновляет огонь при безопасной линии.",
+      "kind": "weapon_switch",
+      "verification_report": "workspace/artifacts/weapon-switch-20260926-200912/report.json",
+      "fix_notes": "Функциональный E2E на base1: реальный расход последнего патрона Shotgun, обновление полного инвентаря, выбор Machinegun или Blaster и возобновление огня. Оба варианта прошли на 2x/1x. Историческая сцена bunk1 целиком не восстановлена. Текущий живой процесс пока без исправления."
     }
   ]
 }

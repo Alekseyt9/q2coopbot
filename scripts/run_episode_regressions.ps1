@@ -41,8 +41,19 @@ try {
             $passed = $false; $reason = ''
             try {
                 $scenario = Join-Path $repo $episode.scenario
-                $definition = Get-Content $scenario -Raw | ConvertFrom-Json
-				if ($episode.kind -eq 'session') {
+                $definition = $null
+                if ($episode.kind -ne 'weapon_switch') { $definition = Get-Content $scenario -Raw | ConvertFrom-Json }
+				if ($episode.kind -eq 'weapon_switch') {
+					& $scenario -Timescales @($scale) -Port $Port -OutputRoot $trial | Out-Host
+					$report = @(Get-Content (Join-Path $trial 'report.json') -Raw | ConvertFrom-Json)
+					if ($report.Count -ne 2 -or @($report | Where-Object { !$_.accepted }).Count) { throw 'Weapon switch trial rejected' }
+					$passed=$true; $reason='accepted'
+				} elseif ($episode.kind -eq 'elevator') {
+					& (Join-Path $PSScriptRoot 'run_speed_trial.ps1') -ElevatorTrial -TransitionMap $definition.map -AASDir (Join-Path $repo $definition.aas_dir) -SynchronizedStart -UnlimitedLoopbackRate -GameFrames $definition.game_frames -Timescales @($scale) -Port $Port -OutputRoot $trial | Out-Host
+					$summary = Get-Content (Join-Path $trial 'summary.json') -Raw | ConvertFrom-Json
+					if (!$summary.regrouped_on_upper_floor -or 'completed' -notin $summary.elevator_stages) { throw 'Elevator trial rejected' }
+					$passed=$true; $reason='accepted'
+				} elseif ($episode.kind -eq 'session') {
 					New-Item -ItemType Directory $trial|Out-Null
 					$trialConfig=Join-Path $trial 'trial.json'
 					@{session=$scenario;runtime_root=(Join-Path $repo 'workspace/runtime/q2go');port=$Port;timescale=$scale;tail_frames=5}|ConvertTo-Json|Set-Content $trialConfig

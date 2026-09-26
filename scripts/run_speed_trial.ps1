@@ -284,6 +284,7 @@ foreach ($scale in $Timescales) {
         if ($CombatMoveTrial -or $FriendlyFireTrial) {
             $humanConfig.test.spawn_map = 'base1'
             $humanConfig.test.spawn_soldier = '96,-200,24'
+			if ($WeaponSwitchTrial) { $humanConfig.test.spawn_class = 'monster_infantry' }
         }
         if ($FriendlyFireTrial) {
             $humanConfig.output.trace_jsonl = $humanTracePath

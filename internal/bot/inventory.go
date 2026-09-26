@@ -8,6 +8,7 @@ import (
 type inventoryWatch struct {
 	mapName              string
 	lastFrame, requested int
+	warmupUntil          int
 }
 
 func (w *inventoryWatch) command(s quake.Snapshot) string {
@@ -16,6 +17,14 @@ func (w *inventoryWatch) command(s quake.Snapshot) string {
 	}
 	w.lastFrame = s.Frame
 	if s.Map == "" || s.Frame <= 0 || s.Health <= 0 || s.InventoryOpen {
+		return ""
+	}
+	// Let initial configstrings and weapon precaches drain before adding the
+	// inventory stream to the server's bounded outgoing datagrams.
+	if w.warmupUntil == 0 {
+		w.warmupUntil = s.Frame + 3
+	}
+	if s.Frame < w.warmupUntil {
 		return ""
 	}
 	if w.requested != 0 && s.Frame-w.requested < 20 {
