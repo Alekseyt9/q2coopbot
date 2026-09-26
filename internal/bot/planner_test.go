@@ -25,6 +25,39 @@ func TestPlannerKeepsWaypointProgress(t *testing.T) {
 	}
 }
 
+func TestFollowClosesDistanceBeforeCover(t *testing.T) {
+	goal := quake.Vec3{100, 0, 0}
+	p := &Planner{World: World{Map: "test"}}
+	for i, tc := range []struct {
+		x    float64
+		goal string
+	}{{10, "follow_teammate"}, {30, "cover_teammate"}} {
+		p.update(quake.Snapshot{Map: "test", Frame: i + 1, Self: quake.Vec3{tc.x, 0, 0}, Teammate: &goal, Health: 100}, "")
+		if p.World.Goal != tc.goal {
+			t.Fatalf("distance=%g: got %s want %s", 100-tc.x, p.World.Goal, tc.goal)
+		}
+	}
+}
+
+func TestNewFollowGoalDoesNotInheritStalledHealthDetour(t *testing.T) {
+	n := &quake.Navigator{Areas: []quake.Area{{},
+		{Min: quake.Vec3{-10, -10, -10}, Max: quake.Vec3{10, 10, 10}},
+		{Min: quake.Vec3{190, -10, -10}, Max: quake.Vec3{210, 10, 10}},
+	}, Edges: [][]quake.Edge{{}, {{To: 2, Start: quake.Vec3{32, 0, 0}, End: quake.Vec3{192, 0, 0}, Kind: 2, Cost: 10}}, nil}}
+	goal := quake.Vec3{200, 0, 0}
+	for _, active := range []bool{false, true} {
+		p := &Planner{Nav: n, World: World{Map: "test", Goal: "recover_health"}, lastProgress: time.Now().Add(-time.Minute), failures: 3}
+		if active {
+			p.detourUntil = time.Now().Add(time.Second)
+		}
+		p.update(quake.Snapshot{Map: "test", Frame: 100, Teammate: &goal, Health: 100, OnGround: true}, "")
+		cmd := p.command(quake.UserCmd{})
+		if p.World.Goal != "follow_teammate" || p.failures != 0 || !p.detourUntil.IsZero() || cmd.Up != 0 || cmd.Forward <= 0 {
+			t.Fatalf("active=%v: goal=%s failures=%d detour=%v cmd=%+v", active, p.World.Goal, p.failures, p.detourUntil, cmd)
+		}
+	}
+}
+
 func TestPlannerKeepsWorldRouteWhileAimingAndFiring(t *testing.T) {
 	n := &quake.Navigator{Areas: []quake.Area{{},
 		{Min: quake.Vec3{-10, -10, -10}, Max: quake.Vec3{10, 10, 10}},
@@ -42,7 +75,8 @@ func TestPlannerKeepsWorldRouteWhileAimingAndFiring(t *testing.T) {
 		t.Fatalf("combat movement arbitration: cmd=%+v decision=%+v", cmd, p.World.Command)
 	}
 	yaw := float64(int16(uint16(cmd.Yaw)+uint16(s.DeltaAngles[1]))) * 2 * math.Pi / 65536
-	pitch := float64(int16(uint16(cmd.Pitch)+uint16(s.DeltaAngles[0]))) * 2 * math.Pi / 65536
+	// PM_AirMove forms its movement basis from one third of view pitch.
+	pitch := float64(int16(uint16(cmd.Pitch)+uint16(s.DeltaAngles[0]))) * 2 * math.Pi / 65536 / 3
 	vx := math.Cos(pitch)*math.Cos(yaw)*float64(cmd.Forward) + math.Sin(yaw)*float64(cmd.Side)
 	vy := math.Cos(pitch)*math.Sin(yaw)*float64(cmd.Forward) - math.Cos(yaw)*float64(cmd.Side)
 	if vx < 200 || math.Abs(vy) > 3 {

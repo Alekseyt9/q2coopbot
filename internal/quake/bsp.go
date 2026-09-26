@@ -205,6 +205,9 @@ func (m *MapInfo) DoorMoveBlock(movers []Mover, origin Vec3, dx, dy float64) (in
 			continue
 		}
 		if sweptBoxAABB(origin, next, min, max, playerMin, playerMax) {
+			if visible && m.doorStepClear(movers, origin, next, max[2]) {
+				continue
+			}
 			if !visible {
 				return entity.Model, "dynamic_door_unobserved"
 			}

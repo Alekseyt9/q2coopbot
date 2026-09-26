@@ -199,6 +199,24 @@ func TestDecodeExplosionTemporaryEntity(t *testing.T) {
 		}
 	}
 }
+func TestDecodeParasiteAndMedicBeam(t *testing.T) {
+	for _, effect := range []byte{16, 19} {
+		packet := append([]byte{3, effect}, make([]byte, 14)...)
+		// The following stufftext proves that the beam consumes exactly its
+		// payload and does not discard the rest of the server message.
+		packet = append(packet, 11, 'o', 'k', 0)
+		d := NewDecoder()
+		if _, err := d.Parse(packet); err != nil || len(d.Commands) != 1 || d.Commands[0] != "ok" {
+			t.Fatalf("effect %d: err=%v commands=%v", effect, err, d.Commands)
+		}
+		for size := 0; size < 14; size++ {
+			if _, err := NewDecoder().Parse(packet[:2+size]); err == nil {
+				t.Fatalf("effect %d accepted truncated payload of %d bytes", effect, size)
+			}
+		}
+	}
+}
+
 func TestRouteUsesReachabilities(t *testing.T) {
 	n := &Navigator{Areas: []Area{{}, {Min: Vec3{-10, -10, -10}, Max: Vec3{10, 10, 10}}, {Min: Vec3{90, -10, -10}, Max: Vec3{110, 10, 10}}}, Edges: [][]Edge{{}, {{To: 2, Start: Vec3{8, 0, 0}, End: Vec3{92, 0, 0}, Kind: 2, Cost: 10}}, nil}}
 	route, ok := n.Route(Vec3{0, 0, 0}, Vec3{100, 0, 0})

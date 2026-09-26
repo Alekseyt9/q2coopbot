@@ -64,7 +64,13 @@ func (p *Planner) planWalkOff() bool {
 		if _, ok := p.Nav.Route(landing, p.goalPoint); !ok {
 			continue
 		}
-		p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: 80, phase: 2, drop: true}
+		// Air steering cannot brake ground velocity immediately. Keep enough
+		// margin for drift after crossing the landing point on a short drop.
+		speed := 60.0
+		if s.Self[2]-landing[2] > 160 {
+			speed = 40
+		}
+		p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: speed, phase: 2, drop: true}
 		return true
 	}
 	return false

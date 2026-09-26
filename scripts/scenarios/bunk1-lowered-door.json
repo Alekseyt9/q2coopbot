@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "name": "bunk1-lowered-door-threshold",
+  "map": "bunk1",
+  "map_entry": "start",
+  "start_frame": 40,
+  "game_frames": 300,
+  "bot_release_frame": 140,
+  "bot_origin": [
+    31.625,
+    -385.75,
+    24.125
+  ],
+  "bot_health": 74,
+  "bot_invulnerable": true,
+  "actor_origin": [
+    292,
+    -400,
+    24.125
+  ],
+  "expect": {},
+  "steps": [
+    {
+      "id": "lower-door-118",
+      "action": "wait",
+      "frames": 30
+    },
+    {
+      "id": "open-paired-doors",
+      "action": "place",
+      "target": [
+        416,
+        -690,
+        -39.875
+      ],
+      "timeout_frames": 10
+    },
+    {
+      "frames": 15,
+      "action": "push",
+      "target": [
+        416,
+        -620,
+        -39.875
+      ],
+      "id": "press-button-126"
+    },
+    {
+      "id": "let-doors-open",
+      "action": "wait",
+      "frames": 20
+    },
+    {
+      "id": "player-beyond-door",
+      "action": "place",
+      "target": [
+        70.375,
+        -121,
+        24.25
+      ],
+      "timeout_frames": 10
+    },
+    {
+      "id": "wait-for-bot",
+      "action": "wait",
+      "frames": 170
+    }
+  ]
+}

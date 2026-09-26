@@ -17,7 +17,8 @@ type CommandDecision struct {
 
 // worldMove converts an XY direction into forward/side commands in the final
 // view frame. Quake II's positive sidemove points to the player's right, whose
-// XY basis is (sin(yaw), -cos(yaw)). Forward's XY length shrinks with pitch.
+// XY basis is (sin(yaw), -cos(yaw)). Dry-land PM_AirMove uses pitch/3,
+// including on the ground; using the full aim pitch overdrives steep shots.
 func worldMove(cmd quake.UserCmd, s quake.Snapshot, dx, dy, speed float64, keepAim bool) quake.UserCmd {
 	distance := math.Hypot(dx, dy)
 	if distance < 0.001 || speed <= 0 {
@@ -30,6 +31,7 @@ func worldMove(cmd quake.UserCmd, s quake.Snapshot, dx, dy, speed float64, keepA
 	yaw := float64(int16(uint16(cmd.Yaw)+uint16(s.DeltaAngles[1]))) * 2 * math.Pi / 65536
 	pitch := float64(int16(uint16(cmd.Pitch)+uint16(s.DeltaAngles[0]))) * 2 * math.Pi / 65536
 	pitch = math.Max(-89*math.Pi/180, math.Min(89*math.Pi/180, pitch))
+	pitch /= 3
 	forward := speed * (x*math.Cos(yaw) + y*math.Sin(yaw)) / math.Cos(pitch)
 	side := speed * (x*math.Sin(yaw) - y*math.Cos(yaw))
 	maxInput := math.Max(math.Abs(forward), math.Abs(side))

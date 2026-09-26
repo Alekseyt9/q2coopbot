@@ -525,6 +525,11 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 				if e = r.skip(6); e != nil {
 					return frames, e
 				}
+			} else if effect == 16 || effect == 19 {
+				// Parasite/medic beam: entity short and two packed positions.
+				if e = r.skip(14); e != nil {
+					return frames, e
+				}
 			} else if effect == 10 {
 				if e = r.skip(9); e != nil {
 					return frames, e
