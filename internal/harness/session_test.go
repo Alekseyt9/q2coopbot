@@ -13,6 +13,44 @@ func sessionFixture() Session {
 	return Session{Version: 1, Name: "maps", TransitionTimeoutMS: 1000, Phases: []Phase{{ID: "first", Scenario: a}, {ID: "second", Scenario: b}}}
 }
 
+func TestSessionWaitsForDynamicBarrier(t *testing.T) {
+	s := sessionFixture()
+	s.ReadinessBarrier = true
+	r, err := NewSession(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := input(80)
+	if d := r.Tick(in, 0); r.Status.State != "pending" || d.ChangeMap != "" {
+		t.Fatal(r.Status)
+	}
+	in.PhaseStart = 90
+	r.Tick(in, time.Millisecond)
+	if r.Status.StartFrame != 90 || r.Status.Phase.CompletedSteps != 0 {
+		t.Fatal(r.Status)
+	}
+	for f := 90; f <= 92; f++ {
+		in.Frame = f
+		r.Tick(in, time.Duration(f)*time.Millisecond)
+	}
+	if r.Status.State != "waiting_map" || r.Status.Phase.EndFrame != 92 {
+		t.Fatal(r.Status)
+	}
+	in.Map = "base3"
+	in.Generation = 3
+	in.Frame = 120
+	in.PhaseStart = 0
+	r.Tick(in, 100*time.Millisecond)
+	if r.Status.StartFrame != 0 || r.Status.State != "pending" {
+		t.Fatal(r.Status)
+	}
+	in.PhaseStart = 119
+	r.Tick(in, 101*time.Millisecond)
+	if r.Status.Reason != "barrier_start_missed" {
+		t.Fatal(r.Status)
+	}
+}
+
 func waitingSession(t *testing.T) *SessionRunner {
 	t.Helper()
 	r, err := NewSession(sessionFixture())

@@ -11,6 +11,7 @@ import (
 // Session retains a separate frame budget and behavior expectations per map.
 // A transition is requested only after the preceding phase completed its steps.
 type Session struct {
+	ReadinessBarrier    bool    `json:"readiness_barrier,omitempty"`
 	Version             int     `json:"version"`
 	Name                string  `json:"name"`
 	TransitionTimeoutMS int     `json:"transition_timeout_ms"`
@@ -61,6 +62,7 @@ func (s Session) Validate() error {
 }
 
 type SessionStatus struct {
+	StartFrame int           `json:"start_frame,omitempty"`
 	State      string        `json:"state"`
 	PhaseIndex int           `json:"phase_index"`
 	PhaseID    string        `json:"phase_id"`
@@ -145,6 +147,7 @@ func (r *SessionRunner) Tick(in Input, elapsed time.Duration) SessionDecision {
 		}
 		r.Status.PhaseIndex++
 		r.Status.PhaseID = next.ID
+		r.Status.StartFrame = 0
 		r.Status.State = "pending"
 		r.phase = New(next.Scenario)
 		r.seenGenerations[in.Generation] = true
@@ -158,6 +161,24 @@ func (r *SessionRunner) Tick(in Input, elapsed time.Duration) SessionDecision {
 	if len(r.seenGenerations) == 0 && in.Map == r.definition.Phases[0].Scenario.Map {
 		r.seenGenerations[in.Generation] = true
 		r.previousMap, r.previousGeneration = in.Map, in.Generation
+	}
+	if r.definition.ReadinessBarrier && !r.phase.started {
+		if in.PhaseStart == 0 {
+			r.Status.State = "pending"
+			r.Status.Phase = r.phase.Status
+			return SessionDecision{}
+		}
+		if r.Status.StartFrame == 0 {
+			if in.PhaseStart < in.Frame {
+				return r.fail("barrier_start_missed")
+			}
+			delta := in.PhaseStart - r.phase.Scenario.StartFrame
+			r.phase.Scenario.StartFrame = in.PhaseStart
+			r.phase.Scenario.GameFrames += delta
+			r.Status.StartFrame = in.PhaseStart
+		} else if r.Status.StartFrame != in.PhaseStart {
+			return r.fail("barrier_start_changed")
+		}
 	}
 	d := r.phase.Tick(in)
 	r.Status.Phase = r.phase.Status

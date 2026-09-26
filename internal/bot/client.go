@@ -20,6 +20,9 @@ import (
 )
 
 type Client struct {
+	sessionReadySent                 bool
+	sessionStartFrame                int
+	sessionSetupAt                   time.Time
 	sessionDefinition                *harness.Session
 	session                          *harness.SessionRunner
 	sessionPhase                     int
@@ -376,6 +379,9 @@ func (c *Client) run(ctx context.Context) error {
 		if err := c.prepareSessionPhase(); err != nil {
 			return err
 		}
+		if err := c.sessionBarrier(now); err != nil {
+			return err
+		}
 		if c.session != nil {
 			c.session.Poll(now.Sub(c.start))
 			if c.session.Status.State == "failed" {
@@ -524,10 +530,14 @@ func (c *Client) run(ctx context.Context) error {
 				cmd = quake.UserCmd{}
 				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_idle"}
 			}
+			if c.sessionDefinition != nil && c.sessionDefinition.ReadinessBarrier && (c.sessionStartFrame == 0 || frame < c.sessionStartFrame) {
+				cmd = quake.UserCmd{}
+				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "session_barrier"}
+			}
 			jumpAge := c.latestFrame - c.testTeleportAfterSentFrame
 			if (c.scenario != nil || c.session != nil) && !safetyStop {
 				s := c.planner.World.Snapshot
-				in := harness.Input{Frame: frame, Generation: c.spawncount, Map: s.Map, Self: s.Self, OnGround: s.OnGround, Health: s.Health}
+				in := harness.Input{Frame: frame, Generation: c.spawncount, Map: s.Map, Self: s.Self, OnGround: s.OnGround, Health: s.Health, PhaseStart: c.sessionStartFrame}
 				var d harness.Decision
 				var status *harness.Status
 				if c.session != nil {
@@ -612,6 +622,7 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			if c.traceFile != nil && c.framePaced {
 				entry := struct {
+					SessionStartFrame int                    `json:"session_start_frame,omitempty"`
 					Session           *harness.SessionStatus `json:"session,omitempty"`
 					Map               string                 `json:"map"`
 					Spawncount        int                    `json:"spawncount"`
@@ -646,8 +657,9 @@ func (c *Client) run(ctx context.Context) error {
 					Arbitration       CommandDecision        `json:"arbitration"`
 					Command           quake.UserCmd          `json:"sent_command"`
 				}{
-					Session: c.sessionStatus(),
-					Map:     c.planner.World.Map, Spawncount: c.spawncount, EpisodeFrame: c.moves,
+					SessionStartFrame: c.sessionStartFrame,
+					Session:           c.sessionStatus(),
+					Map:               c.planner.World.Map, Spawncount: c.spawncount, EpisodeFrame: c.moves,
 					Frame: frame, ObservationFrame: c.planner.World.Snapshot.Frame,
 					ObservationAgeMS: now.Sub(c.planner.World.Updated).Milliseconds(),
 					RelativeFrame:    frame - c.firstMoveFrame, ClientSequence: clientSequence,

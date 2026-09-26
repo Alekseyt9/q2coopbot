@@ -188,6 +188,7 @@ func (r *Runner) RejectRoute(reason string) {
 }
 
 type Input struct {
+	PhaseStart        int
 	Frame, Generation int
 	Map               string
 	Self              quake.Vec3

@@ -3,6 +3,7 @@ package bot
 import (
 	"fmt"
 	"q2coopbot/internal/harness"
+	"time"
 )
 
 func configureSession(cfg *Config) (*harness.Session, *harness.SessionRunner, error) {
@@ -18,6 +19,9 @@ func configureSession(cfg *Config) (*harness.Session, *harness.SessionRunner, er
 	if cfg.TestSessionRole != "actor" && cfg.TestSessionRole != "observer" {
 		return nil, nil, fmt.Errorf("session_role must be actor or observer")
 	}
+	if cfg.TestScenarioFrameOrigin != 0 || cfg.ExitOnReconnect || cfg.TestGroundEdgeProbe || cfg.TestDoorProbe || cfg.TestDoorPassProbe || cfg.TestButtonProbe || cfg.TestButtonAutoGoal || cfg.TestTeleportReturn != "" {
+		return nil, nil, fmt.Errorf("test.session cannot combine with legacy setup, reconnect exit or gameplay probes")
+	}
 	actor := cfg.TestSessionRole == "actor"
 	if actor != cfg.Idle || actor && cfg.TestRCONPassword == "" {
 		return nil, nil, fmt.Errorf("session actor requires idle and RCON; observer must run bot policy")
@@ -27,6 +31,9 @@ func configureSession(cfg *Config) (*harness.Session, *harness.SessionRunner, er
 		return nil, nil, err
 	}
 	first := s.Phases[0].Scenario
+	if s.ReadinessBarrier && cfg.TestScenarioResult == "" {
+		return nil, nil, fmt.Errorf("readiness barrier requires scenario_result in a fresh run directory")
+	}
 	position := first.BotOrigin
 	if actor {
 		position = first.ActorOrigin
@@ -60,7 +67,7 @@ func (c *Client) prepareSessionPhase() error {
 		return fmt.Errorf("unexpected session map %s at phase %d", mapName, index)
 	}
 	phase := c.sessionDefinition.Phases[index].Scenario
-	if c.latestFrame >= phase.StartFrame {
+	if !c.sessionDefinition.ReadinessBarrier && c.latestFrame >= phase.StartFrame {
 		return fmt.Errorf("session placement too late: frame %d, phase start %d", c.latestFrame, phase.StartFrame)
 	}
 	c.sessionPhase, c.sessionMap, c.sessionGeneration = index, mapName, c.spawncount
@@ -70,6 +77,8 @@ func (c *Client) prepareSessionPhase() error {
 		c.testTeleportPosition = phase.ActorOrigin
 	}
 	c.testTeleportSent = false
+	c.sessionReadySent, c.sessionStartFrame = false, 0
+	c.sessionSetupAt = time.Now()
 	c.scenarioPath = testWalkPath{}
 	return nil
 }

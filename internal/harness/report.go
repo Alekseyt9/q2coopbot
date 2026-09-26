@@ -10,6 +10,9 @@ import (
 )
 
 type Trace struct {
+	ClientSequence    uint32          `json:"client_sequence"`
+	SessionStartFrame int             `json:"session_start_frame,omitempty"`
+	Session           *SessionStatus  `json:"session,omitempty"`
 	SelfEntity        int             `json:"self_entity"`
 	TeammateEntity    int             `json:"teammate_entity,omitempty"`
 	Health            *int16          `json:"health,omitempty"`
