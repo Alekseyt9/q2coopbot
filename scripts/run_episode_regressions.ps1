@@ -57,6 +57,20 @@ try {
                 & (Join-Path $PSScriptRoot 'run_speed_trial.ps1') @args | Out-Host
                 $rows = @(Get-Content (Join-Path $trial "scale-$scale-port-$Port-trace.jsonl") | ForEach-Object { ConvertFrom-Json $_ } | Where-Object map -eq $episode.map)
                 $accept = $episode.acceptance
+				if ($accept.actor_health_checkpoints) {
+					$actorRows = @(Get-Content (Join-Path $trial "scale-$scale-port-$Port-human-trace.jsonl") | ForEach-Object { ConvertFrom-Json $_ } | Where-Object map -eq $episode.map)
+					$after = -1
+					foreach ($checkpoint in $accept.actor_health_checkpoints) {
+						$match = @($actorRows | Where-Object {
+							$_.frame -gt $after -and $_.health -eq $checkpoint.health -and
+							[math]::Abs($_.self[0]-$checkpoint.origin[0]) -lt 16 -and
+							[math]::Abs($_.self[1]-$checkpoint.origin[1]) -lt 16 -and
+							[math]::Abs($_.self[2]-$checkpoint.origin[2]) -lt 16
+						} | Select-Object -First 1)
+						if (!$match.Count) { throw 'Actor health/position checkpoint not observed' }
+						$after = $match[0].frame
+					}
+				}
 				if ($definition.bot_health) {
 					$setup=@($rows|Where-Object { $_.health -eq $definition.bot_health -and [math]::Abs($_.self[0]-$definition.bot_origin[0]) -lt 16 -and [math]::Abs($_.self[1]-$definition.bot_origin[1]) -lt 16 })
 					if (!$setup.Count) {throw 'Initial bot health/position not observed'}

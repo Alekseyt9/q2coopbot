@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "name": "base3-elevator-human-repro",
+  "map": "base3",
+  "start_frame": 40,
+  "game_frames": 220,
+  "actor_origin": [
+    795.375,
+    -78.5,
+    -231.875
+  ],
+  "bot_origin": [
+    833,
+    226.625,
+    -423.875
+  ],
+  "expect": {},
+  "steps": [
+    {
+      "action": "wait",
+      "id": "wait-for-bot",
+      "frames": 170
+    }
+  ],
+  "map_entry": "base2a",
+  "bot_health": 43,
+  "bot_invulnerable": true
+}

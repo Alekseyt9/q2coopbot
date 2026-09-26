@@ -69,3 +69,32 @@ func TestHealthChoiceDoesNotDependOnEntityIterationOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestHealthTargetSurvivesAcquisitionBoundary(t *testing.T) {
+	item := quake.Object{Class: "item_health", Origin: quake.Vec3{299, 0, 15}}
+	near := quake.Object{Class: "item_health", Origin: quake.Vec3{20, 0, 15}}
+	s := quake.Snapshot{Frame: 40, Pickups: []quake.Object{item}}
+	p := &Planner{World: World{Goal: "recover_health"}}
+	goal, ok := p.healthGoal(s)
+	if !ok {
+		t.Fatal("initial pickup not selected")
+	}
+	p.budgetHealthGoal(s, goal)
+	s.Self[0] = -4 // Still visible, but now outside acquisition radius.
+	s.Frame++
+	s.Pickups = []quake.Object{near, item}
+	if got, ok := p.healthGoal(s); !ok || got != goal {
+		t.Fatal("movement or a nearer pickup stole the active goal")
+	}
+	s.Frame = 65
+	p.budgetHealthGoal(s, goal)
+	if got, ok := p.healthGoal(s); !ok || got != healthStand(near.Origin) {
+		t.Fatal("timed-out goal was retained")
+	}
+	p.healthActive = true
+	p.healthTarget = healthStand(near.Origin)
+	s.Pickups = nil
+	if _, ok := p.healthGoal(s); ok {
+		t.Fatal("disappeared pickup retained")
+	}
+}

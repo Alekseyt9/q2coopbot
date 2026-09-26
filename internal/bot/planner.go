@@ -354,14 +354,10 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		goal = *s.Teammate
 	}
 	p.hasGoal = true
-	for _, pickup := range s.Pickups {
-		if searching {
-			break
-		}
-		if s.Health < 45 && strings.Contains(pickup.Class, "health") && quake.Horizontal(s.Self, pickup.Origin) < 300 && p.healthAllowed(pickup.Origin, s.Frame) {
-			goal = healthStand(pickup.Origin)
+	if !searching && s.Health < 45 {
+		if health, ok := p.healthGoal(s); ok {
+			goal = health
 			p.World.Goal = "recover_health"
-			break
 		}
 	}
 	if searching { /* the last known point is a search target, not a visible teammate */
@@ -374,12 +370,9 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	if !searching && p.World.Strategy != nil {
 		switch p.World.Strategy.Choice {
 		case "recover":
-			for _, pickup := range s.Pickups {
-				if strings.Contains(pickup.Class, "health") && quake.Horizontal(s.Self, pickup.Origin) < 300 && p.healthAllowed(pickup.Origin, s.Frame) {
-					goal = healthStand(pickup.Origin)
-					p.World.Goal = "recover_health"
-					break
-				}
+			if health, ok := p.healthGoal(s); ok {
+				goal = health
+				p.World.Goal = "recover_health"
 			}
 		case "engage":
 			for _, enemy := range s.Enemies {
@@ -395,12 +388,9 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 	}
 	if !searching && p.World.Tactic != nil && p.World.Tactic.Action == "recover" {
-		for _, pickup := range s.Pickups {
-			if strings.Contains(pickup.Class, "health") && quake.Horizontal(s.Self, pickup.Origin) < 300 && p.healthAllowed(pickup.Origin, s.Frame) {
-				goal = healthStand(pickup.Origin)
-				p.World.Goal = "recover_health"
-				break
-			}
+		if health, ok := p.healthGoal(s); ok {
+			goal = health
+			p.World.Goal = "recover_health"
 		}
 	}
 	goal = p.budgetHealthGoal(s, goal)

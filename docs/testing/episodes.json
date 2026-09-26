@@ -5,7 +5,7 @@
       "id": "base1-stairs",
       "title": "Остановка у ступеней при сопровождении",
       "map": "base1",
-      "status": "fix_in_progress",
+      "status": "verified_1x_2x",
       "reproduction": "ready",
       "scenario": "scripts/scenarios/base1-stairs.json",
       "evidence": "workspace/artifacts/stair-human-20260926/trace.jsonl",
@@ -57,7 +57,7 @@
       "id": "base2-health-blocked",
       "title": "Недоступная аптечка удерживает бота на месте",
       "map": "base2",
-      "status": "fix_in_progress",
+      "status": "verified_1x_2x",
       "reproduction": "ready",
       "scenario": "scripts/scenarios/base2-health-blocked.json",
       "evidence": "workspace/artifacts/live-stuck-20260926-180355/trace.jsonl",
@@ -85,7 +85,7 @@
       "id": "base2-no-respawn",
       "title": "Бот не возрождается после смерти",
       "map": "base2",
-      "status": "fix_in_progress",
+      "status": "verified_1x_2x",
       "reproduction": "ready",
       "scenario": "scripts/scenarios/policy-respawn-session.json",
       "evidence": "workspace/artifacts/live-death-20260926-180836/trace.jsonl",
@@ -101,7 +101,7 @@
       "id": "base3-stuck-20260926-181438",
       "title": "Повторное застревание в живой игре",
       "map": "base3",
-      "status": "fix_in_progress",
+      "status": "verified_1x_2x",
       "reproduction": "ready",
       "scenario": "scripts/scenarios/base3-stuck.json",
       "evidence": "workspace/artifacts/live-stuck-20260926-181438/trace.jsonl",
@@ -132,7 +132,7 @@
       "id": "base2-stuck-20260926-182855",
       "title": "Застревание, дополнительное наблюдение",
       "map": "base2",
-      "status": "fix_in_progress",
+      "status": "verified_1x_2x",
       "reproduction": "ready",
       "scenario": "scripts/scenarios/base2-low-health-stuck.json",
       "evidence": "workspace/artifacts/live-stuck-20260926-182855/trace.jsonl",
@@ -164,12 +164,109 @@
       "reproduction": "observation_only",
       "scenario": "",
       "evidence": "workspace/artifacts/live-stuck-20260926-183318/trace.jsonl",
-      "symptom": "frame=1340; self=31,625,-385,75,24,125; health=74; goal=wait_for_teammate; reason=no_movement_goal",
+      "symptom": "frame=1340; self=31,625,-385,75,24,125; health=74; goal=wait_for_teammate; reason=no_movement_goal; уточнение: до потери видимости кадр 1093 содержит dynamic_door_blocked; затем wait_for_teammate.",
       "missing_setup": [
-        "Проверить причину и воспроизведение по сохранённой трассе"
+        "Воспроизвести состояние дверей и путь игрока перед потерей видимости"
       ],
       "acceptance": null,
       "expected_result": "Восстановление сопровождения без бесконечного застревания"
+    },
+    {
+      "id": "ware1-continuous-fire-20260926-184307",
+      "title": "Постоянная стрельба в живой игре",
+      "map": "ware1",
+      "status": "fixed_pending_e2e",
+      "reproduction": "observation_only",
+      "scenario": "",
+      "evidence": "workspace/artifacts/live-fire-20260926-184307/trace.jsonl",
+      "symptom": "501 из 501 кадров с атакой; frame=1333; self=-2609,75,-719,625,24,125; health=74; goal=cover_teammate; aim=enemy; gunner.h: FRAME_death01=190, FRAME_death11=200, подтверждена стрельба по трупу.",
+      "missing_setup": [
+        "Добавить E2E с гибелью gunner и проверкой прекращения стрельбы"
+      ],
+      "regression_test": "internal/bot/gunner_death_test.go: TestGunnerDeathReleasesAttack",
+      "fix_notes": "Decoder исключает gunner на кадрах смерти 190..200. Тест восприятие→команда проверяет снятие атаки, 501 кадр трупа и сохранение атаки по живому gunner на кадре 201. Полный живой эпизод ещё не принят.",
+      "acceptance": null,
+      "expected_result": "Стрельба только по актуальной подтверждённой угрозе; прекращение при смерти цели или потере условий огня"
+    },
+    {
+      "id": "base3-stairs-20260926-190951",
+      "title": "Застревание на лестнице в живой игре",
+      "map": "base3",
+      "status": "fixed_pending_e2e",
+      "reproduction": "ready",
+      "scenario": "scripts/scenarios/base3-stairs.json",
+      "evidence": "workspace/artifacts/live-stairs-20260926-190951/trace.jsonl",
+      "symptom": "Сообщение игрока: застрял на лестнице. frame=1340; self=[270.875,704,-791.875]; health=34; teammate=[-29.125,510,-599.875]; follow_teammate; navigation=ready; движение route, Forward=160, Up=0; явная причина ограничения отсутствует. В последних 100 кадрах 2 кадров с той же позицией.",
+      "missing_setup": [],
+      "acceptance": {
+        "follow_after_event": false,
+        "required_event": "",
+        "max": [
+          60,
+          610,
+          -580
+        ],
+        "goal": "cover_teammate",
+        "min": [
+          -110,
+          410,
+          -620
+        ],
+        "actor_health_checkpoints": [
+          {
+            "origin": [
+              496,
+              608,
+              -807.75
+            ],
+            "health": 60
+          },
+          {
+            "origin": [
+              496,
+              704,
+              -807.75
+            ],
+            "health": 70
+          }
+        ]
+      },
+      "expected_result": "Бот поднимается по лестнице и восстанавливает сопровождение; не удерживает команду движения без прогресса бесконечно.",
+      "asset": {
+        "path": "workspace/runtime/q2go/baseq2/maps/base3.aas",
+        "sha256": "0EEDB66F2F12367DEAB1DFC9241DBFAFAC77558F2EA230239F9F226F92989054"
+      },
+      "fix_notes": "Воспроизведено после подбора игроком двух ближайших аптечек: переключение целей на границе 300 units. Удержание выбранной видимой аптечки до исчезновения или таймаута. Сценарий изолирует навигацию с bot_invulnerable=true."
+    },
+    {
+      "id": "base3-elevator-20260926-191435",
+      "title": "Застревание перед лифтом в живой игре",
+      "map": "base3",
+      "status": "open",
+      "reproduction": "observation_only",
+      "scenario": "scripts/scenarios/base3-elevator.json",
+      "evidence": "workspace/artifacts/live-elevator-20260926-191435/trace.jsonl",
+      "symptom": "Сообщение игрока: застрял перед лифтом. frame=4083; self=833,226,625,-423,875; health=43; goal=follow_teammate; navigation=ready; reason=at_waypoint",
+      "missing_setup": [
+        "Восстановить подход к лифту, положение платформы и игрока, состояние кнопок и триггеров"
+      ],
+      "acceptance": null,
+      "expected_result": "Бот вызывает или дожидается лифта, садится на платформу и продолжает сопровождение."
+    },
+    {
+      "id": "base3-lost-20260926-192240",
+      "title": "Потеря сопровождения после движения за игроком",
+      "map": "base3",
+      "status": "open",
+      "reproduction": "observation_only",
+      "scenario": "",
+      "evidence": "workspace/artifacts/live-lost-20260926-192240/trace.jsonl",
+      "symptom": "Игрок сообщает: бот потерялся, хотя сначала шёл следом. frame=8776; self=-174,125,-1153,25,-279,875; health=90; goal=wait_for_teammate; navigation=ready; reason=no_movement_goal; teammate_age=991",
+      "missing_setup": [
+        "Восстановить маршрут игрока и момент потери контакта; проверить связь с предыдущим эпизодом лифта"
+      ],
+      "acceptance": null,
+      "expected_result": "После потери видимости бот обоснованно ищет игрока и восстанавливает сопровождение либо явно фиксирует причину отказа."
     }
   ]
 }

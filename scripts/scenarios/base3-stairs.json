@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "name": "base3-stairs-human-repro",
+  "map": "base3",
+  "start_frame": 40,
+  "game_frames": 260,
+  "actor_origin": [
+    496,
+    608,
+    -807.75
+  ],
+  "bot_origin": [
+    234.5,
+    704,
+    -775.875
+  ],
+  "expect": {},
+  "steps": [
+    {
+      "action": "wait",
+      "id": "take-first-health",
+      "frames": 3
+    },
+    {
+      "action": "place",
+      "target": [
+        496,
+        704,
+        -807.75
+      ],
+      "id": "take-second-health",
+      "timeout_frames": 10
+    },
+    {
+      "action": "wait",
+      "id": "consume-second",
+      "frames": 3
+    },
+    {
+      "action": "place",
+      "target": [
+        -29.125,
+        510,
+        -599.875
+      ],
+      "id": "player-upstairs",
+      "timeout_frames": 10
+    },
+    {
+      "action": "wait",
+      "id": "wait-for-bot",
+      "frames": 180
+    }
+  ],
+  "map_entry": "base2a",
+  "bot_health": 34,
+  "bot_invulnerable": true,
+  "actor_health": 50
+}

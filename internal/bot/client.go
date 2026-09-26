@@ -431,12 +431,12 @@ func (c *Client) run(ctx context.Context) error {
 				return err
 			}
 			c.testTeleportSent = true
-			if c.testInitialHealth > 0 {
-				if c.testInvulnerable {
-					if err := c.command("god"); err != nil {
-						return err
-					}
+			if c.testInvulnerable {
+				if err := c.command("god"); err != nil {
+					return err
 				}
+			}
+			if c.testInitialHealth > 0 {
 				if err := c.command(fmt.Sprintf("give health %d", c.testInitialHealth)); err != nil {
 					return err
 				}
@@ -702,6 +702,9 @@ func (c *Client) run(ctx context.Context) error {
 					Health            int16                  `json:"health"`
 					OnGround          bool                   `json:"on_ground"`
 					Goal              string                 `json:"goal"`
+					GoalPoint         *quake.Vec3            `json:"goal_point,omitempty"`
+					Route             []quake.Waypoint       `json:"route,omitempty"`
+					Pickups           []quake.Object         `json:"pickups,omitempty"`
 					Scenario          *harness.Status        `json:"scenario,omitempty"`
 					SearchTarget      *quake.Vec3            `json:"search_target,omitempty"`
 					SearchAttempt     *SearchAttempt         `json:"search_attempt,omitempty"`
@@ -732,6 +735,7 @@ func (c *Client) run(ctx context.Context) error {
 					TeammateAgeFrames: c.planner.World.Snapshot.TeammateAgeFrames,
 					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround,
 					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
+					Route: c.planner.World.Route, Pickups: c.planner.World.Snapshot.Pickups,
 					Scenario:         c.scenarioStatus(),
 					SearchAttempt:    c.planner.World.SearchAttempt,
 					SearchRoute:      c.planner.World.SearchRoute,
@@ -745,6 +749,10 @@ func (c *Client) run(ctx context.Context) error {
 					Enemies:     c.planner.World.Snapshot.Enemies,
 					Arbitration: c.planner.World.Command,
 					Command:     cmd,
+				}
+				if c.planner.hasGoal {
+					goal := c.planner.goalPoint
+					entry.GoalPoint = &goal
 				}
 				data, err := json.Marshal(entry)
 				if err != nil {

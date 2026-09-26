@@ -20,6 +20,7 @@ type Step struct {
 	Route   bool        `json:"route,omitempty"`
 }
 type Scenario struct {
+	ActorHealth     int          `json:"actor_health,omitempty"`
 	BotInvulnerable bool         `json:"bot_invulnerable,omitempty"`
 	BotHealth       int          `json:"bot_health,omitempty"`
 	MapEntry        string       `json:"map_entry,omitempty"`
@@ -70,6 +71,9 @@ func Load(path string) (Scenario, error) {
 }
 
 func (s Scenario) Validate() error {
+	if s.ActorHealth < 0 || s.ActorHealth > 100 {
+		return fmt.Errorf("actor_health must be 0 (default) or 1..100")
+	}
 	if s.BotHealth < 0 || s.BotHealth > 100 {
 		return fmt.Errorf("bot_health must be 0 (default) or 1..100")
 	}

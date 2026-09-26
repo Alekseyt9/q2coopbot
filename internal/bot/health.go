@@ -10,6 +10,25 @@ func (p *Planner) healthAllowed(at quake.Vec3, frame int) bool {
 	return frame >= p.healthBanned[at]
 }
 
+// Keep an acquired pickup until it disappears or its progress budget expires.
+// Reapplying the 300-unit acquisition radius every frame can alternate a
+// downstairs pickup and an upstairs route on opposite sides of one step.
+func (p *Planner) healthGoal(s quake.Snapshot) (quake.Vec3, bool) {
+	if p.healthActive {
+		for _, item := range s.Pickups {
+			if item.Class == "item_health" && healthStand(item.Origin) == p.healthTarget && p.healthAllowed(item.Origin, s.Frame) {
+				return p.healthTarget, true
+			}
+		}
+	}
+	for _, item := range s.Pickups {
+		if item.Class == "item_health" && quake.Horizontal(s.Self, item.Origin) < 300 && p.healthAllowed(item.Origin, s.Frame) {
+			return healthStand(item.Origin), true
+		}
+	}
+	return quake.Vec3{}, false
+}
+
 // A tempting but inaccessible pickup must not indefinitely own the follow
 // goal. Budget progress in game frames and suppress that location briefly.
 func (p *Planner) budgetHealthGoal(s quake.Snapshot, goal quake.Vec3) quake.Vec3 {

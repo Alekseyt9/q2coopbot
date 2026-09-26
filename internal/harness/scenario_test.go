@@ -8,6 +8,16 @@ import (
 func fixture() Scenario {
 	return Scenario{Version: 1, Name: "test", Map: "base2", StartFrame: 40, GameFrames: 100, Steps: []Step{{ID: "wait", Action: "wait", Frames: 2}}}
 }
+
+func TestActorHealthBounds(t *testing.T) {
+	for _, hp := range []int{-1, 0, 1, 50, 100, 101} {
+		s := fixture()
+		s.ActorHealth = hp
+		if (s.Validate() == nil) != (hp >= 0 && hp <= 100) {
+			t.Fatalf("actor health %d validation", hp)
+		}
+	}
+}
 func input(frame int) Input {
 	return Input{Frame: frame, Generation: 2, Map: "base2", Health: 100, OnGround: true}
 }

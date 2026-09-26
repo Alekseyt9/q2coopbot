@@ -682,7 +682,11 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 		}
 		if strings.Contains(path, "/monsters/") && Distance(entity.Origin, f.Origin) < 1024 {
 			kind := strings.SplitN(strings.SplitN(path, "/monsters/", 2)[1], "/", 2)[0]
-			if kind == "soldier" && entity.Frame >= 272 && entity.Frame <= 474 || kind == "infantry" && entity.Frame >= 125 && entity.Frame <= 178 {
+			// Baseq2 monster animation ranges (game/monster/*/*.h).
+			// Gunner's next frame, 201, starts a live duck animation.
+			if kind == "soldier" && entity.Frame >= 272 && entity.Frame <= 474 ||
+				kind == "infantry" && entity.Frame >= 125 && entity.Frame <= 178 ||
+				kind == "gunner" && entity.Frame >= 190 && entity.Frame <= 200 {
 				continue
 			}
 			s.Enemies = append(s.Enemies, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame})

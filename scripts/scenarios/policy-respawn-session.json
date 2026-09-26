@@ -46,9 +46,9 @@
         "start_frame": 40,
         "game_frames": 220,
         "actor_origin": [
-          320,
-          1940,
-          -144
+          720,
+          2292,
+          -231.875
         ],
         "bot_origin": [
           194,

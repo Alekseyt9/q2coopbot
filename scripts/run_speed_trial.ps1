@@ -291,6 +291,7 @@ foreach ($scale in $Timescales) {
         if ($LeaveTeammateOnTransition) { $humanConfig.test.exit_on_reconnect = $true }
         if ($actorScenarioDefinition) {
             $humanConfig.output.trace_jsonl = $humanTracePath
+			if ($actorScenarioDefinition.actor_health) { $humanConfig.test.initial_health = [int]$actorScenarioDefinition.actor_health }
             $humanConfig.test.scenario = $ActorScenario
             if ($ScenarioTailFrames) { $humanConfig.test.scenario_result = $scenarioResultPath }
             $humanConfig.test.teleport_map = $actorScenarioDefinition.map
