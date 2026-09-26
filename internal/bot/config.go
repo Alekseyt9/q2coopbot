@@ -41,6 +41,7 @@ type ConfigFile struct {
 		SetupHoldFrames              int    `json:"setup_hold_frames"`
 		ScenarioFrameOrigin          int    `json:"scenario_frame_origin"`
 		WalkTarget                   string `json:"walk_target"`
+		WalkRoute                    bool   `json:"walk_route"`
 		WalkAfterFrames              int    `json:"walk_after_frames"`
 		WalkFrames                   int    `json:"walk_frames"`
 		Idle                         bool   `json:"idle"`
@@ -137,6 +138,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestSetupHoldFrames = file.Test.SetupHoldFrames
 	cfg.TestScenarioFrameOrigin = file.Test.ScenarioFrameOrigin
 	cfg.TestWalkTarget, cfg.TestWalkAfterFrames, cfg.TestWalkFrames = file.Test.WalkTarget, file.Test.WalkAfterFrames, file.Test.WalkFrames
+	cfg.TestWalkRoute = file.Test.WalkRoute
 	cfg.TestTeleportAfter, cfg.TestTeleportAfterFrames = file.Test.TeleportAfter, file.Test.TeleportAfterFrames
 	cfg.TestTeleportReturn, cfg.TestTeleportReturnAfterFrames = file.Test.TeleportReturn, file.Test.TeleportReturnAfterFrames
 	cfg.TestJumpAfterTeleportFrames = file.Test.JumpAfterTeleportFrames

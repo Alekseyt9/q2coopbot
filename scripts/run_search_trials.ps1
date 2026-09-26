@@ -20,9 +20,9 @@ New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
 
 # These are reaction fixtures. A scripted return cannot prove that the viewpoint caused discovery.
 $cases = @(
-    @{ name = 'hidden-sound'; options = @{ HiddenPlayerSoundTrial = $true }; expected = 'not_seen' },
-    @{ name = 'late-return'; options = @{ ReacquireTeammate = $true }; expected = 'not_seen' },
-    @{ name = 'active-return'; options = @{ ReacquireTeammate = $true; SearchReturnAfterFrames = 7 }; expected = 'reacquired' }
+    @{ name = 'hidden-sound'; options = @{ HiddenPlayerSoundTrial = $true }; expected = 'no_new_visibility' },
+    @{ name = 'late-return'; options = @{ ReacquireTeammate = $true }; expected = 'no_new_visibility' },
+    @{ name = 'early-return'; options = @{ ReacquireTeammate = $true; SearchReturnAfterFrames = 7 }; expected = 'no_new_visibility' }
 )
 $runs = [System.Collections.Generic.List[object]]::new()
 for ($i = 0; $i -lt $cases.Count; $i++) {

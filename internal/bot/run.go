@@ -24,6 +24,7 @@ type Config struct {
 	TestSetupHoldFrames                 int
 	TestDisableSearch                   bool
 	TestWalkTarget                      string
+	TestWalkRoute                       bool
 	TestWalkAfterFrames, TestWalkFrames int
 	Host, Name, GameDir, AASDir         string
 	WorldFile, TracePath, StopFile      string
@@ -220,7 +221,8 @@ func Run(ctx context.Context, cfg Config) error {
 		testScenarioFrameOrigin: cfg.TestScenarioFrameOrigin,
 		testSetupHoldFrames:     cfg.TestSetupHoldFrames,
 		testWalkTarget:          walkTarget, testWalkAfterFrames: cfg.TestWalkAfterFrames, testWalkFrames: cfg.TestWalkFrames,
-		conn: conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
+		testWalkRoute: cfg.TestWalkRoute,
+		conn:          conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
 		decoder: quake.NewDecoder(), planner: &Planner{AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53},
 		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name,
 		idle: cfg.Idle, duration: cfg.Duration, framePaced: cfg.FramePaced, gameFrames: cfg.GameFrames,

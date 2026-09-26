@@ -53,3 +53,29 @@ func TestSharedScenarioClockIgnoresClientJoinDelay(t *testing.T) {
 		t.Fatal("legacy teleport-relative clock changed")
 	}
 }
+
+func TestRoutedWalkKeepsProgressAndResetsOnNewEpisode(t *testing.T) {
+	p := testWalkPath{ready: true, mapName: "test", lastFrame: 10, route: []quake.Waypoint{
+		{Position: quake.Vec3{10, 0, 24}}, {Position: quake.Vec3{100, 0, 24}},
+	}}
+	s := quake.Snapshot{Map: "test", Frame: 11, Self: quake.Vec3{10, 0, 24}}
+	nav := &quake.Navigator{}
+	p.command(s, quake.Vec3{200, 0, 24}, nil, nav)
+	if p.next != 1 {
+		t.Fatal("completed waypoint retained")
+	}
+	s.Frame = 12
+	s.Self = quake.Vec3{-30, 0, 24}
+	p.command(s, quake.Vec3{200, 0, 24}, nil, nav)
+	if p.next != 1 {
+		t.Fatal("route progress moved backwards")
+	}
+	s.Frame = 1
+	p.command(s, quake.Vec3{200, 0, 24}, nil, nav)
+	if p.ready || p.next != 0 {
+		t.Fatal("new episode reused old route")
+	}
+	if _, err := validateTestWalk(Config{TestWalkRoute: true}); err == nil {
+		t.Fatal("route mode without target accepted")
+	}
+}

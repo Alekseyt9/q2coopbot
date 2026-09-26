@@ -10,8 +10,14 @@ import (
 // Static BSP rays estimate information gain, not server PVS or player presence.
 // Dynamic doors can occlude these rays; movement keeps its separate door guard.
 type SearchVisibility struct {
-	HiddenSamples int `json:"hidden_samples"`
-	NewlyVisible  int `json:"newly_visible"`
+	HiddenSamples   int `json:"hidden_samples"`
+	NewlyVisible    int `json:"newly_visible"`
+	SafeCandidates  int `json:"safe_candidates"`
+	MaxNewlyVisible int `json:"max_newly_visible"`
+}
+
+func (v *SearchVisibility) noNewCoverage() bool {
+	return v != nil && v.HiddenSamples > 0 && v.SafeCandidates > 0 && v.MaxNewlyVisible == 0
 }
 
 func searchEye(origin quake.Vec3) quake.Vec3 {

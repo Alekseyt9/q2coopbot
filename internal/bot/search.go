@@ -92,6 +92,10 @@ func (p *Planner) hiddenTeammateGoal(s quake.Snapshot) (quake.Vec3, string, bool
 				LastSeenFrame: s.Frame - *s.TeammateAgeFrames, Target: &viewpoint,
 				Basis: "last_seen_aas_viewpoint", ExpectedObservation: "teammate_visible_in_current_snapshot",
 				Attempt: 1, MaxAttempts: 1, StartFrame: s.Frame, State: "active", Visibility: visibility}
+			if visibility.noNewCoverage() {
+				p.finishSearchAttempt(s.Frame, "no_new_visibility")
+				return quake.Vec3{}, "", false
+			}
 			p.probeTarget = &viewpoint
 			p.probeLastSelf = s.Self
 			p.probeProgressFrame = s.Frame
@@ -142,6 +146,7 @@ func (p *Planner) selectSearchViewpoint(s quake.Snapshot) (quake.Vec3, *SearchVi
 	best := math.Inf(1)
 	var chosen quake.Vec3
 	var visibility *SearchVisibility
+	safeCandidates, maxGain := 0, 0
 	samples := p.searchVisibilitySamples(s)
 	for i := 1; i < len(p.Nav.Areas); i++ {
 		area := p.Nav.Areas[i]
@@ -169,11 +174,16 @@ func (p *Planner) selectSearchViewpoint(s quake.Snapshot) (quake.Vec3, *SearchVi
 			continue
 		}
 		gain := newVisibleSamples(samples, candidate, p.World.Geometry.ClearShot)
+		safeCandidates++
+		maxGain = max(maxGain, gain)
 		score := searchViewpointScore(travel, fromLast, gain)
 		if score < best {
 			best, chosen = score, candidate
 			visibility = &SearchVisibility{HiddenSamples: len(samples), NewlyVisible: gain}
 		}
+	}
+	if visibility != nil {
+		visibility.SafeCandidates, visibility.MaxNewlyVisible = safeCandidates, maxGain
 	}
 	return chosen, visibility, !math.IsInf(best, 1)
 }

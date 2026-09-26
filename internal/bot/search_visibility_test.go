@@ -5,6 +5,18 @@ import (
 	"testing"
 )
 
+func TestNoCoverageRequiresEvidenceAcrossAllSafeCandidates(t *testing.T) {
+	if !(&SearchVisibility{HiddenSamples: 5, SafeCandidates: 3}).noNewCoverage() {
+		t.Fatal("zero-gain candidates not rejected")
+	}
+	for _, v := range []*SearchVisibility{nil, {}, {HiddenSamples: 5}, {SafeCandidates: 3},
+		{HiddenSamples: 5, SafeCandidates: 3, MaxNewlyVisible: 1}} {
+		if v.noNewCoverage() {
+			t.Fatalf("missing evidence or useful alternative rejected: %+v", v)
+		}
+	}
+}
+
 func TestVisibilityPreferenceIsBounded(t *testing.T) {
 	near := searchViewpointScore(100, 100, 0)
 	if searchViewpointScore(140, 100, 4) >= near {

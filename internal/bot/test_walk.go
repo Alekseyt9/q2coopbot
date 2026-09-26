@@ -18,6 +18,9 @@ func (c *Client) testScenarioAge(frame int) int {
 
 // Test walking uses normal usercmd physics; only the initial placement teleports.
 func validateTestWalk(cfg Config) (quake.Vec3, error) {
+	if cfg.TestWalkRoute && cfg.TestWalkTarget == "" {
+		return quake.Vec3{}, fmt.Errorf("test.walk_route requires test.walk_target")
+	}
 	if cfg.TestWalkTarget == "" && cfg.TestWalkAfterFrames == 0 && cfg.TestWalkFrames == 0 {
 		return quake.Vec3{}, nil
 	}
@@ -26,6 +29,39 @@ func validateTestWalk(cfg Config) (quake.Vec3, error) {
 		return quake.Vec3{}, fmt.Errorf("test.walk_target requires frame pacing, idle, initial teleport, delay >=25, 1..1000 frames and no other movement scenario")
 	}
 	return parseTestTeleport(cfg.TestWalkTarget)
+}
+
+type testWalkPath struct {
+	route     []quake.Waypoint
+	next      int
+	ready     bool
+	mapName   string
+	lastFrame int
+}
+
+func (p *testWalkPath) command(s quake.Snapshot, target quake.Vec3, geometry *quake.MapInfo, nav *quake.Navigator) quake.UserCmd {
+	if nav == nil {
+		return quake.UserCmd{}
+	}
+	if p.mapName != s.Map || s.Frame < p.lastFrame {
+		*p = testWalkPath{mapName: s.Map, lastFrame: s.Frame}
+	}
+	p.lastFrame = s.Frame
+	if !p.ready {
+		var ok bool
+		p.route, ok = nav.SearchRoute(s.Self, target)
+		if !ok {
+			return quake.UserCmd{}
+		}
+		p.ready = true
+	}
+	for p.next < len(p.route) && quake.Horizontal(s.Self, p.route[p.next].Position) <= 24 {
+		p.next++
+	}
+	if p.next < len(p.route) {
+		return testWalkCommand(s, p.route[p.next].Position, geometry, nav)
+	}
+	return testWalkCommand(s, target, geometry, nav)
 }
 
 func testWalkCommand(s quake.Snapshot, target quake.Vec3, geometry *quake.MapInfo, nav *quake.Navigator) quake.UserCmd {

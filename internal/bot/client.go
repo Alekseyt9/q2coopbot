@@ -80,6 +80,8 @@ type Client struct {
 	testLineCross                    bool
 	testHoldPosition                 bool
 	testWalkTarget                   quake.Vec3
+	testWalkRoute                    bool
+	testWalkPath                     testWalkPath
 	testWalkAfterFrames              int
 	testWalkFrames                   int
 	testSetupHoldFrames              int
@@ -481,6 +483,9 @@ func (c *Client) run(ctx context.Context) error {
 				age := c.testScenarioAge(frame)
 				if age >= c.testWalkAfterFrames && age < c.testWalkAfterFrames+c.testWalkFrames {
 					cmd = testWalkCommand(c.planner.World.Snapshot, c.testWalkTarget, c.planner.World.Geometry, c.planner.Nav)
+					if c.testWalkRoute {
+						cmd = c.testWalkPath.command(c.planner.World.Snapshot, c.testWalkTarget, c.planner.World.Geometry, c.planner.Nav)
+					}
 					c.planner.World.Command = CommandDecision{MoveSource: "test_walk", AimSource: "test_walk"}
 				}
 			}

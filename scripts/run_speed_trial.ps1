@@ -29,7 +29,7 @@ param(
     [switch]$TeammateSearchTrial,
     [switch]$ReacquireTeammate,
     [int]$SearchReturnAfterFrames = 15,
-    [ValidateSet('not_seen', 'reacquired')][string]$SearchExpectedOutcome = 'not_seen',
+    [ValidateSet('not_seen', 'reacquired', 'no_new_visibility')][string]$SearchExpectedOutcome = 'no_new_visibility',
     [switch]$HiddenPlayerSoundTrial,
     [string]$SearchFixture = '',
     [switch]$SearchWaitBaseline,
@@ -270,6 +270,7 @@ foreach ($scale in $Timescales) {
             $humanConfig.test.teleport_map = $fixture.map
             $humanConfig.test.teleport = $fixture.human_origin
             $humanConfig.test.walk_target = $fixture.human_walk_target
+			$humanConfig.test.walk_route = [bool]$fixture.walk_route
             $humanConfig.test.walk_after_frames = [int]$fixture.walk_after_frames
             $humanConfig.test.walk_frames = [int]$fixture.walk_frames
             $humanConfig.test.scenario_frame_origin = [int]$fixture.frame_origin
@@ -552,6 +553,7 @@ foreach ($scale in $Timescales) {
                         start_frame = $attempt.start_frame; end_frame = $null
                         duration_frames = 0; travel_horizontal_units = 0.0
                         state = 'active'; outcome = $null; visible_at_end = $null
+                        visibility = $attempt.visibility
                     }
                 }
                 $detail = $searchAttemptDetails[$attemptKey]
@@ -644,7 +646,7 @@ foreach ($scale in $Timescales) {
                         $entry.sent_command.Up -ne 0) { $searchWaitMoveFrames++ }
                 }
             }
-            if ($TeammateSearchTrial -and $entry.map -eq 'base2' -and $probeFrames -gt 0 -and
+            if ($TeammateSearchTrial -and $entry.map -eq 'base2' -and $searchFrames -gt 0 -and
                 $null -ne $entry.teammate -and $entry.teammate_age_frames -eq 0) {
                 $searchReacquiredFrames++
                 if ($entry.goal -eq 'follow_teammate' -and
@@ -1104,6 +1106,10 @@ if ($TeammateSearchTrial -and @($results | Where-Object {
     $null -eq $_.search_start_x -or $null -eq $_.search_max_x -or
     $(if ($SearchApproachOnly) {
         $_.probe_frames -ne 0 -or $_.search_attempts -ne 0 -or $null -ne $_.probe_target -or $_.search_wait_at_point -lt 1
+    } elseif ($SearchExpectedOutcome -eq 'no_new_visibility') {
+        $_.probe_frames -ne 0 -or $_.search_attempts -ne 1 -or $_.search_attempt_invalid -ne 0 -or
+        @($_.search_attempt_details | Where-Object { $_.outcome -eq 'no_new_visibility' -and $_.duration_frames -eq 0 -and $_.travel_horizontal_units -eq 0 -and
+            $_.visibility.hidden_samples -gt 0 -and $_.visibility.safe_candidates -gt 0 -and $_.visibility.max_newly_visible -eq 0 }).Count -ne 1
     } else {
         $_.probe_frames -lt 2 -or $_.probe_move_frames -lt 2 -or $_.probe_fire_frames -ne 0 -or
         $_.search_attempts -ne 1 -or $_.search_attempt_invalid -ne 0 -or

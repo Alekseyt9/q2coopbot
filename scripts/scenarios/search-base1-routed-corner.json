@@ -1,0 +1,13 @@
+{
+  "walk_route": true,
+  "name": "base1-routed-corner",
+  "human_origin": "218,1164,-231",
+  "walk_frames": 30,
+  "bot_origin": "155,1164,-231",
+  "map": "base1",
+  "walk_after_frames": 25,
+  "evaluation_frames": 40,
+  "bot_hold_frames": 40,
+  "human_walk_target": "400,1120,-231",
+  "frame_origin": 40
+}

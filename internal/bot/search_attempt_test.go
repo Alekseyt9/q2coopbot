@@ -6,6 +6,24 @@ import (
 	"q2coopbot/internal/quake"
 )
 
+func TestSkippedZeroGainViewpointDoesNotRestart(t *testing.T) {
+	p, s, _ := searchAttemptFixture()
+	p.probeTarget = nil
+	p.searchApproachStarted = true
+	p.finishSearchAttempt(s.Frame, "no_new_visibility")
+	for frame := s.Frame; frame < 30; frame++ {
+		s.Frame = frame
+		age := frame - 8
+		s.TeammateAgeFrames = &age
+		if _, _, ok := p.hiddenTeammateGoal(s); ok {
+			t.Fatal("skipped viewpoint restarted movement")
+		}
+		if p.searchAttempt.Outcome != "no_new_visibility" {
+			t.Fatal("skip reason lost")
+		}
+	}
+}
+
 func searchAttemptFixture() (*Planner, quake.Snapshot, quake.Vec3) {
 	last, view := quake.Vec3{200, 0, 24}, quake.Vec3{100, 0, 24}
 	age := 3

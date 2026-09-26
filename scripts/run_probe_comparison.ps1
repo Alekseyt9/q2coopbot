@@ -59,6 +59,7 @@ foreach ($mode in @('probe','approach')) {
             $distance += [math]::Sqrt([math]::Pow($bot[$i].self[0]-$bot[$i-1].self[0],2)+[math]::Pow($bot[$i].self[1]-$bot[$i-1].self[1],2))
         }
         $probe = @($bot | Where-Object { $_.goal -eq 'probe_last_seen' })
+        $decision = @($bot | Where-Object { $null -ne $_.search_attempt } | Select-Object -First 1)
         $loss = @($bot | Where-Object { $null -eq $_.teammate -and $null -ne $_.last_teammate } | Select-Object -First 1)
         if ($loss.Count -ne 1) { throw 'Player did not become hidden.' }
         $rediscovered = @($bot | Where-Object { $_.frame -gt $loss[0].frame -and $null -ne $_.teammate }).Count -gt 0
@@ -66,9 +67,10 @@ foreach ($mode in @('probe','approach')) {
         $runs.Add([pscustomobject]@{
             mode=$mode; timescale=$summary.timescale; loss_frame=$loss[0].frame
             first_probe_frame=$(if ($probe.Count) { $probe[0].frame } else { $null })
+            decision_frame=$(if ($decision.Count) { $decision[0].search_attempt.start_frame } else { $null })
             approach_frames=@($bot | Where-Object { $_.goal -eq 'search_last_seen' }).Count
             probe_frames=$probe.Count; attempts=$summary.search_attempts; attempt_details=$summary.search_attempt_details
-            visibility=$(if ($probe.Count) { $probe[0].search_attempt.visibility } else { $null })
+            visibility=$(if ($decision.Count) { $decision[0].search_attempt.visibility } else { $null })
             reacquired=$rediscovered; bot_travel_horizontal=$distance
             bot_min_health=($bot | Measure-Object -Property health -Minimum).Minimum
             hidden_player_jump_sounds=$summary.hidden_player_jump_sounds
@@ -85,13 +87,13 @@ $pairs = @($Timescales | ForEach-Object {
     $humanDelta=0.0; $prefixDelta=0.0; $prefixCommandsEqual=$true
     for ($i=0; $i -lt 60; $i++) {
         $humanDelta=[math]::Max($humanDelta,(Distance $a.human[$i].self $b.human[$i].self))
-        if ($a.bot[$i].frame -le $probe.first_probe_frame) {
+        if ($a.bot[$i].frame -le $probe.decision_frame) {
             $prefixDelta=[math]::Max($prefixDelta,(Distance $a.bot[$i].self $b.bot[$i].self))
-            if ($a.bot[$i].frame -lt $probe.first_probe_frame -and
+            if ($a.bot[$i].frame -lt $probe.decision_frame -and
                 (($a.bot[$i].sent_command | ConvertTo-Json -Compress) -ne ($b.bot[$i].sent_command | ConvertTo-Json -Compress))) { $prefixCommandsEqual=$false }
         }
     }
-    $comparable=$null -ne $probe.first_probe_frame -and $humanDelta -le 0.25 -and $prefixDelta -le 0.25 -and
+    $comparable=$null -ne $probe.decision_frame -and $humanDelta -le 0.25 -and $prefixDelta -le 0.25 -and
         $prefixCommandsEqual -and $probe.loss_frame -eq $approach.loss_frame
     [pscustomobject]@{
         timescale=$scale; comparable=$comparable; human_path_max_delta=$humanDelta
@@ -99,6 +101,7 @@ $pairs = @($Timescales | ForEach-Object {
         extra_travel_horizontal=$probe.bot_travel_horizontal-$approach.bot_travel_horizontal
         probe_reacquired=$probe.reacquired; approach_reacquired=$approach.reacquired
         conclusion=$(if (-not $comparable) {'inconclusive_fixture_mismatch'}
+            elseif ($probe.probe_frames -eq 0 -and -not $probe.reacquired -and -not $approach.reacquired) {'probe_skipped_without_reacquisition'}
             elseif (-not $probe.reacquired -and -not $approach.reacquired) {'probe_added_travel_without_reacquisition'}
             elseif ($probe.reacquired -and -not $approach.reacquired) {'probe_only_reacquisition_in_fixture'}
             else {'compare_reacquisition_timing'})
