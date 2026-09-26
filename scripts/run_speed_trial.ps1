@@ -2,6 +2,7 @@
 param(
     [string]$RuntimeRoot = (Join-Path (Split-Path -Parent $PSScriptRoot) 'workspace\runtime\q2go'),
     [string]$ServerExe = '',
+    [string]$ClientExe = '',
     [string]$Map = 'base1',
     [int]$Port = 28120,
     [int]$GameFrames = 100,
@@ -29,9 +30,10 @@ param(
     [switch]$TeammateSearchTrial,
     [switch]$ReacquireTeammate,
     [int]$SearchReturnAfterFrames = 15,
-    [ValidateSet('not_seen', 'reacquired', 'no_new_visibility')][string]$SearchExpectedOutcome = 'no_new_visibility',
+    [ValidateSet('not_seen', 'reacquired', 'no_new_visibility')][string]$SearchExpectedOutcome = 'not_seen',
     [switch]$HiddenPlayerSoundTrial,
     [string]$SearchFixture = '',
+    [string]$ActorScenario = '',
     [switch]$SearchWaitBaseline,
     [switch]$SearchApproachOnly,
     [switch]$SearchSynchronizedSetup,
@@ -42,6 +44,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $fixture = $null
+$actorScenarioDefinition = $null
+if ($ActorScenario) {
+    $ActorScenario = [IO.Path]::GetFullPath($ActorScenario)
+    $actorScenarioDefinition = Get-Content -LiteralPath $ActorScenario -Raw | ConvertFrom-Json
+    if (-not $SynchronizedStart -or $SearchFixture -or $TeammateSearchTrial -or $TeammateMemoryTrial -or $ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $ObservationGapTrial -or $GroundEdgeTrial -or $DoorTrial -or $DoorPassTrial -or $ButtonTrial -or $ButtonAutoTrial -or $NoAASTrial -or $BSPFailureTrial) { throw 'Actor scenario requires synchronized start and no other gameplay trial.' }
+    if ($actorScenarioDefinition.map -ne $(if ($TransitionMap) {$TransitionMap} else {$Map}) -or $GameFrames -lt $actorScenarioDefinition.game_frames) {throw 'Scenario map/frame budget mismatch.'}
+}
 if ($SearchWaitBaseline -and -not $SearchFixture) { throw '-SearchWaitBaseline requires -SearchFixture.' }
 if ($SearchSynchronizedSetup -and -not $TeammateSearchTrial) { throw 'Search synchronized setup requires -TeammateSearchTrial.' }
 if ($SearchApproachOnly -and -not $SearchFixture -and (-not $TeammateSearchTrial -or -not $HiddenPlayerSoundTrial)) { throw '-SearchApproachOnly requires -SearchFixture or the hidden-sound search trial.' }
@@ -144,11 +153,15 @@ $gameDir = [System.IO.Path]::GetFullPath($gameDir)
 if ($AASDir) { $AASDir = [System.IO.Path]::GetFullPath($AASDir) }
 New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
 $botExe = Join-Path $OutputRoot 'q2coopbot.exe'
+if ($ClientExe) {
+    $botExe = (Resolve-Path -LiteralPath $ClientExe).Path
+} else {
 Push-Location $repoRoot
 try {
     & go build -o $botExe ./cmd/q2coopbot
     if ($LASTEXITCODE -ne 0) { throw 'Go build failed.' }
 } finally { Pop-Location }
+}
 
 function Read-AppliedCommands([string]$LogPath) {
     $pattern = 'sv_test_applied_cmd spawncount=(\d+) frame=(\d+) seq=(\d+) kind=(\w+) pitch=(-?\d+) yaw=(-?\d+) roll=(-?\d+) forward=(-?\d+) side=(-?\d+) up=(-?\d+) buttons=(\d+) impulse=(\d+) msec=(\d+) light=(\d+)'
@@ -185,7 +198,7 @@ foreach ($scale in $Timescales) {
     $rconPassword = if ($TransitionMap) { [guid]::NewGuid().ToString('N') } else { '' }
     if ($TransitionMap) { $args = "+set rcon_password $rconPassword $args" }
     if ($UnlimitedLoopbackRate) { $args = "+set sv_test_unlimited_loopback 1 $args" }
-    if ($ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $GroundEdgeTrial -or $DoorTrial -or $DoorPassTrial -or $ButtonTrial -or $ButtonAutoTrial -or $TeammateMemoryTrial -or $TeammateSearchTrial -or $SearchFixture) { $args = "+set cheats 1 $args" }
+    if ($ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $GroundEdgeTrial -or $DoorTrial -or $DoorPassTrial -or $ButtonTrial -or $ButtonAutoTrial -or $TeammateMemoryTrial -or $TeammateSearchTrial -or $SearchFixture -or $ActorScenario) { $args = "+set cheats 1 $args" }
     if ($SynchronizedStart) { $args = "+set sv_test_trace_client GoCoopMate +set sv_test_start_client GoCoopMate $args" }
     $server = Start-Process -FilePath $ServerExe -ArgumentList $args -WorkingDirectory $RuntimeRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
     $human = $null
@@ -264,6 +277,12 @@ foreach ($scale in $Timescales) {
             $humanConfig.test.line_cross = $true
         }
         if ($LeaveTeammateOnTransition) { $humanConfig.test.exit_on_reconnect = $true }
+        if ($actorScenarioDefinition) {
+            $humanConfig.output.trace_jsonl = $humanTracePath
+            $humanConfig.test.scenario = $ActorScenario
+            $humanConfig.test.teleport_map = $actorScenarioDefinition.map
+            $humanConfig.test.teleport = ($actorScenarioDefinition.actor_origin | ForEach-Object {([double]$_).ToString([cultureinfo]::InvariantCulture)}) -join ','
+        }
         if ($SearchSynchronizedSetup) { $humanConfig.test.scenario_frame_origin = 40 }
         if ($fixture) {
             $humanConfig.output.trace_jsonl = $humanTracePath
@@ -336,6 +355,12 @@ foreach ($scale in $Timescales) {
         if ($NoAASTrial) { $botConfig.test.no_aas = $true }
         if ($FriendlyFireTrial) { $botConfig.test.hold_position = $true }
         if ($SearchApproachOnly) { $botConfig.test.disable_probe = $true }
+        if ($actorScenarioDefinition) {
+            $botConfig.test.teleport_map = $actorScenarioDefinition.map
+            $botConfig.test.teleport = ($actorScenarioDefinition.bot_origin | ForEach-Object {([double]$_).ToString([cultureinfo]::InvariantCulture)}) -join ','
+            $botConfig.test.scenario_frame_origin = $actorScenarioDefinition.start_frame
+            $botConfig.test.setup_hold_frames = 1
+        }
         if ($SearchSynchronizedSetup) {
             $botConfig.test.scenario_frame_origin = 40
             $botConfig.test.setup_hold_frames = 4
@@ -1109,7 +1134,8 @@ if ($TeammateSearchTrial -and @($results | Where-Object {
     } elseif ($SearchExpectedOutcome -eq 'no_new_visibility') {
         $_.probe_frames -ne 0 -or $_.search_attempts -ne 1 -or $_.search_attempt_invalid -ne 0 -or
         @($_.search_attempt_details | Where-Object { $_.outcome -eq 'no_new_visibility' -and $_.duration_frames -eq 0 -and $_.travel_horizontal_units -eq 0 -and
-            $_.visibility.hidden_samples -gt 0 -and $_.visibility.safe_candidates -gt 0 -and $_.visibility.max_newly_visible -eq 0 }).Count -ne 1
+            $_.visibility.hidden_samples -gt 0 -and $_.visibility.safe_candidates -gt 0 -and $_.visibility.max_newly_visible -eq 0 -and
+            $_.visibility.audit_complete -eq $true -and $_.visibility.audit_samples -gt 0 -and $_.visibility.audit_max_gain -eq 0 }).Count -ne 1
     } else {
         $_.probe_frames -lt 2 -or $_.probe_move_frames -lt 2 -or $_.probe_fire_frames -ne 0 -or
         $_.search_attempts -ne 1 -or $_.search_attempt_invalid -ne 0 -or

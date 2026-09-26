@@ -6,10 +6,13 @@ import (
 )
 
 func TestNoCoverageRequiresEvidenceAcrossAllSafeCandidates(t *testing.T) {
-	if !(&SearchVisibility{HiddenSamples: 5, SafeCandidates: 3}).noNewCoverage() {
+	if !(&SearchVisibility{HiddenSamples: 5, SafeCandidates: 3, AuditComplete: true, AuditSamples: 20}).noNewCoverage() {
 		t.Fatal("zero-gain candidates not rejected")
 	}
 	for _, v := range []*SearchVisibility{nil, {}, {HiddenSamples: 5}, {SafeCandidates: 3},
+		{HiddenSamples: 5, SafeCandidates: 3},
+		{HiddenSamples: 5, SafeCandidates: 3, AuditSamples: 128},
+		{HiddenSamples: 5, SafeCandidates: 3, AuditComplete: true, AuditSamples: 20, AuditMaxGain: 1},
 		{HiddenSamples: 5, SafeCandidates: 3, MaxNewlyVisible: 1}} {
 		if v.noNewCoverage() {
 			t.Fatalf("missing evidence or useful alternative rejected: %+v", v)

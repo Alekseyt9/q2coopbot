@@ -39,6 +39,10 @@ func (p *Planner) finishSearchAttempt(frame int, outcome string) {
 	p.searchAttempt.State = "completed"
 	p.searchAttempt.Outcome = outcome
 	p.searchAttempt.EndFrame = frame
+	// A terminal attempt cannot retain an executable target. A fresh visible
+	// observation resets the budget in Planner.update.
+	p.probeTarget = nil
+	p.probeAttempted = true
 }
 
 // hiddenTeammateGoal permits one short approach to a confirmed position and
@@ -51,6 +55,11 @@ func (p *Planner) hiddenTeammateGoal(s quake.Snapshot) (quake.Vec3, string, bool
 		(p.searchAttempt.Entity != s.LastTeammateEntity ||
 			p.searchAttempt.LastSeenFrame != s.Frame-*s.TeammateAgeFrames) {
 		p.searchAttempt = nil
+		p.probeTarget = nil
+		p.probeAttempted = false
+		p.searchApproachStarted = false
+		p.lastSeenSelfKnown = false
+		p.routeKnown = false
 	}
 	if s.LastTeammate == nil || s.TeammateAgeFrames == nil || *s.TeammateAgeFrames <= 0 ||
 		*s.TeammateAgeFrames > 40 || p.World.GeometryStatus != "ready" || p.Nav == nil ||
@@ -147,6 +156,7 @@ func (p *Planner) selectSearchViewpoint(s quake.Snapshot) (quake.Vec3, *SearchVi
 	var chosen quake.Vec3
 	var visibility *SearchVisibility
 	safeCandidates, maxGain := 0, 0
+	var safeViews []quake.Vec3
 	samples := p.searchVisibilitySamples(s)
 	for i := 1; i < len(p.Nav.Areas); i++ {
 		area := p.Nav.Areas[i]
@@ -175,6 +185,7 @@ func (p *Planner) selectSearchViewpoint(s quake.Snapshot) (quake.Vec3, *SearchVi
 		}
 		gain := newVisibleSamples(samples, candidate, p.World.Geometry.ClearShot)
 		safeCandidates++
+		safeViews = append(safeViews, candidate)
 		maxGain = max(maxGain, gain)
 		score := searchViewpointScore(travel, fromLast, gain)
 		if score < best {
@@ -184,6 +195,17 @@ func (p *Planner) selectSearchViewpoint(s quake.Snapshot) (quake.Vec3, *SearchVi
 	}
 	if visibility != nil {
 		visibility.SafeCandidates, visibility.MaxNewlyVisible = safeCandidates, maxGain
+		if maxGain == 0 && len(samples) > 0 {
+			audit, complete := p.searchVisibilityAuditSamples(s)
+			visibility.AuditSamples, visibility.AuditComplete = len(audit), complete
+			for _, candidate := range safeViews {
+				gain := newVisibleSamples(audit, candidate, p.World.Geometry.ClearShot)
+				visibility.AuditMaxGain = max(visibility.AuditMaxGain, gain)
+				if candidate == chosen {
+					visibility.AuditChosenGain = gain
+				}
+			}
+		}
 	}
 	return chosen, visibility, !math.IsInf(best, 1)
 }

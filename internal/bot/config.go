@@ -36,6 +36,7 @@ type ConfigFile struct {
 		StopFile   string `json:"stop_file"`
 	} `json:"output"`
 	Test struct {
+		Scenario                     string `json:"scenario"`
 		DisableSearch                bool   `json:"disable_search"`
 		DisableProbe                 bool   `json:"disable_probe"`
 		SetupHoldFrames              int    `json:"setup_hold_frames"`
@@ -133,6 +134,7 @@ func LoadConfig(path string) (Config, error) {
 		cfg.TestChangeAfter = 20
 	}
 	cfg.TestTeleportMap, cfg.TestTeleport = file.Test.TeleportMap, file.Test.Teleport
+	cfg.TestScenario = resolve(file.Test.Scenario)
 	cfg.TestDisableSearch = file.Test.DisableSearch
 	cfg.TestDisableProbe = file.Test.DisableProbe
 	cfg.TestSetupHoldFrames = file.Test.SetupHoldFrames

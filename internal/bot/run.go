@@ -14,11 +14,13 @@ import (
 	"strings"
 	"time"
 
+	"q2coopbot/internal/harness"
 	"q2coopbot/internal/quake"
 )
 
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
+	TestScenario                        string
 	TestDisableProbe                    bool
 	TestScenarioFrameOrigin             int
 	TestSetupHoldFrames                 int
@@ -82,6 +84,20 @@ func transitionMapArgument(destination, previous string) (string, error) {
 }
 
 func Run(ctx context.Context, cfg Config) error {
+	var scenario *harness.Runner
+	if cfg.TestScenario != "" {
+		if !cfg.FramePaced || !cfg.Idle || cfg.TestTeleport == "" || cfg.TestTeleportAfter != "" || cfg.TestWalkTarget != "" || cfg.TestLineCross || cfg.TestJumpAfterTeleportFrames != 0 || cfg.TestJumpAgainAfterTeleportFrames != 0 || cfg.TestHoldPosition || cfg.TestGapFrames != 0 || cfg.TestSpawnSoldier != "" {
+			return fmt.Errorf("test.scenario requires isolated frame-paced idle actor and initial placement")
+		}
+		definition, err := harness.Load(cfg.TestScenario)
+		if err != nil {
+			return fmt.Errorf("scenario: %w", err)
+		}
+		if definition.Map != cfg.TestTeleportMap {
+			return fmt.Errorf("scenario map differs from actor placement")
+		}
+		scenario = harness.New(definition)
+	}
 	if (cfg.TestDisableSearch || cfg.TestDisableProbe) && !cfg.FramePaced {
 		return fmt.Errorf("test.disable_search and test.disable_probe require run.frame_paced")
 	}
@@ -218,6 +234,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer conn.Close()
 	client := &Client{
+		scenario:                scenario,
 		testScenarioFrameOrigin: cfg.TestScenarioFrameOrigin,
 		testSetupHoldFrames:     cfg.TestSetupHoldFrames,
 		testWalkTarget:          walkTarget, testWalkAfterFrames: cfg.TestWalkAfterFrames, testWalkFrames: cfg.TestWalkFrames,

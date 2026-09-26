@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "expect": {"contact_losses":2,"reacquisitions":2,"follow_resumptions":2},
+  "name": "repeated-contact-scripted-placement",
+  "map": "base2",
+  "start_frame": 40,
+  "game_frames": 180,
+  "actor_origin": [320,1940,-144],
+  "bot_origin": [194,1940,-144],
+  "steps": [
+    {"id":"initial-contact","action":"wait","frames":3},
+    {"id":"hide-1","action":"place","target":[191,2111,-103],"timeout_frames":8},
+    {"id":"search-1","action":"wait","frames":20},
+    {"id":"return-1","action":"place","target":[400,1840,-144],"timeout_frames":8},
+    {"id":"follow-1","action":"wait","frames":12},
+    {"id":"hide-2","action":"place","target":[191,2111,-103],"timeout_frames":8},
+    {"id":"search-2","action":"wait","frames":20},
+    {"id":"return-2","action":"place","target":[400,1840,-144],"timeout_frames":8},
+    {"id":"follow-2","action":"wait","frames":12}
+  ]
+}

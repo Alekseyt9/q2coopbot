@@ -15,10 +15,13 @@ import (
 	"strings"
 	"time"
 
+	"q2coopbot/internal/harness"
 	"q2coopbot/internal/quake"
 )
 
 type Client struct {
+	scenario                         *harness.Runner
+	scenarioPath                     testWalkPath
 	conn                             *net.UDPConn
 	address                          *net.UDPAddr
 	seq, serverSeq                   uint32
@@ -479,6 +482,27 @@ func (c *Client) run(ctx context.Context) error {
 				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_idle"}
 			}
 			jumpAge := c.latestFrame - c.testTeleportAfterSentFrame
+			if c.scenario != nil && !safetyStop {
+				s := c.planner.World.Snapshot
+				d := c.scenario.Tick(harness.Input{Frame: frame, Generation: c.spawncount, Map: s.Map, Self: s.Self, OnGround: s.OnGround, Health: s.Health})
+				cmd = quake.UserCmd{}
+				if d.NewStep {
+					c.scenarioPath = testWalkPath{}
+				}
+				if d.Place != nil {
+					v := *d.Place
+					if err := c.command(fmt.Sprintf("teleport %g %g %g", v[0], v[1], v[2])); err != nil {
+						return err
+					}
+				}
+				if d.Walk != nil {
+					cmd = testWalkCommand(s, *d.Walk, c.planner.World.Geometry, c.planner.Nav)
+					if d.Route {
+						cmd = c.scenarioPath.command(s, *d.Walk, c.planner.World.Geometry, c.planner.Nav)
+					}
+				}
+				c.planner.World.Command = CommandDecision{MoveSource: "test_scenario", AimSource: "none", LimitReason: c.scenario.Status.State}
+			}
 			if !safetyStop && c.testTeleportSent && c.planner.World.Map == c.testTeleportMap && c.testWalkFrames > 0 {
 				age := c.testScenarioAge(frame)
 				if age >= c.testWalkAfterFrames && age < c.testWalkAfterFrames+c.testWalkFrames {
@@ -532,6 +556,7 @@ func (c *Client) run(ctx context.Context) error {
 					Health            int16              `json:"health"`
 					OnGround          bool               `json:"on_ground"`
 					Goal              string             `json:"goal"`
+					Scenario          *harness.Status    `json:"scenario,omitempty"`
 					SearchTarget      *quake.Vec3        `json:"search_target,omitempty"`
 					SearchAttempt     *SearchAttempt     `json:"search_attempt,omitempty"`
 					SearchRoute       *SearchRouteCheck  `json:"search_route,omitempty"`
@@ -556,6 +581,7 @@ func (c *Client) run(ctx context.Context) error {
 					TeammateAgeFrames: c.planner.World.Snapshot.TeammateAgeFrames,
 					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround,
 					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
+					Scenario:         c.scenarioStatus(),
 					SearchAttempt:    c.planner.World.SearchAttempt,
 					SearchRoute:      c.planner.World.SearchRoute,
 					TeammateSound:    c.planner.World.TeammateSound,
