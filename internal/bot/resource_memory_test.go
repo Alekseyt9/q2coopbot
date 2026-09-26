@@ -115,6 +115,7 @@ func TestResourceMemoryBase1ReturnAndMissing(t *testing.T) {
 		t.Fatal("needed kit not selected from memory")
 	}
 	p.Nav = nil
+	p.resources[42].Attempted = false
 	if len(p.rememberedCandidates(s)) != 0 {
 		t.Fatal("memory bypasses navigation evidence")
 	}

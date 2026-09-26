@@ -48,6 +48,7 @@ type ConfigFile struct {
 		DisableSearch                bool   `json:"disable_search"`
 		DisableProbe                 bool   `json:"disable_probe"`
 		SetupHoldFrames              int    `json:"setup_hold_frames"`
+		HideHealthFrames             []int  `json:"hide_health_frames"`
 		ScenarioFrameOrigin          int    `json:"scenario_frame_origin"`
 		WalkTarget                   string `json:"walk_target"`
 		WalkRoute                    bool   `json:"walk_route"`
@@ -150,6 +151,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestDisableSearch = file.Test.DisableSearch
 	cfg.TestDisableProbe = file.Test.DisableProbe
 	cfg.TestSetupHoldFrames = file.Test.SetupHoldFrames
+	cfg.TestHideHealthFrames = file.Test.HideHealthFrames
 	cfg.TestInitialHealth = file.Test.InitialHealth
 	cfg.TestWeaponSwitchFixture = file.Test.WeaponSwitchFixture
 	cfg.TestInvulnerable = file.Test.Invulnerable

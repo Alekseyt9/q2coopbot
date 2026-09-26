@@ -1,0 +1,15 @@
+{
+  "version":1,
+  "name":"base1-health-memory-return-perception-mask",
+  "map":"base1",
+  "start_frame":40,
+  "game_frames":220,
+  "bot_release_frame":70,
+  "bot_hide_health_frames":[50,110],
+  "actor_origin":[960,248,-167.875],
+  "bot_origin":[960,408,-167.875],
+  "bot_health":40,
+  "bot_invulnerable":true,
+  "expect":{},
+  "steps":[{"id":"wait-for-treatment-and-return","action":"wait","frames":170}]
+}

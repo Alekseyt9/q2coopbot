@@ -32,6 +32,7 @@ type Config struct {
 	TestDisableProbe                    bool
 	TestScenarioFrameOrigin             int
 	TestSetupHoldFrames                 int
+	TestHideHealthFrames                []int
 	TestDisableSearch                   bool
 	TestWalkTarget                      string
 	TestWalkRoute                       bool
@@ -145,6 +146,9 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if cfg.TestSetupHoldFrames < 0 || cfg.TestSetupHoldFrames > 1000 || cfg.TestSetupHoldFrames > 0 && (!cfg.FramePaced || cfg.TestTeleport == "") {
 		return fmt.Errorf("test.setup_hold_frames requires frame pacing, initial teleport and 0..1000 frames")
+	}
+	if len(cfg.TestHideHealthFrames) > 0 && (len(cfg.TestHideHealthFrames) != 2 || !cfg.FramePaced || cfg.TestTeleport == "" || cfg.TestHideHealthFrames[0] < 0 || cfg.TestHideHealthFrames[1] <= cfg.TestHideHealthFrames[0] || cfg.TestHideHealthFrames[1] > 1000) {
+		return fmt.Errorf("test.hide_health_frames requires frame pacing, teleport and a bounded [start,end) interval")
 	}
 	if cfg.GameDir == "" {
 		return fmt.Errorf("client.game_dir is required")
@@ -275,6 +279,7 @@ func Run(ctx context.Context, cfg Config) error {
 		session:                 sessionRunner,
 		testScenarioFrameOrigin: cfg.TestScenarioFrameOrigin,
 		testSetupHoldFrames:     cfg.TestSetupHoldFrames,
+		testHideHealthFrames:    cfg.TestHideHealthFrames,
 		testInitialHealth:       cfg.TestInitialHealth,
 		testWeaponSwitchFixture: cfg.TestWeaponSwitchFixture,
 		testInvulnerable:        cfg.TestInvulnerable,

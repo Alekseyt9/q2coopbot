@@ -88,7 +88,7 @@ func (p *Planner) rememberedCandidates(s quake.Snapshot) []quake.Object {
 			continue
 		}
 		at := healthStand(r.Item.Origin)
-		if s.Teammate == nil || quake.Distance(*s.Teammate, at) > 384 || quake.Distance(s.Self, at) > 300 || !s.OnGround {
+		if s.Teammate == nil || quake.Distance(*s.Teammate, at) > 384 || quake.Distance(s.Self, at) > 480 || !s.OnGround {
 			continue
 		}
 		if _, ok := p.resourceRoute(s.Self, at); ok {

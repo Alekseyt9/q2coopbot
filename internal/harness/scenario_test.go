@@ -9,6 +9,21 @@ func fixture() Scenario {
 	return Scenario{Version: 1, Name: "test", Map: "base2", StartFrame: 40, GameFrames: 100, Steps: []Step{{ID: "wait", Action: "wait", Frames: 2}}}
 }
 
+func TestHealthMaskIntervalValidation(t *testing.T) {
+	for _, span := range [][]int{{40}, {39, 60}, {60, 60}, {60, 101}, {40, 60, 80}} {
+		s := fixture()
+		s.BotHideHealthFrames = span
+		if s.Validate() == nil {
+			t.Fatalf("accepted %v", span)
+		}
+	}
+	s := fixture()
+	s.BotHideHealthFrames = []int{50, 70}
+	if err := s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPushRunsFixedFramesAndStopsOnDiscontinuity(t *testing.T) {
 	target := quake.Vec3{}
 	s := fixture()

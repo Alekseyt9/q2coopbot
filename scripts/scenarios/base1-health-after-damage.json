@@ -1,0 +1,17 @@
+{
+  "version":1,
+  "name":"base1-health-after-server-damage",
+  "map":"base1",
+  "start_frame":40,
+  "game_frames":400,
+  "actor_origin":[740,80,-167.875],
+  "bot_origin":[960,408,-167.875],
+  "bot_health":100,
+  "expect":{},
+  "steps":[
+    {"id":"leave-health-behind","action":"wait","frames":75},
+    {"id":"prepare-damage","action":"place","target":[870,80,-167.875],"timeout_frames":10},
+    {"id":"server-damage","action":"shoot_teammate","frames":30},
+    {"id":"wait-for-treatment","action":"wait","frames":230}
+  ]
+}

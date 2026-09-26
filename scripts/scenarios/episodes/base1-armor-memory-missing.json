@@ -1,7 +1,7 @@
 {
   "id": "base1-armor-memory-missing",
   "title": "Проверка запомненной брони, которую забрал напарник",
-  "status": "open",
+  "status": "verified_1x_2x",
   "reproduction": "ready",
   "map": "base1",
   "scenario": "scripts/scenarios/base1-armor-memory-missing.json",
@@ -13,8 +13,17 @@
     "memory_missing": "item_armor_jacket",
     "actor_armor_gain": 25,
     "goal": "cover_teammate",
-    "min": [-405,-650,-90],
-    "max": [-240,-470,-50],
+    "min": [
+      -405,
+      -650,
+      -90
+    ],
+    "max": [
+      -240,
+      -470,
+      -50
+    ],
     "follow_after_event": false
-  }
+  },
+  "verification": "workspace/artifacts/episode-regressions-20260927-015807-622/report.json"
 }

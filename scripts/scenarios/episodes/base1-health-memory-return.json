@@ -1,0 +1,29 @@
+{
+  "id": "base1-health-memory-return",
+  "title": "Возврат к сохранившейся аптечке при тестовой потере наблюдения",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "map": "base1",
+  "scenario": "scripts/scenarios/base1-health-memory-return.json",
+  "evidence": "Контролируемая маска аптечек в наблюдениях клиента; предмет и лечение на настоящем сервере. Не проверяет естественное исчезновение из PVS за поворотом.",
+  "symptom": "Без памяти бот не может выбрать ранее замеченную аптечку, отсутствующую в текущем наблюдении.",
+  "missing_setup": [],
+  "expected_result": "После наблюдения и потери видимости бот выбирает аптечку по памяти, получает лечение во время маски и возвращается к игроку.",
+  "acceptance": {
+    "memory_health_return": true,
+    "goal": "cover_teammate",
+    "min_health": 50,
+    "min": [
+      880,
+      168,
+      -180
+    ],
+    "max": [
+      1040,
+      328,
+      -150
+    ],
+    "follow_after_event": false
+  },
+  "verification": "workspace/artifacts/episode-regressions-20260927-020841-434/report.json"
+}

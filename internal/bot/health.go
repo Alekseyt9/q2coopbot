@@ -35,6 +35,9 @@ func usefulHealth(s quake.Snapshot, item quake.Object) bool {
 // Reapplying the 300-unit acquisition radius every frame can alternate a
 // downstairs pickup and an upstairs route on opposite sides of one step.
 func (p *Planner) healthGoal(s quake.Snapshot) (quake.Vec3, bool) {
+	if p.testSetupHold {
+		return quake.Vec3{}, false
+	}
 	if p.healthActive {
 		for _, item := range s.Pickups {
 			if item.Class == "item_health" && usefulHealth(s, item) && healthStand(item.Origin) == p.healthTarget && p.healthAllowed(item.Origin, s.Frame) {
@@ -52,6 +55,11 @@ func (p *Planner) healthGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	}
 	for _, item := range s.Pickups {
 		if item.Class == "item_health" && usefulHealth(s, item) && quake.Horizontal(s.Self, item.Origin) < 300 && p.healthAllowed(item.Origin, s.Frame) {
+			if p.Nav != nil && p.World.Geometry.HasCollision() {
+				if _, ok := p.resourceRoute(s.Self, healthStand(item.Origin)); !ok {
+					continue
+				}
+			}
 			return healthStand(item.Origin), true
 		}
 	}

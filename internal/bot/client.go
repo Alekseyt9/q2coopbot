@@ -112,6 +112,7 @@ type Client struct {
 	testWalkAfterFrames              int
 	testWalkFrames                   int
 	testSetupHoldFrames              int
+	testHideHealthFrames             []int
 	testScenarioFrameOrigin          int
 	testGroundEdgeProbe              bool
 	testDoorProbe                    bool
@@ -273,6 +274,7 @@ func (c *Client) handle(packet []byte) {
 			if c.firstMoveFrame < 0 || c.testGapFrames == 0 || relativeFrame < c.testGapStart || relativeFrame >= c.testGapStart+c.testGapFrames {
 				c.planner.testSetupHold = c.testSetupHoldFrames > 0 && s.Map == c.testTeleportMap &&
 					(!c.testTeleportSent || c.testScenarioAge(s.Frame) < c.testSetupHoldFrames)
+				s = c.maskTestHealth(s)
 				c.planner.update(s, c.root)
 			}
 			if c.frames%50 == 0 {
@@ -668,6 +670,10 @@ func (c *Client) run(ctx context.Context) error {
 					cmd = worldMove(cmd, s, d.Push[0]-s.Self[0], d.Push[1]-s.Self[1], 100, false)
 					status.MovementReason = "scripted_push"
 				}
+				if d.ShootTeammate {
+					cmd = scenarioShootTeammate(s, c.planner.World.Geometry)
+					status.MovementReason = "scripted_shoot_teammate"
+				}
 				if d.Walk != nil {
 					cmd, status.MovementReason = testWalkDiagnostic(s, *d.Walk, c.planner.World.Geometry, c.planner.Nav)
 					if d.Route {
@@ -755,6 +761,7 @@ func (c *Client) run(ctx context.Context) error {
 					Pickups            []quake.Object         `json:"pickups,omitempty"`
 					Pickup             *PickupAttempt         `json:"pickup,omitempty"`
 					Resources          []ResourceMemory       `json:"resource_memory,omitempty"`
+					TestHealthMasked   bool                   `json:"test_health_masked,omitempty"`
 					Scenario           *harness.Status        `json:"scenario,omitempty"`
 					SearchTarget       *quake.Vec3            `json:"search_target,omitempty"`
 					SearchAttempt      *SearchAttempt         `json:"search_attempt,omitempty"`
@@ -791,6 +798,7 @@ func (c *Client) run(ctx context.Context) error {
 					Route: c.planner.World.Route, Pickups: c.planner.World.Snapshot.Pickups,
 					Pickup:           c.planner.World.Pickup,
 					Resources:        c.planner.resourceMemory(),
+					TestHealthMasked: c.testHealthMasked(c.planner.World.Snapshot),
 					Scenario:         c.scenarioStatus(),
 					SearchAttempt:    c.planner.World.SearchAttempt,
 					SearchRoute:      c.planner.World.SearchRoute,

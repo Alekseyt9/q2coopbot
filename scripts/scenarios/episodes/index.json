@@ -29,6 +29,8 @@
     "base1-armor-pickup.json",
     "weapon-ammo-economy.json",
     "health-armor-resource-memory.json",
-    "base1-armor-memory-missing.json"
+    "base1-armor-memory-missing.json",
+    "base1-health-memory-return.json",
+    "base1-health-after-damage.json"
   ]
 }

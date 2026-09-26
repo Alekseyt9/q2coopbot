@@ -72,6 +72,39 @@ try {
                 $accept = $episode.acceptance
 				Assert-EpisodeSetup $rows $accept
 				$stageFrame = -1
+				if ($accept.health_after_damage) {
+					if (@($rows | Where-Object test_health_masked).Count) { throw 'Natural health test used a perception mask' }
+					$initial=@($rows|Where-Object { $_.health -eq 100 -and @($_.pickups|Where-Object class -eq 'item_health').Count }|Select-Object -First 1)
+					$actorRows=@(Get-Content (Join-Path $trial "scale-$scale-port-$Port-human-trace.jsonl")|ConvertFrom-Json)
+					$shot=@($actorRows|Where-Object { $_.scenario.step_id -eq 'server-damage' -and ($_.sent_command.Buttons -band 1) }|Select-Object -First 1)
+					if (!$initial.Count -or !$shot.Count) { throw 'Initial health observation or actor shot missing' }
+					$lost=@($rows|Where-Object { $_.frame -gt $initial[0].frame -and $_.frame -lt $shot[0].frame -and $_.health -eq 100 -and @($_.resource_memory|Where-Object { $_.item.class -eq 'item_health' -and $_.state -eq 'unknown' }).Count }|Select-Object -First 1)
+					$hurt=@($rows|Where-Object { $_.frame -gt $shot[0].frame -and $_.health -gt 0 -and $_.health -lt 45 }|Select-Object -First 1)
+					if (!$lost.Count -or !$hurt.Count) { throw 'Leaving health while healthy or later damage missing' }
+					$healed=$null
+					for ($i=1;$i -lt $rows.Count;$i++) {
+						$row=$rows[$i]; $prev=$rows[$i-1]
+						if ($row.frame -le $hurt[0].frame -or $row.health -lt $accept.min_health -or $row.health -le $prev.health -or $prev.goal -ne 'recover_health') { continue }
+						foreach ($item in $initial[0].pickups | Where-Object class -eq 'item_health') {
+							if ([math]::Abs($row.self[0]-$item.origin[0]) -lt 48 -and [math]::Abs($row.self[1]-$item.origin[1]) -lt 48 -and [math]::Abs($row.self[2]-$item.origin[2]-9.125) -lt 32) { $healed=$row; break }
+						}
+						if ($healed) {break}
+					}
+					if (!$healed) { throw 'Treatment at previously observed health not confirmed after damage' }
+					$stageFrame=$healed.frame
+				}
+				if ($accept.memory_health_return) {
+					$choice = @($rows | Where-Object { $_.test_health_masked -and $_.goal -eq 'recover_health' -and !@($_.pickups | Where-Object class -eq 'item_health').Count -and @($_.resource_memory | Where-Object { $_.item.class -eq 'item_health' -and $_.state -eq 'unknown' -and $_.attempted }).Count } | Select-Object -First 1)
+					if (!$choice.Count) { throw 'Health goal from memory not observed' }
+					$target = $choice[0].goal_point
+					$remembered = @($choice[0].resource_memory | Where-Object { $_.item.class -eq 'item_health' -and [math]::Abs($_.item.origin[0]-$target[0]) -lt 1 -and [math]::Abs($_.item.origin[1]-$target[1]) -lt 1 } | Select-Object -First 1)
+					if (!$remembered.Count) { throw 'Health goal differs from memory target' }
+					$entity = $remembered[0].item.id
+					if (!@($rows | Where-Object { $_.frame -lt $choice[0].frame -and @($_.pickups | Where-Object id -eq $entity).Count }).Count) { throw 'Health target never observed before memory choice' }
+					$healed = @($rows | Where-Object { $_.test_health_masked -and $_.frame -gt $choice[0].frame -and $_.health -ge $accept.min_health -and !@($_.pickups | Where-Object class -eq 'item_health').Count -and [math]::Abs($_.self[0]-$target[0]) -lt 48 -and [math]::Abs($_.self[1]-$target[1]) -lt 48 -and [math]::Abs($_.self[2]-$target[2]) -lt 32 } | Select-Object -First 1)
+					if (!$healed.Count -or $healed[0].health -le $choice[0].health) { throw 'Server healing at remembered target not observed' }
+					$stageFrame = $healed[0].frame
+				}
 				if ($accept.memory_missing) {
 					$class = $accept.memory_missing
 					$observed = @($rows | Where-Object { @($_.resource_memory | Where-Object { $_.item.class -eq $class -and $_.state -eq 'observed' }).Count } | Select-Object -First 1)

@@ -20,20 +20,21 @@ type Step struct {
 	Route   bool        `json:"route,omitempty"`
 }
 type Scenario struct {
-	BotReleaseFrame int          `json:"bot_release_frame,omitempty"`
-	ActorHealth     int          `json:"actor_health,omitempty"`
-	BotInvulnerable bool         `json:"bot_invulnerable,omitempty"`
-	BotHealth       int          `json:"bot_health,omitempty"`
-	MapEntry        string       `json:"map_entry,omitempty"`
-	Expect          Expectations `json:"expect"`
-	Version         int          `json:"version"`
-	Name            string       `json:"name"`
-	Map             string       `json:"map"`
-	StartFrame      int          `json:"start_frame"`
-	GameFrames      int          `json:"game_frames"`
-	ActorOrigin     quake.Vec3   `json:"actor_origin"`
-	BotOrigin       quake.Vec3   `json:"bot_origin"`
-	Steps           []Step       `json:"steps"`
+	BotHideHealthFrames []int        `json:"bot_hide_health_frames,omitempty"`
+	BotReleaseFrame     int          `json:"bot_release_frame,omitempty"`
+	ActorHealth         int          `json:"actor_health,omitempty"`
+	BotInvulnerable     bool         `json:"bot_invulnerable,omitempty"`
+	BotHealth           int          `json:"bot_health,omitempty"`
+	MapEntry            string       `json:"map_entry,omitempty"`
+	Expect              Expectations `json:"expect"`
+	Version             int          `json:"version"`
+	Name                string       `json:"name"`
+	Map                 string       `json:"map"`
+	StartFrame          int          `json:"start_frame"`
+	GameFrames          int          `json:"game_frames"`
+	ActorOrigin         quake.Vec3   `json:"actor_origin"`
+	BotOrigin           quake.Vec3   `json:"bot_origin"`
+	Steps               []Step       `json:"steps"`
 }
 type Expectations struct {
 	MapSequence       []string         `json:"map_sequence,omitempty"`
@@ -72,6 +73,9 @@ func Load(path string) (Scenario, error) {
 }
 
 func (s Scenario) Validate() error {
+	if len(s.BotHideHealthFrames) > 0 && (len(s.BotHideHealthFrames) != 2 || s.BotHideHealthFrames[0] < s.StartFrame || s.BotHideHealthFrames[1] <= s.BotHideHealthFrames[0] || s.BotHideHealthFrames[1] > s.GameFrames) {
+		return fmt.Errorf("bot_hide_health_frames requires [start,end) within scenario frames")
+	}
 	if s.BotReleaseFrame != 0 && (s.BotReleaseFrame <= s.StartFrame || s.BotReleaseFrame >= s.GameFrames) {
 		return fmt.Errorf("bot_release_frame must be between start_frame and game_frames")
 	}
@@ -129,6 +133,11 @@ func (s Scenario) Validate() error {
 		}
 		ids[step.ID] = true
 		switch step.Action {
+		case "shoot_teammate":
+			if step.Frames < 1 || step.Frames > 40 || step.Timeout != 0 || step.Target != nil || step.Route {
+				return fmt.Errorf("invalid shoot_teammate step %s", step.ID)
+			}
+			budget += step.Frames + 1
 		case "push":
 			if step.Target == nil || !finite(*step.Target) || step.Frames < 1 || step.Frames > 100 || step.Timeout != 0 || step.Route {
 				return fmt.Errorf("invalid push step %s", step.ID)
@@ -219,6 +228,7 @@ type Input struct {
 	Health            int16
 }
 type Decision struct {
+	ShootTeammate bool
 	Push          *quake.Vec3
 	Kill, Respawn bool
 	Place, Walk   *quake.Vec3
@@ -290,7 +300,7 @@ func (r *Runner) Tick(in Input) Decision {
 		}
 	}
 	elapsed := in.Frame - r.Status.StepStart
-	done := (step.Action == "wait" || step.Action == "push") && elapsed >= step.Frames
+	done := (step.Action == "wait" || step.Action == "push" || step.Action == "shoot_teammate") && elapsed >= step.Frames
 	if step.Action == "respawn_cycle" {
 		if in.Health <= 0 {
 			if r.Status.DeathFrame == 0 {
@@ -326,5 +336,6 @@ func (r *Runner) Tick(in Input) Decision {
 	if step.Action == "push" {
 		d.Push = step.Target
 	}
+	d.ShootTeammate = step.Action == "shoot_teammate"
 	return d
 }

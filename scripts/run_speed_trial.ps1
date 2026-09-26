@@ -384,6 +384,9 @@ foreach ($scale in $Timescales) {
 			if ($actorScenarioDefinition.map_entry) { $botConfig.test.change_entry=$actorScenarioDefinition.map_entry }
             $botConfig.test.teleport = ($actorScenarioDefinition.bot_origin | ForEach-Object {([double]$_).ToString([cultureinfo]::InvariantCulture)}) -join ','
             $botConfig.test.scenario_frame_origin = $actorScenarioDefinition.start_frame
+			if ($actorScenarioDefinition.bot_hide_health_frames) {
+				$botConfig.test.hide_health_frames = @($actorScenarioDefinition.bot_hide_health_frames | ForEach-Object { [int]$_ - [int]$actorScenarioDefinition.start_frame })
+			}
             $botConfig.test.setup_hold_frames = 1
 			if ($actorScenarioDefinition.bot_release_frame) {
 				$botConfig.test.setup_hold_frames = [int]$actorScenarioDefinition.bot_release_frame - [int]$actorScenarioDefinition.start_frame
