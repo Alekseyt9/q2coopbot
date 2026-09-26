@@ -1,0 +1,21 @@
+{
+  "id": "bunk1-empty-ammo-weapon-switch-20260926-194743",
+  "title": "Не переключается на другое оружие после исчерпания патронов",
+  "map": "bunk1",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_weapon_switch_trial.ps1",
+  "evidence": "workspace/artifacts/live-weapon-switch-20260926-194743/trace.jsonl",
+  "symptom": "Сообщение игрока: после исчерпания патронов бот не переключается на другое оружие. Контекст записи: frame=9294; self=-969,-65,5,232,125; health=60; goal=wait_for_teammate. Исчерпание патронов и состав инвентаря требуют отдельного подтверждения; историческая трасса не содержит этих полей.",
+  "missing_setup": [],
+  "acceptance": {
+    "weapon_switch": [
+      "blaster",
+      "stocked"
+    ]
+  },
+  "expected_result": "После исчерпания патронов бот выбирает доступное оружие с боезапасом либо Blaster, подтверждает переключение и возобновляет огонь при безопасной линии.",
+  "kind": "weapon_switch",
+  "verification_report": "workspace/artifacts/weapon-switch-20260926-200912/report.json",
+  "fix_notes": "Функциональный E2E на base1: реальный расход последнего патрона Shotgun, обновление полного инвентаря, выбор Machinegun или Blaster и возобновление огня. Оба варианта прошли на 2x/1x. Историческая сцена bunk1 целиком не восстановлена. Текущий живой процесс пока без исправления."
+}

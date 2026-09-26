@@ -753,6 +753,7 @@ func (c *Client) run(ctx context.Context) error {
 					GoalPoint          *quake.Vec3            `json:"goal_point,omitempty"`
 					Route              []quake.Waypoint       `json:"route,omitempty"`
 					Pickups            []quake.Object         `json:"pickups,omitempty"`
+					Pickup             *PickupAttempt         `json:"pickup,omitempty"`
 					Scenario           *harness.Status        `json:"scenario,omitempty"`
 					SearchTarget       *quake.Vec3            `json:"search_target,omitempty"`
 					SearchAttempt      *SearchAttempt         `json:"search_attempt,omitempty"`
@@ -787,6 +788,7 @@ func (c *Client) run(ctx context.Context) error {
 					Inventory: c.planner.World.Snapshot.Inventory, InventoryKnown: c.planner.World.Snapshot.InventoryKnown, InventoryAgeFrames: c.planner.World.Snapshot.InventoryAgeFrames,
 					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
 					Route: c.planner.World.Route, Pickups: c.planner.World.Snapshot.Pickups,
+					Pickup:           c.planner.World.Pickup,
 					Scenario:         c.scenarioStatus(),
 					SearchAttempt:    c.planner.World.SearchAttempt,
 					SearchRoute:      c.planner.World.SearchRoute,

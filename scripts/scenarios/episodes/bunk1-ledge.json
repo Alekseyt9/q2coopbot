@@ -1,0 +1,35 @@
+{
+  "id": "bunk1-stuck-20260926-193319",
+  "title": "Повторное застревание в живой игре",
+  "map": "bunk1",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/bunk1-ledge.json",
+  "evidence": "workspace/artifacts/live-stuck-20260926-193319/trace.jsonl",
+  "symptom": "Повторное застревание в живой игре (сообщение игрока). frame=953; self=293,125,-1023,5,24,125; health=98; goal=follow_teammate; navigation=direct_clear; reason=no_verified_landing",
+  "missing_setup": [],
+  "acceptance": {
+    "goal": "cover_teammate",
+    "follow_after_event": false,
+    "required_event": "drop_landed",
+    "min": [
+      460,
+      -1010,
+      -112
+    ],
+    "max": [
+      565,
+      -870,
+      -96
+    ]
+  },
+  "expected_result": "Бот восстанавливает сопровождение без бесконечной остановки",
+  "asset": {
+    "sha256": "4BAEC5D9CE778B499D3583533C40BC74C2D5152A1A1851F1E3A4822ED0E8DB61",
+    "path": "workspace/runtime/q2go/baseq2/maps/bunk1.aas"
+  },
+  "fix_notes": "Старый AAS не содержал пригодных переходов. Новый граф выявил блокировку walk-off reach защитой от падений. Добавлен ограниченный проверяемый спуск с торможением и сохранением управления до приземления.",
+  "latest_regression": "workspace/artifacts/episode-regressions-20260927-005824-092/report.json",
+  "regression_notes": "27.09: восстановлена приёмка 2x/1x, 0 frame gaps/decode errors. Сервер сохраняет снимок мира при переполнении необязательными эффектами/инвентарём; скорость схода 60 (40 для спуска >160), cover ближе 80. Подтверждены drop_landed и прибытие; критерии не ослаблены.",
+  "verification": "workspace/artifacts/episode-regressions-20260927-005824-092/report.json"
+}

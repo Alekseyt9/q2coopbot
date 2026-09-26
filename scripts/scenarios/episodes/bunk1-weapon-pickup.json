@@ -1,0 +1,16 @@
+{
+  "id": "bunk1-weapon-pickup-20260926-193319",
+  "title": "Бот не подбирает новое оружие",
+  "map": "bunk1",
+  "status": "open",
+  "reproduction": "observation_only",
+  "scenario": "",
+  "evidence": "workspace/artifacts/live-stuck-20260926-193319/trace.jsonl",
+  "symptom": "Бот не подбирает новое оружие (сообщение игрока). frame=953; self=293,125,-1023,5,24,125; health=98; goal=follow_teammate; navigation=direct_clear; reason=no_verified_landing",
+  "missing_setup": [
+    "Установить оружие и его положение; проверить распознавание, выбор цели подбора и подтверждение получения"
+  ],
+  "acceptance": null,
+  "expected_result": "Бот распознаёт достижимое полезное оружие, подбирает его и возвращается к сопровождению",
+  "fix_notes": "Текущий выбор предметов в planner ограничен здоровьем; модели оружия не классифицируются Snapshot как pickups. Требуется отдельная реализация распознавания и цели подбора оружия, не считать исправленным."
+}

@@ -1,0 +1,16 @@
+{
+  "id": "base2-no-respawn",
+  "title": "Бот не возрождается после смерти",
+  "map": "base2",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/policy-respawn-session.json",
+  "evidence": "workspace/artifacts/live-death-20260926-180836/trace.jsonl",
+  "symptom": "Здоровье -12, постоянный dead и пустые команды. Тестовое возрождение не включено в обычную политику.",
+  "missing_setup": [],
+  "acceptance": {
+    "session": "policy_respawn"
+  },
+  "expected_result": "Самостоятельное возрождение после разрешённой сервером задержки и восстановление сопровождения.",
+  "kind": "session"
+}

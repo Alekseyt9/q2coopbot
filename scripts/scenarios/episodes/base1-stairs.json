@@ -1,0 +1,26 @@
+{
+  "id": "base1-stairs",
+  "title": "Остановка у ступеней при сопровождении",
+  "map": "base1",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/base1-stairs.json",
+  "evidence": "workspace/artifacts/stair-human-20260926/trace.jsonl",
+  "symptom": "Ступени распознавались как static_hull_blocked; бот топтался и терял маршрут.",
+  "missing_setup": [],
+  "acceptance": {
+    "min": [
+      -1900,
+      1760,
+      88
+    ],
+    "max": [
+      -1780,
+      1860,
+      145
+    ],
+    "required_event": "",
+    "follow_after_event": false
+  },
+  "expected_result": "Живой бот поднимается по лестнице и оказывается на опоре рядом с игроком."
+}

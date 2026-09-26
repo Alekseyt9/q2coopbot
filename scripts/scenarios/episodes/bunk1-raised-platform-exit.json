@@ -1,0 +1,32 @@
+{
+  "id": "bunk1-raised-platform-exit",
+  "title": "Выход с поднятой платформы на верхний пол bunk1",
+  "map": "bunk1",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/bunk1-platform-exit.json",
+  "evidence": "workspace/artifacts/bunk1-upper-20260926/baseline/summary.json",
+  "symptom": "На поднятом func_plat *100 маршрут начинается на нижнем полу; бот останавливается at_waypoint над точкой маршрута.",
+  "missing_setup": [],
+  "acceptance": {
+    "required_event": "platform_exit",
+    "max": [
+      -740,
+      -10,
+      240
+    ],
+    "follow_after_event": false,
+    "min": [
+      -890,
+      -120,
+      225
+    ],
+    "goal": "cover_teammate"
+  },
+  "expected_result": "Бот выходит на статический пол той же высоты и возвращается к сопровождению.",
+  "asset": {
+    "sha256": "4BAEC5D9CE778B499D3583533C40BC74C2D5152A1A1851F1E3A4822ED0E8DB61",
+    "path": "workspace/runtime/q2go/baseq2/maps/bunk1.aas"
+  },
+  "verification": "workspace/artifacts/episode-regressions-20260926-210006-886/report.json"
+}

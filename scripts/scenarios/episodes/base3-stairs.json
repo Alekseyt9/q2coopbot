@@ -1,0 +1,54 @@
+{
+  "id": "base3-stairs-20260926-190951",
+  "title": "Застревание на лестнице в живой игре",
+  "map": "base3",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/base3-stairs.json",
+  "evidence": "workspace/artifacts/live-stairs-20260926-190951/trace.jsonl",
+  "symptom": "Сообщение игрока: застрял на лестнице. frame=1340; self=[270.875,704,-791.875]; health=34; teammate=[-29.125,510,-599.875]; follow_teammate; navigation=ready; движение route, Forward=160, Up=0; явная причина ограничения отсутствует. В последних 100 кадрах 2 кадров с той же позицией.",
+  "missing_setup": [],
+  "acceptance": {
+    "follow_after_event": false,
+    "required_event": "",
+    "max": [
+      60,
+      610,
+      -580
+    ],
+    "goal": "cover_teammate",
+    "min": [
+      -110,
+      410,
+      -620
+    ],
+    "actor_health_checkpoints": [
+      {
+        "origin": [
+          496,
+          608,
+          -807.75
+        ],
+        "health": 60
+      },
+      {
+        "origin": [
+          496,
+          704,
+          -807.75
+        ],
+        "health": 70
+      }
+    ]
+  },
+  "expected_result": "Бот поднимается по лестнице и восстанавливает сопровождение; не удерживает команду движения без прогресса бесконечно.",
+  "asset": {
+    "path": "workspace/runtime/q2go/baseq2/maps/base3.aas",
+    "sha256": "0EEDB66F2F12367DEAB1DFC9241DBFAFAC77558F2EA230239F9F226F92989054"
+  },
+  "fix_notes": "Воспроизведено после подбора игроком двух ближайших аптечек: переключение целей на границе 300 units. Удержание выбранной видимой аптечки до исчезновения или таймаута. Сценарий изолирует навигацию с bot_invulnerable=true.",
+  "verification_report": "workspace/artifacts/episode-regressions-20260926-192807-520/report.json",
+  "latest_regression": "workspace/artifacts/episode-regressions-20260927-005824-092/report.json",
+  "regression_notes": "27.09: восстановлена приёмка 2x/1x за прежние 260 кадров. Смена цели сбрасывает таймер застревания и detour, не отменяя активный маршрут лифта. После недоступной аптечки бот не начинает сопровождение с ложного обходного прыжка.",
+  "verification": "workspace/artifacts/episode-regressions-20260927-005824-092/report.json"
+}

@@ -8,7 +8,8 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'check_episode_setup.ps1')
 $repo = Split-Path -Parent $PSScriptRoot
-$registry = Get-Content (Join-Path $repo 'docs/testing/episodes.json') -Raw | ConvertFrom-Json
+. (Join-Path $PSScriptRoot 'read_episode_registry.ps1')
+$registry = Read-EpisodeRegistry (Join-Path $repo 'scripts/scenarios/episodes/index.json')
 if ($registry.version -ne 1) { throw 'Unsupported episode registry version' }
 $seen = @{}
 foreach ($episode in $registry.episodes) {
@@ -26,7 +27,7 @@ foreach ($episode in $selected) { if ($episode.reproduction -ne 'ready') { throw
 if (!$selected.Count -or @($Timescales | Where-Object { $_ -notin @(1,2) }).Count) { throw 'Choose ready episodes and timescales 1/2' }
 $out = Join-Path $repo ('workspace/artifacts/episode-regressions-' + (Get-Date -Format yyyyMMdd-HHmmss-fff))
 New-Item -ItemType Directory $out | Out-Null
-Copy-Item (Join-Path $repo 'docs/testing/episodes.json') (Join-Path $out 'registry.json')
+$registry | ConvertTo-Json -Depth 40 | Set-Content (Join-Path $out 'registry.json')
 $exe = Join-Path $out 'q2coopbot.exe'
 Push-Location $repo
 try {

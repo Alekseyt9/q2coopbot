@@ -1,0 +1,15 @@
+{
+  "id": "base2-stuck-20260926-192906",
+  "title": "Повторное застревание в живой игре",
+  "map": "base2",
+  "status": "open",
+  "reproduction": "observation_only",
+  "scenario": "",
+  "evidence": "workspace/artifacts/live-stuck-20260926-192906/trace.jsonl",
+  "symptom": "Игрок сообщает о новом застревании. frame=1503; self=-13,625,-415,75,-167,875; health=38; goal=wait_for_teammate; navigation=ready; reason=no_movement_goal; elevator=",
+  "missing_setup": [
+    "Восстановить подход к месту и состояние динамических объектов; установить причину остановки"
+  ],
+  "acceptance": null,
+  "expected_result": "Бот выходит из застревания и восстанавливает сопровождение либо явно прекращает недоступный манёвр."
+}

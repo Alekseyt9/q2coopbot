@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "files": [
+    "base1-stairs.json",
+    "base2-bridge.json",
+    "base2-health-blocked.json",
+    "base2-no-respawn.json",
+    "base3-follow-stuck.json",
+    "base2-health-detour.json",
+    "bunk1-lowered-door.json",
+    "ware1-continuous-fire.json",
+    "base3-stairs.json",
+    "base3-elevator.json",
+    "base3-lost.json",
+    "base2-stuck-later.json",
+    "bunk1-ledge.json",
+    "bunk1-weapon-pickup.json",
+    "bunk1-no-fire.json",
+    "bunk1-upper-bridge.json",
+    "base2-elevator-runtime-aas.json",
+    "bunk1-ammo-pickup.json",
+    "bunk1-armor-pickup.json",
+    "bunk1-empty-ammo-weapon-switch.json",
+    "base3-elevator-recovery.json",
+    "bunk1-raised-platform-exit.json",
+    "enemy-crouch-aim.json",
+    "low-ceiling-crouch-traversal.json"
+  ]
+}

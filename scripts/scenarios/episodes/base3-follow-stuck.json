@@ -1,0 +1,31 @@
+{
+  "id": "base3-stuck-20260926-181438",
+  "title": "Повторное застревание в живой игре",
+  "map": "base3",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/base3-stuck.json",
+  "evidence": "workspace/artifacts/live-stuck-20260926-181438/trace.jsonl",
+  "symptom": "frame=1179; self=1453,75,1402,5,-807,875; health=100; goal=follow_teammate; reason=static_hull_blocked",
+  "missing_setup": [],
+  "acceptance": {
+    "follow_after_event": false,
+    "min": [
+      1050,
+      1190,
+      -835
+    ],
+    "max": [
+      1250,
+      1390,
+      -780
+    ],
+    "required_event": "",
+    "goal": "cover_teammate"
+  },
+  "expected_result": "Бот выходит из застревания либо ограниченно отказывается от недоступной цели и восстанавливает сопровождение",
+  "asset": {
+    "path": "workspace/runtime/q2go/baseq2/maps/base3.aas",
+    "sha256": "0EEDB66F2F12367DEAB1DFC9241DBFAFAC77558F2EA230239F9F226F92989054"
+  }
+}

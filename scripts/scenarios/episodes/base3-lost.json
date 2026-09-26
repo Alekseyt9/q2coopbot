@@ -1,0 +1,15 @@
+{
+  "id": "base3-lost-20260926-192240",
+  "title": "Потеря сопровождения после движения за игроком",
+  "map": "base3",
+  "status": "open",
+  "reproduction": "observation_only",
+  "scenario": "",
+  "evidence": "workspace/artifacts/live-lost-20260926-192240/trace.jsonl",
+  "symptom": "Игрок сообщает: бот потерялся, хотя сначала шёл следом. frame=8776; self=-174,125,-1153,25,-279,875; health=90; goal=wait_for_teammate; navigation=ready; reason=no_movement_goal; teammate_age=991",
+  "missing_setup": [
+    "Восстановить маршрут игрока и момент потери контакта; проверить связь с предыдущим эпизодом лифта"
+  ],
+  "acceptance": null,
+  "expected_result": "После потери видимости бот обоснованно ищет игрока и восстанавливает сопровождение либо явно фиксирует причину отказа."
+}

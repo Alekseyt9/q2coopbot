@@ -1,0 +1,26 @@
+{
+  "id": "base2-bridge",
+  "title": "Недолёт через разрыв моста",
+  "map": "base2",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/base2-bridge.json",
+  "evidence": "workspace/artifacts/base2-bridge-human-20260926/trace.jsonl",
+  "symptom": "После случайного отталкивания маршрут в воздухе исчезает, движение прекращается, бот падает вниз.",
+  "missing_setup": [],
+  "acceptance": {
+    "min": [
+      440,
+      120,
+      18
+    ],
+    "max": [
+      555,
+      205,
+      42
+    ],
+    "required_event": "jump_landed",
+    "follow_after_event": true
+  },
+  "expected_result": "Запланированный прыжок, живое приземление на дальней стороне, затем движение сопровождения."
+}

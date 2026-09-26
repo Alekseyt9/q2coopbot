@@ -1,0 +1,17 @@
+{
+  "id": "bunk1-no-fire-20260926-193729",
+  "title": "Бот не стреляет при видимых игроку монстрах",
+  "map": "bunk1",
+  "status": "fixed_pending_e2e",
+  "reproduction": "observation_only",
+  "scenario": "",
+  "evidence": "workspace/artifacts/live-no-fire-20260926-193729/trace.jsonl",
+  "symptom": "Сообщение игрока: монстры видимы, бот не стреляет. frame=3373; self=-381,875,-234,75,24,125; health=60; goal=follow_teammate; reason=no_verified_landing; observed_enemies=7; buttons=0",
+  "missing_setup": [
+    "Проверить видимость и прямую линию огня от бота, союзника на линии, оружие и патроны; воспроизвести состояние монстров"
+  ],
+  "acceptance": null,
+  "expected_result": "Бот стреляет по живому противнику при подтверждённой безопасной линии огня и доступном оружии.",
+  "fix_notes": "В 409 кадрах сохранённой трассы есть видимый враг ближе 650, но ближайший враг скрыт. Выбор цели теперь исключает неподтверждённую линию огня до ранжирования по расстоянию. Последний кадр с видимыми врагами дальше 650 этим не меняется. Нужен точный E2E с закрытым ближним и видимым дальним монстром.",
+  "regression_test": "internal/bot/combat_selection_test.go: TestCoveredNearestEnemyDoesNotHideVisibleTarget"
+}

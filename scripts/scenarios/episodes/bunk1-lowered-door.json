@@ -1,0 +1,83 @@
+{
+  "id": "bunk1-stuck-20260926-183318",
+  "title": "Застревание, дополнительное наблюдение",
+  "map": "bunk1",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/bunk1-lowered-door.json",
+  "evidence": "workspace/artifacts/live-stuck-20260926-183318/trace.jsonl",
+  "symptom": "frame=1340; self=31,625,-385,75,24,125; health=74; goal=wait_for_teammate; reason=no_movement_goal; уточнение: до потери видимости кадр 1093 содержит dynamic_door_blocked; затем wait_for_teammate.",
+  "missing_setup": [],
+  "acceptance": {
+    "max": [
+      150,
+      -48,
+      40
+    ],
+    "setup_checkpoints": [
+      {
+        "id": "lowered-door-and-open-passage",
+        "self": [
+          31.625,
+          -385.75,
+          24.125
+        ],
+        "teammate": [
+          70.375,
+          -121,
+          24.125
+        ],
+        "movers": [
+          {
+            "origin": [
+              0,
+              0,
+              -122
+            ],
+            "model": 118
+          },
+          {
+            "origin": [
+              -58,
+              0,
+              0
+            ],
+            "model": 125
+          },
+          {
+            "origin": [
+              58,
+              0,
+              0
+            ],
+            "model": 135
+          },
+          {
+            "origin": [
+              0,
+              -10,
+              0
+            ],
+            "model": 126
+          }
+        ],
+        "min_frame": 139,
+        "max_frame": 140
+      }
+    ],
+    "min": [
+      0,
+      -195,
+      18
+    ],
+    "follow_after_event": false,
+    "goal": "cover_teammate"
+  },
+  "expected_result": "Восстановление сопровождения без бесконечного застревания",
+  "asset": {
+    "sha256": "4BAEC5D9CE778B499D3583533C40BC74C2D5152A1A1851F1E3A4822ED0E8DB61",
+    "path": "workspace/runtime/q2go/baseq2/maps/bunk1.aas"
+  },
+  "fix_notes": "Восстановлено состояние перед потерей видимости (исторический frame1093), включая положения двери118, створок125/135 и кнопки126. Игрок ожидает за дверью; его последующий скрытый путь неизвестен и не принят этим сценарием. Клиент разрешает только наблюдаемый порог до18 единиц с проверкой опоры и свободного полного корпуса, включая другие двери. Старая сборка на текущем AAS застревает (button4-baseline); новая проходит2x/1x.",
+  "verification": "workspace/artifacts/episode-regressions-20260927-011346-903/report.json"
+}

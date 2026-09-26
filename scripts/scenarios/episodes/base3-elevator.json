@@ -1,0 +1,17 @@
+{
+  "id": "base3-elevator-20260926-191435",
+  "title": "Застревание перед лифтом в живой игре",
+  "map": "base3",
+  "status": "fixed_pending_e2e",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/base3-elevator.json",
+  "evidence": "workspace/artifacts/live-elevator-20260926-191435/trace.jsonl",
+  "symptom": "Сообщение игрока: застрял перед лифтом. frame=4083; self=833,226,625,-423,875; health=43; goal=follow_teammate; navigation=ready; reason=at_waypoint",
+  "missing_setup": [
+    "Восстановить подход к лифту, положение платформы и игрока, состояние кнопок и триггеров"
+  ],
+  "acceptance": null,
+  "expected_result": "Бот вызывает или дожидается лифта, садится на платформу и продолжает сопровождение.",
+  "fix_notes": "Исправлено сохранение состояния elevator после замены маршрута; при начале посадки сбрасывается наземный detour. Replay сохранённой трассы до исправления выявляет orphan elevator на frame 3255; после исправления инвариант соблюдён. Сценарий с историей подъёма проходит на 2x, но полный исходный срыв/возврат под лифт пока не принят.",
+  "regression_test": "internal/bot/elevator_replay_test.go: TestRouteReplacementDropsOldElevator, TestElevatorLiveTraceAudit"
+}

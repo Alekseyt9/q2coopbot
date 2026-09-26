@@ -13,6 +13,7 @@ import (
 )
 
 type World struct {
+	Pickup           *PickupAttempt    `json:"pickup,omitempty"`
 	SearchRoute      *SearchRouteCheck `json:"search_route,omitempty"`
 	Map              string            `json:"map"`
 	Geometry         *quake.MapInfo    `json:"geometry,omitempty"`
@@ -36,6 +37,9 @@ type World struct {
 	Updated          time.Time         `json:"updated"`
 }
 type Planner struct {
+	pickup                   *pickupTask
+	pickupBanned             map[quake.Vec3]int
+	pickupNext               int
 	healthActive             bool
 	healthTarget, healthLast quake.Vec3
 	healthAt                 int
@@ -175,6 +179,7 @@ func (p *Planner) setMap(name, root string) {
 	p.deathFrame = 0
 	p.healthActive = false
 	p.healthBanned = nil
+	p.pickup, p.pickupBanned, p.pickupNext = nil, nil, 0
 	p.jump = nil
 	p.buttonCooldown = 0
 	p.failures = 0
@@ -394,6 +399,10 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 	}
 	goal = p.budgetHealthGoal(s, goal)
+	if item, ok := p.pickupGoal(s); ok {
+		goal = item
+		p.World.Goal = "collect_item"
+	}
 	if previousGoal != p.World.Goal {
 		// A stalled health/search task is not evidence that the new follow
 		// route is stuck. Inheriting that timer immediately launches a detour
@@ -606,7 +615,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		flight, _ := p.jumpCommand(quake.UserCmd{Yaw: cmd.Yaw})
 		return flight
 	}
-	if p.World.Goal != "follow_teammate" && p.World.Goal != "recover_health" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
+	if p.World.Goal != "follow_teammate" && p.World.Goal != "collect_item" && p.World.Goal != "recover_health" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
 		if p.World.Command.LimitReason == "" {
 			p.World.Command.LimitReason = "no_movement_goal"
 		}

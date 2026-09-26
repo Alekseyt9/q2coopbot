@@ -1,0 +1,32 @@
+{
+  "id": "base3-elevator-recovery",
+  "title": "Возврат к игроку с нижней площадки лифта base3",
+  "map": "base3",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/base3-elevator-recovery.json",
+  "evidence": "workspace/artifacts/live-elevator-20260926-191435/trace.jsonl",
+  "symptom": "Контроль восстановления из сохранённой нижней точки; игрок ожидает на верхнем этаже. Не воспроизводит историю исходного срыва.",
+  "missing_setup": [],
+  "acceptance": {
+    "required_elevator_stages": [
+      "board",
+      "ride",
+      "exit",
+      "completed"
+    ],
+    "max": [
+      855,
+      -20,
+      -210
+    ],
+    "goal": "cover_teammate",
+    "min": [
+      735,
+      -150,
+      -250
+    ]
+  },
+  "expected_result": "Посадка, подъём, выход, затем живое прибытие к игроку на верхнем полу.",
+  "verification": "workspace/artifacts/episode-regressions-20260926-203200-587/report.json"
+}

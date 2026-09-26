@@ -1,0 +1,28 @@
+{
+  "id": "base2-health-blocked",
+  "title": "Недоступная аптечка удерживает бота на месте",
+  "map": "base2",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/base2-health-blocked.json",
+  "evidence": "workspace/artifacts/live-stuck-20260926-180355/trace.jsonl",
+  "symptom": "recover_health, здоровье 36, static_hull_blocked в точке [290.5,1744.125,24.125].",
+  "missing_setup": [],
+  "acceptance": {
+    "goal": "cover_teammate",
+    "max": [
+      72,
+      2230,
+      50
+    ],
+    "required_event": "",
+    "min_health": 37,
+    "follow_after_event": false,
+    "min": [
+      -128,
+      2040,
+      0
+    ]
+  },
+  "expected_result": "Получение достижимой аптечки либо ограниченный отказ и возврат к сопровождению."
+}

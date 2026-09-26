@@ -1,0 +1,17 @@
+{
+  "id": "ware1-continuous-fire-20260926-184307",
+  "title": "Постоянная стрельба в живой игре",
+  "map": "ware1",
+  "status": "fixed_pending_e2e",
+  "reproduction": "observation_only",
+  "scenario": "",
+  "evidence": "workspace/artifacts/live-fire-20260926-184307/trace.jsonl",
+  "symptom": "501 из 501 кадров с атакой; frame=1333; self=-2609,75,-719,625,24,125; health=74; goal=cover_teammate; aim=enemy; gunner.h: FRAME_death01=190, FRAME_death11=200, подтверждена стрельба по трупу.",
+  "missing_setup": [
+    "Добавить E2E с гибелью gunner и проверкой прекращения стрельбы"
+  ],
+  "regression_test": "internal/bot/gunner_death_test.go: TestGunnerDeathReleasesAttack",
+  "fix_notes": "Decoder исключает gunner на кадрах смерти 190..200. Тест восприятие→команда проверяет снятие атаки, 501 кадр трупа и сохранение атаки по живому gunner на кадре 201. Полный живой эпизод ещё не принят.",
+  "acceptance": null,
+  "expected_result": "Стрельба только по актуальной подтверждённой угрозе; прекращение при смерти цели или потере условий огня"
+}

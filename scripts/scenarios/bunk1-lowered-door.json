@@ -30,7 +30,7 @@
       "action": "place",
       "target": [
         416,
-        -690,
+        -600,
         -39.875
       ],
       "timeout_frames": 10
@@ -40,7 +40,7 @@
       "action": "push",
       "target": [
         416,
-        -620,
+        -680,
         -39.875
       ],
       "id": "press-button-126"
@@ -63,7 +63,7 @@
     {
       "id": "wait-for-bot",
       "action": "wait",
-      "frames": 170
+      "frames": 160
     }
   ]
 }

@@ -719,6 +719,8 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 				continue
 			}
 			s.Enemies = append(s.Enemies, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame})
+		} else if kind := pickupModels[path]; kind != "" && Distance(entity.Origin, f.Origin) < 384 {
+			s.Pickups = append(s.Pickups, Object{ID: entity.Number, Class: kind, Origin: entity.Origin, Frame: entity.Frame})
 		} else if strings.Contains(path, "/items/") && Distance(entity.Origin, f.Origin) < 384 {
 			kind := strings.SplitN(strings.SplitN(path, "/items/", 2)[1], "/", 2)[0]
 			if strings.Contains(kind, "heal") {

@@ -1,0 +1,28 @@
+{
+  "id": "base2-stuck-20260926-182855",
+  "title": "Застревание, дополнительное наблюдение",
+  "map": "base2",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/base2-low-health-stuck.json",
+  "evidence": "workspace/artifacts/live-stuck-20260926-182855/trace.jsonl",
+  "symptom": "frame=2038; self=140,625,-748,375,8,125; health=7; goal=recover_health; reason=no_movement_goal",
+  "missing_setup": [],
+  "acceptance": {
+    "goal": "cover_teammate",
+    "max": [
+      206,
+      -348,
+      32
+    ],
+    "required_event": "",
+    "min_health": 8,
+    "follow_after_event": false,
+    "min": [
+      6,
+      -548,
+      -8
+    ]
+  },
+  "expected_result": "Навигационная проверка с 7 здоровья и отключённым уроном: получить аптечку и восстановить сопровождение. Выживание в бою проверяется отдельно."
+}
