@@ -17,7 +17,7 @@ param(
     [switch]$SynchronizedStart,
     [switch]$ElevatorTrial,
     [switch]$CombatMoveTrial,
-	[ValidateSet('','blaster','stocked','economy_weak','economy_armed','economy_pair_weak','economy_pair_heavy')][string]$WeaponSwitchTrial = '',
+	[ValidateSet('','blaster','stocked','economy_weak','economy_armed','economy_pair_weak','economy_pair_heavy','projectile_blaster','projectile_hyper','rail_precision','rail_friend_behind')][string]$WeaponSwitchTrial = '',
     [switch]$ObservationGapTrial,
     [switch]$FriendlyFireTrial,
     [switch]$GroundEdgeTrial,
@@ -286,6 +286,20 @@ foreach ($scale in $Timescales) {
             $humanConfig.test.spawn_soldier = '96,-200,24'
 			if ($WeaponSwitchTrial -and $WeaponSwitchTrial -notin @('economy_weak','economy_pair_weak')) { $humanConfig.test.spawn_class = 'monster_infantry' }
 			if ($WeaponSwitchTrial -eq 'economy_pair_heavy') {$humanConfig.test.spawn_class='monster_tank'}
+			if ($WeaponSwitchTrial -like 'rail_*') {
+				$humanConfig.test.spawn_class='monster_tank'
+				$humanConfig.test.teleport_map='base1'
+				$humanConfig.test.teleport=if ($WeaponSwitchTrial -eq 'rail_friend_behind') {'192,-164,24'} else {'128,-320,24'}
+				$humanConfig.test.invulnerable=$true
+			}
+			if ($WeaponSwitchTrial -like 'projectile_*') {
+				# Use the native soldier in the base1 supply corridor.
+				$humanConfig.test.spawn_map=''
+				$humanConfig.test.spawn_soldier=''
+				$humanConfig.test.teleport_map='base1'
+				$humanConfig.test.teleport='1184,192,-32'
+				$humanConfig.test.invulnerable=$true
+			}
         }
         if ($FriendlyFireTrial) {
             $humanConfig.output.trace_jsonl = $humanTracePath
@@ -375,8 +389,11 @@ foreach ($scale in $Timescales) {
 		if ($WeaponSwitchTrial) {
 			$botConfig.test.weapon_switch_fixture = $WeaponSwitchTrial
 			if ($WeaponSwitchTrial -like 'economy_*') { $botConfig.test.invulnerable=$true }
+			if ($WeaponSwitchTrial -like 'projectile_*') { $botConfig.test.invulnerable=$true; $botConfig.test.hold_position=$true }
+			if ($WeaponSwitchTrial -like 'rail_*') { $botConfig.test.invulnerable=$true; $botConfig.test.hold_position=$true }
 			$botConfig.test.teleport_map = 'base1'
 			$botConfig.test.teleport = '32,-224,24'
+			if ($WeaponSwitchTrial -like 'projectile_*') { $botConfig.test.teleport='1136,256,-32' }
 		}
         if ($SearchApproachOnly) { $botConfig.test.disable_probe = $true }
         if ($actorScenarioDefinition) {
@@ -1115,7 +1132,7 @@ if ($ElevatorTrial -and @($results | Where-Object {
 }).Count -gt 0) {
     throw "Elevator trial did not complete; inspect positions, mover and stages in $summary"
 }
-if ($CombatMoveTrial -and @($results | Where-Object { $_.combat_move_frames -le 0 -or $_.combat_move_with_side -le 0 }).Count -gt 0) {
+if ($CombatMoveTrial -and $WeaponSwitchTrial -notlike 'projectile_*' -and $WeaponSwitchTrial -notlike 'rail_*' -and @($results | Where-Object { $_.combat_move_frames -le 0 -or $_.combat_move_with_side -le 0 }).Count -gt 0) {
     throw "Combat movement trial did not produce firing while following a route: $summary"
 }
 if ($ObservationGapTrial -and @($results | Where-Object { $_.attack_before_gap -le 0 -or $_.stale_neutral_frames -le 0 -or $_.recovered_action_frames -le 0 }).Count -gt 0) {

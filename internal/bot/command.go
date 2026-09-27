@@ -8,6 +8,8 @@ import (
 
 // CommandDecision records which controller supplied each part of a usercmd.
 type CommandDecision struct {
+	AimErrorDegrees float64     `json:"aim_error_degrees,omitempty"`
+	AimEntity       int         `json:"aim_entity,omitempty"`
 	AimPoint        *quake.Vec3 `json:"aim_point,omitempty"`
 	LeadSeconds     float64     `json:"lead_seconds,omitempty"`
 	MoveSource      string      `json:"move_source"`

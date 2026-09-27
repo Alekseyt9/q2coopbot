@@ -5,6 +5,7 @@ import (
 	"os"
 	"q2coopbot/internal/quake"
 	"testing"
+	"time"
 )
 
 func TestInterceptTime(t *testing.T) {
@@ -99,6 +100,21 @@ func TestProjectileAimUsesCurrentWeaponAndGeometry(t *testing.T) {
 		t.Fatal("stale velocity accepted")
 	}
 	s.Frame = 3
+	// The eventual fire decision must still protect the teammate on the
+	// predicted shot segment, rather than bypassing arbitration for a lead.
+	clear := true
+	e.ClearShot = &clear
+	s.Health = 100
+	s.Map = "base1"
+	s.Enemies = []quake.Object{e}
+	friend := quake.Vec3{64, -210, 24}
+	s.Teammate = &friend
+	now := time.Now()
+	p.World = World{Map: "base1", Snapshot: s, Geometry: &g, GeometryStatus: "ready", Goal: "cover_teammate", Updated: now}
+	cmd := p.commandAt(quake.UserCmd{}, now)
+	if cmd.Buttons&1 != 0 || p.World.Command.LimitReason != "friendly_line_of_fire" || p.World.Command.LeadSeconds <= 0 {
+		t.Fatalf("unsafe lead: %+v %+v", cmd, p.World.Command)
+	}
 	p.World.Geometry = nil
 	if _, flight := p.projectileAim(s, e); flight != 0 {
 		t.Fatal("unverified trajectory accepted")

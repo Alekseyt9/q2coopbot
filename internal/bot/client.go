@@ -461,6 +461,12 @@ func (c *Client) run(ctx context.Context) error {
 					setup = []string{"give Shotgun", "give Shells 20", "use Blaster"}
 				} else if strings.HasPrefix(c.testWeaponSwitchFixture, "economy_pair_") {
 					setup = []string{"give HyperBlaster", "give Cells 100", "give Railgun", "give Slugs 10", "give Shotgun", "give Shells 20", "use Blaster"}
+				} else if c.testWeaponSwitchFixture == "projectile_blaster" {
+					setup = []string{"use Blaster"}
+				} else if c.testWeaponSwitchFixture == "projectile_hyper" {
+					setup = []string{"give HyperBlaster", "give Cells 100", "use HyperBlaster"}
+				} else if strings.HasPrefix(c.testWeaponSwitchFixture, "rail_") {
+					setup = []string{"give Railgun", "give Slugs 10", "use Railgun"}
 				}
 				var payload []byte
 				for _, command := range setup {

@@ -523,6 +523,11 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 				if e != nil {
 					return frames, e
 				}
+			} else if effect == 3 {
+				// TE_RAILTRAIL: two packed positions.
+				if e = r.skip(12); e != nil {
+					return frames, e
+				}
 			} else if effect == 5 || effect == 6 || effect == 7 || effect == 8 || effect == 17 || effect == 18 {
 				// Explosion temporary entities carry one packed position.
 				if e = r.skip(6); e != nil {

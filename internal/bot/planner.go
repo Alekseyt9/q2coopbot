@@ -38,6 +38,7 @@ type World struct {
 	Updated          time.Time         `json:"updated"`
 }
 type Planner struct {
+	railAim                  railAim
 	enemyMotion              map[int]enemyMotion
 	resources                map[int]*ResourceMemory
 	healthStarted            int
@@ -551,6 +552,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 	cmd := quake.UserCmd{Yaw: prev.Yaw, Msec: 50}
 	p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none"}
 	s := p.World.Snapshot
+	if !isRailgun(s.Weapon) || s.Health <= 0 {
+		p.railAim = railAim{}
+	}
 	if p.World.Map == "" || s.Frame == 0 {
 		p.World.Command.LimitReason = "no_frame"
 		return cmd
@@ -607,18 +611,37 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 			enemy = &s.Enemies[i]
 		}
 	}
-	if p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && tactic != "follow" && tactic != "recover" && enemy != nil && best < 650 && (s.Ammo > 0 || strings.Contains(strings.ToLower(s.Weapon), "blast")) && enemy.ClearShot != nil && *enemy.ClearShot {
+	combatRange := 650.0
+	if isRailgun(s.Weapon) {
+		combatRange = 1000
+	}
+	if p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && tactic != "follow" && tactic != "recover" && enemy != nil && best < combatRange && (s.Ammo > 0 || strings.Contains(strings.ToLower(s.Weapon), "blast")) && enemy.ClearShot != nil && *enemy.ClearShot {
 		from, to := s.EyePoint(), enemy.AimPoint()
 		to, leadSeconds := p.projectileAim(s, *enemy)
 		p.World.Command.AimPoint = &to
+		p.World.Command.AimEntity = enemy.ID
 		p.World.Command.LeadSeconds = leadSeconds
-		if s.Teammate != nil && teammateBlocksShot(from, to, *s.Teammate) {
+		safetyEnd := to
+		if isRailgun(s.Weapon) {
+			safetyEnd = railEnd(from, to)
+		}
+		if s.Teammate != nil && teammateBlocksShot(from, safetyEnd, *s.Teammate) {
 			p.World.Command.LimitReason = "friendly_line_of_fire"
+			p.railAim = railAim{}
 		} else {
 			cmd.Yaw = quake.YawTo(from, to, s.DeltaAngles[1])
 			cmd.Pitch = quake.PitchTo(from, to, s.DeltaAngles[0])
-			cmd.Buttons = 1
 			p.World.Command.AimSource = "enemy"
+			ready := true
+			if isRailgun(s.Weapon) {
+				cmd, ready = p.railCommand(s, *enemy, prev, cmd)
+				if !ready {
+					p.World.Command.LimitReason = "rail_aim_settling"
+				}
+			}
+			if ready {
+				cmd.Buttons = 1
+			}
 		}
 	}
 	if tactic == "attack" {
@@ -779,8 +802,8 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 	} else if p.World.Goal == "probe_last_seen" {
 		speed = 160
 	}
-	cmd = worldMove(cmd, s, dx, dy, math.Min(speed, moveSpeedLimit), cmd.Buttons != 0)
-	if cmd.Buttons == 0 {
+	cmd = worldMove(cmd, s, dx, dy, math.Min(speed, moveSpeedLimit), p.World.Command.AimSource == "enemy")
+	if p.World.Command.AimSource != "enemy" {
 		p.World.Command.AimSource = "route"
 	}
 	return cmd
