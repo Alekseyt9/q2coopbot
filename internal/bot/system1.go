@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"q2coopbot/internal/quake"
 	"regexp"
 	"strings"
 	"time"
@@ -48,10 +49,15 @@ func (t *Tactician) options(w World) []string {
 	if s.Teammate != nil && w.Goal == "cover_teammate" {
 		actions = append(actions, "hold")
 	}
+	if s.Teammate != nil && (w.Goal == "cover_teammate" || w.Goal == "follow_teammate") {
+		if profile := combatSpacing(s); profile != nil && profile.NeedSpace && s.OnGround && quake.Distance(s.Self, *s.Teammate) <= combatLeash(profile) {
+			actions = append(actions, "retreat")
+		}
+	}
 	return actions
 }
 
-var tacticLetter = regexp.MustCompile(`(?i)\b[A-D]\b`)
+var tacticLetter = regexp.MustCompile(`(?i)\b[A-E]\b`)
 
 func (t *Tactician) poll(w World) (TacticalDecision, bool) {
 	select {
@@ -87,7 +93,10 @@ func (t *Tactician) tick(w World) {
 	}
 	t.busy = true
 	options := t.options(w)
-	state := compactPlanState(w)
+	state := struct {
+		State  planState      `json:"state"`
+		Combat *CombatSpacing `json:"combat"`
+	}{compactPlanState(w), combatSpacing(w.Snapshot)}
 	go func() {
 		start := time.Now()
 		labels := make([]string, len(options))
@@ -95,7 +104,7 @@ func (t *Tactician) tick(w World) {
 			labels[i] = fmt.Sprintf("%c=%s", 'A'+i, option)
 		}
 		facts, _ := json.Marshal(state)
-		prompt := "You are the fast tactical controller of a Quake II cooperative companion. Protect the human. Follow the current strategic plan. Attack only when clear_shot=true and the option is offered; network visibility alone is insufficient. Choose one offered option and output only its letter.\nState: " + string(facts) + "\nOptions: " + strings.Join(labels, ", ") + "\nAnswer:"
+		prompt := "You are the fast tactical controller of a Quake II cooperative companion. Protect the human. Follow the current strategic plan. Combat gives observed weapon/enemy spacing constraints, not enemy health. Prefer retreat when need_space=true; the controller rejects steps toward other threats or hazards. Do not chase a shotgun target through a group. Attack only when clear_shot=true and the option is offered; network visibility alone is insufficient. Choose one offered option and output only its letter.\nState: " + string(facts) + "\nOptions: " + strings.Join(labels, ", ") + "\nAnswer:"
 		payload, _ := json.Marshal(map[string]any{"model": t.model, "prompt": prompt, "stream": false, "think": false, "keep_alive": "10m", "options": map[string]any{"temperature": 0, "num_predict": 1, "num_ctx": 1024}})
 		resp, e := t.http.Post(t.endpoint, "application/json", bytes.NewReader(payload))
 		if e != nil {

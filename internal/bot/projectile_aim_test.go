@@ -10,6 +10,11 @@ import (
 )
 
 func TestProjectileComparisonControls(t *testing.T) {
+	for _, light := range []int{-1, 128, 256} {
+		if err := Run(context.Background(), Config{TestLight: &light}); err == nil {
+			t.Fatal("test lighting allowed outside prepared combat fixture")
+		}
+	}
 	if err := Run(context.Background(), Config{TestCombatBarrier: true}); err == nil {
 		t.Fatal("combat barrier allowed outside prepared frame-paced scene")
 	}
@@ -49,6 +54,9 @@ func TestInterceptTime(t *testing.T) {
 }
 
 func TestProjectileConfidenceDependsOnFlightTime(t *testing.T) {
+	if !projectileHistoryReliable(1, 0.15) || projectileHistoryReliable(2, 0.5) || !projectileHistoryReliable(6, 0.5) {
+		t.Fatal("forecast horizon must grow only with observed steady history")
+	}
 	if !projectileMotionReliable(35, 0.1) || projectileMotionReliable(35, 0.5) || !projectileMotionReliable(0, 0.5) {
 		t.Fatal("distant accelerating target trusted or steady motion rejected")
 	}
@@ -81,9 +89,18 @@ func TestMotionRequiresStableContinuousObservations(t *testing.T) {
 	step(1, 0, false)
 	step(2, 5, false)
 	step(3, 10, true)
+	if p.enemyMotion[7].steadyFrames != 2 {
+		t.Fatal("steady duration must include both observed intervals")
+	}
 	step(4, 5, false)
+	if p.enemyMotion[7].steadyFrames != 1 {
+		t.Fatal("turn retained the previous course's duration")
+	}
 	step(5, 0, true) // reversal needs a second matching velocity
 	step(7, -10, false)
+	if p.enemyMotion[7].steadyFrames != 0 {
+		t.Fatal("observation gap retained steady history")
+	}
 	step(8, -15, false)
 	step(9, -20, true)
 	step(10, 500, false)
@@ -114,7 +131,7 @@ func TestProjectileAimUsesCurrentWeaponAndGeometry(t *testing.T) {
 	}
 	e := quake.Object{ID: 7, Class: "monster_infantry", Origin: quake.Vec3{96, -200, 24}, Solid: 8290}
 	s := quake.Snapshot{Frame: 3, Self: quake.Vec3{32, -224, 24}, Weapon: "Blaster"}
-	p := &Planner{World: World{Geometry: &g}, enemyMotion: map[int]enemyMotion{7: {class: e.Class, frame: 3, stable: true, velocity: quake.Vec3{0, 100, 0}}}}
+	p := &Planner{World: World{Geometry: &g}, enemyMotion: map[int]enemyMotion{7: {class: e.Class, frame: 3, stable: true, steadyFrames: 8, velocity: quake.Vec3{0, 100, 0}}}}
 	for _, weapon := range []string{"Blaster", "models/weapons/v_hyperb/tris.md2"} {
 		s.Weapon = weapon
 		aim, flight := p.projectileAim(s, e)

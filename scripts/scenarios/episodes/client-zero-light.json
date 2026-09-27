@@ -1,0 +1,28 @@
+{
+  "id": "client-zero-light",
+  "title": "UDP-клиент сообщает нулевую освещённость",
+  "map": "base1",
+  "status": "verified_static_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_light_detection_trial.ps1",
+  "missing_setup": [],
+  "acceptance": {
+    "zero_light_control": true,
+    "native_movement_before_fire": true,
+    "bsp_static_light": true,
+    "server_applied_light": true
+  },
+  "evidence": "internal/quake/usercmd.go передаёт Light; обычный клиент оставляет ноль. yquake2/src/game/g_ai.c FindTarget отвергает client->light_level <= 5. В projectile-flyer-probe4 Flyer стоял до огня; после явного test.light=128 в probe7 движется до огня.",
+  "symptom": "Визуальное обнаружение бота штатными монстрами подавлено даже на освещённом участке. Реакция на выстрел/шум может скрывать проблему.",
+  "expected_result": "Клиент передаёт освещённость из доступных данных карты; тесты проверяют обнаружение без предварительной стрельбы и поведение в темноте.",
+  "implementation_notes": "Обычный клиент рассчитывает статическое освещение по BSP lightmaps, текстурным координатам и серверным lightstyles. Проводится выборка вниз2048 от EyePoint, уровень150*max(RGB), modulate=1, ограничение0..255. test.light теперь nullable: null/отсутствие означает BSP, явный0 — тёмный контроль. Трасса содержит источник. На2x/1x: бот34, актёр58; Flyer движется до огня8/10 кадров, с нулём0/10; отправленные и применённые команды совпадают. Повреждённые световые данные не ломают геометрию: lighting_error/unavailable. Динамические вспышки пока не учитываются.",
+  "kind": "light_detection",
+  "verification_report": "workspace/artifacts/light-detection-acceptance/report.json",
+  "remaining_validation": [
+    "Живое переключение lightstyles; протокольные изменения уже покрыты тестом",
+    "Реальный тёмный участок BSP; текущий UDP-контроль использует принудительный0",
+    "Динамические источники света выстрелов/взрывов",
+    "Естественные боевые профили с включённым BSP-светом"
+  ],
+  "transition_report": "workspace/artifacts/light-map-transition/light-transition-report.json"
+}

@@ -1,0 +1,29 @@
+{
+  "id": "base1-flyer-projectile-overlead",
+  "title": "Лишние Cells при упреждении по Flyer",
+  "map": "base1",
+  "kind": "projectile_comparison",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_projectile_flyer_trial.ps1",
+  "fixture": "scripts/scenarios/base1-flyer-crossing.json",
+  "missing_setup": [],
+  "evidence": "workspace/artifacts/projectile-flyer-1x/report.json и projectile-flyer-2x/report.json: на обеих скоростях совпадающий старт; Hyper lead 9 Cells/19 кадров, baseline 7 Cells/17 кадров; Blaster 50 кадров в обоих вариантах. Сравнительный gate ожидаемо отклоняет Hyper.",
+  "symptom": "Линейный прогноз после краткого устойчивого движения Flyer даёт лишние промахи при последующем изменении его движения.",
+  "expected_result": "При одинаковых исходных траекториях урон/убийство не хуже baseline, время и расход Cells не больше; все реально выпущенные снаряды атрибутированы.",
+  "acceptance": {
+    "min_initial_distance": 400,
+    "min_crossing_frames": 2,
+    "min_crossing_speed": 30,
+    "no_damage_time_ammo_regression": true,
+    "actual_projectile_accounting": true
+  },
+  "implementation_notes": "Горизонт дальнего прогноза ограничен длительностью наблюдённого устойчивого курса. При повороте/ускорении история перезапускается; короткий прогноз до0.2с сохраняет прежние проверки ускорения. На2x/1x финальный Hyper снимает50HP за17 кадров,7 Cells,3 живых попадания из7,0 неразрешённых исходов. Подтверждено совпадение исходной траектории с baseline. Отдельный положительный тест упреждения принят4/4: Blaster6 и Hyper9 проверенных команд на каждой скорости. Общая эффективность на новых траекториях не заявляется.",
+  "remaining_validation": [
+    "Другие курсы движения, расстояния и задержки сети",
+    "Исправление освещённости обычного клиента и повторение естественного обнаружения",
+    "Общая полезность дальнего упреждения, не только устранение перерасхода"
+  ],
+  "verification_report": "workspace/artifacts/projectile-history-acceptance-hyper/verification.json",
+  "positive_aim_report": "workspace/artifacts/projectile-history-positive-aim/report.json"
+}

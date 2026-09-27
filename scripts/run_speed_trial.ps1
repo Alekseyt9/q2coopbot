@@ -17,6 +17,8 @@ param(
     [switch]$SynchronizedStart,
     [switch]$ElevatorTrial,
     [switch]$CombatMoveTrial,
+    [switch]$CombatSpacingTrial,
+    [string]$CombatSpacingFixture='',
     [switch]$DamageTrace,
     [switch]$DisableProjectileLead,
     [switch]$ProjectileComparison,
@@ -49,6 +51,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if($CombatSpacingTrial -and (!$CombatMoveTrial -or $WeaponSwitchTrial -or $Map -ne 'base1' -or $TransitionMap)){throw 'Combat spacing requires the base1 combat movement scene without another weapon/map fixture'}
 if ($DisableProjectileLead -and $WeaponSwitchTrial -notlike 'projectile_*') {throw 'Baseline requires a projectile fixture'}
 if ($ProjectileComparison -and $WeaponSwitchTrial -notlike 'projectile_*') {throw 'Comparison requires a projectile fixture'}
 if ($ProjectileRange -eq 'far' -and !$ProjectileComparison) {throw 'Far range requires projectile comparison'}
@@ -57,6 +60,12 @@ $projectileSetup=$null
 if($ProjectileFixture){
     if(!$ProjectileComparison -or !$SynchronizedStart -or $Map -ne 'base1'){throw 'Projectile fixture requires synchronized base1 comparison'}
     $projectileSetup=Read-ProjectileFixture $ProjectileFixture
+    if($projectileSetup.PSObject.Properties['second_target_origin']){throw 'Second target requires a combat spacing fixture'}
+    if($projectileSetup.PSObject.Properties['actor_walk_target']){throw 'Moving actor requires a combat spacing fixture'}
+}
+if($CombatSpacingFixture){
+    if(!$CombatSpacingTrial -or !$SynchronizedStart -or $ProjectileFixture){throw 'Spacing fixture requires synchronized spacing trial only'}
+    $projectileSetup=Read-ProjectileFixture $CombatSpacingFixture
 }
 . "$PSScriptRoot/read_damage_events.ps1"
 . "$PSScriptRoot/read_projectile_ledger.ps1"
@@ -222,7 +231,7 @@ foreach ($scale in $Timescales) {
     if ($TransitionMap) { $args = "+set rcon_password $rconPassword $args" }
     if ($UnlimitedLoopbackRate) { $args = "+set sv_test_unlimited_loopback 1 $args" }
     if ($DamageTrace) { $args = "+set g_test_damage 1 $args" }
-    if ($ProjectileComparison) { $args = "+set g_test_combat_barrier 1 $args" }
+    if ($ProjectileComparison -or $CombatSpacingFixture) { $args = "+set g_test_combat_barrier 1 $args" }
     if ($projectileSetup) { $args = "+set g_test_combat_target $($projectileSetup.target_class) " + $args.Replace("+set game baseq2 ", "") } # baseq2 is the default game; keep below engine argv limit.
     if ($ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $GroundEdgeTrial -or $DoorTrial -or $DoorPassTrial -or $ButtonTrial -or $ButtonAutoTrial -or $TeammateMemoryTrial -or $TeammateSearchTrial -or $SearchFixture -or $ActorScenario) { $args = "+set cheats 1 $args" }
     if ($SynchronizedStart) { $args = "+set sv_test_trace_client GoCoopMate +set sv_test_start_client GoCoopMate $args" }
@@ -313,6 +322,7 @@ foreach ($scale in $Timescales) {
 			}
 			if ($WeaponSwitchTrial -like 'projectile_*') {
 				$humanConfig.test.combat_barrier=[bool]$ProjectileComparison
+				if($ProjectileComparison){$humanConfig.test.light=0} # Preserve historical dark comparison baseline.
 				# Use the native soldier in the base1 supply corridor.
 				$humanConfig.test.spawn_map=''
 				$humanConfig.test.spawn_soldier=''
@@ -347,10 +357,19 @@ foreach ($scale in $Timescales) {
             $humanConfig.test.scenario_frame_origin = [int]$fixture.frame_origin
         }
         if($projectileSetup){
+            $humanConfig.test.combat_barrier=$true
+            $humanConfig.test.teleport_map=$projectileSetup.map
+            $humanConfig.output.trace_jsonl=$humanTracePath
+            $humanConfig.test.light=$projectileSetup.light
             $humanConfig.test.teleport=Format-ProjectileOrigin $projectileSetup.actor_origin
             $humanConfig.test.spawn_map=$projectileSetup.map
             $humanConfig.test.spawn_soldier=Format-ProjectileOrigin $projectileSetup.target_origin
             $humanConfig.test.spawn_class=$projectileSetup.target_class
+            if($projectileSetup.PSObject.Properties['actor_walk_target']){
+                $humanConfig.test.walk_target=Format-ProjectileOrigin $projectileSetup.actor_walk_target
+                $humanConfig.test.walk_after_frames=[int]$projectileSetup.actor_walk_after_frames
+                $humanConfig.test.walk_frames=[int]$projectileSetup.actor_walk_frames
+            }
         }
         $humanConfig | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $humanConfigPath -Encoding UTF8
         $human = Start-Process -FilePath $botExe -ArgumentList "--config `"$humanConfigPath`"" -WorkingDirectory $repoRoot -RedirectStandardOutput $humanLog -RedirectStandardError $humanErr -WindowStyle Hidden -PassThru
@@ -421,8 +440,20 @@ foreach ($scale in $Timescales) {
 			$botConfig.test.teleport = '32,-224,24'
 			if ($WeaponSwitchTrial -like 'projectile_*') { $botConfig.test.teleport='1136,256,-32' }
 			if ($ProjectileRange -eq 'far') { $botConfig.test.teleport='608,192,-32' }
-			if ($projectileSetup) { $botConfig.test.teleport=Format-ProjectileOrigin $projectileSetup.bot_origin }
+			if ($ProjectileComparison) { $botConfig.test.light=0 } # Natural BSP lighting is tested separately.
+			if ($projectileSetup) { $botConfig.test.teleport=Format-ProjectileOrigin $projectileSetup.bot_origin; $botConfig.test.light=$projectileSetup.light }
 		}
+        if($CombatSpacingFixture){
+            $botConfig.test.teleport_map=$projectileSetup.map
+            $botConfig.test.teleport=Format-ProjectileOrigin $projectileSetup.bot_origin
+            $botConfig.test.combat_barrier=$true
+            $botConfig.test.light=$projectileSetup.light
+            if($projectileSetup.PSObject.Properties['second_target_origin']){
+                $botConfig.test.spawn_map=$projectileSetup.map
+                $botConfig.test.spawn_soldier=Format-ProjectileOrigin $projectileSetup.second_target_origin
+                $botConfig.test.spawn_class=$projectileSetup.target_class
+            }
+        }
         if ($SearchApproachOnly) { $botConfig.test.disable_probe = $true }
         if ($actorScenarioDefinition) {
             $botConfig.test.teleport_map = $actorScenarioDefinition.map
@@ -1180,7 +1211,7 @@ if ($ElevatorTrial -and @($results | Where-Object {
 }).Count -gt 0) {
     throw "Elevator trial did not complete; inspect positions, mover and stages in $summary"
 }
-if ($CombatMoveTrial -and $WeaponSwitchTrial -notlike 'projectile_*' -and $WeaponSwitchTrial -notlike 'rail_*' -and @($results | Where-Object { $_.combat_move_frames -le 0 -or $_.combat_move_with_side -le 0 }).Count -gt 0) {
+if ($CombatMoveTrial -and !$CombatSpacingTrial -and $WeaponSwitchTrial -notlike 'projectile_*' -and $WeaponSwitchTrial -notlike 'rail_*' -and @($results | Where-Object { $_.combat_move_frames -le 0 -or $_.combat_move_with_side -le 0 }).Count -gt 0) {
     throw "Combat movement trial did not produce firing while following a route: $summary"
 }
 if ($ObservationGapTrial -and @($results | Where-Object { $_.attack_before_gap -le 0 -or $_.stale_neutral_frames -le 0 -or $_.recovered_action_frames -le 0 }).Count -gt 0) {
@@ -1303,5 +1334,3 @@ if ($BSPFailureTrial -and @($results | Where-Object {
     throw "BSP failure trial did not hold a neutral command with AAS present: $summary"
 }
 Write-Output "Saved $summary"
-
-

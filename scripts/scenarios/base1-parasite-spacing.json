@@ -1,0 +1,10 @@
+{
+  "name": "base1-parasite-spacing",
+  "map": "base1",
+  "bot_origin": [32, -224, 24],
+  "actor_origin": [32, -352, 24],
+  "target_class": "monster_parasite",
+  "target_origin": [200, -224, 24],
+  "light": null,
+  "scope": "Native Parasite, BSP lighting, synchronized prepared positions; players remain vulnerable"
+}

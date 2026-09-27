@@ -1,0 +1,11 @@
+{
+  "name": "base1-parasite-group",
+  "map": "base1",
+  "bot_origin": [32, -224, 24],
+  "actor_origin": [32, -352, 24],
+  "target_class": "monster_parasite",
+  "target_origin": [200, -224, 24],
+  "second_target_origin": [128, -304, 24],
+  "light": null,
+  "scope": "Two native Parasites; second threat covers the previous firing-position detour; vulnerable clients, BSP light, synchronized start"
+}

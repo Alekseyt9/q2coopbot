@@ -1,0 +1,13 @@
+{
+  "name": "base1-projectile-teammate-crossing",
+  "map": "base1",
+  "bot_origin": [32, -224, 24],
+  "actor_origin": [128, -128, 24],
+  "target_class": "monster_parasite",
+  "target_origin": [200, -224, 24],
+  "actor_walk_target": [128, -304, 24],
+  "actor_walk_after_frames": 30,
+  "actor_walk_frames": 20,
+  "light": null,
+  "scope": "Teammate approaches a projectile lane from the side using real movement; vulnerable clients, native Parasite"
+}

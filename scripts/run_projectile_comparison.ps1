@@ -25,7 +25,7 @@ foreach($mode in @('projectile_blaster','projectile_hyper')) {
             $metrics=@(Measure-ProjectileLedger $weaponShots $rows[0].self_entity)[0]
             if($metrics.unresolved -or $metrics.unknown_freed){throw 'Comparison ended without complete projectile outcomes'}
             $detail|Add-Member -NotePropertyName projectiles -NotePropertyValue $metrics
-            $runs += [pscustomobject]@{repeat=$repeat;range=$Range;timescale=$run.timescale;detail=$detail;trace=$run.trace_jsonl;server_log=$run.combat_log}
+            $runs += [pscustomobject]@{fixture=$fixture;repeat=$repeat;range=$Range;timescale=$run.timescale;detail=$detail;trace=$run.trace_jsonl;server_log=$run.combat_log}
             $runs|ConvertTo-Json -Depth 8|Set-Content (Join-Path $OutputRoot 'runs.json')
         }
     }
@@ -41,4 +41,3 @@ foreach($mode in @('projectile_blaster','projectile_hyper')) {
 }
 $pairs | Select-Object mode,timescale,matched_initial_trajectory,@{n='lead_damage';e={$_.lead.health_damage}},@{n='baseline_damage';e={$_.baseline.health_damage}},@{n='lead_cells';e={$_.lead.cells_spent}},@{n='baseline_cells';e={$_.baseline.cells_spent}}
 if(@($pairs|Where-Object {!$_.accepted}).Count){throw 'Comparison rejected: setup differs or far-range damage/time/ammo regressed'}
-

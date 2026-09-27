@@ -43,6 +43,12 @@
     "base1-rail-aim.json",
     "base1-rail-damage.json",
     "base1-projectile-comparison-start.json",
-    "base1-projectile-far-overlead.json"
+    "base1-projectile-far-overlead.json",
+    "base1-flyer-projectile-overlead.json",
+    "client-zero-light.json",
+    "combat-spacing-safe-retreat.json",
+    "base1-parasite-firing-position.json",
+    "base1-parasite-group-retreat.json",
+    "base1-moving-teammate-fire-guard.json"
   ]
 }

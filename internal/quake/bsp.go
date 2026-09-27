@@ -24,16 +24,18 @@ type MapEntity struct {
 	Map        string `json:"map,omitempty"`
 }
 type MapInfo struct {
-	Name       string      `json:"name"`
-	BSPSource  string      `json:"bsp_source"`
-	Planes     int         `json:"planes"`
-	Nodes      int         `json:"nodes"`
-	Leaves     int         `json:"leaves"`
-	Brushes    int         `json:"brushes"`
-	Entities   []MapEntity `json:"entities"`
-	Models     []BSPModel  `json:"-"`
-	collision  *CollisionMap
-	visibility *bspVisibility
+	Name          string      `json:"name"`
+	BSPSource     string      `json:"bsp_source"`
+	Planes        int         `json:"planes"`
+	Nodes         int         `json:"nodes"`
+	Leaves        int         `json:"leaves"`
+	Brushes       int         `json:"brushes"`
+	Entities      []MapEntity `json:"entities"`
+	Models        []BSPModel  `json:"-"`
+	collision     *CollisionMap
+	visibility    *bspVisibility
+	lighting      *bspLight
+	LightingError string `json:"lighting_error,omitempty"`
 }
 
 type BSPModel struct{ Min, Max, Origin Vec3 }
@@ -703,6 +705,11 @@ func LoadMap(root, name string) (MapInfo, error) {
 	if e = walk(int(int32(binary.LittleEndian.Uint32(models[36:])))); e != nil {
 		return MapInfo{}, e
 	}
-	return MapInfo{Name: name, BSPSource: source, Planes: len(planes) / 20, Nodes: len(nodes) / 28, Leaves: len(leaves) / 28, Brushes: len(brushes) / 12, Entities: parseMapEntities(string(entities)), Models: modelBounds, collision: c,
+	lighting, lightErr := parseBSPLight(lump, c.planes, nodes, models)
+	lightError := ""
+	if lightErr != nil {
+		lightError = lightErr.Error()
+	}
+	return MapInfo{Name: name, BSPSource: source, Planes: len(planes) / 20, Nodes: len(nodes) / 28, Leaves: len(leaves) / 28, Brushes: len(brushes) / 12, Entities: parseMapEntities(string(entities)), Models: modelBounds, collision: c, lighting: lighting, LightingError: lightError,
 		visibility: parseBSPVisibility(visibilityData, nodes, leaves, c.planes)}, nil
 }

@@ -13,6 +13,7 @@ type enemyMotion struct {
 	stable           bool
 	velocityKnown    bool
 	velocityChange   float64
+	steadyFrames     int
 }
 
 func projectileFixtureWeaponReady(fixture, weapon string) bool {
@@ -32,6 +33,12 @@ func (p *Planner) observeEnemyMotion(s quake.Snapshot) {
 				m.velocityKnown = true
 				m.velocityChange = math.Hypot(v[0]-old.velocity[0], v[1]-old.velocity[1])
 				m.stable = old.velocityKnown && m.velocityChange <= 80 && v[0]*old.velocity[0]+v[1]*old.velocity[1] >= 0
+				m.steadyFrames = 1
+				// Allow snapshot quantization, but restart the history on a turn
+				// or acceleration instead of extrapolating a newly chosen course.
+				if old.velocityKnown && m.velocityChange <= 8 {
+					m.steadyFrames = min(old.steadyFrames+1, 8)
+				}
 			}
 		}
 		next[e.ID] = m
@@ -64,6 +71,9 @@ func (p *Planner) projectileAim(s quake.Snapshot, e quake.Object) (quake.Vec3, f
 	if !projectileMotionReliable(m.velocityChange, t) {
 		return point, 0
 	}
+	if !projectileHistoryReliable(m.steadyFrames, t) {
+		return point, 0
+	}
 	lead := point
 	lead[0] += m.velocity[0] * t
 	lead[1] += m.velocity[1] * t
@@ -76,6 +86,12 @@ func (p *Planner) projectileAim(s quake.Snapshot, e quake.Object) (quake.Vec3, f
 
 func projectileMotionReliable(velocityChange, flight float64) bool {
 	return 0.5*(velocityChange*10)*flight*flight <= 8
+}
+
+func projectileHistoryReliable(steadyFrames int, flight float64) bool {
+	// Stable observations already cover two intervals, with their acceleration
+	// checked separately. Longer flights need a correspondingly steady course.
+	return float64(max(2, steadyFrames))*0.1 >= flight
 }
 
 func interceptTime(from, to, velocity quake.Vec3, speed float64) (float64, bool) {

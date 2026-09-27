@@ -24,6 +24,7 @@ type Config struct {
 	TestDisableProjectileLead           bool
 	TestProjectileComparison            bool
 	TestCombatBarrier                   bool
+	TestLight                           *int
 	TestInvulnerable                    bool
 	TestInitialHealth                   int
 	TestChangeEntry                     string
@@ -98,6 +99,9 @@ func transitionMapArgument(destination, previous string) (string, error) {
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.TestCombatBarrier && (!cfg.FramePaced || cfg.TestTeleport == "" || cfg.TestTeleportMap != "base1") {
 		return fmt.Errorf("combat barrier requires frame pacing and base1 teleport")
+	}
+	if cfg.TestLight != nil && (*cfg.TestLight < 0 || *cfg.TestLight > 255 || !cfg.TestCombatBarrier) {
+		return fmt.Errorf("test light requires combat barrier and a value in 0..255")
 	}
 	if (cfg.TestDisableProjectileLead || cfg.TestProjectileComparison) && (!cfg.FramePaced || !strings.HasPrefix(cfg.TestWeaponSwitchFixture, "projectile_")) {
 		return fmt.Errorf("projectile comparison controls require a frame-paced projectile fixture")
@@ -266,7 +270,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.TestSpawnClass == "" {
 		cfg.TestSpawnClass = "monster_soldier_light"
 	}
-	if cfg.TestSpawnClass != "monster_soldier_light" && cfg.TestSpawnClass != "monster_soldier_ss" && cfg.TestSpawnClass != "monster_infantry" && cfg.TestSpawnClass != "monster_tank" && cfg.TestSpawnClass != "monster_flyer" {
+	if cfg.TestSpawnClass != "monster_soldier_light" && cfg.TestSpawnClass != "monster_soldier_ss" && cfg.TestSpawnClass != "monster_infantry" && cfg.TestSpawnClass != "monster_tank" && cfg.TestSpawnClass != "monster_flyer" && cfg.TestSpawnClass != "monster_parasite" {
 		return fmt.Errorf("unsupported test spawn class %q", cfg.TestSpawnClass)
 	}
 	if cfg.AASDir == "" {
@@ -313,6 +317,7 @@ func Run(ctx context.Context, cfg Config) error {
 		testHoldPosition:         cfg.TestHoldPosition,
 		testProjectileComparison: cfg.TestProjectileComparison,
 		testCombatBarrier:        cfg.TestCombatBarrier,
+		testLight:                cfg.TestLight,
 		testGroundEdgeProbe:      cfg.TestGroundEdgeProbe,
 		testDoorProbe:            cfg.TestDoorProbe,
 		testDoorPassProbe:        cfg.TestDoorPassProbe,

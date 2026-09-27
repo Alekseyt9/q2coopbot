@@ -1,0 +1,28 @@
+{
+  "id": "base1-moving-teammate-fire-guard",
+  "title": "Прекращение и возобновление огня при движущемся напарнике",
+  "map": "base1",
+  "kind": "moving_teammate",
+  "status": "verified_crossing_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_moving_teammate_trial.ps1",
+  "fixture": "scripts/scenarios/base1-parasite-moving-teammate.json",
+  "missing_setup": [],
+  "symptom": "Проверка статичного напарника не доказывает безопасность при пересечении линии огня в движении.",
+  "expected_result": "Наблюдать реальное движение, запрещать выстрел при перекрытии, возобновлять после освобождения линии и завершать бой без урона игрокам.",
+  "acceptance": {
+    "min_observed_steps": 4,
+    "min_actor_distance": 100,
+    "min_moving_blocked_frames": 1,
+    "min_resumed_fire_frames": 3,
+    "kills": 1,
+    "max_players_damage": 0
+  },
+  "implementation_notes": "Тестовый актёр начинает ходьбу через30 кадров после снятия combat barrier. Сверяются координаты в обеих клиентских трассах, реальные перемещения, запрет/возобновление огня и серверный урон. Оба клиента уязвимы, BSP-свет обычный, Parasite со штатным AI. Это регрессионная сцена, не утверждение о ранее наблюдавшемся friendly fire. На2x/1x:6 наблюдаемых шагов,136.88 единицы пути,4 кадра запрета огня (1 во время движения),78 кадров возобновлённого огня,1 убийство,0 урона обоим игрокам.",
+  "remaining_validation": [
+    "Пересечение траектории уже выпущенного снаряда",
+    "Движущийся напарник в смешанной группе",
+    "Большая входящая инерция бота"
+  ],
+  "verification_report": "workspace/artifacts/moving-teammate-acceptance/report.json"
+}

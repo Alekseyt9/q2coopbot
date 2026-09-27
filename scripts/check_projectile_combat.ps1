@@ -23,6 +23,13 @@ function Measure-ProjectileCombat($Rows,$Events,[string]$Mode,[bool]$Baseline,[i
     $start=@($Rows | Where-Object frame -eq $StartFrame)
     if($start.Count -ne 1 -or $start[0].self_entity -lt 1){throw 'Comparison start missing'}
     $start=$start[0]
+    if($Fixture){
+        if(@($start.enemies).Count -ne 1){throw 'Projectile scene is not isolated'}
+        foreach($pair in @(@($start.self,$Fixture.bot_origin),@($start.teammate,$Fixture.actor_origin))){
+            for($axis=0;$axis -lt 3;$axis++){if([math]::Abs($pair[0][$axis]-$pair[1][$axis]) -gt 1){throw 'Fixture actor position mismatch'}}
+        }
+        if($null -ne $Fixture.light -and @($Rows|Where-Object {$_.sent_command.Light -ne $Fixture.light}).Count){throw 'Fixture light not sent'}
+    }
     if(@($Rows|Where-Object {$_.frame -lt $StartFrame+10 -and ($_.sent_command.Buttons -band 1)}).Count){throw 'Fire before common observation window ended'}
     if(@($Events|Where-Object {$_.spawncount -eq $start.spawncount -and $_.frame -lt $StartFrame+10}).Count){throw 'Damage before common observation window ended'}
     $signature=@(foreach($n in 0..9) {
@@ -49,16 +56,21 @@ function Measure-ProjectileCombat($Rows,$Events,[string]$Mode,[bool]$Baseline,[i
     $active=@($Rows|Where-Object {if($Mode -eq 'projectile_hyper'){$_.weapon -like '*/v_hyperb/*'}else{$_.weapon -eq 'Blaster'}})
     $fire=@($active|Where-Object {$_.arbitration.aim_entity -eq $id -and ($_.sent_command.Buttons -band 1)})
     if($fire.Count -lt 1 -or @($Rows|Where-Object weapon_request).Count){throw 'Fixed weapon comparison not exercised'}
-    if(!$Baseline){$null=Assert-ProjectileAim $Rows $Mode $id 1 $targetClass}else{
+    $led=@($fire|Where-Object {$_.arbitration.lead_seconds -gt 0})
+    if(!$Baseline){
+        # Outcome comparisons may reject every unsafe forecast. Actual lead
+        # exercise is a separate gate in run_projectile_aim_trial.ps1.
+        if($led.Count){$null=Assert-ProjectileAim $Rows $Mode $id 1 $targetClass}
+    }else{
         if(@($Rows|Where-Object {$_.arbitration.lead_seconds -gt 0}).Count){throw 'Baseline uses lead'}
-        foreach($r in $fire){
-            $e=@($r.enemies|Where-Object id -eq $id)[0]
-            if(!$e){throw 'Baseline target missing'}
-            $top=8*(($e.solid -shr 10) -band 63)-32
-            $bottom=-8*(($e.solid -shr 5) -band 31)
-            $point=@($e.origin[0],$e.origin[1],($e.origin[2]+[math]::Min([math]::Max(22,$bottom+8),$top-8)))
-            for($i=0;$i -lt 3;$i++){if([math]::Abs($r.arbitration.aim_point[$i]-$point[$i]) -gt 0.02){throw 'Baseline did not aim at current body'}}
-        }
+    }
+    foreach($r in @($fire|Where-Object {$_.arbitration.lead_seconds -le 0})){
+        $e=@($r.enemies|Where-Object id -eq $id)[0]
+        if(!$e){throw 'Fallback target missing'}
+        $top=8*(($e.solid -shr 10) -band 63)-32
+        $bottom=-8*(($e.solid -shr 5) -band 31)
+        $point=@($e.origin[0],$e.origin[1],($e.origin[2]+[math]::Min([math]::Max(22,$bottom+8),$top-8)))
+        for($i=0;$i -lt 3;$i++){if([math]::Abs($r.arbitration.aim_point[$i]-$point[$i]) -gt 0.02){throw 'Fallback did not aim at current body'}}
     }
     $mod=if($Mode -eq 'projectile_hyper'){10}else{1}
     $contacts=@($Events|Where-Object {$_.spawncount -eq $start.spawncount -and $_.map -eq 'base1' -and $_.frame -ge $start.frame -and $_.frame -le $Rows[-1].frame -and $_.target -eq $id})
@@ -74,5 +86,5 @@ function Measure-ProjectileCombat($Rows,$Events,[string]$Mode,[bool]$Baseline,[i
     [pscustomobject]@{target=$id;mode=$Mode;baseline=$Baseline;range=$Range;initial_distance=$distance;crossing_frames=$crossing;max_crossing_speed=$maxCross;start_frame=$StartFrame;initial_trajectory=($signature|ConvertTo-Json -Compress -Depth 5)
         health_damage=[int](($hits|Measure-Object live_health_damage -Sum).Sum);damage_events=$hits.Count;kills=$kills.Count
         kill_after_start_frames=$(if($kills.Count){$kills[0].frame-$start.frame}else{$null});cells_spent=$spent
-        fire_commands=$fire.Count;target_class=$targetClass;scope='fixed_weapon_native_ai_prepared_scene'}
+        fire_commands=$fire.Count;lead_fire_commands=$led.Count;target_class=$targetClass;scope='fixed_weapon_native_ai_prepared_scene'}
 }

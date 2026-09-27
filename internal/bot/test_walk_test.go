@@ -27,6 +27,21 @@ func TestWalkScenarioRequiresIsolatedFramePacedActor(t *testing.T) {
 	}
 }
 
+func TestCombatWalkWaitsForReleaseAndUsesReleaseClock(t *testing.T) {
+	c := &Client{testCombatBarrier: true, testTeleportSentFrame: 10, testCombatGoFrame: 100}
+	if age := c.testWalkAge(130); age != -1 {
+		t.Fatalf("walk before barrier: %d", age)
+	}
+	c.testCombatGo = true
+	if age := c.testWalkAge(130); age != 30 {
+		t.Fatalf("wrong combat clock: %d", age)
+	}
+	c.testCombatBarrier = false
+	if age := c.testWalkAge(130); age != 120 {
+		t.Fatalf("ordinary walk clock changed: %d", age)
+	}
+}
+
 func TestRoutePreflightReasons(t *testing.T) {
 	s := quake.Snapshot{Map: "test", Frame: 40, Health: 100, OnGround: true}
 	p := testWalkPath{}

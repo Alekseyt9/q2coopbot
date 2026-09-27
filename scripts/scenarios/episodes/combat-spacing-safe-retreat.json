@@ -1,0 +1,17 @@
+{
+  "id": "combat-spacing-safe-retreat",
+  "title": "Отход от близкого врага без возврата под атаку",
+  "map": "base1",
+  "kind": "combat_spacing",
+  "status": "verified_single_enemy_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_combat_spacing_trial.ps1",
+  "missing_setup": [],
+  "evidence": "workspace/artifacts/combat-spacing-follow: после отхода следование тянуло бота обратно к врагу. Добавлена полоса удержания minimum..minimum+32.",
+  "verification_report": "workspace/artifacts/combat-spacing-acceptance/report.json",
+  "symptom": "При близком противнике обычное следование сокращало дистанцию; первоначальный отход колебался с движением обратно к напарнику.",
+  "expected_result": "Бот отходит при опасной близости, сохраняет прицел и огонь, затем удерживает дистанцию. Не подходит к другому видимому врагу и не пересекает непроверенную геометрию.",
+  "acceptance": {"min_observed_away_steps": 3, "min_retreat_fire_commands": 3, "min_hold_frames": 2},
+  "implementation_notes": "На2x/1x:4 команды отхода,4 наблюдаемых шага от той же позиции врага,4 команды огня при отходе,5 кадров удержания. System1 получает профиль и может выбрать retreat; без модели работает ограниченный локальный fallback. Группа, блокировка, прицел и прекращение follow проверены Go-тестами. Реальная модель System1 не вызывалась.",
+  "remaining_validation": ["UDP-сцены группы, Parasite и Tank", "Потери здоровья/убийства и сравнение с прежней тактикой", "Вход в отход с большой инерцией и сложная динамическая геометрия", "Выбор профилей реальной моделью System1"]
+}

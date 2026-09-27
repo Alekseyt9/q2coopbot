@@ -39,6 +39,7 @@ type ConfigFile struct {
 		DisableProjectileLead        bool   `json:"disable_projectile_lead"`
 		ProjectileComparison         bool   `json:"projectile_comparison"`
 		CombatBarrier                bool   `json:"combat_barrier"`
+		Light                        *int   `json:"light"`
 		WeaponSwitchFixture          string `json:"weapon_switch_fixture"`
 		Invulnerable                 bool   `json:"invulnerable"`
 		InitialHealth                int    `json:"initial_health"`
@@ -160,6 +161,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestDisableProjectileLead = file.Test.DisableProjectileLead
 	cfg.TestProjectileComparison = file.Test.ProjectileComparison
 	cfg.TestCombatBarrier = file.Test.CombatBarrier
+	cfg.TestLight = file.Test.Light
 	cfg.TestInvulnerable = file.Test.Invulnerable
 	cfg.TestChangeEntry = file.Test.ChangeEntry
 	cfg.TestScenarioFrameOrigin = file.Test.ScenarioFrameOrigin

@@ -1,0 +1,30 @@
+{
+  "id": "base1-parasite-group-retreat",
+  "title": "Лимит удаления от напарника останавливает отход от группы",
+  "map": "base1",
+  "kind": "parasite_group",
+  "status": "verified_two_parasites_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_parasite_group_trial.ps1",
+  "fixture": "scripts/scenarios/base1-parasite-group.json",
+  "missing_setup": [],
+  "evidence": "workspace/artifacts/parasite-group-visible/group-report.json: обе цели убиты, но49HP потеряно после остановки отхода лимитом220.",
+  "symptom": "Бот не может выйти из радиуса языка двух Parasite, поскольку прежний лимит220 до напарника меньше требуемой боевой дистанции.",
+  "expected_result": "Отойти от обеих наблюдаемых угроз, убить обе цели без урона, не стрелять в напарника и вернуться после боя.",
+  "acceptance": {
+    "min_group_frames": 10,
+    "min_group_away_steps": 3,
+    "kills": 2,
+    "max_bot_damage": 0,
+    "max_teammate_distance": 360,
+    "final_teammate_distance": 220
+  },
+  "implementation_notes": "Combat leash зависит от профиля: max(220, minimum+32), ограничен384; Parasite352. Тот же предел в локальном контроллере и допустимых вариантах System1. Две цели одного класса создаются до общего барьера; уязвимые клиенты, обычный BSP-свет, штатный AI. Проверяется открытая геометрия начальной расстановки. На2x/1x:24 наблюдаемых шага отхода от обеих угроз,2 убийства,0HP потерь; максимальная дистанция до напарника293.86, после боя55.81. Модель System1 не запускалась.",
+  "remaining_validation": [
+    "Смешанные типы монстров",
+    "Движущийся напарник",
+    "Вход с большой инерцией",
+    "Реальный выбор System1"
+  ],
+  "verification_report": "workspace/artifacts/parasite-group-acceptance/report.json"
+}

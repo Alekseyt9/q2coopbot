@@ -1,0 +1,13 @@
+{
+  "name": "base1-parasite-moving-teammate",
+  "map": "base1",
+  "bot_origin": [32, -224, 24],
+  "actor_origin": [32, -352, 24],
+  "target_class": "monster_parasite",
+  "target_origin": [200, -224, 24],
+  "actor_walk_target": [32, -224, 24],
+  "actor_walk_after_frames": 30,
+  "actor_walk_frames": 20,
+  "light": null,
+  "scope": "Vulnerable teammate crosses the firing lane using real usercmd movement, starting30 frames after native combat barrier release"
+}

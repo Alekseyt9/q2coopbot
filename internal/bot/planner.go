@@ -41,6 +41,7 @@ type Planner struct {
 	TestDisableProjectileLead bool
 	railAim                   railAim
 	enemyMotion               map[int]enemyMotion
+	shotTeammateMotion        shotTeammateMotion
 	resources                 map[int]*ResourceMemory
 	healthStarted             int
 	pickup                    *pickupTask
@@ -297,6 +298,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 	}
 	p.observeEnemyMotion(s)
+	p.observeShotTeammateMotion(s)
 	previous := p.World.Snapshot
 	if previous.Frame > 0 && previous.Health <= 0 && s.Health > 0 {
 		p.deathFrame = 0
@@ -629,6 +631,8 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		if s.Teammate != nil && teammateBlocksShot(from, safetyEnd, *s.Teammate) {
 			p.World.Command.LimitReason = "friendly_line_of_fire"
 			p.railAim = railAim{}
+		} else if p.teammateEntersProjectile(s, from, to) {
+			p.World.Command.LimitReason = "friendly_projectile_crossing"
 		} else {
 			cmd.Yaw = quake.YawTo(from, to, s.DeltaAngles[1])
 			cmd.Pitch = quake.PitchTo(from, to, s.DeltaAngles[0])
@@ -645,9 +649,18 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 			}
 		}
 	}
+	profile := combatSpacing(s)
+	p.World.Command.CombatSpacing = profile
+	if (p.World.Goal == "cover_teammate" || p.World.Goal == "follow_teammate") && profile != nil && profile.Distance < profile.Minimum+32 && s.Teammate != nil && quake.Distance(s.Self, *s.Teammate) <= combatLeash(profile) && (tactic == "" || tactic == "attack" || tactic == "retreat") {
+		if profile.NeedSpace {
+			return p.combatRetreat(cmd, profile)
+		}
+		p.World.Command.MoveLimitReason = "combat_spacing_hold"
+		return cmd
+	}
 	if tactic == "attack" {
 		if p.World.Command.LimitReason == "" {
-			p.World.Command.LimitReason = "tactic_attack_stationary"
+			p.World.Command.LimitReason = "tactic_" + tactic + "_stationary"
 		}
 		return cmd
 	}

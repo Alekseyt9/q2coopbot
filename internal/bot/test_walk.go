@@ -16,6 +16,16 @@ func (c *Client) testScenarioAge(frame int) int {
 	return frame - c.testTeleportSentFrame
 }
 
+func (c *Client) testWalkAge(frame int) int {
+	if c.testCombatBarrier {
+		if !c.testCombatGo {
+			return -1
+		}
+		return frame - c.testCombatGoFrame
+	}
+	return c.testScenarioAge(frame)
+}
+
 // Test walking uses normal usercmd physics; only the initial placement teleports.
 func validateTestWalk(cfg Config) (quake.Vec3, error) {
 	if cfg.TestWalkRoute && cfg.TestWalkTarget == "" {

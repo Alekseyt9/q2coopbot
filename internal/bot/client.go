@@ -23,6 +23,7 @@ type Client struct {
 	weaponSwitch                            weaponSwitch
 	testProjectileComparison                bool
 	testCombatBarrier, testCombatGo         bool
+	testLight                               *int
 	testCombatGoFrame                       int
 	inventoryWatch                          inventoryWatch
 	testWeaponSwitchFixture                 string
@@ -752,7 +753,7 @@ func (c *Client) run(ctx context.Context) error {
 				c.planner.World.Command = CommandDecision{MoveSource: "test_scenario", AimSource: "none", LimitReason: status.State}
 			}
 			if !safetyStop && c.testTeleportSent && c.planner.World.Map == c.testTeleportMap && c.testWalkFrames > 0 {
-				age := c.testScenarioAge(frame)
+				age := c.testWalkAge(frame)
 				if age >= c.testWalkAfterFrames && age < c.testWalkAfterFrames+c.testWalkFrames {
 					cmd = testWalkCommand(c.planner.World.Snapshot, c.testWalkTarget, c.planner.World.Geometry, c.planner.Nav)
 					if c.testWalkRoute {
@@ -783,11 +784,22 @@ func (c *Client) run(ctx context.Context) error {
 				c.attacks++
 			}
 			clientSequence := c.seq
+			light, lightKnown := c.planner.World.Geometry.StaticLightLevel(c.planner.World.Snapshot.EyePoint(), c.decoder.Config, c.latestFrame)
+			cmd.Light = light
+			lightSource := "bsp_static"
+			if !lightKnown {
+				lightSource = "unavailable"
+			}
+			if c.testLight != nil {
+				cmd.Light = byte(*c.testLight)
+				lightSource = "test_override"
+			}
 			if err := c.send(quake.MovePacket(cmd, c.previous, clientSequence), false); err != nil {
 				return err
 			}
 			if c.traceFile != nil && c.framePaced {
 				entry := struct {
+					LightSource        string                 `json:"light_source"`
 					Connection         int                    `json:"connection"`
 					ObserverKill       bool                   `json:"test_observer_kill,omitempty"`
 					ObserverRespawn    bool                   `json:"test_observer_respawn,omitempty"`
@@ -853,7 +865,8 @@ func (c *Client) run(ctx context.Context) error {
 					Frame: frame, ObservationFrame: c.planner.World.Snapshot.Frame,
 					ObservationAgeMS: now.Sub(c.planner.World.Updated).Milliseconds(),
 					RelativeFrame:    frame - c.firstMoveFrame, ClientSequence: clientSequence,
-					Self: c.planner.World.Snapshot.Self, SelfEntity: c.decoder.PlayerNumber, Teammate: c.planner.World.Snapshot.Teammate,
+					LightSource: lightSource,
+					Self:        c.planner.World.Snapshot.Self, SelfEntity: c.decoder.PlayerNumber, Teammate: c.planner.World.Snapshot.Teammate,
 					TeammateEntity:    c.planner.World.Snapshot.TeammateEntity,
 					LastTeammate:      c.planner.World.Snapshot.LastTeammate,
 					TeammateAgeFrames: c.planner.World.Snapshot.TeammateAgeFrames,
