@@ -19,6 +19,7 @@ param(
     [switch]$CombatMoveTrial,
     [switch]$CombatSpacingTrial,
     [string]$CombatSpacingFixture='',
+    [switch]$WallBrakingTrial,
     [switch]$DamageTrace,
     [switch]$DisableProjectileLead,
     [switch]$ProjectileComparison,
@@ -51,6 +52,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if($WallBrakingTrial -and (!$CombatSpacingTrial -or !$CombatSpacingFixture)){throw 'Wall braking requires a combat spacing fixture'}
 if($CombatSpacingTrial -and (!$CombatMoveTrial -or $WeaponSwitchTrial -or $Map -ne 'base1' -or $TransitionMap)){throw 'Combat spacing requires the base1 combat movement scene without another weapon/map fixture'}
 if ($DisableProjectileLead -and $WeaponSwitchTrial -notlike 'projectile_*') {throw 'Baseline requires a projectile fixture'}
 if ($ProjectileComparison -and $WeaponSwitchTrial -notlike 'projectile_*') {throw 'Comparison requires a projectile fixture'}
@@ -445,6 +447,7 @@ foreach ($scale in $Timescales) {
 			if ($projectileSetup) { $botConfig.test.teleport=Format-ProjectileOrigin $projectileSetup.bot_origin; $botConfig.test.light=$projectileSetup.light }
 		}
         if($CombatSpacingFixture){
+            if($WallBrakingTrial){$botConfig.test.hold_position=$true}
             $botConfig.test.teleport_map=$projectileSetup.map
             $botConfig.test.teleport=Format-ProjectileOrigin $projectileSetup.bot_origin
             $botConfig.test.combat_barrier=$true

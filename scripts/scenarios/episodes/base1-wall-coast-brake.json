@@ -1,0 +1,16 @@
+{
+  "id": "base1-wall-coast-brake",
+  "title": "Остановка остаточного движения перед статической стеной",
+  "map": "base1",
+  "kind": "combat_spacing",
+  "status": "verified_neutral_coast_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_wall_coast_brake_trial.ps1",
+  "fixture": "scripts/scenarios/base1-wall-coast-brake.json",
+  "missing_setup": [],
+  "evidence": "workspace/artifacts/wall-coast-brake/report.json: реальный разгон300, остановка без смещения, запас14 до границы корпуса у стены на2x/1x.",
+  "expected_result": "После трёх команд разгона остановиться встречной командой, сохранив прицел, без контакта со стеной.",
+  "acceptance": {"incoming_speed": 300, "max_stopping_shift": 0.25, "max_remaining_speed": 1},
+  "remaining_validation": ["Край площадки", "Другие timestep и скорости", "Динамические препятствия и опоры", "Нестандартная серверная физика"],
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-171708-050/report.json"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "base1-edge-coast-brake",
+  "title": "Остановка остаточной инерции перед потерей полной опоры у края",
+  "map": "base1",
+  "kind": "combat_spacing",
+  "status": "verified_neutral_coast_edge_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_edge_coast_brake_trial.ps1",
+  "fixture": "scripts/scenarios/base1-edge-coast-brake.json",
+  "missing_setup": [],
+  "expected_result": "После настоящего разгона300 остановиться встречной командой на площадке, затем сохранить координаты и опору10 кадров.",
+  "acceptance": {"incoming_speed": 300, "max_stopping_shift": 0.25, "max_remaining_speed": 1, "supported_tail_frames": 10},
+  "implementation_notes": "Тормозить только нейтральную100ms-команду с полной исходной опорой и прогнозом потери опоры. Повторный прогноз корректировки должен давать смещение<=0.125 и остаточную скорость<=1; намеренное движение/прыжок не изменяются.",
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-172926-920/report.json",
+  "remaining_validation": ["Другие направления и скорости", "Уже частично нависающий корпус", "Движущиеся опоры", "Подход к краю при активной команде движения"]
+}

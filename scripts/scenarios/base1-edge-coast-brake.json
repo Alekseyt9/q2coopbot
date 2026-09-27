@@ -1,0 +1,12 @@
+{
+  "name": "base1-edge-coast-brake",
+  "map": "base1",
+  "bot_origin": [490, 140, -39.875],
+  "actor_origin": [490, 280, -39.875],
+  "target_class": "monster_parasite",
+  "target_origin": [200, -224, 24],
+  "bot_run_in_target": [380, 140, -39.875],
+  "bot_run_in_frames": 1,
+  "light": null,
+  "scope": "One physical westward command then hold at x=460; neutral coast would lose full footprint support"
+}

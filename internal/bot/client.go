@@ -784,6 +784,14 @@ func (c *Client) run(ctx context.Context) error {
 					c.frameGaps += frame - c.lastMoveFrame - 1
 				}
 			}
+			if c.framePaced && !safetyStop && !c.idle && c.planner.elevator == nil && c.planner.button == nil && c.planner.jump == nil {
+				if braked, ok := brakeGroundCoast(c.planner.World.Snapshot, cmd, c.planner.World.Geometry); ok {
+					input := cmd
+					c.planner.World.Command.BrakeInput = &input
+					cmd = braked
+					c.planner.World.Command.MoveSource = "ground_coast_brake"
+				}
+			}
 			if cmd.Buttons&1 != 0 {
 				c.attacks++
 			}

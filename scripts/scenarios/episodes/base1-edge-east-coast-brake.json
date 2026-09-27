@@ -1,0 +1,15 @@
+{
+  "id": "base1-edge-east-coast-brake",
+  "title": "Торможение у края на восток с прицелом под углом к скорости",
+  "map": "base1",
+  "kind": "combat_spacing",
+  "status": "verified_east_coast_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_edge_east_coast_brake_trial.ps1",
+  "fixture": "scripts/scenarios/base1-edge-east-coast-brake.json",
+  "missing_setup": [],
+  "expected_result": "Остановиться после восточного разгона300, сохранив прицел/кнопки и полную опору10 кадров.",
+  "acceptance": {"incoming_speed": 300, "max_stopping_shift": 0.25, "max_remaining_speed": 1, "max_view_velocity_alignment": 0.95, "aim_preserved": true},
+  "verification_report": "workspace/artifacts/edge-east-coast-brake/report.json",
+  "remaining_validation": ["Север/юг и диагональное движение", "Движущиеся двери и опоры", "Активная команда движения к краю"]
+}

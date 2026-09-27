@@ -8,6 +8,7 @@ import (
 
 // CommandDecision records which controller supplied each part of a usercmd.
 type CommandDecision struct {
+	BrakeInput      *quake.UserCmd `json:"brake_input,omitempty"`
 	RetreatUrgent   bool           `json:"retreat_urgent,omitempty"`
 	CombatSpacing   *CombatSpacing `json:"combat_spacing,omitempty"`
 	AimErrorDegrees float64        `json:"aim_error_degrees,omitempty"`

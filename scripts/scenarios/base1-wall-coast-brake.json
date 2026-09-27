@@ -1,0 +1,12 @@
+{
+  "name": "base1-wall-coast-brake",
+  "map": "base1",
+  "bot_origin": [56, -224, 24.125],
+  "actor_origin": [32, -352, 24.125],
+  "target_class": "monster_parasite",
+  "target_origin": [200, -224, 24],
+  "bot_run_in_target": [-100, -224, 24.125],
+  "bot_run_in_frames": 3,
+  "light": null,
+  "scope": "Three physical westward commands then hold; incoming speed300 at x=-34, wall hull boundary x=-48"
+}

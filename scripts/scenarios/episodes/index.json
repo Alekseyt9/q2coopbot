@@ -52,6 +52,9 @@
     "base1-moving-teammate-fire-guard.json",
     "base1-projectile-teammate-crossing.json",
     "base1-parasite-run-in.json",
-    "base1-firing-lane-stall.json"
+    "base1-firing-lane-stall.json",
+    "base1-wall-coast-brake.json",
+    "base1-edge-coast-brake.json",
+    "base1-edge-east-coast-brake.json"
   ]
 }
