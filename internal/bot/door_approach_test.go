@@ -8,6 +8,15 @@ import (
 	"q2coopbot/internal/quake"
 )
 
+func TestSetupHoldDoesNotAccumulateStuckRecovery(t *testing.T) {
+	p := &Planner{GameClock: true, testSetupHold: true, routeKnown: true, failures: 4, detourUntil: time.Unix(1000, 0), World: World{Map: "test"}}
+	s := quake.Snapshot{Map: "test", Frame: 140, Health: 74, Self: quake.Vec3{110, -243, 24}}
+	p.update(s, "")
+	if p.routeKnown || p.failures != 0 || !p.detourUntil.IsZero() || !p.lastProgress.Equal(p.navigationNow(140)) {
+		t.Fatal("release inherits a route or a stuck recovery from setup")
+	}
+}
+
 // Captured stalled frame 240 from episode-regressions-20260927-013504-479.
 func TestBunk1OpenDoorShortWaypoint(t *testing.T) {
 	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")

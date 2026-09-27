@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "name": "base1-health-memory-natural",
+  "map": "base1",
+  "start_frame": 40,
+  "game_frames": 250,
+  "bot_release_frame": 100,
+  "bot_origin": [
+    1128,
+    350,
+    -31.875
+  ],
+  "bot_release_origin": [
+    1235,
+    192,
+    -41.875
+  ],
+  "actor_origin": [
+    1184,
+    -96,
+    -31.875
+  ],
+  "bot_health": 40,
+  "bot_invulnerable": true,
+  "expect": {},
+  "steps": [
+    {
+      "id": "take-first-stim",
+      "action": "wait",
+      "frames": 10
+    },
+    {
+      "timeout_frames": 10,
+      "id": "take-second-stim",
+      "action": "place",
+      "target": [
+        1128,
+        -96,
+        -31.875
+      ]
+    },
+    {
+      "id": "consume-second-stim",
+      "action": "wait",
+      "frames": 10
+    },
+    {
+      "timeout_frames": 10,
+      "id": "wait-near-corner",
+      "action": "place",
+      "target": [
+        1320,
+        192,
+        -31.875
+      ]
+    },
+    {
+      "id": "wait-for-memory-treatment",
+      "action": "wait",
+      "frames": 160
+    }
+  ]
+}
+

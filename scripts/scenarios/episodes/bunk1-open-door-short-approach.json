@@ -2,7 +2,7 @@
   "id": "bunk1-open-door-short-approach",
   "title": "Короткая точка маршрута между открытыми створками",
   "map": "bunk1",
-  "status": "open",
+  "status": "verified_1x_2x",
   "reproduction": "ready",
   "scenario": "scripts/scenarios/bunk1-open-door-short-approach.json",
   "evidence": "workspace/artifacts/episode-regressions-20260927-013504-479/bunk1-stuck-20260926-183318-x2/scale-2-port-29410-trace.jsonl frame240",
@@ -79,6 +79,10 @@
     "sha256": "4BAEC5D9CE778B499D3583533C40BC74C2D5152A1A1851F1E3A4822ED0E8DB61",
     "path": "workspace/runtime/q2go/baseq2/maps/bunk1.aas"
   },
-  "fix_notes": "Проверять короткий подход16 единиц полным корпусом и ограничивать скорость80; старый guard40 запрещал движение до точки поворота.",
-  "verification": ""
+  "fix_notes": "Проверять короткий подход16 единиц полным корпусом и ограничивать скорость80; старый guard40 запрещал движение до точки поворота. 27.09: устранена блокировка короткой точки перед поворотом (40-unit lookahead пересекал боковую створку за целью). При полностью проверенном16-unit шаге скорость ограничена80. Точный старт принят на1x/2x, включая обязательный door_short_approach; повторный2x с потерей frame259 отклонён и отдельно успешно повторён. Скрытая траектория ушедшего игрока не принята.",
+  "verification": "workspace/artifacts/episode-regressions-20260927-024132-552/report.json",
+  "repeat_verification": [
+    "workspace/artifacts/episode-regressions-20260927-024304-970/report.json",
+    "workspace/artifacts/episode-regressions-20260927-024555-757/report.json"
+  ]
 }

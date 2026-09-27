@@ -1,0 +1,57 @@
+{
+  "id": "base1-health-memory-natural",
+  "title": "Выбор аптечки по памяти после естественной потери наблюдения за поворотом",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "map": "base1",
+  "scenario": "scripts/scenarios/base1-health-memory-natural.json",
+  "evidence": "Подготовленный старт: наблюдение аптечки, серверная постановка за поворотом, выпуск бота. Маски наблюдений нет. Соседние стимпаки заранее подбирает актор.",
+  "symptom": "Нужно подтвердить новый выбор отсутствующей в текущем снимке аптечки, а не продолжение видимой цели.",
+  "missing_setup": [],
+  "expected_result": "Новая цель лечения из unknown-памяти, повторное наблюдение того же предмета, рост HP возле него и возврат к игроку.",
+  "acceptance": {
+    "natural_health_memory": true,
+    "min_health": 50,
+    "goal": "cover_teammate",
+    "min": [
+      1220,
+      150,
+      -65
+    ],
+    "max": [
+      1320,
+      260,
+      -15
+    ],
+    "follow_after_event": false,
+    "setup_checkpoints": [
+      {
+        "id": "observing-alcove",
+        "min_frame": 45,
+        "max_frame": 50,
+        "self": [
+          1128,
+          350,
+          -31.875
+        ]
+      },
+      {
+        "id": "behind-corner-before-release",
+        "min_frame": 99,
+        "max_frame": 100,
+        "self": [
+          1235,
+          192,
+          -31.875
+        ],
+        "teammate": [
+          1320,
+          223,
+          -57.75
+        ]
+      }
+    ]
+  },
+  "verification": "workspace/artifacts/episode-regressions-20260927-025552-381/report.json",
+  "verification_notes": "На обеих скоростях: frame100 новый recover_health при отсутствии entity271; unknown/attempted и последнее наблюдение95. Повторное наблюдение101, лечение40→50 на113, cover_teammate145. Подготовленная постановка за поворотом; самостоятельный уход и получение урона в эту проверку не входят."
+}

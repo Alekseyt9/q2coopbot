@@ -760,6 +760,7 @@ func (c *Client) run(ctx context.Context) error {
 					Route              []quake.Waypoint       `json:"route,omitempty"`
 					Pickups            []quake.Object         `json:"pickups,omitempty"`
 					Pickup             *PickupAttempt         `json:"pickup,omitempty"`
+					ResourceYield      *ResourceYield         `json:"resource_yield,omitempty"`
 					Resources          []ResourceMemory       `json:"resource_memory,omitempty"`
 					TestHealthMasked   bool                   `json:"test_health_masked,omitempty"`
 					Scenario           *harness.Status        `json:"scenario,omitempty"`
@@ -797,6 +798,7 @@ func (c *Client) run(ctx context.Context) error {
 					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
 					Route: c.planner.World.Route, Pickups: c.planner.World.Snapshot.Pickups,
 					Pickup:           c.planner.World.Pickup,
+					ResourceYield:    c.planner.World.ResourceYield,
 					Resources:        c.planner.resourceMemory(),
 					TestHealthMasked: c.testHealthMasked(c.planner.World.Snapshot),
 					Scenario:         c.scenarioStatus(),

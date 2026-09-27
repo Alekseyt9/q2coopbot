@@ -7,6 +7,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'check_episode_setup.ps1')
+. (Join-Path $PSScriptRoot 'check_natural_health_memory.ps1')
 $repo = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'read_episode_registry.ps1')
 $registry = Read-EpisodeRegistry (Join-Path $repo 'scripts/scenarios/episodes/index.json')
@@ -72,6 +73,22 @@ try {
                 $accept = $episode.acceptance
 				Assert-EpisodeSetup $rows $accept
 				$stageFrame = -1
+				if ($accept.armor_yield) {
+					$yield=@($rows|Where-Object { $_.resource_yield.class -eq $accept.armor_yield -and $_.resource_yield.reason -eq 'teammate_closer' -and $_.health -gt 0 }|Select-Object -First 1)
+					if (!$yield.Count) {throw 'Armor yield not observed'}
+					$entity=$yield[0].resource_yield.entity
+					$item=@($yield[0].pickups|Where-Object id -eq $entity)
+					if ($item.Count -ne 1) {throw 'Yielded armor not visible'}
+					$actorRows=@(Get-Content (Join-Path $trial "scale-$scale-port-$Port-human-trace.jsonl")|ConvertFrom-Json)
+					$before=@($actorRows|Where-Object { $_.frame -le $yield[0].frame }|Select-Object -Last 1)
+					if (!$before.Count -or $before[0].armor -ne 0 -or @($rows|Where-Object { $_.armor -gt 0 -or ($_.pickup.entity -eq $entity -and $_.pickup.state -in @('approach','confirmed')) }).Count) {throw 'Bot competed for yielded armor or invalid actor baseline'}
+					$gain=@($actorRows|Where-Object { $_.frame -gt $yield[0].frame -and $_.armor -ge 25 -and [math]::Abs($_.self[0]-$item[0].origin[0]) -lt 48 -and [math]::Abs($_.self[1]-$item[0].origin[1]) -lt 48 -and [math]::Abs($_.self[2]-$item[0].origin[2]-9.125) -lt 32 }|Select-Object -First 1)
+					if (!$gain.Count) {throw 'Actor pickup of yielded armor not confirmed'}
+					$stageFrame=$gain[0].frame
+				}
+				if ($accept.natural_health_memory) {
+					$stageFrame = Assert-NaturalHealthMemory $rows $accept.min_health
+				}
 				if ($accept.required_move_reason) {
 					$moveEvent=@($rows|Where-Object { $_.arbitration.move_limit_reason -eq $accept.required_move_reason -and $_.health -gt 0 -and ($_.sent_command.Forward -ne 0 -or $_.sent_command.Side -ne 0) }|Select-Object -First 1)
 					if (!$moveEvent.Count) {throw 'Required guarded movement not observed'}

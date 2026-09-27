@@ -94,6 +94,7 @@ func (p *Planner) finishPickup(s quake.Snapshot, state string) {
 	p.routeKnown = false
 }
 func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
+	p.World.ResourceYield = nil
 	allowed := !p.testSetupHold && s.Health >= 45 && s.Teammate != nil && quake.Horizontal(s.Self, *s.Teammate) < 384 &&
 		(p.World.Goal == "follow_teammate" || p.World.Goal == "cover_teammate") && p.elevator == nil && p.button == nil && p.jump == nil
 	if p.pickup != nil {
@@ -114,6 +115,10 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 			}
 		}
 		if visible {
+			if p.yieldPickup(s, t.attempt.Entity, t.attempt.Class, t.attempt.Target) {
+				p.finishPickup(s, "yielded")
+				return quake.Vec3{}, false
+			}
 			t.missing = 0
 		} else if t.missing == 0 {
 			t.missing = s.Frame
@@ -155,6 +160,9 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		}
 		cost, ok := p.resourceRoute(s.Self, at)
 		if !ok {
+			continue
+		}
+		if p.yieldPickup(s, item.ID, item.Class, at) {
 			continue
 		}
 		sp := pickupSpecs[item.Class]

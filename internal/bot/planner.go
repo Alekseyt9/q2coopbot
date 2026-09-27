@@ -13,6 +13,7 @@ import (
 )
 
 type World struct {
+	ResourceYield    *ResourceYield    `json:"resource_yield,omitempty"`
 	Pickup           *PickupAttempt    `json:"pickup,omitempty"`
 	SearchRoute      *SearchRouteCheck `json:"search_route,omitempty"`
 	Map              string            `json:"map"`
@@ -264,6 +265,7 @@ func (p *Planner) setMap(name, root string) {
 }
 func (p *Planner) update(s quake.Snapshot, root string) {
 	p.setMap(s.Map, root)
+	p.World.ResourceYield = nil
 	p.observeResources(s)
 	if p.TestHideDoor53 && s.Map == "base2" {
 		visible := make([]quake.Mover, 0, len(s.Movers))
@@ -275,6 +277,15 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		s.Movers = visible
 	}
 	now := p.navigationNow(s.Frame)
+	if p.testSetupHold {
+		// Setup may place the actor/bot or move doors. Start release with a
+		// route from the observed placement, without an artificial stuck jump.
+		p.routeKnown = false
+		p.lastSelf = s.Self
+		p.lastProgress = now
+		p.detourUntil = time.Time{}
+		p.failures = 0
+	}
 	if p.World.Geometry.HasCollision() {
 		for i := range s.Enemies {
 			from, to := s.Self, s.Enemies[i].Origin
