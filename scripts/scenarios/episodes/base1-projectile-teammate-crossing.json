@@ -1,0 +1,27 @@
+{
+  "id": "base1-projectile-teammate-crossing",
+  "title": "Снаряд попадает в тормозящего и возвращающегося напарника",
+  "map": "base1",
+  "kind": "projectile_friend",
+  "status": "verified_blaster_crossing_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_projectile_friend_trial.ps1",
+  "fixture": "scripts/scenarios/base1-projectile-teammate-crossing.json",
+  "missing_setup": [],
+  "evidence": "workspace/artifacts/projectile-friend-crossing-probe: сервер связал10HP урона напарнику с Blaster shot6. Один прогноз постоянной скорости не предотвращал попадание при торможении/развороте; промежуточная версия также дала10HP на2x/1x.",
+  "expected_result": "Отложить выстрел при прогнозируемом пересечении или неустойчивом отходе напарника от линии, затем возобновить бой без урона игрокам.",
+  "acceptance": {
+    "min_predicted_block_frames": 2,
+    "max_players_damage": 0,
+    "kills": 1,
+    "resumed_fire": true
+  },
+  "implementation_notes": "Прогноз только для Blaster/Hyperblaster: относительная траектория заряда со скоростью1000 и наблюдаемого напарника, горизонтальное движение, горизонт0.5с. При изменении скорости более8 расширяется текущая защитная область, максимум на64. Непрерывность проверяется по карте, кадрам, сущности, видимости и состоянию бота. Предсказание не является гарантией против произвольного будущего поворота. На2x/1x:5 кадров прогнозного запрета,7 обычного запрета,73 кадра возобновлённого огня,1 убийство,0 урона обоим игрокам. Реальная модель System1 не вызывалась.",
+  "remaining_validation": [
+    "Hyperblaster в живой сцене",
+    "Более дальние траектории и задержка сети",
+    "Прыжки/вертикальное движение напарника",
+    "Другие виды снарядов и несколько напарников"
+  ],
+  "verification_report": "workspace/artifacts/projectile-friend-acceptance/report.json"
+}

@@ -20,6 +20,17 @@ func TestProjectileFriendUsesCollisionTime(t *testing.T) {
 	if p.teammateEntersProjectile(s, from, to) {
 		t.Fatal("blocked departing teammate")
 	}
+	p.shotTeammateMotion.velocityChange = 180
+	if !p.teammateEntersProjectile(s, from, to) {
+		t.Fatal("ignored uncertain departing velocity")
+	}
+	friend[1] = 40
+	p.shotTeammateMotion.velocityChange = 62.5
+	if !p.teammateEntersProjectile(s, from, to) {
+		t.Fatal("released guard during continued braking")
+	}
+	friend[1] = 60
+	p.shotTeammateMotion.velocityChange = 0
 	p.shotTeammateMotion.velocity[1] = -100
 	if p.teammateEntersProjectile(s, from, to) {
 		t.Fatal("blocked crossing after bolt passes")

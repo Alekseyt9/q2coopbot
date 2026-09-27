@@ -3,6 +3,10 @@ function Read-ProjectileFixture([string]$Path) {
     if($f.map -ne 'base1' -or $f.target_class -notin @('monster_flyer','monster_parasite')){throw 'Unsupported combat fixture map/class'}
     if(!$f.PSObject.Properties['light'] -or ($null -ne $f.light -and ($f.light -isnot [long] -and $f.light -isnot [int] -or $f.light -lt 0 -or $f.light -gt 255))){throw 'Fixture light must be null (BSP) or integer 0..255'}
     $coordinates=@('bot_origin','actor_origin','target_origin')
+    if($f.PSObject.Properties['bot_run_in_target']){
+        $coordinates+='bot_run_in_target'
+        if(!$f.PSObject.Properties['bot_run_in_frames'] -or ($f.bot_run_in_frames -isnot [int] -and $f.bot_run_in_frames -isnot [long]) -or $f.bot_run_in_frames -lt 1 -or $f.bot_run_in_frames -gt 5){throw 'Run-in requires1..5 frames'}
+    } elseif($f.PSObject.Properties['bot_run_in_frames']){throw 'Run-in requires target'}
     if($f.PSObject.Properties['second_target_origin']){$coordinates+='second_target_origin'}
     if($f.PSObject.Properties['actor_walk_target']){
         $coordinates+='actor_walk_target'

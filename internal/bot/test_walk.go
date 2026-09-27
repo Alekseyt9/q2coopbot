@@ -28,6 +28,12 @@ func (c *Client) testWalkAge(frame int) int {
 
 // Test walking uses normal usercmd physics; only the initial placement teleports.
 func validateTestWalk(cfg Config) (quake.Vec3, error) {
+	if cfg.TestWalkRunIn {
+		if !cfg.FramePaced || cfg.Idle || !cfg.TestCombatBarrier || cfg.TestTeleport == "" || cfg.TestWalkTarget == "" || cfg.TestWalkAfterFrames != 0 || cfg.TestWalkFrames < 1 || cfg.TestWalkFrames > 5 || cfg.TestWalkRoute || cfg.TestTeleportAfter != "" || cfg.TestLineCross {
+			return quake.Vec3{}, fmt.Errorf("test.walk_run_in requires active frame-paced combat barrier, initial teleport, 1..5 immediate straight walk frames")
+		}
+		return parseTestTeleport(cfg.TestWalkTarget)
+	}
 	if cfg.TestWalkRoute && cfg.TestWalkTarget == "" {
 		return quake.Vec3{}, fmt.Errorf("test.walk_route requires test.walk_target")
 	}

@@ -55,7 +55,7 @@ func (p *Planner) teammateEntersProjectile(s quake.Snapshot, from, to quake.Vec3
 	}
 	// Braking or turning invalidates the departing-player prediction. Temporarily
 	// widen the current body envelope; release it when observed motion settles.
-	if m.velocityChange > 80 {
+	if m.velocityChange > 8 {
 		for i := range delta {
 			delta[i] = (to[i] - from[i]) * 1000 / d * flight
 		}

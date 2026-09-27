@@ -62,6 +62,7 @@ if($ProjectileFixture){
     $projectileSetup=Read-ProjectileFixture $ProjectileFixture
     if($projectileSetup.PSObject.Properties['second_target_origin']){throw 'Second target requires a combat spacing fixture'}
     if($projectileSetup.PSObject.Properties['actor_walk_target']){throw 'Moving actor requires a combat spacing fixture'}
+    if($projectileSetup.PSObject.Properties['bot_run_in_target']){throw 'Run-in requires a combat spacing fixture'}
 }
 if($CombatSpacingFixture){
     if(!$CombatSpacingTrial -or !$SynchronizedStart -or $ProjectileFixture){throw 'Spacing fixture requires synchronized spacing trial only'}
@@ -448,6 +449,12 @@ foreach ($scale in $Timescales) {
             $botConfig.test.teleport=Format-ProjectileOrigin $projectileSetup.bot_origin
             $botConfig.test.combat_barrier=$true
             $botConfig.test.light=$projectileSetup.light
+            if($projectileSetup.PSObject.Properties['bot_run_in_target']){
+                $botConfig.test.walk_run_in=$true
+                $botConfig.test.walk_target=Format-ProjectileOrigin $projectileSetup.bot_run_in_target
+                $botConfig.test.walk_after_frames=0
+                $botConfig.test.walk_frames=[int]$projectileSetup.bot_run_in_frames
+            }
             if($projectileSetup.PSObject.Properties['second_target_origin']){
                 $botConfig.test.spawn_map=$projectileSetup.map
                 $botConfig.test.spawn_soldier=Format-ProjectileOrigin $projectileSetup.second_target_origin

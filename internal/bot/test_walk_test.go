@@ -42,6 +42,22 @@ func TestCombatWalkWaitsForReleaseAndUsesReleaseClock(t *testing.T) {
 	}
 }
 
+func TestCombatRunInRequiresBoundedExplicitFixture(t *testing.T) {
+	valid := Config{FramePaced: true, TestCombatBarrier: true, TestWalkRunIn: true, TestTeleport: "32,-224,24", TestWalkTarget: "160,-224,24", TestWalkFrames: 3}
+	if _, err := validateTestWalk(valid); err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []func(*Config){
+		func(c *Config) { c.TestCombatBarrier = false }, func(c *Config) { c.Idle = true }, func(c *Config) { c.TestWalkFrames = 6 }, func(c *Config) { c.TestWalkAfterFrames = 1 }, func(c *Config) { c.TestWalkRoute = true }, func(c *Config) { c.TestWalkTarget = "" },
+	} {
+		c := valid
+		change(&c)
+		if _, err := validateTestWalk(c); err == nil {
+			t.Fatalf("accepted invalid run-in: %+v", c)
+		}
+	}
+}
+
 func TestRoutePreflightReasons(t *testing.T) {
 	s := quake.Snapshot{Map: "test", Frame: 40, Health: 100, OnGround: true}
 	p := testWalkPath{}

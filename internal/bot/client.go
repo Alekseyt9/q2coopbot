@@ -113,6 +113,7 @@ type Client struct {
 	testHoldPosition                        bool
 	testWalkTarget                          quake.Vec3
 	testWalkRoute                           bool
+	testWalkRunIn                           bool
 	testWalkPath                            testWalkPath
 	testWalkAfterFrames                     int
 	testWalkFrames                          int
@@ -760,6 +761,9 @@ func (c *Client) run(ctx context.Context) error {
 						cmd = c.testWalkPath.command(c.planner.World.Snapshot, c.testWalkTarget, c.planner.World.Geometry, c.planner.Nav)
 					}
 					c.planner.World.Command = CommandDecision{MoveSource: "test_walk", AimSource: "test_walk"}
+					if c.testWalkRunIn {
+						c.planner.World.Command.MoveSource = "test_combat_run_in"
+					}
 				}
 			}
 			if c.testTeleportAfterSent && (c.testJumpAfterTeleportFrames > 0 &&

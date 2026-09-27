@@ -49,6 +49,7 @@
     "combat-spacing-safe-retreat.json",
     "base1-parasite-firing-position.json",
     "base1-parasite-group-retreat.json",
-    "base1-moving-teammate-fire-guard.json"
+    "base1-moving-teammate-fire-guard.json",
+    "base1-projectile-teammate-crossing.json"
   ]
 }
