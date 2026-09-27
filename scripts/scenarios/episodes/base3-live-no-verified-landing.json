@@ -2,12 +2,14 @@
   "id": "base3-live-no-verified-landing",
   "title": "Бот останавливается при следовании: не подтверждена площадка",
   "map": "base3",
-  "status": "confirmed_live",
+  "status": "verified_fixture_parallel_2x",
   "reproduction": "observation_only",
   "evidence": "workspace/artifacts/live-stuck-20260927-221000/bot-full.jsonl",
   "observed_failure": "Последние 200 кадров трассы: no_verified_landing. На кадре2014 бот [606.125,1106.125,-807.875], скорость0, здоровье97; видимый напарник [922.75,699,-807.875]. Цель follow_teammate, navigation direct_clear, движение заблокировано.",
   "expected_result": "Найти безопасный обход или корректный переход к напарнику без бесконечного ожидания и без отключения проверки опоры.",
   "missing_setup": [
-    "Воспроизводимая сцена с геометрией и начальным состоянием; определить причину отказа проверки опоры"
-  ]
+    "Включение специализированной проверки прибытия в общий runner; повтор сцены с боем"
+  ],
+  "verification": "workspace/artifacts/scenario-suite-20260927-223220-299/suite-summary.json",
+  "diagnosis": "Без AAS direct_clear вёл в опасный шаг; с полным AAS оба прогона от исходной позиции дошли к напарнику, здоровье97. Есть jump_missed, но без ущерба и зависания. Проверено без боевых актёров."
 }

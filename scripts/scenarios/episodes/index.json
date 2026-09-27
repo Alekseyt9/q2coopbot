@@ -80,6 +80,7 @@
     "base3-live-no-verified-landing.json",
     "base3-live-missed-ammo.json",
     "base3-live-missed-shotgun.json",
-    "base3-live-fire-at-dead-monster.json"
+    "base3-live-fire-at-dead-monster.json",
+    "base2-respawn-hidden-regroup.json"
   ]
 }

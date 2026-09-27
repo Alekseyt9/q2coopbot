@@ -20,6 +20,8 @@ import (
 
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
+	MemoryFile                          string
+	MemorySession                       string
 	TestWeaponSwitchFixture             string
 	TestDisableProjectileLead           bool
 	TestProjectileComparison            bool
@@ -309,6 +311,7 @@ func Run(ctx context.Context, cfg Config) error {
 		conn:          conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
 		decoder: quake.NewDecoder(), planner: &Planner{AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53, TestDisableProjectileLead: cfg.TestDisableProjectileLead},
 		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name,
+		memoryFile: cfg.MemoryFile, memorySession: cfg.MemorySession,
 		idle: cfg.Idle, duration: cfg.Duration, framePaced: cfg.FramePaced, gameFrames: cfg.GameFrames,
 		exitOnReconnect: cfg.ExitOnReconnect, testChangeMap: cfg.TestChangeMap,
 		testChangeAfter: cfg.TestChangeAfter, testRconPassword: cfg.TestRCONPassword,

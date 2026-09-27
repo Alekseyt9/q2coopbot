@@ -28,7 +28,8 @@
             "id": "wait-for-return",
             "frames": 430
           }
-        ]
+        ],
+        "map_entry": "base1"
       },
       "observer_respawn_cycle": {
         "recovery_frames": 300,
@@ -62,7 +63,8 @@
             "id": "wait-for-return",
             "frames": 430
           }
-        ]
+        ],
+        "map_entry": "base1"
       },
       "observer_respawn_cycle": {
         "recovery_frames": 300,

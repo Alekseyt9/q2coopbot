@@ -98,9 +98,8 @@ type Planner struct {
 	teammateSoundCue          *TeammateSoundCue
 	teammateEvidence          *TeammateEvidence
 	respawnRegroup            *respawnRegroup
+	deathPoint                *quake.Vec3
 	machinegunBurst           machinegunBurst
-	// Experimental until the long return route passes its live acceptance.
-	testRespawnRegroup bool
 }
 
 // setTestGroundEdgeGoal bypasses route selection only for the live edge fixture.
@@ -205,6 +204,7 @@ func (p *Planner) setMap(name, root string) {
 	p.routeKnown = false
 	p.elevator = nil
 	p.respawnRegroup = nil
+	p.deathPoint = nil
 	p.probeTarget = nil
 	p.searchAttempt = nil
 	p.probeAttempted = false

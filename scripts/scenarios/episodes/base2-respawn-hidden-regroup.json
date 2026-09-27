@@ -1,0 +1,18 @@
+{
+  "acceptance": {
+    "real_death": true,
+    "hidden_return": true,
+    "initial_distance_above": 640,
+    "arrival_within_frames": 300
+  },
+  "missing_setup": [],
+  "status": "verified_parallel_2x",
+  "expected_result": "После естественного респавна идти по AAS к последней видимой позиции, вновь увидеть напарника и вернуться к сопровождению.",
+  "evidence": "workspace/artifacts/scenario-suite-20260927-223728-985/suite-summary.json",
+  "scenario": "scripts/run_respawn_regroup_trial.ps1",
+  "reproduction": "ready",
+  "title": "Возвращение к последней видимой позиции игрока после смерти",
+  "kind": "combat_spacing",
+  "map": "base2",
+  "id": "base2-respawn-hidden-regroup"
+}

@@ -20,6 +20,11 @@ import (
 )
 
 type Client struct {
+	memoryFile                              string
+	memorySession                           string
+	travelMemory                            *travelMemory
+	memoryLoaded                            bool
+	memoryWritten                           int
 	weaponSwitch                            weaponSwitch
 	testProjectileComparison                bool
 	testCombatBarrier, testCombatGo         bool
@@ -282,7 +287,10 @@ func (c *Client) handle(packet []byte) {
 				c.planner.testSetupHold = c.testSetupHoldFrames > 0 && s.Map == c.testTeleportMap &&
 					(!c.testTeleportSent || c.testScenarioAge(s.Frame) < c.testSetupHoldFrames)
 				s = c.maskTestHealth(s)
+				c.prepareTravelMemory(s)
+				returning := c.planner.respawnRegroup != nil
 				c.planner.update(s, c.root)
+				c.saveTravelMemory(s, returning)
 			}
 			if c.frames%50 == 0 {
 				w := c.planner.World
@@ -429,7 +437,11 @@ func (c *Client) run(ctx context.Context) error {
 				c.sessionPendingMap = ""
 				continue
 			}
-			mapArg, err := transitionMapArgument(c.sessionPendingMap, c.planner.World.Map)
+			entry := c.planner.World.Map
+			if explicit := c.sessionDefinition.Phases[c.sessionPhase+1].Scenario.MapEntry; explicit != "" {
+				entry = explicit
+			}
+			mapArg, err := transitionMapArgument(c.sessionPendingMap, entry)
 			if err != nil {
 				return err
 			}

@@ -1,0 +1,28 @@
+{
+  "name": "base3-live-landing-block",
+  "bot_health": 97,
+  "steps": [
+    {
+      "action": "wait",
+      "id": "wait-for-regroup",
+      "frames": 170
+    }
+  ],
+  "bot_invulnerable": true,
+  "version": 1,
+  "start_frame": 40,
+  "bot_origin": [
+    606.125,
+    1106.125,
+    -807.875
+  ],
+  "map": "base3",
+  "expect": {},
+  "map_entry": "base2a",
+  "actor_origin": [
+    922.75,
+    699,
+    -807.875
+  ],
+  "game_frames": 220
+}

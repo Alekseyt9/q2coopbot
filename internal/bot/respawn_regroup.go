@@ -13,15 +13,28 @@ type respawnRegroup struct {
 }
 
 func (p *Planner) observeRespawnRegroup(previous, s quake.Snapshot) {
-	if s.Teammate != nil || s.LastTeammate == nil || s.LastTeammateEntity <= 0 || previous.Map != s.Map || s.Frame < previous.Frame {
+	if previous.Frame > 0 && (previous.Map != s.Map || s.Frame < previous.Frame) {
+		p.deathPoint = nil
 		p.respawnRegroup = nil
 		return
 	}
-	if p.respawnRegroup != nil && p.respawnRegroup.entity != s.LastTeammateEntity {
+	if previous.Frame > 0 && previous.Health > 0 && s.Health <= 0 {
+		point := s.Self
+		p.deathPoint = &point
+	}
+	if s.Teammate != nil {
+		p.respawnRegroup = nil
+		return
+	}
+	if p.respawnRegroup != nil && p.respawnRegroup.entity != 0 && (s.LastTeammate == nil || p.respawnRegroup.entity != s.LastTeammateEntity) {
 		p.respawnRegroup = nil
 	}
-	if p.testRespawnRegroup && previous.Frame > 0 && previous.Health <= 0 && s.Health > 0 {
-		p.respawnRegroup = &respawnRegroup{entity: s.LastTeammateEntity, target: *s.LastTeammate}
+	if previous.Frame > 0 && previous.Health <= 0 && s.Health > 0 {
+		if s.LastTeammate != nil && s.LastTeammateEntity > 0 {
+			p.respawnRegroup = &respawnRegroup{entity: s.LastTeammateEntity, target: *s.LastTeammate}
+		} else if p.deathPoint != nil {
+			p.respawnRegroup = &respawnRegroup{target: *p.deathPoint}
+		}
 	}
 }
 
@@ -62,7 +75,7 @@ func (p *Planner) regroupEntryRoute(s quake.Snapshot, goal quake.Vec3) ([]quake.
 			if seen[at] || math.Abs(at[0]-s.Self[0]) > 128 || math.Abs(at[1]-s.Self[1]) > 128 {
 				continue
 			}
-			if !g.PlayerMoveClear(current.at, at) || !g.CrouchStepClear(current.at, dir[0], dir[1], 16) {
+			if !g.PlayerMoveClear(current.at, at) || !regroupGroundSupported(g, current.at, dir) {
 				continue
 			}
 			if _, reason := g.DoorMoveBlockStep(s.Movers, current.at, dir[0], dir[1], 16); reason != "" {
@@ -87,4 +100,20 @@ func (p *Planner) regroupEntryRoute(s quake.Snapshot, goal quake.Vec3) ([]quake.
 		}
 	}
 	return nil, false
+}
+
+// The collision floor can be slightly below the actual spawn support.
+// Sample a short walk with at most one ordinary step down, not the two-unit
+// flat-floor tolerance used by crouching passages. Command-time guards still
+// check the observed floor, velocity, movers and hazards on every tick.
+func regroupGroundSupported(g *quake.MapInfo, from, dir quake.Vec3) bool {
+	for d := 0.0; d <= 16; d += 2 {
+		at := from
+		at[0] += dir[0] * d
+		at[1] += dir[1] * d
+		if _, ok := g.GroundDrop(at, 18); !ok {
+			return false
+		}
+	}
+	return true
 }

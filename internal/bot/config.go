@@ -17,9 +17,11 @@ type ConfigFile struct {
 		Port int    `json:"port"`
 	} `json:"server"`
 	Client struct {
-		Name    string `json:"name"`
-		GameDir string `json:"game_dir"`
-		AASDir  string `json:"aas_dir"`
+		MemoryFile    string `json:"memory_file"`
+		MemorySession string `json:"memory_session"`
+		Name          string `json:"name"`
+		GameDir       string `json:"game_dir"`
+		AASDir        string `json:"aas_dir"`
 	} `json:"client"`
 	Run struct {
 		Duration   string `json:"duration"`
@@ -134,6 +136,11 @@ func LoadConfig(path string) (Config, error) {
 		cfg.Name = "GoCoopMate"
 	}
 	cfg.GameDir, cfg.AASDir = resolve(file.Client.GameDir), resolve(file.Client.AASDir)
+	cfg.MemoryFile = resolve(file.Client.MemoryFile)
+	cfg.MemorySession = file.Client.MemorySession
+	if cfg.MemoryFile != "" && cfg.MemorySession == "" {
+		return cfg, fmt.Errorf("client.memory_file requires a server-lifetime memory_session")
+	}
 	cfg.WorldFile, cfg.TracePath, cfg.StopFile = resolve(file.Output.WorldJSON), resolve(file.Output.TraceJSONL), resolve(file.Output.StopFile)
 	cfg.FramePaced, cfg.GameFrames = file.Run.FramePaced, file.Run.GameFrames
 	cfg.TestScenarioResult = resolve(file.Test.ScenarioResult)
