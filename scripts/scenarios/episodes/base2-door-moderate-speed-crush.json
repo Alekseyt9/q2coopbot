@@ -1,0 +1,26 @@
+{
+  "id": "base2-door-moderate-speed-crush",
+  "title": "При 160/240 безопасный выбег ошибочно разрешал опасную активную команду под дверь",
+  "map": "base2",
+  "kind": "combat_spacing",
+  "status": "verified_distance_speed_matrix_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_door_distance_speed_trial.ps1",
+  "missing_setup": [],
+  "observed_failure": "На скоростях160 и240 прогноз следующего положения двери видит опасную активную команду, но старая коррекция требует также опасного нейтрального выбега. Бот продолжает движение, получает2 урона, дверь открывается от контакта.",
+  "baseline_traces": [
+    "workspace/artifacts/door-distance-speed-probes/middle-160/scale-2-port-29950-trace.jsonl",
+    "workspace/artifacts/door-distance-speed-probes/middle-240/scale-2-port-29950-trace.jsonl"
+  ],
+  "expected_result": "Остановить опасную активную команду независимо от безопасности нейтрального выбега; сохранить прицел и кнопки, пройти матрицу дистанций/скоростей без контакта и урона.",
+  "remaining_validation": [
+    "Другие направления подхода",
+    "Движущиеся опоры",
+    "Естественный маршрут без тестовой локальной цели"
+  ],
+  "verification_report": "workspace/artifacts/door-distance-speed-verified/report.json",
+  "acceptance": {
+    "cases": 6,
+    "health_loss": 0
+  }
+}

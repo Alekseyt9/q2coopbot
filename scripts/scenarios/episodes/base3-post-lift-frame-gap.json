@@ -1,0 +1,35 @@
+{
+  "id": "base3-post-lift-frame-gap",
+  "title": "После дальнего подхода к лифту в бою пропускается кадр122",
+  "map": "base3",
+  "status": "open_observation_gap",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/base3-post-lift-frame-gap.json",
+  "missing_setup": [],
+  "observed_failure": "После завершённой посадки и выхода при последующем бое трасса переходит с кадра121 на123. Повторено при параллелизме3 и2; observation gate отклоняет прогон. Причина пока не установлена.",
+  "evidence": "workspace/artifacts/scenario-suite-20260927-184204-305/run-001/summary.json",
+  "expected_result": "Непрерывная трасса наблюдений и совпадение отправленных/применённых команд на всём эпизоде. Не ослаблять observation gate.",
+  "remaining_validation": [
+    "Локализовать пропуск в серверной отправке, клиентском декодировании или обработке кадра",
+    "Отдельная проверка после посадки"
+  ],
+  "acceptance": {
+    "required_elevator_stages": [
+      "board",
+      "ride",
+      "exit",
+      "completed"
+    ],
+    "goal": "cover_teammate",
+    "min": [
+      710,
+      -150,
+      -250
+    ],
+    "max": [
+      855,
+      -20,
+      -210
+    ]
+  }
+}

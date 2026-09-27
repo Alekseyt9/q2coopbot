@@ -27,6 +27,20 @@ func TestLoadConfigResolvesPathsAndDefaults(t *testing.T) {
 	}
 }
 
+func TestDoorProbeSpeedConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bot.json")
+	if err := os.WriteFile(path, []byte(`{"test":{"door_pass_probe":true,"door_pass_speed":160}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.TestDoorPassProbe || cfg.TestDoorPassSpeed != 160 {
+		t.Fatal("door probe speed not forwarded")
+	}
+}
+
 func TestLoadConfigRejectsTyposAndTrailingData(t *testing.T) {
 	for _, tc := range []struct {
 		name, data, want string

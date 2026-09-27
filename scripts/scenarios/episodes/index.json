@@ -63,6 +63,9 @@
     "base2-closing-door-approach.json",
     "base2-closing-door-stop.json",
     "base2-door-coast-contact.json",
-    "base2-door-closing-crush.json"
+    "base2-door-closing-crush.json",
+    "base2-door-moderate-speed-crush.json",
+    "base3-elevator-boarding.json",
+    "base3-post-lift-frame-gap.json"
   ]
 }

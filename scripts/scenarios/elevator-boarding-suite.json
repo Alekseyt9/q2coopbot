@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "repetitions": 1,
+  "timescales": [
+    2
+  ],
+  "runtime_root": "../../workspace/runtime/q2go",
+  "base_port": 29970,
+  "scenarios": [
+    "base3-elevator-board-near.json",
+    "base3-elevator-board-far.json",
+    "base3-elevator-board-late.json"
+  ],
+  "parallelism": 2,
+  "tail_frames": 5
+}

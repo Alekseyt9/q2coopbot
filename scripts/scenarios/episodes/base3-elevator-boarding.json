@@ -1,0 +1,25 @@
+{
+  "id": "base3-elevator-boarding",
+  "title": "Посадка на лифт: близкий, дальний и опоздавший подход",
+  "map": "base3",
+  "kind": "combat_spacing",
+  "status": "verified_boarding_parallel_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_elevator_boarding_trial.ps1",
+  "missing_setup": [],
+  "expected_result": "Войти с неподвижного пола на платформу37, подтвердить опору и совпадающий подъём минимум30 единиц без урона. В позднем варианте дождаться возврата платформы.",
+  "verification_report": "workspace/artifacts/scenario-suite-20260927-184533-115/boarding-report.json",
+  "remaining_validation": [
+    "Длительное удержание на платформе",
+    "Проверка безопасного выхода",
+    "Сопровождение и бой после лифта"
+  ],
+  "acceptance": {
+    "min_supported_frames": 4,
+    "min_rising_frames": 3,
+    "late_wait_frames": 5,
+    "cases": 3,
+    "min_carried_height": 30,
+    "health_loss": 0
+  }
+}

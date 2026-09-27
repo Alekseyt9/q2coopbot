@@ -15,5 +15,10 @@
     "Горизонтальные и вращающиеся двери",
     "Движущиеся опоры"
   ],
-  "verification_report": "workspace/artifacts/closing-door-phases-verified/report.json"
+  "verification_report": "workspace/artifacts/closing-door-phases-verified/report.json",
+  "acceptance": {
+    "move_source": "door_coast_brake",
+    "health_loss": 0,
+    "min_hull_margin": 1
+  }
 }
