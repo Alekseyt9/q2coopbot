@@ -1,0 +1,8 @@
+{
+ "id":"base1-weapon-economy-pair","title":"Одинаковые запасы против солдата и танка",
+ "map":"base1","kind":"weapon_switch","status":"open","reproduction":"ready",
+ "scenario":"scripts/run_weapon_economy_pair_trial.ps1","acceptance":{"matched_inventory":true},"missing_setup":[],
+ "evidence":"Подготовленный одинаковый инвентарь: Blaster/Shotgun/HyperBlaster/Railgun, Cells100/Slugs10/Shells20; бот неуязвим, цель создаётся сервером в одной позиции.",
+ "symptom":"Выбор против тяжёлой цели ранее не был принят в UDP-бою; не сравнивались одинаковые запасы.",
+ "expected_result":"Солдат: Blaster и сохранение припасов. Танк: HyperBlaster и расход Cells. Для обоих наблюдается анимация смерти того же entity; отчёт сохраняет игровые секунды и расход до её наблюдения."
+}

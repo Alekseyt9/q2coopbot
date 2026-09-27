@@ -1,0 +1,19 @@
+{
+  "id": "base1-weapon-economy",
+  "title": "Экономия патронов против солдата и усиление оружия против пехотинца",
+  "map": "base1",
+  "kind": "weapon_switch",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_weapon_economy_trial.ps1",
+  "acceptance": {
+    "inventory_and_firing": true
+  },
+  "missing_setup": [],
+  "evidence": "Подготовленный серверный инвентарь и спавн противника; решения и выстрелы выполняет обычная политика бота.",
+  "symptom": "Раньше оружие менялось в основном после опустошения, без оценки класса видимой цели и стоимости выстрелов.",
+  "expected_result": "Против солдата переход Chaingun→Blaster с сохранением100 Bullets; против infantry переход Blaster→Shotgun с реальным расходом Shells. Не более3 запросов на вариант.",
+  "verification": "workspace/artifacts/weapon-economy-20260927-114501-245/report.json",
+  "regression_verification": "workspace/artifacts/weapon-switch-20260927-114534/report.json",
+  "verification_notes": "Новые варианты4/4, прежний переход при пустом оружии4/4. Экономическая ветка делает один запрос на вариант. Тяжёлые монстры и сравнение разных целей при одинаковом инвентаре остаются отдельными проверками."
+}

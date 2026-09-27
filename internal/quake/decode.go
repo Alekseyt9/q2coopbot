@@ -653,6 +653,7 @@ type Snapshot struct {
 	DeltaAngles        [3]int16        `json:"delta_angles"`
 	Enemies            []Object        `json:"enemies"`
 	Obstacles          []Object        `json:"obstacles,omitempty"`
+	Defeated           []Object        `json:"defeated,omitempty"`
 	Pickups            []Object        `json:"pickups"`
 	Movers             []Mover         `json:"movers,omitempty"`
 	Sounds             []SoundEvent    `json:"sounds,omitempty"`
@@ -725,7 +726,9 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 			// Gunner's next frame, 201, starts a live duck animation.
 			if kind == "soldier" && entity.Frame >= 272 && entity.Frame <= 474 ||
 				kind == "infantry" && entity.Frame >= 125 && entity.Frame <= 178 ||
-				kind == "gunner" && entity.Frame >= 190 && entity.Frame <= 200 {
+				kind == "gunner" && entity.Frame >= 190 && entity.Frame <= 200 ||
+				kind == "tank" && entity.Frame >= 222 && entity.Frame <= 253 {
+				s.Defeated = append(s.Defeated, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame})
 				continue
 			}
 			s.Enemies = append(s.Enemies, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame})

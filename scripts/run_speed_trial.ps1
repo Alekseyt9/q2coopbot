@@ -17,7 +17,7 @@ param(
     [switch]$SynchronizedStart,
     [switch]$ElevatorTrial,
     [switch]$CombatMoveTrial,
-	[ValidateSet('','blaster','stocked')][string]$WeaponSwitchTrial = '',
+	[ValidateSet('','blaster','stocked','economy_weak','economy_armed','economy_pair_weak','economy_pair_heavy')][string]$WeaponSwitchTrial = '',
     [switch]$ObservationGapTrial,
     [switch]$FriendlyFireTrial,
     [switch]$GroundEdgeTrial,
@@ -284,7 +284,8 @@ foreach ($scale in $Timescales) {
         if ($CombatMoveTrial -or $FriendlyFireTrial) {
             $humanConfig.test.spawn_map = 'base1'
             $humanConfig.test.spawn_soldier = '96,-200,24'
-			if ($WeaponSwitchTrial) { $humanConfig.test.spawn_class = 'monster_infantry' }
+			if ($WeaponSwitchTrial -and $WeaponSwitchTrial -notin @('economy_weak','economy_pair_weak')) { $humanConfig.test.spawn_class = 'monster_infantry' }
+			if ($WeaponSwitchTrial -eq 'economy_pair_heavy') {$humanConfig.test.spawn_class='monster_tank'}
         }
         if ($FriendlyFireTrial) {
             $humanConfig.output.trace_jsonl = $humanTracePath
@@ -373,6 +374,7 @@ foreach ($scale in $Timescales) {
         if ($FriendlyFireTrial) { $botConfig.test.hold_position = $true }
 		if ($WeaponSwitchTrial) {
 			$botConfig.test.weapon_switch_fixture = $WeaponSwitchTrial
+			if ($WeaponSwitchTrial -like 'economy_*') { $botConfig.test.invulnerable=$true }
 			$botConfig.test.teleport_map = 'base1'
 			$botConfig.test.teleport = '32,-224,24'
 		}

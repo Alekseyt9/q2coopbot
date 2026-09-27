@@ -33,3 +33,17 @@ func TestEntitySolidDeltaAndDeathObstacle(t *testing.T) {
 		t.Fatal("non-solid corpse remains an obstacle")
 	}
 }
+
+func TestTankDeathObservationDoesNotRemainCombatTarget(t *testing.T) {
+	for _, frame := range []int{221, 222, 253, 254} {
+		d := Decoder{Config: map[int]string{33: "models/monsters/tank/tris.md2"}}
+		s := d.Snapshot(Frame{Number: 1, Entities: map[int]Entity{7: {Number: 7, Model: 1, Frame: frame, Solid: 2080}}})
+		dead := frame >= 222 && frame <= 253
+		if (len(s.Defeated) == 1) != dead || (len(s.Enemies) == 0) != dead || len(s.Obstacles) != 1 {
+			t.Fatalf("frame%d: %+v", frame, s)
+		}
+		if dead && s.Defeated[0].ID != 7 {
+			t.Fatal("death lost entity identity")
+		}
+	}
+}

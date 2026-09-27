@@ -1,0 +1,42 @@
+{
+  "id": "base1-ammo-yield",
+  "title": "Уступка патронов напарнику с подтверждением его инвентаря",
+  "map": "base1",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/base1-ammo-yield.json",
+  "evidence": "Подготовленный сценарий: бот самостоятельно берёт Shotgun, затем уступает коробку Shells игроку; actor_inventory включён только для приёмки.",
+  "symptom": "Уступка патронов ранее не имела отдельной UDP-приёмки.",
+  "missing_setup": [],
+  "expected_result": "Нужные боту патроны уступлены; после уступки нет повторного подхода к этой коробке, игрок получает10 Shells, бот возвращается к сопровождению.",
+  "acceptance": {
+    "ammo_yield": {
+      "class": "ammo_shells",
+      "name": "Shells",
+      "weapon": "Shotgun",
+      "origin": [
+        928,
+        24,
+        -176.875
+      ],
+      "gain": 10
+    },
+    "inventory_pickups": [
+      "weapon_shotgun"
+    ],
+    "goal": "cover_teammate",
+    "min": [
+      840,
+      -40,
+      -185
+    ],
+    "max": [
+      1030,
+      140,
+      -140
+    ],
+    "follow_after_event": false
+  },
+  "verification": "workspace/artifacts/episode-regressions-20260927-113730-947/report.json",
+  "verification_notes": "Принято на2x/1x. Бот владеет Shotgun, уступает Shells; актор получает10 в свежем серверном инвентаре. Прежний сбор оружия/патронов и уступка брони также прошли: общий пакет6/6."
+}

@@ -20,6 +20,7 @@ type Step struct {
 	Route   bool        `json:"route,omitempty"`
 }
 type Scenario struct {
+	ActorInventory      bool         `json:"actor_inventory,omitempty"`
 	BotReleaseOrigin    *quake.Vec3  `json:"bot_release_origin,omitempty"`
 	BotHideHealthFrames []int        `json:"bot_hide_health_frames,omitempty"`
 	BotReleaseFrame     int          `json:"bot_release_frame,omitempty"`

@@ -8,6 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'check_episode_setup.ps1')
 . (Join-Path $PSScriptRoot 'check_natural_health_memory.ps1')
+. (Join-Path $PSScriptRoot 'check_ammo_yield.ps1')
 $repo = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'read_episode_registry.ps1')
 $registry = Read-EpisodeRegistry (Join-Path $repo 'scripts/scenarios/episodes/index.json')
@@ -73,6 +74,10 @@ try {
                 $accept = $episode.acceptance
 				Assert-EpisodeSetup $rows $accept
 				$stageFrame = -1
+				if ($accept.ammo_yield) {
+					$actorRows=@(Get-Content (Join-Path $trial "scale-$scale-port-$Port-human-trace.jsonl")|ConvertFrom-Json)
+					$stageFrame=Assert-AmmoYield $rows $actorRows $accept.ammo_yield
+				}
 				if ($accept.armor_yield) {
 					$yield=@($rows|Where-Object { $_.resource_yield.class -eq $accept.armor_yield -and $_.resource_yield.reason -eq 'teammate_closer' -and $_.health -gt 0 }|Select-Object -First 1)
 					if (!$yield.Count) {throw 'Armor yield not observed'}

@@ -5,11 +5,14 @@ import "q2coopbot/internal/quake"
 // Server frames bound retries independently of wall-clock acceleration.
 // weapnext delegates inventory/ammo validation to the authoritative server.
 type weaponSwitch struct {
-	mapName                                 string
-	lastFrame, emptyAt, requestAt, attempts int
+	economyCandidate, reason                 string
+	economySince, economyAt, economyAttempts int
+	mapName                                  string
+	lastFrame, emptyAt, requestAt, attempts  int
 }
 
 func (w *weaponSwitch) command(s quake.Snapshot) string {
+	w.reason = ""
 	if w.mapName != s.Map || s.Frame < w.lastFrame || s.Health <= 0 {
 		*w = weaponSwitch{mapName: s.Map}
 	}
@@ -22,7 +25,7 @@ func (w *weaponSwitch) command(s quake.Snapshot) string {
 	}
 	if s.Weapon == "Blaster" || s.Ammo > 0 {
 		w.emptyAt, w.requestAt, w.attempts = 0, 0, 0
-		return ""
+		return w.economyCommand(s)
 	}
 	if w.emptyAt == 0 {
 		w.emptyAt = s.Frame
@@ -31,6 +34,7 @@ func (w *weaponSwitch) command(s quake.Snapshot) string {
 		return ""
 	}
 	w.requestAt = s.Frame
+	w.reason = "empty_weapon"
 	w.attempts++
 	if w.attempts == 1 {
 		return stockedWeapon(s)

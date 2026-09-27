@@ -20,120 +20,121 @@ import (
 )
 
 type Client struct {
-	weaponSwitch                     weaponSwitch
-	inventoryWatch                   inventoryWatch
-	testWeaponSwitchFixture          string
-	sessionConnection                int
-	connection                       int
-	sessionObserverCycle             observerRespawnState
-	sessionTransitionRequested       bool
-	sessionTransitionAcked           bool
-	sessionReadySent                 bool
-	sessionStartFrame                int
-	sessionSetupAt                   time.Time
-	sessionDefinition                *harness.Session
-	session                          *harness.SessionRunner
-	sessionPhase                     int
-	sessionMap                       string
-	sessionGeneration                int
-	sessionPendingMap                string
-	scenarioResultPath               string
-	scenarioTailFrames               int
-	scenarioResultSent               bool
-	scenarioCompletion               *scenarioCompletion
-	scenario                         *harness.Runner
-	scenarioPath                     testWalkPath
-	conn                             *net.UDPConn
-	address                          *net.UDPAddr
-	seq, serverSeq                   uint32
-	serverReliable                   uint32
-	qport                            uint16
-	challenge                        int
-	connected, begun                 bool
-	spawncount                       int
-	lastHandshake                    string
-	handshakeAt                      time.Time
-	decoder                          *quake.Decoder
-	pendingSounds                    []quake.SoundEvent
-	planner                          *Planner
-	root                             string
-	previous                         quake.UserCmd
-	nextMove                         time.Time
-	lastFrame                        time.Time
-	framePaced                       bool
-	gameFrames                       int
-	frameReady                       bool
-	latestFrame                      int
-	firstMoveFrame                   int
-	lastMoveFrame                    int
-	firstMoveAt                      time.Time
-	frameGaps                        int
-	suppressedFrames                 int
-	frames, moves                    int
-	attacks                          int
-	worldFile                        string
-	traceFile                        *os.File
-	stopFile                         string
-	name                             string
-	idle                             bool
-	testChangeMap                    string
-	testChangeEntry                  string
-	testInitialHealth                int
-	testInvulnerable                 bool
-	testChangeAfter                  int
-	testRconPassword                 string
-	testChangeSent                   bool
-	testChangeAt                     time.Time
-	testChangeTimedOut               bool
-	testTeleportMap                  string
-	testTeleportPosition             quake.Vec3
-	testTeleportSent                 bool
-	testTeleportSentFrame            int
-	testTeleportAfterPosition        quake.Vec3
-	testTeleportAfterFrames          int
-	testTeleportAfterSent            bool
-	testTeleportAfterSentFrame       int
-	testTeleportReturnPosition       quake.Vec3
-	testTeleportReturnAfterFrames    int
-	testTeleportReturnSent           bool
-	testJumpAfterTeleportFrames      int
-	testJumpAgainAfterTeleportFrames int
-	testSpawnMap                     string
-	testSpawnClass                   string
-	testSpawnPosition                quake.Vec3
-	testSpawnSent                    bool
-	testGapStart                     int
-	testGapFrames                    int
-	testLineCross                    bool
-	testHoldPosition                 bool
-	testWalkTarget                   quake.Vec3
-	testWalkRoute                    bool
-	testWalkPath                     testWalkPath
-	testWalkAfterFrames              int
-	testWalkFrames                   int
-	testSetupHoldFrames              int
-	testHideHealthFrames             []int
-	testScenarioFrameOrigin          int
-	testGroundEdgeProbe              bool
-	testDoorProbe                    bool
-	testDoorPassProbe                bool
-	testButtonProbe                  bool
-	testButtonAutoGoal               bool
-	testDoorPassStarted              bool
-	testLineEntered                  bool
-	testLineLeft                     bool
-	lastObservedMap                  string
-	mapChanges                       int
-	beginPending                     string
-	beginAt                          time.Time
-	reconnected                      bool
-	exitOnReconnect                  bool
-	stopOnReconnect                  bool
-	strategist                       *Strategist
-	tactician                        *Tactician
-	seenCommands                     map[string]bool
-	duration                         time.Duration
-	start                            time.Time
+	weaponSwitch                            weaponSwitch
+	inventoryWatch                          inventoryWatch
+	testWeaponSwitchFixture                 string
+	testPairReady, testPairBlasterRequested bool
+	sessionConnection                       int
+	connection                              int
+	sessionObserverCycle                    observerRespawnState
+	sessionTransitionRequested              bool
+	sessionTransitionAcked                  bool
+	sessionReadySent                        bool
+	sessionStartFrame                       int
+	sessionSetupAt                          time.Time
+	sessionDefinition                       *harness.Session
+	session                                 *harness.SessionRunner
+	sessionPhase                            int
+	sessionMap                              string
+	sessionGeneration                       int
+	sessionPendingMap                       string
+	scenarioResultPath                      string
+	scenarioTailFrames                      int
+	scenarioResultSent                      bool
+	scenarioCompletion                      *scenarioCompletion
+	scenario                                *harness.Runner
+	scenarioPath                            testWalkPath
+	conn                                    *net.UDPConn
+	address                                 *net.UDPAddr
+	seq, serverSeq                          uint32
+	serverReliable                          uint32
+	qport                                   uint16
+	challenge                               int
+	connected, begun                        bool
+	spawncount                              int
+	lastHandshake                           string
+	handshakeAt                             time.Time
+	decoder                                 *quake.Decoder
+	pendingSounds                           []quake.SoundEvent
+	planner                                 *Planner
+	root                                    string
+	previous                                quake.UserCmd
+	nextMove                                time.Time
+	lastFrame                               time.Time
+	framePaced                              bool
+	gameFrames                              int
+	frameReady                              bool
+	latestFrame                             int
+	firstMoveFrame                          int
+	lastMoveFrame                           int
+	firstMoveAt                             time.Time
+	frameGaps                               int
+	suppressedFrames                        int
+	frames, moves                           int
+	attacks                                 int
+	worldFile                               string
+	traceFile                               *os.File
+	stopFile                                string
+	name                                    string
+	idle                                    bool
+	testChangeMap                           string
+	testChangeEntry                         string
+	testInitialHealth                       int
+	testInvulnerable                        bool
+	testChangeAfter                         int
+	testRconPassword                        string
+	testChangeSent                          bool
+	testChangeAt                            time.Time
+	testChangeTimedOut                      bool
+	testTeleportMap                         string
+	testTeleportPosition                    quake.Vec3
+	testTeleportSent                        bool
+	testTeleportSentFrame                   int
+	testTeleportAfterPosition               quake.Vec3
+	testTeleportAfterFrames                 int
+	testTeleportAfterSent                   bool
+	testTeleportAfterSentFrame              int
+	testTeleportReturnPosition              quake.Vec3
+	testTeleportReturnAfterFrames           int
+	testTeleportReturnSent                  bool
+	testJumpAfterTeleportFrames             int
+	testJumpAgainAfterTeleportFrames        int
+	testSpawnMap                            string
+	testSpawnClass                          string
+	testSpawnPosition                       quake.Vec3
+	testSpawnSent                           bool
+	testGapStart                            int
+	testGapFrames                           int
+	testLineCross                           bool
+	testHoldPosition                        bool
+	testWalkTarget                          quake.Vec3
+	testWalkRoute                           bool
+	testWalkPath                            testWalkPath
+	testWalkAfterFrames                     int
+	testWalkFrames                          int
+	testSetupHoldFrames                     int
+	testHideHealthFrames                    []int
+	testScenarioFrameOrigin                 int
+	testGroundEdgeProbe                     bool
+	testDoorProbe                           bool
+	testDoorPassProbe                       bool
+	testButtonProbe                         bool
+	testButtonAutoGoal                      bool
+	testDoorPassStarted                     bool
+	testLineEntered                         bool
+	testLineLeft                            bool
+	lastObservedMap                         string
+	mapChanges                              int
+	beginPending                            string
+	beginAt                                 time.Time
+	reconnected                             bool
+	exitOnReconnect                         bool
+	stopOnReconnect                         bool
+	strategist                              *Strategist
+	tactician                               *Tactician
+	seenCommands                            map[string]bool
+	duration                                time.Duration
+	start                                   time.Time
 }
 
 func (c *Client) sendRaw(data []byte) error { _, e := c.conn.WriteToUDP(data, c.address); return e }
@@ -454,6 +455,13 @@ func (c *Client) run(ctx context.Context) error {
 					setup = append(setup, "give Machinegun", "give Bullets 20")
 				}
 				setup = append(setup, "use Shotgun")
+				if c.testWeaponSwitchFixture == "economy_weak" {
+					setup = []string{"give Chaingun", "give Bullets 100", "use Chaingun"}
+				} else if c.testWeaponSwitchFixture == "economy_armed" {
+					setup = []string{"give Shotgun", "give Shells 20", "use Blaster"}
+				} else if strings.HasPrefix(c.testWeaponSwitchFixture, "economy_pair_") {
+					setup = []string{"give HyperBlaster", "give Cells 100", "give Railgun", "give Slugs 10", "give Shotgun", "give Shells 20", "use Blaster"}
+				}
 				var payload []byte
 				for _, command := range setup {
 					payload = append(payload, 4)
@@ -577,9 +585,24 @@ func (c *Client) run(ctx context.Context) error {
 				c.planner.setTestButtonGoal()
 			}
 			cmd := c.planner.command(c.previous)
+			pairSetup := strings.HasPrefix(c.testWeaponSwitchFixture, "economy_pair_") && !c.testPairReady
+			if pairSetup && c.testTeleportSent && c.testScenarioAge(c.latestFrame) >= 10 {
+				if !c.testPairBlasterRequested {
+					if err := c.command("use Blaster"); err != nil {
+						return err
+					}
+					c.testPairBlasterRequested = true
+				} else if c.planner.World.Snapshot.Weapon == "Blaster" && c.planner.World.Snapshot.InventoryKnown && c.planner.World.Snapshot.InventoryAgeFrames <= 1 {
+					c.testPairReady = true
+					pairSetup = false
+				}
+			}
 			weaponRequest := ""
-			if !safetyStop && !c.idle && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
-				weaponRequest = c.weaponSwitch.command(c.planner.World.Snapshot)
+			observeInventory := !c.idle || c.scenario != nil && c.scenario.Scenario.ActorInventory
+			if !safetyStop && observeInventory && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
+				if !c.idle && !pairSetup {
+					weaponRequest = c.weaponSwitch.command(c.planner.World.Snapshot)
+				}
 				if request := c.inventoryWatch.command(c.planner.World.Snapshot); request != "" {
 					if err := c.command(request); err != nil {
 						return err
@@ -590,6 +613,10 @@ func (c *Client) run(ctx context.Context) error {
 						return err
 					}
 				}
+			}
+			if pairSetup {
+				cmd = quake.UserCmd{Msec: 50}
+				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_weapon_setup"}
 			}
 			if (c.testGroundEdgeProbe || c.testDoorProbe || c.testDoorPassProbe || c.testButtonProbe) && c.testTeleportSent && !c.planner.World.Snapshot.OnGround {
 				cmd = quake.UserCmd{}
@@ -751,6 +778,7 @@ func (c *Client) run(ctx context.Context) error {
 					Armor              int16                  `json:"armor"`
 					Weapon             string                 `json:"weapon"`
 					WeaponRequest      string                 `json:"weapon_request,omitempty"`
+					WeaponReason       string                 `json:"weapon_reason,omitempty"`
 					Inventory          []quake.InventoryItem  `json:"inventory,omitempty"`
 					InventoryKnown     bool                   `json:"inventory_known"`
 					InventoryAgeFrames int                    `json:"inventory_age_frames"`
@@ -760,6 +788,7 @@ func (c *Client) run(ctx context.Context) error {
 					Route              []quake.Waypoint       `json:"route,omitempty"`
 					Pickups            []quake.Object         `json:"pickups,omitempty"`
 					Obstacles          []quake.Object         `json:"obstacles,omitempty"`
+					Defeated           []quake.Object         `json:"defeated,omitempty"`
 					Pickup             *PickupAttempt         `json:"pickup,omitempty"`
 					ResourceYield      *ResourceYield         `json:"resource_yield,omitempty"`
 					Resources          []ResourceMemory       `json:"resource_memory,omitempty"`
@@ -795,11 +824,13 @@ func (c *Client) run(ctx context.Context) error {
 					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround,
 					Ammo: c.planner.World.Snapshot.Ammo, Armor: c.planner.World.Snapshot.Armor,
 					Weapon: c.planner.World.Snapshot.Weapon, WeaponRequest: weaponRequest,
-					Inventory: c.planner.World.Snapshot.Inventory, InventoryKnown: c.planner.World.Snapshot.InventoryKnown, InventoryAgeFrames: c.planner.World.Snapshot.InventoryAgeFrames,
+					WeaponReason: c.weaponSwitch.reason,
+					Inventory:    c.planner.World.Snapshot.Inventory, InventoryKnown: c.planner.World.Snapshot.InventoryKnown, InventoryAgeFrames: c.planner.World.Snapshot.InventoryAgeFrames,
 					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
 					Route: c.planner.World.Route, Pickups: c.planner.World.Snapshot.Pickups,
 					Pickup:           c.planner.World.Pickup,
 					Obstacles:        c.planner.World.Snapshot.Obstacles,
+					Defeated:         c.planner.World.Snapshot.Defeated,
 					ResourceYield:    c.planner.World.ResourceYield,
 					Resources:        c.planner.resourceMemory(),
 					TestHealthMasked: c.testHealthMasked(c.planner.World.Snapshot),

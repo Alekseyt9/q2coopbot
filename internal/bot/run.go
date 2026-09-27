@@ -133,8 +133,8 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.TestInvulnerable && (!cfg.FramePaced || cfg.TestTeleport == "") {
 		return fmt.Errorf("test invulnerability requires frame pacing and teleport")
 	}
-	if cfg.TestWeaponSwitchFixture != "" && (cfg.TestWeaponSwitchFixture != "blaster" && cfg.TestWeaponSwitchFixture != "stocked" || !cfg.FramePaced || cfg.TestTeleport == "") {
-		return fmt.Errorf("weapon_switch_fixture requires blaster/stocked, frame pacing and teleport")
+	if cfg.TestWeaponSwitchFixture != "" && (cfg.TestWeaponSwitchFixture != "blaster" && cfg.TestWeaponSwitchFixture != "stocked" && cfg.TestWeaponSwitchFixture != "economy_weak" && cfg.TestWeaponSwitchFixture != "economy_armed" && cfg.TestWeaponSwitchFixture != "economy_pair_weak" && cfg.TestWeaponSwitchFixture != "economy_pair_heavy" || !cfg.FramePaced || cfg.TestTeleport == "") {
+		return fmt.Errorf("weapon_switch_fixture requires a supported fixture, frame pacing and teleport")
 	}
 	if cfg.TestInitialHealth < 0 || cfg.TestInitialHealth > 100 || cfg.TestInitialHealth > 0 && (!cfg.FramePaced || cfg.TestTeleport == "") {
 		return fmt.Errorf("initial_health requires frame pacing, teleport, and 1..100 health")
@@ -257,7 +257,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.TestSpawnClass == "" {
 		cfg.TestSpawnClass = "monster_soldier_light"
 	}
-	if cfg.TestSpawnClass != "monster_soldier_light" && cfg.TestSpawnClass != "monster_soldier_ss" && cfg.TestSpawnClass != "monster_infantry" {
+	if cfg.TestSpawnClass != "monster_soldier_light" && cfg.TestSpawnClass != "monster_soldier_ss" && cfg.TestSpawnClass != "monster_infantry" && cfg.TestSpawnClass != "monster_tank" {
 		return fmt.Errorf("unsupported test spawn class %q", cfg.TestSpawnClass)
 	}
 	if cfg.AASDir == "" {

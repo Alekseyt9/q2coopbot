@@ -34,6 +34,9 @@
     "base1-health-after-damage.json",
     "bunk1-open-door-short-approach.json",
     "base1-health-memory-natural.json",
-    "base1-armor-yield.json"
+    "base1-armor-yield.json",
+    "base1-ammo-yield.json",
+    "base1-weapon-economy.json",
+    "base1-weapon-economy-pair.json"
   ]
 }

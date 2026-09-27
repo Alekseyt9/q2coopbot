@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "name": "base1-ammo-yield",
+  "map": "base1",
+  "start_frame": 40,
+  "game_frames": 220,
+  "actor_origin": [
+    928,
+    64,
+    -167.875
+  ],
+  "bot_origin": [
+    750,
+    -30,
+    -167.875
+  ],
+  "bot_health": 100,
+  "bot_invulnerable": true,
+  "expect": {},
+  "steps": [
+    {
+      "id": "wait-for-weapon-and-yield",
+      "action": "wait",
+      "frames": 50
+    },
+    {
+      "id": "take-shells",
+      "action": "place",
+      "target": [
+        928,
+        24,
+        -167.875
+      ],
+      "timeout_frames": 10
+    },
+    {
+      "id": "wait-for-bot",
+      "action": "wait",
+      "frames": 110
+    }
+  ],
+  "actor_inventory": true
+}
