@@ -3,8 +3,9 @@ package bot
 import (
 	"os"
 	"path/filepath"
-	"q2coopbot/internal/quake"
 	"testing"
+
+	"q2coopbot/internal/quake"
 )
 
 func TestBase1YieldThenReleaseAndInterrupt(t *testing.T) {
@@ -20,9 +21,9 @@ func TestBase1YieldThenReleaseAndInterrupt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	team := quake.Vec3{-384, -592, -79.875}
+	team := quake.Vec3{-344, -544, -79.875}
 	item := quake.Object{ID: 42, Class: "item_armor_jacket", Origin: quake.Vec3{-384, -544, -88.875}}
-	s := quake.Snapshot{Frame: 40, Health: 100, OnGround: true, InventoryKnown: true, Self: quake.Vec3{-300, -544, -79.875}, Teammate: &team, Pickups: []quake.Object{item}}
+	s := quake.Snapshot{Frame: 40, Health: 100, OnGround: true, InventoryKnown: true, Self: quake.Vec3{-300, -600, -79.875}, Teammate: &team, Pickups: []quake.Object{item}}
 	p := &Planner{Nav: n, World: World{Map: "base1", Geometry: &g, Goal: "follow_teammate"}}
 	if _, ok := p.pickupGoal(s); ok || p.World.ResourceYield == nil {
 		t.Fatal("did not yield reachable armor")
@@ -32,7 +33,7 @@ func TestBase1YieldThenReleaseAndInterrupt(t *testing.T) {
 	if _, ok := p.pickupGoal(s); !ok || p.World.ResourceYield != nil {
 		t.Fatal("armor remains reserved after teammate leaves")
 	}
-	team = quake.Vec3{-384, -592, -79.875}
+	team = quake.Vec3{-344, -544, -79.875}
 	s.Frame++
 	if _, ok := p.pickupGoal(s); ok || p.pickup != nil || p.World.Pickup.State != "yielded" {
 		t.Fatal("active approach not cancelled")
@@ -71,4 +72,3 @@ func TestTeammatePickupPriority(t *testing.T) {
 		})
 	}
 }
-

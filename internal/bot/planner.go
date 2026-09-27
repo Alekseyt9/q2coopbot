@@ -698,6 +698,15 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 			p.World.Command.MoveSource = "detour"
 		}
 	}
+	if cmd.Up == 0 {
+		if ax, ay, ok := p.resourceObstacleStep(s, dx, dy); ok {
+			dx, dy = ax, ay
+			moveSpeedLimit, probeDistance = 80, 16
+			p.World.Command.MoveSource = "resource_obstacle_avoid"
+			p.World.Command.MoveLimitReason = "resource_obstacle_avoid"
+			p.routeKnown = false
+		}
+	}
 	if s.OnGround && cmd.Up == 0 {
 		probeStep := probeDistance
 		if p.World.Goal == "touch_button" {

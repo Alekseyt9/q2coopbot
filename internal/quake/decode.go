@@ -66,6 +66,7 @@ func (r *reader) skip(n int) error { _, e := r.take(n); return e }
 
 type Entity struct {
 	Number, Model, Frame int
+	Solid                uint16
 	Origin               Vec3
 }
 type Frame struct {
@@ -225,7 +226,9 @@ func parseEntity(r *reader, number int, b uint32, old Entity) (Entity, error) {
 		}
 	}
 	if b&0x8000000 != 0 {
-		if e := r.skip(2); e != nil {
+		var e error
+		out.Solid, e = r.ushort()
+		if e != nil {
 			return out, e
 		}
 	}
@@ -649,6 +652,7 @@ type Snapshot struct {
 	Weapon             string          `json:"weapon"`
 	DeltaAngles        [3]int16        `json:"delta_angles"`
 	Enemies            []Object        `json:"enemies"`
+	Obstacles          []Object        `json:"obstacles,omitempty"`
 	Pickups            []Object        `json:"pickups"`
 	Movers             []Mover         `json:"movers,omitempty"`
 	Sounds             []SoundEvent    `json:"sounds,omitempty"`
@@ -712,6 +716,11 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 		}
 		if strings.Contains(path, "/monsters/") && Distance(entity.Origin, f.Origin) < 1024 {
 			kind := strings.SplitN(strings.SplitN(path, "/monsters/", 2)[1], "/", 2)[0]
+			// Death animations stop being combat targets before their server
+			// bounding box necessarily stops colliding with players.
+			if entity.Solid != 0 {
+				s.Obstacles = append(s.Obstacles, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame})
+			}
 			// Baseq2 monster animation ranges (game/monster/*/*.h).
 			// Gunner's next frame, 201, starts a live duck animation.
 			if kind == "soldier" && entity.Frame >= 272 && entity.Frame <= 474 ||

@@ -1,9 +1,46 @@
 {
- "id":"base1-armor-yield","title":"Уступка брони ближайшему напарнику","map":"base1",
- "status":"open","reproduction":"ready","scenario":"scripts/scenarios/base1-armor-yield.json",
- "evidence":"Контроль совместного использования по наблюдаемым позициям. HP и инвентарь игрока не передаются боту; акторская трасса используется только для проверки результата.",
- "symptom":"Бот мог начинать сбор брони прямо перед находящимся ближе игроком.",
- "missing_setup":[],"expected_result":"Бот уступает видимую броню; игрок получает25 брони, бот не начинает подбор и сохраняет сопровождение.",
- "acceptance":{"armor_yield":"item_armor_jacket","goal":"cover_teammate","follow_after_event":false,"min":[-410,-650,-95],"max":[-250,-500,-60],
- "setup_checkpoints":[{"id":"player-closer","min_frame":45,"max_frame":50,"self":[-300,-600,-79.875],"teammate":[-344,-544,-79.875]}]}
+  "id": "base1-armor-yield",
+  "title": "Уступка брони ближайшему напарнику",
+  "map": "base1",
+  "status": "verified_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/base1-armor-yield.json",
+  "evidence": "Контроль совместного использования по наблюдаемым позициям. HP и инвентарь игрока не передаются боту; акторская трасса используется только для проверки результата.",
+  "symptom": "Бот мог начинать сбор брони прямо перед находящимся ближе игроком.",
+  "missing_setup": [],
+  "expected_result": "Бот уступает видимую броню; игрок получает25 брони, бот не начинает подбор и сохраняет сопровождение.",
+  "acceptance": {
+    "armor_yield": "item_armor_jacket",
+    "goal": "cover_teammate",
+    "follow_after_event": false,
+    "min": [
+      -410,
+      -650,
+      -95
+    ],
+    "max": [
+      -250,
+      -500,
+      -60
+    ],
+    "setup_checkpoints": [
+      {
+        "id": "player-closer",
+        "min_frame": 45,
+        "max_frame": 50,
+        "self": [
+          -300,
+          -600,
+          -79.875
+        ],
+        "teammate": [
+          -344,
+          -544,
+          -79.875
+        ]
+      }
+    ]
+  },
+  "verification": "workspace/artifacts/episode-regressions-20260927-030404-516/report.json",
+  "verification_notes": "Уступка принята2/2 на1x/2x: игрок получает25 брони, бот0 и возвращается в cover. Общий отчёт7/8: отдельный сбой маршрута аптечки на2x не относится к приёмке уступки."
 }
