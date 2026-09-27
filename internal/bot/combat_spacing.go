@@ -104,42 +104,50 @@ func (p *Planner) combatRetreat(cmd quake.UserCmd, profile *CombatSpacing) quake
 	}
 	dx /= d
 	dy /= d
-	for _, angle := range []float64{0, math.Pi / 4, -math.Pi / 4, math.Pi / 2, -math.Pi / 2} {
-		x, y := dx*math.Cos(angle)-dy*math.Sin(angle), dx*math.Sin(angle)+dy*math.Cos(angle)
-		next := quake.Vec3{s.Self[0] + 16*x, s.Self[1] + 16*y, s.Self[2]}
-		if profile.Enemy == "monster_parasite" && quake.Horizontal(s.Self, enemy.Origin) >= parasiteFiringDistance && p.World.Command.AimSource == "enemy" {
-			candidate := s
-			candidate.Self = next
-			to := enemy.AimPoint()
-			if isRailgun(s.Weapon) {
-				to = railEnd(candidate.EyePoint(), to)
+	speeds := []float64{80}
+	if p.urgentRetreat.target == enemy.ID && s.Frame <= p.urgentRetreat.until && d < parasiteFiringDistance {
+		speeds = []float64{160, 80}
+		p.World.Command.RetreatUrgent = true
+	}
+	for _, speed := range speeds {
+		step := speed * 0.2
+		for _, angle := range []float64{0, math.Pi / 4, -math.Pi / 4, math.Pi / 2, -math.Pi / 2} {
+			x, y := dx*math.Cos(angle)-dy*math.Sin(angle), dx*math.Sin(angle)+dy*math.Cos(angle)
+			next := quake.Vec3{s.Self[0] + step*x, s.Self[1] + step*y, s.Self[2]}
+			if profile.Enemy == "monster_parasite" && quake.Horizontal(s.Self, enemy.Origin) >= parasiteFiringDistance && p.World.Command.AimSource == "enemy" {
+				candidate := s
+				candidate.Self = next
+				to := enemy.AimPoint()
+				if isRailgun(s.Weapon) {
+					to = railEnd(candidate.EyePoint(), to)
+				}
+				if teammateBlocksShot(candidate.EyePoint(), to, *s.Teammate) {
+					continue
+				}
 			}
-			if teammateBlocksShot(candidate.EyePoint(), to, *s.Teammate) {
+			if (quake.Horizontal(next, *s.Teammate) < 48 && quake.Horizontal(next, *s.Teammate) < quake.Horizontal(s.Self, *s.Teammate)+1) || quake.Distance(next, *s.Teammate) > combatLeash(profile) {
 				continue
 			}
-		}
-		if (quake.Horizontal(next, *s.Teammate) < 48 && quake.Horizontal(next, *s.Teammate) < quake.Horizontal(s.Self, *s.Teammate)+1) || quake.Distance(next, *s.Teammate) > combatLeash(profile) {
-			continue
-		}
-		groupSafe := true
-		for _, e := range s.Enemies {
-			if e.ClearShot != nil && *e.ClearShot && quake.Distance(s.Self, e.Origin) < 650 && quake.Distance(next, e.Origin) < quake.Distance(s.Self, e.Origin)-2 {
-				groupSafe = false
-				break
+			groupSafe := true
+			for _, e := range s.Enemies {
+				if e.ClearShot != nil && *e.ClearShot && quake.Distance(s.Self, e.Origin) < 650 && quake.Distance(next, e.Origin) < quake.Distance(s.Self, e.Origin)-2 {
+					groupSafe = false
+					break
+				}
 			}
+			if !groupSafe {
+				continue
+			}
+			if p.World.Geometry.GroundMoveHazardStep(nil, s.Self, x, y, step) != "" {
+				continue
+			}
+			if _, hazard := p.World.Geometry.DoorMoveBlockStep(s.Movers, s.Self, x, y, step); hazard != "" {
+				continue
+			}
+			p.World.Command.MoveSource = "combat_retreat"
+			p.World.Command.MoveLimitReason = ""
+			return worldMove(cmd, s, x, y, speed, p.World.Command.AimSource == "enemy")
 		}
-		if !groupSafe {
-			continue
-		}
-		if p.World.Geometry.GroundMoveHazardStep(nil, s.Self, x, y, 16) != "" {
-			continue
-		}
-		if _, hazard := p.World.Geometry.DoorMoveBlockStep(s.Movers, s.Self, x, y, 16); hazard != "" {
-			continue
-		}
-		p.World.Command.MoveSource = "combat_retreat"
-		p.World.Command.MoveLimitReason = ""
-		return worldMove(cmd, s, x, y, 80, p.World.Command.AimSource == "enemy")
 	}
 	return cmd
 }
@@ -151,49 +159,56 @@ func (p *Planner) combatFiringPosition(cmd quake.UserCmd, profile *CombatSpacing
 	if profile.Enemy != "monster_parasite" || quake.Horizontal(s.Self, enemy.Origin) < parasiteFiringDistance || p.World.Command.LimitReason != "friendly_line_of_fire" || p.World.Command.AimEntity != enemy.ID {
 		return cmd
 	}
-	for radius := 8.0; radius <= 64; radius += 8 {
-		for direction := 0; direction < 16; direction++ {
-			angle := float64(direction) * math.Pi / 8
-			x, y := math.Cos(angle), math.Sin(angle)
-			next := s.Self
-			safe := true
-			for step := 8.0; step <= radius; step += 8 {
-				if p.World.Geometry.GroundMoveHazardStep(nil, next, x, y, 8) != "" {
-					safe = false
-					break
+	// Keep the established coarse search first. Near a wall, the safe firing
+	// lane can fall between its 22.5-degree rays; refine only when it fails.
+	for _, directions := range []int{16, 64} {
+		for radius := 8.0; radius <= 64; radius += 8 {
+			for direction := 0; direction < directions; direction++ {
+				if directions == 64 && direction%4 == 0 {
+					continue
 				}
-				if _, hazard := p.World.Geometry.DoorMoveBlockStep(s.Movers, next, x, y, 8); hazard != "" {
-					safe = false
-					break
-				}
-				next[0] += 8 * x
-				next[1] += 8 * y
-				if quake.Horizontal(next, enemy.Origin) < parasiteFiringDistance || quake.Horizontal(next, *s.Teammate) < 48 || quake.Distance(next, *s.Teammate) > combatLeash(profile) {
-					safe = false
-					break
-				}
-				for _, other := range s.Enemies {
-					if other.ID != enemy.ID && quake.Distance(s.Self, other.Origin) < 650 && quake.Distance(next, other.Origin) < quake.Distance(s.Self, other.Origin)-2 {
+				angle := float64(direction) * 2 * math.Pi / float64(directions)
+				x, y := math.Cos(angle), math.Sin(angle)
+				next := s.Self
+				safe := true
+				for step := 8.0; step <= radius; step += 8 {
+					if p.World.Geometry.GroundMoveHazardStep(nil, next, x, y, 8) != "" {
 						safe = false
 						break
 					}
+					if _, hazard := p.World.Geometry.DoorMoveBlockStep(s.Movers, next, x, y, 8); hazard != "" {
+						safe = false
+						break
+					}
+					next[0] += 8 * x
+					next[1] += 8 * y
+					if quake.Horizontal(next, enemy.Origin) < parasiteFiringDistance || quake.Horizontal(next, *s.Teammate) < 48 || quake.Distance(next, *s.Teammate) > combatLeash(profile) {
+						safe = false
+						break
+					}
+					for _, other := range s.Enemies {
+						if other.ID != enemy.ID && quake.Distance(s.Self, other.Origin) < 650 && quake.Distance(next, other.Origin) < quake.Distance(s.Self, other.Origin)-2 {
+							safe = false
+							break
+						}
+					}
+					if !safe {
+						break
+					}
 				}
-				if !safe {
-					break
+				candidate := s
+				candidate.Self = next
+				from, to := candidate.EyePoint(), enemy.AimPoint()
+				if isRailgun(s.Weapon) {
+					to = railEnd(from, to)
 				}
+				if !safe || teammateBlocksShot(from, to, *s.Teammate) || !p.World.Geometry.ClearShot(from, enemy.AimPoint()) || p.World.Geometry.DoorShotBlocked(s.Movers, from, enemy.AimPoint()) {
+					continue
+				}
+				p.World.Command.MoveSource = "combat_firing_position"
+				p.World.Command.MoveLimitReason = ""
+				return worldMove(cmd, s, x, y, 80, false)
 			}
-			candidate := s
-			candidate.Self = next
-			from, to := candidate.EyePoint(), enemy.AimPoint()
-			if isRailgun(s.Weapon) {
-				to = railEnd(from, to)
-			}
-			if !safe || teammateBlocksShot(from, to, *s.Teammate) || !p.World.Geometry.ClearShot(from, enemy.AimPoint()) || p.World.Geometry.DoorShotBlocked(s.Movers, from, enemy.AimPoint()) {
-				continue
-			}
-			p.World.Command.MoveSource = "combat_firing_position"
-			p.World.Command.MoveLimitReason = ""
-			return worldMove(cmd, s, x, y, 80, false)
 		}
 	}
 	return cmd

@@ -833,6 +833,9 @@ func (c *Client) run(ctx context.Context) error {
 					InventoryKnown     bool                   `json:"inventory_known"`
 					InventoryAgeFrames int                    `json:"inventory_age_frames"`
 					OnGround           bool                   `json:"on_ground"`
+					SelfVelocity       quake.Vec3             `json:"self_velocity"`
+					GroundPrediction   *GroundPrediction      `json:"ground_prediction,omitempty"`
+					GroundSurface      string                 `json:"ground_surface"`
 					Ducked             bool                   `json:"ducked"`
 					DeltaAngles        [3]int16               `json:"delta_angles"`
 					Goal               string                 `json:"goal"`
@@ -875,8 +878,11 @@ func (c *Client) run(ctx context.Context) error {
 					LastTeammate:      c.planner.World.Snapshot.LastTeammate,
 					TeammateAgeFrames: c.planner.World.Snapshot.TeammateAgeFrames,
 					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround, Ducked: c.planner.World.Snapshot.Ducked,
-					DeltaAngles: c.planner.World.Snapshot.DeltaAngles,
-					Ammo:        c.planner.World.Snapshot.Ammo, Armor: c.planner.World.Snapshot.Armor,
+					DeltaAngles:      c.planner.World.Snapshot.DeltaAngles,
+					SelfVelocity:     c.planner.World.Snapshot.SelfVelocity,
+					GroundPrediction: diagnoseGroundStep(c.planner.World.Snapshot, cmd, c.planner.World.Geometry),
+					GroundSurface:    c.planner.World.Geometry.GroundFrictionStatus(c.planner.World.Snapshot.Self),
+					Ammo:             c.planner.World.Snapshot.Ammo, Armor: c.planner.World.Snapshot.Armor,
 					Weapon: c.planner.World.Snapshot.Weapon, WeaponRequest: weaponRequest,
 					WeaponReason: c.weaponSwitch.reason,
 					Inventory:    c.planner.World.Snapshot.Inventory, InventoryKnown: c.planner.World.Snapshot.InventoryKnown, InventoryAgeFrames: c.planner.World.Snapshot.InventoryAgeFrames,

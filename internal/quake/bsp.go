@@ -325,6 +325,7 @@ type bspBrush struct{ first, count, contents int }
 type CollisionMap struct {
 	planes       []bspPlane
 	sides        []uint16
+	sideSurfaces []groundSurface
 	brushes      []bspBrush
 	worldBrushes []int
 }
@@ -417,10 +418,21 @@ func (m *CollisionMap) boxClear(from, to, mins, maxs Vec3) bool {
 }
 
 func (m *CollisionMap) groundDrop(origin Vec3, maxDrop float64) (float64, bool) {
+	drop, _, _, ok := m.groundContact(origin, maxDrop)
+	return drop, ok
+}
+
+func (m *CollisionMap) groundContact(origin Vec3, maxDrop float64) (float64, Vec3, groundSurface, bool) {
+	return m.groundContactInset(origin, maxDrop, 0.125)
+}
+
+func (m *CollisionMap) groundContactInset(origin Vec3, maxDrop, inset float64) (float64, Vec3, groundSurface, bool) {
 	feet := origin[2] - 24
 	start, end := origin, origin
 	end[2] = feet - maxDrop - 2
 	best := math.Inf(1)
+	var normal Vec3
+	var surface groundSurface
 	for _, index := range m.worldBrushes {
 		brush := m.brushes[index]
 		if brush.contents&1 == 0 {
@@ -429,9 +441,10 @@ func (m *CollisionMap) groundDrop(origin Vec3, maxDrop float64) (float64, bool) 
 		enter, leave := 0.0, 1.0
 		outside := false
 		groundNormal := Vec3{}
+		groundSide := -1
 		for side := brush.first; side < brush.first+brush.count; side++ {
 			plane := m.planes[m.sides[side]]
-			d1, d2 := -plane.dist+0.125, -plane.dist+0.125
+			d1, d2 := -plane.dist+inset, -plane.dist+inset
 			for axis := 0; axis < 3; axis++ {
 				d1 += start[axis] * plane.normal[axis]
 				d2 += end[axis] * plane.normal[axis]
@@ -447,6 +460,7 @@ func (m *CollisionMap) groundDrop(origin Vec3, maxDrop float64) (float64, bool) 
 			if d1 > d2 {
 				if fraction >= enter {
 					enter, groundNormal = fraction, plane.normal
+					groundSide = side
 				}
 			} else {
 				leave = math.Min(leave, fraction)
@@ -456,10 +470,15 @@ func (m *CollisionMap) groundDrop(origin Vec3, maxDrop float64) (float64, bool) 
 			drop := feet - (origin[2] + enter*(end[2]-origin[2]))
 			if drop <= maxDrop+0.125 && drop < best {
 				best = math.Max(0, drop)
+				normal = groundNormal
+				surface = groundSurface{}
+				if groundSide >= 0 && groundSide < len(m.sideSurfaces) {
+					surface = m.sideSurfaces[groundSide]
+				}
 			}
 		}
 	}
-	return best, !math.IsInf(best, 1)
+	return best, normal, surface, !math.IsInf(best, 1)
 }
 
 func readMapAsset(root, name string) ([]byte, string, error) {
@@ -636,6 +655,10 @@ func LoadMap(root, name string) (MapInfo, error) {
 		}
 	}
 	c := &CollisionMap{planes: make([]bspPlane, len(planes)/20), sides: make([]uint16, len(sides)/4), brushes: make([]bspBrush, len(brushes)/12)}
+	// Surface metadata is optional for collision loading; unknown surfaces must
+	// not be treated as proof that the dry-ground friction model applies.
+	texinfo, texErr := lump(5, 76)
+	c.sideSurfaces = make([]groundSurface, len(c.sides))
 	for i := range c.planes {
 		p := i * 20
 		for j := 0; j < 3; j++ {
@@ -649,6 +672,10 @@ func LoadMap(root, name string) (MapInfo, error) {
 			return MapInfo{}, fmt.Errorf("BSP side %d has invalid plane", i)
 		}
 		c.sides[i] = v
+		tex := int(int16(binary.LittleEndian.Uint16(sides[i*4+2:])))
+		if texErr == nil && tex >= 0 && tex < len(texinfo)/76 {
+			c.sideSurfaces[i] = groundSurface{known: true, flags: binary.LittleEndian.Uint32(texinfo[tex*76+32:])}
+		}
 	}
 	for i := range c.brushes {
 		p := i * 12

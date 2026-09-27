@@ -73,6 +73,7 @@ type Frame struct {
 	Number      int
 	Suppressed  byte
 	Origin      Vec3
+	Velocity    Vec3
 	PMFlags     byte
 	Stats       [32]int16
 	Gun         int
@@ -256,11 +257,18 @@ func (d *Decoder) playerstate(r *reader, old Frame) (Frame, error) {
 			f.Origin[i] = float64(v) / 8
 		}
 	}
-	for _, p := range [][2]int{{4, 6}, {8, 1}} {
-		if flags&uint16(p[0]) != 0 {
-			if e = skip(p[1]); e != nil {
-				return f, e
+	if flags&4 != 0 {
+		for i := range f.Velocity {
+			v, err := r.short()
+			if err != nil {
+				return f, err
 			}
+			f.Velocity[i] = float64(v) / 8
+		}
+	}
+	if flags&8 != 0 {
+		if e = skip(1); e != nil {
+			return f, e
 		}
 	}
 	if flags&16 != 0 {
@@ -647,6 +655,7 @@ type Snapshot struct {
 	Map                string          `json:"map"`
 	Frame              int             `json:"frame"`
 	Self               Vec3            `json:"self"`
+	SelfVelocity       Vec3            `json:"self_velocity"`
 	OnGround           bool            `json:"on_ground"`
 	Teammate           *Vec3           `json:"teammate,omitempty"`
 	TeammateEntity     int             `json:"teammate_entity,omitempty"`
@@ -667,7 +676,7 @@ type Snapshot struct {
 }
 
 func (d *Decoder) Snapshot(f Frame) Snapshot {
-	s := Snapshot{Map: d.Map, Frame: f.Number, Self: f.Origin, Ducked: f.PMFlags&1 != 0, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles}
+	s := Snapshot{Map: d.Map, Frame: f.Number, Self: f.Origin, SelfVelocity: f.Velocity, Ducked: f.PMFlags&1 != 0, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles}
 	s.InventoryKnown, s.InventoryOpen = d.InventoryKnown, f.Stats[13]&2 != 0
 	if d.InventoryKnown {
 		s.InventoryAgeFrames = max(0, f.Number-d.InventoryFrame)

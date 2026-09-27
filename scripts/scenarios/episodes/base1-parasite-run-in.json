@@ -1,0 +1,28 @@
+{
+  "id": "base1-parasite-run-in",
+  "title": "Медленный выход из опасной зоны после разгона к Parasite",
+  "map": "base1",
+  "kind": "combat_run_in",
+  "status": "verified_run_in_and_recorded_stall_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_combat_run_in_trial.ps1",
+  "fixture": "scripts/scenarios/base1-parasite-run-in.json",
+  "missing_setup": [],
+  "evidence": "workspace/artifacts/parasite-run-in-probe: передача управления на скорости300, тормозной перебег4,17HP потерь. Ускорение отхода160 устраняет потери, но регрессия projectile-friend-fast-retreat даёт0 убийств/161 кадр заблокированного выстрела; изменение скорости откатили.",
+  "expected_result": "Перехватить управление после настоящего разгона, затормозить и выйти из атаки без урона, завершить бой; сохранить прохождение сцен с напарником и группой.",
+  "acceptance": {
+    "min_handoff_speed": 250,
+    "max_braking_overshoot": 8,
+    "max_bot_damage": 0,
+    "kills": 1,
+    "existing_combat_regressions_pass": true
+  },
+  "implementation_notes": "Разгон3 кадра без обнуления физики. Срочный отход включается по наблюдаемому сближению>=20 единиц/кадр и дистанции<128 к видимому Parasite, удерживается до выхода за288 или максимум40 кадров. Пропуск кадров, смерть, потеря цели и смена карты сбрасывают режим. Скорость160 с проверкой пути32; при блокировке пробуется80/16. На2x/1x:вход300,тормозной перебег0,0HP потерь вместо17,1 убийство. Все10 связанных регрессий пройдены; в остальных четырёх сценах ускорение не включалось.",
+  "remaining_validation": [
+    "Другие направления входа и препятствия",
+    "Смешанная группа при входящей скорости",
+    "Скользкие поверхности, воздух и задержки сети"
+  ],
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-170006-025/report.json",
+  "followup_notes": "Неуспех ground-surface-run-in (194 кадра friendly_line_of_fire) воспроизведён по записанным координатам в base1-firing-lane-stall. После уточнения направлений поиска обе сцены и четыре связанные регрессии прошли2x/1x. Историческая первая приёмка: episode-regressions-20260927-163344-398/report.json. Это не универсальная гарантия поиска огневой позиции."
+}

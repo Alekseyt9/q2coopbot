@@ -1,0 +1,10 @@
+{
+  "name": "base1-firing-lane-stall",
+  "map": "base1",
+  "bot_origin": [-44.625, -424.625, 24.125],
+  "actor_origin": [32, -352, 24.125],
+  "target_class": "monster_parasite",
+  "target_origin": [200, -224, 24],
+  "light": null,
+  "scope": "Recorded friendly-line stall beside a wall; native Parasite, vulnerable players, BSP light"
+}

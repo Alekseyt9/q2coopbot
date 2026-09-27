@@ -42,6 +42,7 @@ type Planner struct {
 	railAim                   railAim
 	enemyMotion               map[int]enemyMotion
 	shotTeammateMotion        shotTeammateMotion
+	urgentRetreat             urgentRetreat
 	resources                 map[int]*ResourceMemory
 	healthStarted             int
 	pickup                    *pickupTask
@@ -299,6 +300,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	}
 	p.observeEnemyMotion(s)
 	p.observeShotTeammateMotion(s)
+	p.observeUrgentRetreat(s)
 	previous := p.World.Snapshot
 	if previous.Frame > 0 && previous.Health <= 0 && s.Health > 0 {
 		p.deathFrame = 0

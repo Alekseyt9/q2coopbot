@@ -1,0 +1,17 @@
+{
+  "id": "base1-firing-lane-stall",
+  "title": "Зависание у стены: доступная линия огня между направлениями поиска",
+  "map": "base1",
+  "kind": "parasite_spacing",
+  "status": "verified_recorded_position_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_firing_stall_trial.ps1",
+  "fixture": "scripts/scenarios/base1-firing-lane-stall.json",
+  "missing_setup": [],
+  "evidence": "workspace/artifacts/ground-surface-run-in/report.json: на2x 194 кадра friendly_line_of_fire,0 убийств. Тест по конечным координатам воспроизводит отсутствие команды движения при поиске16 направлений.",
+  "expected_result": "Выйти из записанной позиции к свободной линии огня и убить Parasite без урона игрокам и без входа в досягаемость языка.",
+  "acceptance": {"kills": 1, "max_bot_damage": 0, "max_friendly_damage": 0, "min_reposition_steps": 1},
+  "implementation_notes": "После неудачи поиска16 направлений уточнить до64, сохраняя прежний радиус64 и все проверки безопасности. Первичный поиск остаётся прежним.",
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-170006-025/report.json",
+  "remaining_validation": ["Другие стены, движущиеся препятствия и группы монстров"]
+}
