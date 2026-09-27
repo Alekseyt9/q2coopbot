@@ -5,10 +5,55 @@ import (
 	"q2coopbot/internal/quake"
 )
 
+// A descending door may still be clear in the current snapshot. Extrapolate
+// one 100ms command only, then reuse the stationary-hull brake guard.
+func brakeClosingDoorApproach(previous, s quake.Snapshot, cmd quake.UserCmd, g *quake.MapInfo) (quake.UserCmd, bool) {
+	if cmd.Msec != 100 || cmd.Up != 0 || (cmd.Forward == 0 && cmd.Side == 0) || previous.Map != s.Map || previous.Frame+1 != s.Frame {
+		return cmd, false
+	}
+	p := predictGroundStep(s, cmd)
+	if p == nil {
+		return cmd, false
+	}
+	future := s
+	future.Movers = append([]quake.Mover(nil), s.Movers...)
+	for i := range future.Movers {
+		m := &future.Movers[i]
+		for _, old := range previous.Movers {
+			if old.ID == m.ID && old.Model == m.Model && old.Origin[0] == m.Origin[0] && old.Origin[1] == m.Origin[1] {
+				dz := old.Origin[2] - m.Origin[2]
+				if dz > 0.125 && dz <= 16 {
+					m.Origin[2] -= dz
+				}
+			}
+		}
+	}
+	model, reason := g.DoorMoveBlockStep(future.Movers, s.Self, p.Displacement[0], p.Displacement[1], math.Hypot(p.Displacement[0], p.Displacement[1]))
+	if reason != "dynamic_door_blocked" {
+		return cmd, false
+	}
+	neutral := cmd
+	neutral.Forward = 0
+	neutral.Side = 0
+	// The active command is unsafe even when releasing movement would already
+	// coast to a safe stop. Do not require the neutral path to hit the door.
+	brake, ok := brakeObservedDoor(previous, future, neutral, g, model)
+	if !ok {
+		return cmd, false
+	}
+	return brake, true
+}
+
 // Arrest neutral coast only outside the horizontal footprint of an observed
 // vertically closing door. This does not predict arbitrary movers or escape
 // overlap; the normal door guard must already have cancelled movement.
 func brakeClosingDoorCoast(previous, s quake.Snapshot, cmd quake.UserCmd, g *quake.MapInfo) (quake.UserCmd, bool) {
+	return brakeObservedDoor(previous, s, cmd, g, 0)
+}
+
+// hazardModel is supplied only after checking the active command's swept hull.
+// Zero instead requires an independently unsafe neutral coast.
+func brakeObservedDoor(previous, s quake.Snapshot, cmd quake.UserCmd, g *quake.MapInfo, hazardModel int) (quake.UserCmd, bool) {
 	if g == nil || cmd.Msec != 100 || cmd.Forward != 0 || cmd.Side != 0 || cmd.Up != 0 || s.Ducked || previous.Map != s.Map || previous.Frame+1 != s.Frame || previous.Frame <= 0 || previous.Health <= 0 || quake.Distance(previous.Self, s.Self) > 64 || g.GroundFrictionStatus(s.Self) != "dry_flat" {
 		return cmd, false
 	}
@@ -27,6 +72,9 @@ func brakeClosingDoorCoast(previous, s quake.Snapshot, cmd quake.UserCmd, g *qua
 		return cmd, false
 	}
 	model, reason := g.DoorMoveBlockStep(s.Movers, s.Self, s.SelfVelocity[0], s.SelfVelocity[1], prediction.NeutralStopDistance)
+	if hazardModel != 0 {
+		model, reason = hazardModel, "dynamic_door_blocked"
+	}
 	if reason != "dynamic_door_blocked" || nearbyGroundBrushModelExcept(s, g, model) != 0 {
 		return cmd, false
 	}

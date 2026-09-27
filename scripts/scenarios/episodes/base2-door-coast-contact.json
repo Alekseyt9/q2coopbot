@@ -1,0 +1,19 @@
+{
+  "id": "base2-door-coast-contact",
+  "title": "Инерция после запрета движения приводит к контакту с дверью",
+  "map": "base2",
+  "kind": "combat_spacing",
+  "status": "verified_prepared_phase_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_door_coast_contact_trial.ps1",
+  "missing_setup": [],
+  "observed_failure": "Выпуск88: при X26 и скорости300 dynamic_door_blocked снимает команду, но бот докатывается доX27.875 и упирается в дверь вместо свободной остановки.",
+  "baseline_trace": "workspace/artifacts/closing-door-phase-probes/phase-88/scale-2-port-29950-trace.jsonl",
+  "expected_result": "Одна door_coast_brake, сохранение прицела/кнопок, остановка без контакта с минимальным запасом корпуса1, без урона.",
+  "remaining_validation": [
+    "Другие исходные дистанции и скорости",
+    "Горизонтальные и вращающиеся двери",
+    "Движущиеся опоры"
+  ],
+  "verification_report": "workspace/artifacts/closing-door-phases-verified/report.json"
+}

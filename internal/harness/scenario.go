@@ -20,6 +20,7 @@ type Step struct {
 	Route   bool        `json:"route,omitempty"`
 }
 type Scenario struct {
+	BotDoorPassSpeed    int          `json:"bot_door_pass_speed,omitempty"`
 	BotDoorPassProbe    bool         `json:"bot_door_pass_probe,omitempty"`
 	ActorInventory      bool         `json:"actor_inventory,omitempty"`
 	BotReleaseOrigin    *quake.Vec3  `json:"bot_release_origin,omitempty"`
@@ -76,7 +77,11 @@ func Load(path string) (Scenario, error) {
 }
 
 func (s Scenario) Validate() error {
-	if s.BotDoorPassProbe && (s.Map != "base2" || s.BotOrigin != (quake.Vec3{-64, -800, 24}) || s.BotReleaseFrame == 0 || s.BotReleaseOrigin != nil) {
+	if s.BotDoorPassSpeed != 0 && (!s.BotDoorPassProbe || s.BotDoorPassSpeed < 80 || s.BotDoorPassSpeed > 300) {
+		return fmt.Errorf("bot_door_pass_speed requires door probe and 80..300")
+	}
+	validDoorOrigin := s.BotOrigin[1] == -800 && s.BotOrigin[2] == 24 && (s.BotOrigin[0] == -96 || s.BotOrigin[0] == -64 || s.BotOrigin[0] == -48)
+	if s.BotDoorPassProbe && (s.Map != "base2" || !validDoorOrigin || s.BotReleaseFrame == 0 || s.BotReleaseOrigin != nil) {
 		return fmt.Errorf("bot_door_pass_probe requires base2 door origin and delayed release without relocation")
 	}
 	if len(s.BotHideHealthFrames) > 0 && (len(s.BotHideHealthFrames) != 2 || s.BotHideHealthFrames[0] < s.StartFrame || s.BotHideHealthFrames[1] <= s.BotHideHealthFrames[0] || s.BotHideHealthFrames[1] > s.GameFrames) {

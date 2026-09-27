@@ -36,6 +36,47 @@ func TestClosingDoorCoastBrake(t *testing.T) {
 	if unchanged != cmd {
 		t.Fatal("aim or buttons changed")
 	}
+	t.Run("one_tick_closure", func(t *testing.T) {
+		state, old := s, prev
+		state.Movers = []quake.Mover{{ID: 50, Model: 27, Origin: quake.Vec3{0, 0, 62}}}
+		old.Movers = []quake.Mover{{ID: 50, Model: 27, Origin: quake.Vec3{0, 0, 72}}}
+		active := cmd
+		active.Forward = 400
+		got, ok := brakeClosingDoorApproach(old, state, active, &g)
+		if !ok || math.Hypot(predictGroundStep(state, got).Velocity[0], predictGroundStep(state, got).Velocity[1]) > 1 {
+			t.Fatal("one-tick closure not arrested")
+		}
+		old.Frame--
+		if _, ok := brakeClosingDoorApproach(old, state, active, &g); ok {
+			t.Fatal("forecast across gap")
+		}
+		old.Frame++
+		old.Movers[0].Origin[2] = 52
+		if _, ok := brakeClosingDoorApproach(old, state, active, &g); ok {
+			t.Fatal("opening door forecast")
+		}
+		old.Movers[0].Origin[2] = 72
+		state.Self[0] = -4
+		if _, ok := brakeClosingDoorApproach(old, state, active, &g); ok {
+			t.Fatal("safe approach cancelled")
+		}
+	})
+	t.Run("active_move_unsafe_but_neutral_coast_safe", func(t *testing.T) {
+		state, old := s, prev
+		state.Self[0] = 16
+		state.SelfVelocity[0] = 160
+		state.Movers = []quake.Mover{{ID: 50, Model: 27, Origin: quake.Vec3{0, 0, 62}}}
+		old.Self[0] = 0
+		old.Movers = []quake.Mover{{ID: 50, Model: 27, Origin: quake.Vec3{0, 0, 72}}}
+		active := quake.UserCmd{Msec: 100, Forward: 160}
+		if _, ok := brakeClosingDoorCoast(old, state, quake.UserCmd{Msec: 100}, &g); ok {
+			t.Fatal("safe neutral coast should not need braking")
+		}
+		out, ok := brakeClosingDoorApproach(old, state, active, &g)
+		if !ok || math.Hypot(predictGroundStep(state, out).Velocity[0], predictGroundStep(state, out).Velocity[1]) > 1 {
+			t.Fatal("unsafe active command not arrested")
+		}
+	})
 	for _, kind := range []string{"gap", "map", "unobserved", "opening", "horizontal", "identity", "overlap", "safe_coast", "air", "duck", "active", "friend", "short", "other_mover"} {
 		t.Run(kind, func(t *testing.T) {
 			state, old, c, geo := s, prev, cmd, g

@@ -65,6 +65,7 @@ type Config struct {
 	TestNoAAS                           bool
 	TestDoorProbe                       bool
 	TestDoorPassProbe                   bool
+	TestDoorPassSpeed                   int
 	TestButtonProbe                     bool
 	TestButtonAutoGoal                  bool
 	TestNoBSP, TestPartialBSP           bool
@@ -194,7 +195,11 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.TestHideDoor53 && !cfg.TestDoorProbe {
 		return fmt.Errorf("test.hide_door_53 requires test.door_probe")
 	}
-	if cfg.TestDoorPassProbe && (!cfg.FramePaced || cfg.TestTeleportMap != "base2" || cfg.TestTeleport != "-64,-800,24") {
+	if cfg.TestDoorPassSpeed != 0 && (!cfg.TestDoorPassProbe || cfg.TestDoorPassSpeed < 80 || cfg.TestDoorPassSpeed > 300) {
+		return fmt.Errorf("test.door_pass_speed requires door_pass_probe and 80..300")
+	}
+	validDoorOrigin := cfg.TestTeleport == "-96,-800,24" || cfg.TestTeleport == "-64,-800,24" || cfg.TestTeleport == "-48,-800,24"
+	if cfg.TestDoorPassProbe && (!cfg.FramePaced || cfg.TestTeleportMap != "base2" || !validDoorOrigin) {
 		return fmt.Errorf("test.door_pass_probe requires frame pacing and the base2 approach teleport")
 	}
 	if cfg.TestButtonProbe && (!cfg.FramePaced || cfg.TestTeleportMap != "base2" || cfg.TestTeleport != "320,1940,-144") {
@@ -327,6 +332,7 @@ func Run(ctx context.Context, cfg Config) error {
 		testButtonAutoGoal:       cfg.TestButtonAutoGoal,
 	}
 	client.planner.TestDisableSearch = cfg.TestDisableSearch
+	client.planner.testDoorPassSpeed = float64(cfg.TestDoorPassSpeed)
 	client.planner.TestDisableProbe = cfg.TestDisableProbe
 	if cfg.TracePath != "" {
 		client.traceFile, err = os.Create(cfg.TracePath)

@@ -589,7 +589,7 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			if c.testDoorPassProbe && c.testTeleportSent {
 				s := c.planner.World.Snapshot
-				if s.Map == "base2" && s.OnGround && math.Abs(s.Self[0]+64) < 8 && math.Abs(s.Self[1]+800) < 8 {
+				if s.Map == "base2" && s.OnGround && math.Abs(s.Self[0]-c.testTeleportPosition[0]) < 8 && math.Abs(s.Self[1]+800) < 8 {
 					c.testDoorPassStarted = true
 				}
 				if c.testDoorPassStarted {
@@ -790,6 +790,12 @@ func (c *Client) run(ctx context.Context) error {
 					c.planner.World.Command.BrakeInput = &input
 					cmd = braked
 					c.planner.World.Command.MoveSource = "ground_coast_brake"
+				} else if braked, ok := brakeClosingDoorApproach(c.planner.doorPrevious, c.planner.World.Snapshot, cmd, c.planner.World.Geometry); ok {
+					input := cmd
+					c.planner.World.Command.BrakeInput = &input
+					cmd = braked
+					c.planner.World.Command.MoveSource = "door_approach_brake"
+					c.planner.World.Command.MoveLimitReason = "dynamic_door_closing"
 				} else if c.planner.World.Command.MoveLimitReason == "dynamic_door_blocked" {
 					if braked, ok := brakeClosingDoorCoast(c.planner.doorPrevious, c.planner.World.Snapshot, cmd, c.planner.World.Geometry); ok {
 						input := cmd

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "map": "base2",
+  "cases": [
+    {"name":"far-300","x":-96,"speed":300,"release":86,"expected":"door_approach_brake","coast_margin":8},
+    {"name":"near-300","x":-48,"speed":300,"release":89,"expected":"door_coast_brake","coast_margin":8},
+    {"name":"middle-160","x":-64,"speed":160,"release":85,"expected":"door_approach_brake","coast_margin":8},
+    {"name":"middle-240","x":-64,"speed":240,"release":87,"expected":"door_approach_brake","coast_margin":8},
+    {"name":"middle-80","x":-64,"speed":80,"release":80,"expected":"coast","coast_margin":1},
+    {"name":"clear-pass-300","x":-64,"speed":300,"release":86,"expected":"pass","coast_margin":8}
+  ]
+}

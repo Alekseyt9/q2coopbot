@@ -1,0 +1,19 @@
+{
+  "id": "base2-door-closing-crush",
+  "title": "Дверь опускается за следующий кадр и повреждает бота",
+  "map": "base2",
+  "kind": "combat_spacing",
+  "status": "verified_prepared_phase_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_door_closing_crush_trial.ps1",
+  "missing_setup": [],
+  "observed_failure": "Выпуск87: текущий проём ещё разрешает команду, за следующий кадр дверь сталкивается с ботом, снимает2 здоровья и открывается обратно.",
+  "baseline_trace": "workspace/artifacts/closing-door-phase-probes/phase-87/scale-2-port-29950-trace.jsonl",
+  "expected_result": "Одна door_approach_brake по прогнозу одного кадра, без урона, контакта и обратного открытия двери; прицел/кнопки сохранены.",
+  "remaining_validation": [
+    "Другие исходные дистанции и скорости",
+    "Ускорение и изменение направления двери",
+    "Естественный маршрут без локальной тестовой цели"
+  ],
+  "verification_report": "workspace/artifacts/closing-door-phases-verified/report.json"
+}

@@ -38,6 +38,7 @@ type World struct {
 	Updated          time.Time         `json:"updated"`
 }
 type Planner struct {
+	testDoorPassSpeed         float64
 	doorPrevious              quake.Snapshot
 	TestDisableProjectileLead bool
 	railAim                   railAim
@@ -812,6 +813,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		}
 	}
 	speed := 400.0
+	if p.testDoorPassSpeed > 0 {
+		speed = math.Min(speed, p.testDoorPassSpeed)
+	}
 	if !jump && cmd.Up == 0 {
 		speed = math.Min(speed, math.Hypot(dx, dy)*10)
 	}

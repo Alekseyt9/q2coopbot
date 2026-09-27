@@ -82,6 +82,7 @@ type ConfigFile struct {
 		NoAAS                        bool   `json:"no_aas"`
 		DoorProbe                    bool   `json:"door_probe"`
 		DoorPassProbe                bool   `json:"door_pass_probe"`
+		DoorPassSpeed                int    `json:"door_pass_speed"`
 		ButtonProbe                  bool   `json:"button_probe"`
 		ButtonAutoGoal               bool   `json:"button_auto_goal"`
 		NoBSP                        bool   `json:"no_bsp"`
@@ -180,6 +181,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestNoAAS = file.Test.NoAAS
 	cfg.TestDoorProbe = file.Test.DoorProbe
 	cfg.TestDoorPassProbe = file.Test.DoorPassProbe
+	cfg.TestDoorPassSpeed = file.Test.DoorPassSpeed
 	cfg.TestButtonProbe = file.Test.ButtonProbe
 	cfg.TestButtonAutoGoal = file.Test.ButtonAutoGoal
 	cfg.TestNoBSP, cfg.TestPartialBSP = file.Test.NoBSP, file.Test.PartialBSP

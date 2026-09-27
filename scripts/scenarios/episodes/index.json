@@ -61,6 +61,8 @@
     "base1-edge-diagonal-coast-brake.json",
     "base2-door-brake-exclusion.json",
     "base2-closing-door-approach.json",
-    "base2-closing-door-stop.json"
+    "base2-closing-door-stop.json",
+    "base2-door-coast-contact.json",
+    "base2-door-closing-crush.json"
   ]
 }
