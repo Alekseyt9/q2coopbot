@@ -25,29 +25,8 @@ func brakeGroundCoast(s quake.Snapshot, cmd quake.UserCmd, g *quake.MapInfo) (qu
 			return cmd, false
 		}
 	}
-	// Reject nearby brush models at both spawn and observed positions. Their
-	// motion/rotation and support are outside the static friction model.
-	for index, model := range g.Models {
-		if index == 0 {
-			continue
-		}
-		origins := []quake.Vec3{{}}
-		for _, mover := range s.Movers {
-			if mover.Model == index {
-				origins = append(origins, mover.Origin)
-			}
-		}
-		for _, origin := range origins {
-			near := true
-			for axis := range s.Self {
-				if s.Self[axis] < model.Min[axis]+origin[axis]-32 || s.Self[axis] > model.Max[axis]+origin[axis]+32 {
-					near = false
-				}
-			}
-			if near {
-				return cmd, false
-			}
-		}
+	if nearbyGroundBrushModel(s, g) != 0 {
+		return cmd, false
 	}
 	p := diagnoseGroundStep(s, cmd, g)
 	if p == nil || (p.NeutralPath != "static_hull_blocked" && p.NeutralPath != "uneven_or_missing_support") {

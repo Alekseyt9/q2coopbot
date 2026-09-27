@@ -55,6 +55,10 @@
     "base1-firing-lane-stall.json",
     "base1-wall-coast-brake.json",
     "base1-edge-coast-brake.json",
-    "base1-edge-east-coast-brake.json"
+    "base1-edge-east-coast-brake.json",
+    "base1-edge-north-coast-brake.json",
+    "base1-edge-south-coast-brake.json",
+    "base1-edge-diagonal-coast-brake.json",
+    "base2-door-brake-exclusion.json"
   ]
 }

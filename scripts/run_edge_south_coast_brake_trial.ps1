@@ -1,0 +1,4 @@
+[CmdletBinding()]
+param([int[]]$Timescales=@(2,1),[int]$Port=29900,[string]$OutputRoot='')
+$ErrorActionPreference='Stop'
+& "$PSScriptRoot/run_wall_coast_brake_trial.ps1" -Edge -Direction 'south' -Timescales $Timescales -Port $Port -OutputRoot $OutputRoot

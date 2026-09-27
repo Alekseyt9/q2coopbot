@@ -1,0 +1,38 @@
+{
+  "name": "base1-edge-north-coast-brake",
+  "map": "base1",
+  "bot_origin": [
+    296,
+    -6,
+    -39.875
+  ],
+  "actor_origin": [
+    280,
+    188,
+    -39.875
+  ],
+  "target_class": "monster_parasite",
+  "target_origin": [
+    200,
+    -224,
+    24
+  ],
+  "bot_run_in_target": [
+    296,
+    324,
+    -39.875
+  ],
+  "bot_run_in_frames": 1,
+  "light": null,
+  "brake_origin": [
+    296,
+    24,
+    -39.875
+  ],
+  "brake_velocity": [
+    0,
+    300,
+    0
+  ],
+  "scope": "One physical directional command then neutral hold before loss of support"
+}

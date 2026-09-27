@@ -24,7 +24,7 @@ func TestGroundCoastBrake(t *testing.T) {
 	if got.Buttons != cmd.Buttons || got.Yaw != cmd.Yaw || got.Pitch != cmd.Pitch {
 		t.Fatal("brake changed aim/fire")
 	}
-	for _, kind := range []string{"air", "dead", "moving", "jump", "duck", "slow", "short", "friend", "mover", "missing", "open"} {
+	for _, kind := range []string{"air", "dead", "moving", "jump", "duck", "slow", "short", "friend", "mover", "observed_mover", "missing", "open"} {
 		t.Run(kind, func(t *testing.T) {
 			state, c, geo := s, cmd, g
 			switch kind {
@@ -48,6 +48,11 @@ func TestGroundCoastBrake(t *testing.T) {
 			case "mover":
 				geo.Models = append([]quake.BSPModel(nil), g.Models...)
 				geo.Models = append(geo.Models, quake.BSPModel{Min: state.Self, Max: state.Self})
+			case "observed_mover":
+				geo.Models = append([]quake.BSPModel(nil), g.Models...)
+				far := quake.Vec3{state.Self[0] + 1000, state.Self[1], state.Self[2]}
+				state.Movers = []quake.Mover{{Model: len(geo.Models), Origin: quake.Vec3{-1000, 0, 0}}}
+				geo.Models = append(geo.Models, quake.BSPModel{Min: far, Max: far})
 			case "missing":
 				geo = quake.MapInfo{}
 			case "open":

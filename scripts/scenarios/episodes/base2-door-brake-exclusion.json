@@ -1,0 +1,14 @@
+{
+  "id": "base2-door-brake-exclusion",
+  "title": "Открывающаяся дверь: исключение статического торможения и проход",
+  "map": "base2",
+  "kind": "combat_spacing",
+  "status": "verified_opening_door_exclusion_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_door_brake_exclusion_trial.ps1",
+  "missing_setup": [],
+  "expected_result": "Распознать близкую дверь27, дождаться открытия и пройти по земле без включения статического торможения возле двери.",
+  "acceptance": {"min_near_frames": 3, "min_moving_frames": 3, "min_blocked_frames": 1, "static_brake_frames": 0, "crossed_grounded": true},
+  "verification_report": "workspace/artifacts/door-brake-exclusion/report.json",
+  "remaining_validation": ["Большая входящая скорость к закрывающейся двери", "Движущаяся опора", "Пропуски наблюдений и вращающиеся двери"]
+}

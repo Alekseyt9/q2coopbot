@@ -1,0 +1,23 @@
+{
+  "id": "base1-edge-diagonal-coast-brake",
+  "title": "Торможение остаточной инерции у края: diagonal",
+  "map": "base1",
+  "kind": "combat_spacing",
+  "status": "verified_directional_coast_1x_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_edge_diagonal_coast_brake_trial.ps1",
+  "fixture": "scripts/scenarios/base1-edge-diagonal-coast-brake.json",
+  "missing_setup": [],
+  "expected_result": "Остановить обе компоненты скорости после реального разгона, сохранить прицел и опору10 кадров.",
+  "acceptance": {
+    "max_remaining_speed": 1,
+    "supported_tail_frames": 10,
+    "max_stopping_shift": 0.25,
+    "incoming_speed": 300
+  },
+  "remaining_validation": [
+    "Движущиеся двери и опоры",
+    "Активная команда движения к краю"
+  ],
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-174003-187/report.json"
+}

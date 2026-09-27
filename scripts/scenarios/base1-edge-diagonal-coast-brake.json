@@ -1,0 +1,38 @@
+{
+  "name": "base1-edge-diagonal-coast-brake",
+  "map": "base1",
+  "bot_origin": [
+    290.7867965644036,
+    -13.213203435596427,
+    -39.875
+  ],
+  "actor_origin": [
+    280,
+    188,
+    -39.875
+  ],
+  "target_class": "monster_parasite",
+  "target_origin": [
+    200,
+    -224,
+    24
+  ],
+  "bot_run_in_target": [
+    524.132034355964,
+    220.132034355964,
+    -39.875
+  ],
+  "bot_run_in_frames": 1,
+  "light": null,
+  "brake_origin": [
+    312,
+    8,
+    -39.875
+  ],
+  "brake_velocity": [
+    212.132034355964,
+    212.132034355964,
+    0
+  ],
+  "scope": "One physical directional command then neutral hold before loss of support"
+}
