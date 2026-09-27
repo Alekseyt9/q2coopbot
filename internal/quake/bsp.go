@@ -112,6 +112,32 @@ func (m *MapInfo) PlayerMoveClear(from, to Vec3) bool {
 	return m.collision.boxClear(from, to, Vec3{-16, -16, -24}, Vec3{16, 16, 32})
 }
 
+// CrouchMoveClear uses the protocol 34 pmove ducked hull (top=4).
+func (m *MapInfo) CrouchMoveClear(from, to Vec3) bool {
+	return m.HasCollision() && m.collision.boxClear(from, to, Vec3{-16, -16, -24}, Vec3{16, 16, 4})
+}
+
+// CrouchStepClear deliberately supports only short, flat, static passages.
+// Sample support throughout the sweep; AAS alone cannot prove floor safety.
+// Moving doors/platforms must still be checked by the caller.
+func (m *MapInfo) CrouchStepClear(origin Vec3, dx, dy, step float64) bool {
+	distance := math.Hypot(dx, dy)
+	if !m.HasCollision() || distance < 0.001 || step <= 0 || step > 16 {
+		return false
+	}
+	next := Vec3{origin[0] + dx/distance*step, origin[1] + dy/distance*step, origin[2]}
+	if !m.CrouchMoveClear(origin, next) {
+		return false
+	}
+	for d := 0.0; d <= step; d += step / 4 {
+		point := Vec3{origin[0] + dx/distance*d, origin[1] + dy/distance*d, origin[2]}
+		if _, ok := m.GroundDrop(point, 2); !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // GroundDrop reports the vertical distance from the player's current feet to
 // the nearest static walkable surface below a proposed origin.
 func (m *MapInfo) GroundDrop(origin Vec3, maxDrop float64) (float64, bool) {

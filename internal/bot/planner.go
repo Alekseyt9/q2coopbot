@@ -288,9 +288,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	}
 	if p.World.Geometry.HasCollision() {
 		for i := range s.Enemies {
-			from, to := s.Self, s.Enemies[i].Origin
-			from[2] += 22
-			to[2] += 22
+			from, to := s.EyePoint(), s.Enemies[i].AimPoint()
 			clear := p.World.Geometry.ClearShot(from, to) && !p.World.Geometry.DoorShotBlocked(s.Movers, from, to)
 			s.Enemies[i].ClearShot = &clear
 		}
@@ -467,7 +465,10 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 				p.route, p.routeOK = p.Nav.Route(s.Self, goal)
 			}
 		} else {
-			p.route, p.routeOK = p.bridgeRoute()
+			p.route, p.routeOK = p.directCrouchRoute(s, goal)
+			if !p.routeOK {
+				p.route, p.routeOK = p.bridgeRoute()
+			}
 			if !p.routeOK {
 				p.route, p.routeOK = p.Nav.Route(s.Self, goal)
 			}
@@ -602,9 +603,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		}
 	}
 	if p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && tactic != "follow" && tactic != "recover" && enemy != nil && best < 650 && (s.Ammo > 0 || strings.Contains(strings.ToLower(s.Weapon), "blast")) && enemy.ClearShot != nil && *enemy.ClearShot {
-		from, to := s.Self, enemy.Origin
-		from[2] += 22
-		to[2] += 22
+		from, to := s.EyePoint(), enemy.AimPoint()
 		if s.Teammate != nil && teammateBlocksShot(from, to, *s.Teammate) {
 			p.World.Command.LimitReason = "friendly_line_of_fire"
 		} else {
@@ -705,6 +704,17 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 			p.World.Command.MoveSource = "resource_obstacle_avoid"
 			p.World.Command.MoveLimitReason = "resource_obstacle_avoid"
 			p.routeKnown = false
+		}
+	}
+	if s.OnGround && cmd.Up == 0 {
+		// A short verified ducked sweep can pass a low static ceiling.
+		// Keep the standing-hull door guard below: ducking must not bypass doors.
+		if math.Abs(target[2]-s.Self[2]) <= 2 &&
+			p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, 16) == "static_hull_blocked" &&
+			p.World.Geometry.CrouchStepClear(s.Self, dx, dy, 16) {
+			cmd.Up = -200
+			moveSpeedLimit = math.Min(moveSpeedLimit, 80)
+			p.World.Command.Skill = "crouch_passage"
 		}
 	}
 	if s.OnGround && cmd.Up == 0 {

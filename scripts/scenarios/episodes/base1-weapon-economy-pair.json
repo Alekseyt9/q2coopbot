@@ -1,6 +1,8 @@
 {
  "id":"base1-weapon-economy-pair","title":"Одинаковые запасы против солдата и танка",
- "map":"base1","kind":"weapon_switch","status":"open","reproduction":"ready",
+ "map":"base1","kind":"weapon_switch","status":"verified_1x_2x","reproduction":"ready",
+ "verification_report":"workspace/artifacts/weapon-economy-pair-20260927-115224-182/report.json",
+ "implementation_notes":"Принято4/4 на2x/1x. Солдат: Blaster,0.6 игровых секунды до наблюдаемой смерти, расход Cells/Slugs/Shells0. Танк: один запрос HyperBlaster,5.2 игровых секунды, расход37 Cells, Slugs/Shells сохранены. Это близкая подготовленная цель и неуязвимый бот; дальность, дефицит и риск отдельно не приняты.",
  "scenario":"scripts/run_weapon_economy_pair_trial.ps1","acceptance":{"matched_inventory":true},"missing_setup":[],
  "evidence":"Подготовленный одинаковый инвентарь: Blaster/Shotgun/HyperBlaster/Railgun, Cells100/Slugs10/Shells20; бот неуязвим, цель создаётся сервером в одной позиции.",
  "symptom":"Выбор против тяжёлой цели ранее не был принят в UDP-бою; не сравнивались одинаковые запасы.",

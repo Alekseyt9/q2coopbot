@@ -783,6 +783,7 @@ func (c *Client) run(ctx context.Context) error {
 					InventoryKnown     bool                   `json:"inventory_known"`
 					InventoryAgeFrames int                    `json:"inventory_age_frames"`
 					OnGround           bool                   `json:"on_ground"`
+					Ducked             bool                   `json:"ducked"`
 					Goal               string                 `json:"goal"`
 					GoalPoint          *quake.Vec3            `json:"goal_point,omitempty"`
 					Route              []quake.Waypoint       `json:"route,omitempty"`
@@ -821,7 +822,7 @@ func (c *Client) run(ctx context.Context) error {
 					TeammateEntity:    c.planner.World.Snapshot.TeammateEntity,
 					LastTeammate:      c.planner.World.Snapshot.LastTeammate,
 					TeammateAgeFrames: c.planner.World.Snapshot.TeammateAgeFrames,
-					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround,
+					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround, Ducked: c.planner.World.Snapshot.Ducked,
 					Ammo: c.planner.World.Snapshot.Ammo, Armor: c.planner.World.Snapshot.Armor,
 					Weapon: c.planner.World.Snapshot.Weapon, WeaponRequest: weaponRequest,
 					WeaponReason: c.weaponSwitch.reason,

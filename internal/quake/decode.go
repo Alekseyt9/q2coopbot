@@ -624,6 +624,7 @@ type Object struct {
 	Class        string `json:"class"`
 	Origin       Vec3   `json:"origin"`
 	Frame        int    `json:"frame,omitempty"`
+	Solid        uint16 `json:"solid,omitempty"`
 	ClearShot    *bool  `json:"clear_shot,omitempty"`
 	HealthAmount int    `json:"health_amount,omitempty"`
 }
@@ -633,6 +634,7 @@ type Mover struct {
 	Origin Vec3 `json:"origin"`
 }
 type Snapshot struct {
+	Ducked             bool            `json:"ducked"`
 	Inventory          []InventoryItem `json:"inventory,omitempty"`
 	InventoryKnown     bool            `json:"inventory_known"`
 	InventoryAgeFrames int             `json:"inventory_age_frames"`
@@ -660,7 +662,7 @@ type Snapshot struct {
 }
 
 func (d *Decoder) Snapshot(f Frame) Snapshot {
-	s := Snapshot{Map: d.Map, Frame: f.Number, Self: f.Origin, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles}
+	s := Snapshot{Map: d.Map, Frame: f.Number, Self: f.Origin, Ducked: f.PMFlags&1 != 0, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles}
 	s.InventoryKnown, s.InventoryOpen = d.InventoryKnown, f.Stats[13]&2 != 0
 	if d.InventoryKnown {
 		s.InventoryAgeFrames = max(0, f.Number-d.InventoryFrame)
@@ -731,7 +733,7 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 				s.Defeated = append(s.Defeated, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame})
 				continue
 			}
-			s.Enemies = append(s.Enemies, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame})
+			s.Enemies = append(s.Enemies, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame, Solid: entity.Solid})
 		} else if kind := pickupModels[path]; kind != "" && Distance(entity.Origin, f.Origin) < 384 {
 			s.Pickups = append(s.Pickups, Object{ID: entity.Number, Class: kind, Origin: entity.Origin, Frame: entity.Frame})
 		} else if strings.Contains(path, "/items/") && Distance(entity.Origin, f.Origin) < 384 {
