@@ -22,7 +22,7 @@ func isRailgun(weapon string) bool {
 // commands. Movement continues while aiming; no fixed delay is added per shot.
 func (p *Planner) railCommand(s quake.Snapshot, e quake.Object, prev quake.UserCmd, cmd quake.UserCmd) (quake.UserCmd, bool) {
 	point := e.AimPoint()
-	if p.railAim.mapName != s.Map || p.railAim.entity != e.ID || p.railAim.class != e.Class || p.railAim.solid != e.Solid || p.railAim.frame+1 != s.Frame || quake.Distance(point, p.railAim.point) > 64 {
+	if p.railAim.mapName != s.Map || p.railAim.entity != e.ID || p.railAim.class != e.Class || p.railAim.solid != e.Solid || s.Frame < p.railAim.frame || s.Frame > p.railAim.frame+1 || quake.Distance(point, p.railAim.point) > 64 {
 		p.railAim = railAim{mapName: s.Map, entity: e.ID, class: e.Class, solid: e.Solid}
 	}
 	turn := func(from, to int16) int16 {
@@ -35,9 +35,9 @@ func (p *Planner) railCommand(s quake.Snapshot, e quake.Object, prev quake.UserC
 	yaw := quake.YawTo(s.EyePoint(), point, s.DeltaAngles[1])
 	pitch := quake.PitchTo(s.EyePoint(), point, s.DeltaAngles[0])
 	error := math.Max(math.Abs(float64(int16(uint16(yaw)-uint16(cmd.Yaw)))), math.Abs(float64(int16(uint16(pitch)-uint16(cmd.Pitch))))) * 360 / 65536
-	if error <= 0.5 {
+	if error <= 0.5 && p.railAim.frame != s.Frame {
 		p.railAim.settled++
-	} else {
+	} else if error > 0.5 {
 		p.railAim.settled = 0
 	}
 	p.railAim.frame = s.Frame

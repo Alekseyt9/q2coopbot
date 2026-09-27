@@ -36,6 +36,9 @@ type ConfigFile struct {
 		StopFile   string `json:"stop_file"`
 	} `json:"output"`
 	Test struct {
+		DisableProjectileLead        bool   `json:"disable_projectile_lead"`
+		ProjectileComparison         bool   `json:"projectile_comparison"`
+		CombatBarrier                bool   `json:"combat_barrier"`
 		WeaponSwitchFixture          string `json:"weapon_switch_fixture"`
 		Invulnerable                 bool   `json:"invulnerable"`
 		InitialHealth                int    `json:"initial_health"`
@@ -154,6 +157,9 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestHideHealthFrames = file.Test.HideHealthFrames
 	cfg.TestInitialHealth = file.Test.InitialHealth
 	cfg.TestWeaponSwitchFixture = file.Test.WeaponSwitchFixture
+	cfg.TestDisableProjectileLead = file.Test.DisableProjectileLead
+	cfg.TestProjectileComparison = file.Test.ProjectileComparison
+	cfg.TestCombatBarrier = file.Test.CombatBarrier
 	cfg.TestInvulnerable = file.Test.Invulnerable
 	cfg.TestChangeEntry = file.Test.ChangeEntry
 	cfg.TestScenarioFrameOrigin = file.Test.ScenarioFrameOrigin

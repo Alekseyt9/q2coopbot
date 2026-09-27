@@ -39,6 +39,10 @@
     "base1-weapon-economy.json",
     "base1-weapon-economy-pair.json",
     "base1-tight-passage-fallback-stall.json",
-    "base1-projectile-lead.json"
+    "base1-projectile-lead.json",
+    "base1-rail-aim.json",
+    "base1-rail-damage.json",
+    "base1-projectile-comparison-start.json",
+    "base1-projectile-far-overlead.json"
   ]
 }

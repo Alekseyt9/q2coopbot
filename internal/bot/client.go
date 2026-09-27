@@ -21,6 +21,9 @@ import (
 
 type Client struct {
 	weaponSwitch                            weaponSwitch
+	testProjectileComparison                bool
+	testCombatBarrier, testCombatGo         bool
+	testCombatGoFrame                       int
 	inventoryWatch                          inventoryWatch
 	testWeaponSwitchFixture                 string
 	testPairReady, testPairBlasterRequested bool
@@ -237,6 +240,7 @@ func (c *Client) handle(packet []byte) {
 		c.planner.setMap("", c.root)
 		c.weaponSwitch = weaponSwitch{}
 		c.inventoryWatch = inventoryWatch{}
+		c.testCombatGo = false
 		c.seenCommands = map[string]bool{}
 		command := fmt.Sprintf("configstrings %d 0", c.spawncount)
 		c.seenCommands["cmd "+command] = true
@@ -293,6 +297,9 @@ func (c *Client) handle(packet []byte) {
 		}
 		c.seenCommands[request] = true
 		switch {
+		case request == "test_combat_go" && c.testCombatBarrier:
+			c.testCombatGo = true
+			c.testCombatGoFrame = c.latestFrame
 		case request == "changing":
 			c.begun = false
 			c.beginPending = ""
@@ -591,6 +598,15 @@ func (c *Client) run(ctx context.Context) error {
 				c.planner.setTestButtonGoal()
 			}
 			cmd := c.planner.command(c.previous)
+			if c.testCombatBarrier && !c.testCombatGo && c.testTeleportSent {
+				s := c.planner.World.Snapshot
+				weaponReady := !c.testProjectileComparison || projectileFixtureWeaponReady(c.testWeaponSwitchFixture, s.Weapon)
+				if s.OnGround && s.Health > 0 && math.Abs(s.Self[0]-c.testTeleportPosition[0]) < 1 && math.Abs(s.Self[1]-c.testTeleportPosition[1]) < 1 && weaponReady {
+					if err := c.command("test_combat_ready"); err != nil {
+						return err
+					}
+				}
+			}
 			pairSetup := strings.HasPrefix(c.testWeaponSwitchFixture, "economy_pair_") && !c.testPairReady
 			if pairSetup && c.testTeleportSent && c.testScenarioAge(c.latestFrame) >= 10 {
 				if !c.testPairBlasterRequested {
@@ -606,7 +622,7 @@ func (c *Client) run(ctx context.Context) error {
 			weaponRequest := ""
 			observeInventory := !c.idle || c.scenario != nil && c.scenario.Scenario.ActorInventory
 			if !safetyStop && observeInventory && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
-				if !c.idle && !pairSetup {
+				if !c.idle && !pairSetup && !c.testProjectileComparison {
 					weaponRequest = c.weaponSwitch.command(c.planner.World.Snapshot)
 				}
 				if request := c.inventoryWatch.command(c.planner.World.Snapshot); request != "" {
@@ -624,6 +640,10 @@ func (c *Client) run(ctx context.Context) error {
 				cmd = quake.UserCmd{Msec: 50}
 				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_weapon_setup"}
 			}
+			if c.testProjectileComparison && !projectileFixtureWeaponReady(c.testWeaponSwitchFixture, c.planner.World.Snapshot.Weapon) {
+				cmd.Buttons &^= 1
+				c.planner.World.Command.LimitReason = "test_weapon_setup"
+			}
 			if (c.testGroundEdgeProbe || c.testDoorProbe || c.testDoorPassProbe || c.testButtonProbe) && c.testTeleportSent && !c.planner.World.Snapshot.OnGround {
 				cmd = quake.UserCmd{}
 				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_teleport_settling"}
@@ -639,6 +659,14 @@ func (c *Client) run(ctx context.Context) error {
 			if c.idle {
 				cmd = quake.UserCmd{}
 				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_idle"}
+			}
+			if c.testCombatBarrier && !c.testCombatGo {
+				cmd.Forward, cmd.Side, cmd.Up, cmd.Buttons = 0, 0, 0, 0
+				c.planner.World.Command.LimitReason = "test_combat_barrier"
+			}
+			if c.testCombatBarrier && c.testCombatGo && c.latestFrame-c.testCombatGoFrame < 10 {
+				cmd.Buttons &^= 1
+				c.planner.World.Command.LimitReason = "test_combat_observe"
 			}
 			var observerKill, observerRespawn bool
 			if !safetyStop && c.sessionDefinition != nil && c.session == nil {
@@ -790,6 +818,7 @@ func (c *Client) run(ctx context.Context) error {
 					InventoryAgeFrames int                    `json:"inventory_age_frames"`
 					OnGround           bool                   `json:"on_ground"`
 					Ducked             bool                   `json:"ducked"`
+					DeltaAngles        [3]int16               `json:"delta_angles"`
 					Goal               string                 `json:"goal"`
 					GoalPoint          *quake.Vec3            `json:"goal_point,omitempty"`
 					Route              []quake.Waypoint       `json:"route,omitempty"`
@@ -829,7 +858,8 @@ func (c *Client) run(ctx context.Context) error {
 					LastTeammate:      c.planner.World.Snapshot.LastTeammate,
 					TeammateAgeFrames: c.planner.World.Snapshot.TeammateAgeFrames,
 					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround, Ducked: c.planner.World.Snapshot.Ducked,
-					Ammo: c.planner.World.Snapshot.Ammo, Armor: c.planner.World.Snapshot.Armor,
+					DeltaAngles: c.planner.World.Snapshot.DeltaAngles,
+					Ammo:        c.planner.World.Snapshot.Ammo, Armor: c.planner.World.Snapshot.Armor,
 					Weapon: c.planner.World.Snapshot.Weapon, WeaponRequest: weaponRequest,
 					WeaponReason: c.weaponSwitch.reason,
 					Inventory:    c.planner.World.Snapshot.Inventory, InventoryKnown: c.planner.World.Snapshot.InventoryKnown, InventoryAgeFrames: c.planner.World.Snapshot.InventoryAgeFrames,

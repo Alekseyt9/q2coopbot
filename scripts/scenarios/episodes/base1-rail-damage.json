@@ -1,0 +1,17 @@
+{
+  "id":"base1-rail-damage",
+  "title":"Серверное подтверждение попаданий Railgun и защиты напарника",
+  "map":"base1",
+  "kind":"rail_damage",
+  "status":"verified_1x_2x",
+  "reproduction":"ready",
+  "scenario":"scripts/run_rail_damage_trial.ps1",
+  "missing_setup":[],
+  "acceptance":{"attributed_tank_damage":true,"no_contact_during_friendly_guard":true},
+  "verification_report":"workspace/artifacts/rail-damage-20260927-131633-099/report.json",
+  "evidence":"Четыре UDP-сцены2x/1x; отдельный runtime q2go-damage с диагностическим game.dll и q2ded из соседнего yquake2. g_test_damage=1, сетевой frame/spawncount добавляет движок.",
+  "symptom":"Расход Slugs и точное направление команды сами по себе не доказывали попадание; часы игрового модуля и сетевые кадры различаются.",
+  "expected_result":"Урон наблюдаемому Tank атрибутирован боту, MOD_RAILGUN и текущему поколению карты после разрешения огня. Во время10 кадров friendly guard нет контактов Railgun даже с нулевым уроном.",
+  "implementation_notes":"На каждой скорости4 события попадания,750 полезного урона и1 убийство Tank. Четыре сцены приняты;14 искажённых атрибуций отвергнуты. Урон трупам и сверх оставшегося здоровья не считается полезным. Модульный frame сохраняется отдельно от сетевого.",
+  "remaining_validation":["Сравнение с базовым наведением на движущихся целях и большой дистанции","Идентификаторы выстрелов и учёт промахов для доли попаданий","Динамическое появление напарника во время анимации выстрела"]
+}

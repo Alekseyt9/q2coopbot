@@ -11,6 +11,18 @@ function Assert-RailAim($Rows,[string]$Mode) {
         if (!$fire.Count -or $fire[0].arbitration.aim_error_degrees -gt 0.5) {throw 'Accurate rail fire missing'}
         $previous=@($rail | Where-Object frame -eq ($fire[0].frame-1))
         if ($previous.Count -ne 1 -or $previous[0].arbitration.aim_entity -ne $target[0].id -or $previous[0].arbitration.aim_error_degrees -gt 0.5) {throw 'Two precise frames missing'}
+        foreach ($r in @($previous[0],$fire[0])) {
+            if (@($r.delta_angles).Count -ne 3 -or @($r.arbitration.aim_point).Count -ne 3) {throw 'Angle evidence missing'}
+            $dx=$r.arbitration.aim_point[0]-$r.self[0];$dy=$r.arbitration.aim_point[1]-$r.self[1]
+            $eye=$r.self[2]+ $(if($r.ducked){-2}else{22})
+            $yaw=[math]::Atan2($dy,$dx)*180/[math]::PI
+            $pitch=-[math]::Atan2($r.arbitration.aim_point[2]-$eye,[math]::Sqrt($dx*$dx+$dy*$dy))*180/[math]::PI
+            foreach ($pair in @(@($yaw,$r.sent_command.Yaw,$r.delta_angles[1]),@($pitch,$r.sent_command.Pitch,$r.delta_angles[0]))) {
+                $error=$pair[0]-($pair[1]+$pair[2])*360/65536
+                $error=($error%360+540)%360-180
+                if ([math]::Abs($error) -gt 0.5) {throw 'Sent rail angle is inaccurate'}
+            }
+        }
         $spent=@($rail | Where-Object {$_.frame -gt $fire[0].frame -and $_.frame -le $fire[0].frame+20 -and $_.ammo -lt 10})
         if (!$spent.Count) {throw 'No observed slug consumption'}
         return [pscustomobject]@{acquire_frame=$first.frame;fire_frame=$fire[0].frame;ammo_after=$spent[0].ammo;scope='acquisition_and_ammo_not_hit_rate'}

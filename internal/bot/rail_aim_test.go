@@ -51,4 +51,11 @@ func TestRailAimingDoesNotStopWalking(t *testing.T) {
 	if cmd.Buttons != 0 || cmd.Forward != 0 || cmd.Side == 0 || cmd.Yaw != 0 || p.World.Command.LimitReason != "rail_aim_settling" {
 		t.Fatalf("aim/move arbitration: %+v %+v", cmd, p.World.Command)
 	}
+	if duplicate := p.commandAt(cmd, p.World.Updated); duplicate.Buttons != 0 {
+		t.Fatal("duplicate snapshot counted as confirmation")
+	}
+	p.World.Snapshot.Frame++
+	if confirmed := p.commandAt(cmd, p.World.Updated); confirmed.Buttons&1 == 0 {
+		t.Fatal("next precise observation did not confirm aim")
+	}
 }

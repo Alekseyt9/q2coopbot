@@ -1,6 +1,7 @@
-function Assert-ProjectileAim($Rows,[string]$Mode) {
+function Assert-ProjectileAim($Rows,[string]$Mode,[int]$TargetID=0,[ValidateRange(1,1000)][int]$MinimumCommands=2,[string]$TargetClass='monster_soldier') {
     $ErrorActionPreference='Stop'
     $spawn=@($Rows | ForEach-Object {$_.enemies} | Where-Object {$_.class -eq 'monster_soldier' -and $_.origin[0] -ge 1060 -and $_.origin[0] -le 1120 -and $_.origin[1] -ge 330 -and $_.origin[1] -le 390 -and [math]::Abs($_.origin[2]+32) -lt 4} | Select-Object -First 1)
+    if($TargetID -gt 0){$spawn=@($Rows|ForEach-Object {$_.enemies}|Where-Object {$_.id -eq $TargetID -and $_.class -eq $TargetClass}|Select-Object -First 1)}
     if (!$spawn.Count) {throw 'Native moving soldier fixture not observed'}
     $id=$spawn[0].id
     $byFrame=@{};foreach($r in $Rows){$byFrame[[int]$r.frame]=$r}
@@ -18,6 +19,8 @@ function Assert-ProjectileAim($Rows,[string]$Mode) {
         $ox=10*($last[0].origin[0]-$older[0].origin[0]);$oy=10*($last[0].origin[1]-$older[0].origin[1])
         $speed=[math]::Sqrt($vx*$vx+$vy*$vy)
         if ($speed -lt 10 -or $speed -gt 400 -or ($vx-$ox)*($vx-$ox)+($vy-$oy)*($vy-$oy) -gt 6400.01 -or $t -gt 0.75 -or $speed*$t -gt 128) {throw 'Unstable or unbounded lead'}
+        $change=[math]::Sqrt(($vx-$ox)*($vx-$ox)+($vy-$oy)*($vy-$oy))
+        if($vx*$ox+$vy*$oy -lt 0 -or 5*$change*$t*$t -gt 8.01){throw 'Lead exceeds motion confidence for its flight time'}
         $top=8*(($e.solid -shr 10) -band 63)-32
         $bottom=-8*(($e.solid -shr 5) -band 31)
         $height=[math]::Min([math]::Max(22,$bottom+8),$top-8)
@@ -31,6 +34,6 @@ function Assert-ProjectileAim($Rows,[string]$Mode) {
         if ([math]::Abs([math]::Sqrt($distance2)-1000*$t) -gt 0.02) {throw 'Intercept flight time mismatch'}
         $count++
     }
-    if($count -lt 2){throw 'Fewer than two verified lead fire commands for the intended weapon/target'}
+    if($count -lt $MinimumCommands){throw "Fewer than $MinimumCommands verified lead fire commands for the intended weapon/target"}
     [pscustomobject]@{target=$id;verified_lead_commands=$count;scope='command_geometry_not_hit_rate'}
 }

@@ -12,6 +12,12 @@ type enemyMotion struct {
 	frame            int
 	stable           bool
 	velocityKnown    bool
+	velocityChange   float64
+}
+
+func projectileFixtureWeaponReady(fixture, weapon string) bool {
+	return fixture == "projectile_blaster" && weapon == "Blaster" ||
+		fixture == "projectile_hyper" && strings.Contains(weapon, "/v_hyperb/")
 }
 
 func (p *Planner) observeEnemyMotion(s quake.Snapshot) {
@@ -24,7 +30,8 @@ func (p *Planner) observeEnemyMotion(s quake.Snapshot) {
 			if math.Hypot(v[0], v[1]) <= 400 && math.Abs(e.Origin[2]-old.origin[2]) <= 2 {
 				m.velocity = v
 				m.velocityKnown = true
-				m.stable = old.velocityKnown && math.Hypot(v[0]-old.velocity[0], v[1]-old.velocity[1]) <= 80
+				m.velocityChange = math.Hypot(v[0]-old.velocity[0], v[1]-old.velocity[1])
+				m.stable = old.velocityKnown && m.velocityChange <= 80 && v[0]*old.velocity[0]+v[1]*old.velocity[1] >= 0
 			}
 		}
 		next[e.ID] = m
@@ -36,6 +43,9 @@ func (p *Planner) observeEnemyMotion(s quake.Snapshot) {
 // A bounded horizontal intercept is used only for stable, consecutive sightings.
 func (p *Planner) projectileAim(s quake.Snapshot, e quake.Object) (quake.Vec3, float64) {
 	point := e.AimPoint()
+	if p.TestDisableProjectileLead {
+		return point, 0
+	}
 	weapon := strings.ToLower(s.Weapon)
 	if weapon != "blaster" && !strings.Contains(weapon, "/v_hyperb/") {
 		return point, 0
@@ -48,6 +58,12 @@ func (p *Planner) projectileAim(s quake.Snapshot, e quake.Object) (quake.Vec3, f
 	if !ok || t > 0.75 || math.Hypot(m.velocity[0], m.velocity[1])*t > 128 {
 		return point, 0
 	}
+	// The same frame-to-frame speed change is much more uncertain at a long
+	// flight time. Reject lead if that acceleration would add over eight units
+	// of displacement. This is a conservative heuristic, not an error guarantee.
+	if !projectileMotionReliable(m.velocityChange, t) {
+		return point, 0
+	}
 	lead := point
 	lead[0] += m.velocity[0] * t
 	lead[1] += m.velocity[1] * t
@@ -56,6 +72,10 @@ func (p *Planner) projectileAim(s quake.Snapshot, e quake.Object) (quake.Vec3, f
 		return point, 0
 	}
 	return lead, t
+}
+
+func projectileMotionReliable(velocityChange, flight float64) bool {
+	return 0.5*(velocityChange*10)*flight*flight <= 8
 }
 
 func interceptTime(from, to, velocity quake.Vec3, speed float64) (float64, bool) {

@@ -1,0 +1,17 @@
+{
+  "id":"base1-projectile-comparison-start",
+  "title":"Разный старт парных прогонов упреждения",
+  "map":"base1",
+  "kind":"projectile_comparison",
+  "status":"verified_1x_2x",
+  "reproduction":"ready",
+  "scenario":"scripts/run_projectile_comparison.ps1",
+  "missing_setup":[],
+  "evidence":"Исходный сбой: workspace/artifacts/projectile-comparison-20260927-132321-360/report.json,4 пары отклонены. После барьера:8 UDP-прогонов,4 пары с совпадающими10 исходными кадрами приняты на2x/1x.",
+  "verification_report":"workspace/artifacts/projectile-comparison-20260927-133533-985/report.json",
+  "symptom":"sv_test_start_client отпускает мир после cs_spawned, до подтверждения телепортаций и подготовки оружия. Первый шаг native Soldier смещается на кадр, напарник иногда ещё падает после телепортации.",
+  "expected_result":"Общий воспроизводимый старт после подготовки обоих клиентов; одинаковые исходные позиции, фазы и движение цели. Пары принимаются только после проверки этих условий, без ослабления сравнительного gate.",
+  "acceptance":{"matched_initial_trajectory":true,"fixed_weapon":true,"server_damage_attribution":true},
+  "implementation_notes":"g_test_combat_barrier удерживает AI до готовности двух клиентов на земле с WEAPON_READY; сбрасывает PRNG, отмечает сетевой кадр и отпускает клиентов. Затем10 кадров без огня. На обеих скоростях Blaster:30HP и16 кадров до убийства, Hyper:30HP,11 кадров и1 Cell; результаты lead/baseline совпадают.48 испорченных сравнений отвергаются; нулевые попадания не превращаются в успех. Готовность подтверждена для этой сцены, преимущество упреждения не обнаружено.",
+  "remaining_validation":["Парные повторения с более далёкой поперечно движущейся целью","Связь выстрелов с damage для доли попаданий","Отдельная проверка барьера при потере пакетов/переподключении и смене карты"]
+}

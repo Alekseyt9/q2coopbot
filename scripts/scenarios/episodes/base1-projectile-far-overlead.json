@@ -1,0 +1,19 @@
+{
+  "id":"base1-projectile-far-overlead",
+  "title":"Перерасход HyperBlaster из-за ненадёжного дальнего упреждения",
+  "map":"base1",
+  "kind":"projectile_comparison",
+  "status":"verified_1x_2x",
+  "reproduction":"ready",
+  "scenario":"scripts/run_projectile_far_trial.ps1",
+  "missing_setup":[],
+  "evidence":"workspace/artifacts/projectile-comparison-20260927-133926-783/report.json: при совпадающем старте HyperBlaster с упреждением потратил13 Cells и убил за22 кадра, baseline —5 Cells и15 кадров.",
+  "verification_report":"workspace/artifacts/projectile-far-confidence-validation-20260927.json",
+  "projectile_verification_report":"workspace/artifacts/projectile-ledger-final-20260927/verification.json",
+  "projectile_comparison_report":"workspace/artifacts/projectile-ledger-acceptance-20260927/report.json",
+  "symptom":"На дистанции около500 единиц линейное продолжение последних скоростей не учитывало резкий разворот/ускорение Soldier; фиксированный допуск изменения скорости80 был слишком широк для полёта около0.5с.",
+  "expected_result":"Наблюдаемая дальняя поперечная сцена, одинаковые10 кадров до огня; урон/убийство не хуже baseline, время и Cells не больше baseline. Сравнение не доказывает общее превосходство упреждения.",
+  "acceptance":{"min_initial_distance":400,"min_crossing_frames":2,"min_crossing_speed":30,"no_damage_time_ammo_regression":true,"actual_projectile_accounting":true},
+  "implementation_notes":"Добавлены отказ при развороте скоростей и оценка смещения от наблюдаемого ускорения за время полёта:0.5*(deltaVelocity/0.1)*flight^2 <=8. Это эвристика доверия, не гарантия будущего движения. Ненадёжный прогноз заменяется текущей наблюдаемой точкой; огонь не выключается.16 UDP-прогонов,8 пар на2x/1x (по2 повтора): Hyper5 Cells/15 кадров, Blaster34 кадра,30HP — одинаково с baseline.128 искажённых сравнений отвергаются; исходный13/5 тоже отвергается. Ближняя регрессия4/4 сохранена. Доказано устранение перерасхода в этой сцене, не общее преимущество упреждения.",
+  "remaining_validation":["Другие траектории, классы и задержки сети","Доказательство полезности упреждения на устойчивом движении","Серверная атрибуция выстрелов других классов оружия; live-сцены sky/expiry и сохранение/загрузка"]
+}

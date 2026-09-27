@@ -1,12 +1,27 @@
 package bot
 
 import (
+	"context"
 	"math"
 	"os"
 	"q2coopbot/internal/quake"
 	"testing"
 	"time"
 )
+
+func TestProjectileComparisonControls(t *testing.T) {
+	if err := Run(context.Background(), Config{TestCombatBarrier: true}); err == nil {
+		t.Fatal("combat barrier allowed outside prepared frame-paced scene")
+	}
+	for _, cfg := range []Config{{TestDisableProjectileLead: true}, {TestProjectileComparison: true}, {TestProjectileComparison: true, FramePaced: true, TestWeaponSwitchFixture: "rail_precision"}} {
+		if err := Run(context.Background(), cfg); err == nil {
+			t.Fatal("comparison allowed outside projectile fixture")
+		}
+	}
+	if projectileFixtureWeaponReady("projectile_hyper", "Blaster") || !projectileFixtureWeaponReady("projectile_hyper", "models/weapons/v_hyperb/tris.md2") || !projectileFixtureWeaponReady("projectile_blaster", "Blaster") {
+		t.Fatal("fixture weapon confirmation failed")
+	}
+}
 
 func TestInterceptTime(t *testing.T) {
 	for _, tc := range []struct {
@@ -30,6 +45,23 @@ func TestInterceptTime(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestProjectileConfidenceDependsOnFlightTime(t *testing.T) {
+	if !projectileMotionReliable(35, 0.1) || projectileMotionReliable(35, 0.5) || !projectileMotionReliable(0, 0.5) {
+		t.Fatal("distant accelerating target trusted or steady motion rejected")
+	}
+	p := &Planner{}
+	s := quake.Snapshot{Map: "base1", Health: 100, Enemies: []quake.Object{{ID: 7, Class: "monster_soldier"}}}
+	for i, x := range []float64{0, 2, 4, 2} {
+		s.Frame = i + 1
+		s.Enemies[0].Origin[0] = x
+		p.observeEnemyMotion(s)
+		p.World.Snapshot = s
+	}
+	if p.enemyMotion[7].stable {
+		t.Fatal("small reversal accepted as stable motion")
 	}
 }
 
@@ -90,6 +122,11 @@ func TestProjectileAimUsesCurrentWeaponAndGeometry(t *testing.T) {
 			t.Fatalf("%s: %v %v", weapon, aim, flight)
 		}
 	}
+	p.TestDisableProjectileLead = true
+	if aim, flight := p.projectileAim(s, e); flight != 0 || aim != e.AimPoint() {
+		t.Fatal("baseline did not use current observed aim point")
+	}
+	p.TestDisableProjectileLead = false
 	s.Weapon = "models/weapons/v_rail/tris.md2"
 	if aim, flight := p.projectileAim(s, e); flight != 0 || aim != e.AimPoint() {
 		t.Fatal("hitscan given projectile lead")

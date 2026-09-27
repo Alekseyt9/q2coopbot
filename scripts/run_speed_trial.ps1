@@ -17,6 +17,11 @@ param(
     [switch]$SynchronizedStart,
     [switch]$ElevatorTrial,
     [switch]$CombatMoveTrial,
+    [switch]$DamageTrace,
+    [switch]$DisableProjectileLead,
+    [switch]$ProjectileComparison,
+    [string]$ProjectileFixture='',
+    [ValidateSet('near','far')][string]$ProjectileRange='near',
 	[ValidateSet('','blaster','stocked','economy_weak','economy_armed','economy_pair_weak','economy_pair_heavy','projectile_blaster','projectile_hyper','rail_precision','rail_friend_behind')][string]$WeaponSwitchTrial = '',
     [switch]$ObservationGapTrial,
     [switch]$FriendlyFireTrial,
@@ -44,6 +49,17 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if ($DisableProjectileLead -and $WeaponSwitchTrial -notlike 'projectile_*') {throw 'Baseline requires a projectile fixture'}
+if ($ProjectileComparison -and $WeaponSwitchTrial -notlike 'projectile_*') {throw 'Comparison requires a projectile fixture'}
+if ($ProjectileRange -eq 'far' -and !$ProjectileComparison) {throw 'Far range requires projectile comparison'}
+. "$PSScriptRoot/read_projectile_fixture.ps1"
+$projectileSetup=$null
+if($ProjectileFixture){
+    if(!$ProjectileComparison -or !$SynchronizedStart -or $Map -ne 'base1'){throw 'Projectile fixture requires synchronized base1 comparison'}
+    $projectileSetup=Read-ProjectileFixture $ProjectileFixture
+}
+. "$PSScriptRoot/read_damage_events.ps1"
+. "$PSScriptRoot/read_projectile_ledger.ps1"
 if ($WeaponSwitchTrial -and -not $CombatMoveTrial) { throw 'WeaponSwitchTrial requires CombatMoveTrial' }
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if ($ScenarioTailFrames -ne 0 -and (-not $ActorScenario -or $ScenarioTailFrames -lt 2 -or $ScenarioTailFrames -gt 1000)) { throw 'Scenario tail requires an actor scenario and 2..1000 frames.' }
@@ -205,6 +221,9 @@ foreach ($scale in $Timescales) {
     $rconPassword = if ($TransitionMap) { [guid]::NewGuid().ToString('N') } else { '' }
     if ($TransitionMap) { $args = "+set rcon_password $rconPassword $args" }
     if ($UnlimitedLoopbackRate) { $args = "+set sv_test_unlimited_loopback 1 $args" }
+    if ($DamageTrace) { $args = "+set g_test_damage 1 $args" }
+    if ($ProjectileComparison) { $args = "+set g_test_combat_barrier 1 $args" }
+    if ($projectileSetup) { $args = "+set g_test_combat_target $($projectileSetup.target_class) " + $args.Replace("+set game baseq2 ", "") } # baseq2 is the default game; keep below engine argv limit.
     if ($ElevatorTrial -or $CombatMoveTrial -or $FriendlyFireTrial -or $GroundEdgeTrial -or $DoorTrial -or $DoorPassTrial -or $ButtonTrial -or $ButtonAutoTrial -or $TeammateMemoryTrial -or $TeammateSearchTrial -or $SearchFixture -or $ActorScenario) { $args = "+set cheats 1 $args" }
     if ($SynchronizedStart) { $args = "+set sv_test_trace_client GoCoopMate +set sv_test_start_client GoCoopMate $args" }
     $server = Start-Process -FilePath $ServerExe -ArgumentList $args -WorkingDirectory $RuntimeRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
@@ -293,6 +312,7 @@ foreach ($scale in $Timescales) {
 				$humanConfig.test.invulnerable=$true
 			}
 			if ($WeaponSwitchTrial -like 'projectile_*') {
+				$humanConfig.test.combat_barrier=[bool]$ProjectileComparison
 				# Use the native soldier in the base1 supply corridor.
 				$humanConfig.test.spawn_map=''
 				$humanConfig.test.spawn_soldier=''
@@ -325,6 +345,12 @@ foreach ($scale in $Timescales) {
             $humanConfig.test.walk_after_frames = [int]$fixture.walk_after_frames
             $humanConfig.test.walk_frames = [int]$fixture.walk_frames
             $humanConfig.test.scenario_frame_origin = [int]$fixture.frame_origin
+        }
+        if($projectileSetup){
+            $humanConfig.test.teleport=Format-ProjectileOrigin $projectileSetup.actor_origin
+            $humanConfig.test.spawn_map=$projectileSetup.map
+            $humanConfig.test.spawn_soldier=Format-ProjectileOrigin $projectileSetup.target_origin
+            $humanConfig.test.spawn_class=$projectileSetup.target_class
         }
         $humanConfig | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $humanConfigPath -Encoding UTF8
         $human = Start-Process -FilePath $botExe -ArgumentList "--config `"$humanConfigPath`"" -WorkingDirectory $repoRoot -RedirectStandardOutput $humanLog -RedirectStandardError $humanErr -WindowStyle Hidden -PassThru
@@ -389,11 +415,13 @@ foreach ($scale in $Timescales) {
 		if ($WeaponSwitchTrial) {
 			$botConfig.test.weapon_switch_fixture = $WeaponSwitchTrial
 			if ($WeaponSwitchTrial -like 'economy_*') { $botConfig.test.invulnerable=$true }
-			if ($WeaponSwitchTrial -like 'projectile_*') { $botConfig.test.invulnerable=$true; $botConfig.test.hold_position=$true }
+			if ($WeaponSwitchTrial -like 'projectile_*') { $botConfig.test.invulnerable=$true; $botConfig.test.hold_position=$true; $botConfig.test.disable_projectile_lead=[bool]$DisableProjectileLead; $botConfig.test.projectile_comparison=[bool]$ProjectileComparison; $botConfig.test.combat_barrier=[bool]$ProjectileComparison }
 			if ($WeaponSwitchTrial -like 'rail_*') { $botConfig.test.invulnerable=$true; $botConfig.test.hold_position=$true }
 			$botConfig.test.teleport_map = 'base1'
 			$botConfig.test.teleport = '32,-224,24'
 			if ($WeaponSwitchTrial -like 'projectile_*') { $botConfig.test.teleport='1136,256,-32' }
+			if ($ProjectileRange -eq 'far') { $botConfig.test.teleport='608,192,-32' }
+			if ($projectileSetup) { $botConfig.test.teleport=Format-ProjectileOrigin $projectileSetup.bot_origin }
 		}
         if ($SearchApproachOnly) { $botConfig.test.disable_probe = $true }
         if ($actorScenarioDefinition) {
@@ -963,6 +991,24 @@ foreach ($scale in $Timescales) {
             }
         }
         $applied = @(Read-AppliedCommands $stdout)
+        $damageSummary=$null
+        $damagePath=$null
+        $projectileSummary=$null;$projectilePath=$null;$combatLog=$null
+        if ($DamageTrace) {
+            $combatLog=Join-Path $OutputRoot "$name-combat.log"
+            Get-Content -LiteralPath $stdout -Raw | Set-Content -LiteralPath $combatLog -NoNewline -Encoding UTF8
+            $damage=@(Read-DamageEvents $combatLog)
+            $damagePath=Join-Path $OutputRoot "$name-damage.jsonl"
+            Set-Content -LiteralPath $damagePath -Value '' -NoNewline
+            foreach($event in $damage) {$event | ConvertTo-Json -Compress | Add-Content -LiteralPath $damagePath -Encoding UTF8}
+            $ids=@(Get-Content -LiteralPath $tracePath | ConvertFrom-Json | Select-Object -ExpandProperty self_entity -Unique)
+            if($ids.Count -ne 1) {throw 'Damage attribution requires one observed bot entity'}
+            $damageSummary=Measure-BotDamage $damage $ids[0]
+            $shots=@(Read-ProjectileLedger $combatLog $damage)
+            $projectilePath=Join-Path $OutputRoot "$name-projectiles.json"
+            ConvertTo-Json -InputObject $shots -Depth 6 | Set-Content -LiteralPath $projectilePath -Encoding UTF8
+            $projectileSummary=@(Measure-ProjectileLedger $shots $ids[0])
+        }
         foreach ($item in $applied) { ConvertTo-Json -InputObject $item -Compress -Depth 4 | Add-Content -LiteralPath $appliedPath -Encoding UTF8 }
         $newCommands = @($applied | Where-Object { $_.kind -eq 'new' })
         $matchedSequences = @{}
@@ -1092,6 +1138,8 @@ foreach ($scale in $Timescales) {
             matched_applied_commands = $matchedSequences.Count; trace_jsonl = $tracePath
             bot_config_json = $botConfigPath; human_config_json = $humanConfigPath
             applied_jsonl = $appliedPath; world_json = $worldPath; server_log = $stdout
+            damage_jsonl = $damagePath; damage = $damageSummary
+            combat_log = $combatLog; projectiles_json = $projectilePath; projectiles = $projectileSummary
         }
         $results.Add($result)
         $result | Format-Table timescale, game_frames, game_fps, wall_seconds, teammate_seen, matched_applied_commands -AutoSize
@@ -1255,3 +1303,5 @@ if ($BSPFailureTrial -and @($results | Where-Object {
     throw "BSP failure trial did not hold a neutral command with AAS present: $summary"
 }
 Write-Output "Saved $summary"
+
+

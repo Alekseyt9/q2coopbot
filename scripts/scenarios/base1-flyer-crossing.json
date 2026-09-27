@@ -1,0 +1,9 @@
+{
+  "name": "base1-flyer-crossing",
+  "map": "base1",
+  "bot_origin": [608, 192, -32],
+  "actor_origin": [1184, 192, -32],
+  "target_class": "monster_flyer",
+  "target_origin": [1088, 384, 0],
+  "scope": "Isolated native Flyer AI; prepared positions, no scripted target movement"
+}

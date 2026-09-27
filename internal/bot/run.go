@@ -21,6 +21,9 @@ import (
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
 	TestWeaponSwitchFixture             string
+	TestDisableProjectileLead           bool
+	TestProjectileComparison            bool
+	TestCombatBarrier                   bool
 	TestInvulnerable                    bool
 	TestInitialHealth                   int
 	TestChangeEntry                     string
@@ -93,6 +96,12 @@ func transitionMapArgument(destination, previous string) (string, error) {
 }
 
 func Run(ctx context.Context, cfg Config) error {
+	if cfg.TestCombatBarrier && (!cfg.FramePaced || cfg.TestTeleport == "" || cfg.TestTeleportMap != "base1") {
+		return fmt.Errorf("combat barrier requires frame pacing and base1 teleport")
+	}
+	if (cfg.TestDisableProjectileLead || cfg.TestProjectileComparison) && (!cfg.FramePaced || !strings.HasPrefix(cfg.TestWeaponSwitchFixture, "projectile_")) {
+		return fmt.Errorf("projectile comparison controls require a frame-paced projectile fixture")
+	}
 	sessionDefinition, sessionRunner, err := configureSession(&cfg)
 	if err != nil {
 		return err
@@ -257,7 +266,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.TestSpawnClass == "" {
 		cfg.TestSpawnClass = "monster_soldier_light"
 	}
-	if cfg.TestSpawnClass != "monster_soldier_light" && cfg.TestSpawnClass != "monster_soldier_ss" && cfg.TestSpawnClass != "monster_infantry" && cfg.TestSpawnClass != "monster_tank" {
+	if cfg.TestSpawnClass != "monster_soldier_light" && cfg.TestSpawnClass != "monster_soldier_ss" && cfg.TestSpawnClass != "monster_infantry" && cfg.TestSpawnClass != "monster_tank" && cfg.TestSpawnClass != "monster_flyer" {
 		return fmt.Errorf("unsupported test spawn class %q", cfg.TestSpawnClass)
 	}
 	if cfg.AASDir == "" {
@@ -287,7 +296,7 @@ func Run(ctx context.Context, cfg Config) error {
 		testWalkTarget:          walkTarget, testWalkAfterFrames: cfg.TestWalkAfterFrames, testWalkFrames: cfg.TestWalkFrames,
 		testWalkRoute: cfg.TestWalkRoute,
 		conn:          conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
-		decoder: quake.NewDecoder(), planner: &Planner{AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53},
+		decoder: quake.NewDecoder(), planner: &Planner{AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53, TestDisableProjectileLead: cfg.TestDisableProjectileLead},
 		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name,
 		idle: cfg.Idle, duration: cfg.Duration, framePaced: cfg.FramePaced, gameFrames: cfg.GameFrames,
 		exitOnReconnect: cfg.ExitOnReconnect, testChangeMap: cfg.TestChangeMap,
@@ -300,13 +309,15 @@ func Run(ctx context.Context, cfg Config) error {
 		testSpawnMap:                     cfg.TestSpawnMap, testSpawnPosition: spawnPosition,
 		testSpawnClass: cfg.TestSpawnClass,
 		testGapStart:   cfg.TestGapStart, testGapFrames: cfg.TestGapFrames,
-		testLineCross:       cfg.TestLineCross,
-		testHoldPosition:    cfg.TestHoldPosition,
-		testGroundEdgeProbe: cfg.TestGroundEdgeProbe,
-		testDoorProbe:       cfg.TestDoorProbe,
-		testDoorPassProbe:   cfg.TestDoorPassProbe,
-		testButtonProbe:     cfg.TestButtonProbe,
-		testButtonAutoGoal:  cfg.TestButtonAutoGoal,
+		testLineCross:            cfg.TestLineCross,
+		testHoldPosition:         cfg.TestHoldPosition,
+		testProjectileComparison: cfg.TestProjectileComparison,
+		testCombatBarrier:        cfg.TestCombatBarrier,
+		testGroundEdgeProbe:      cfg.TestGroundEdgeProbe,
+		testDoorProbe:            cfg.TestDoorProbe,
+		testDoorPassProbe:        cfg.TestDoorPassProbe,
+		testButtonProbe:          cfg.TestButtonProbe,
+		testButtonAutoGoal:       cfg.TestButtonAutoGoal,
 	}
 	client.planner.TestDisableSearch = cfg.TestDisableSearch
 	client.planner.TestDisableProbe = cfg.TestDisableProbe
