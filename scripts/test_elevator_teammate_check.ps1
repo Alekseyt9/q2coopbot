@@ -10,10 +10,14 @@ $source=Get-Content $s.trace_jsonl;$actors=Get-Content $s.human_trace_jsonl
 $null=Assert-ElevatorTeammateWait @($source|ConvertFrom-Json) $c @($actors|ConvertFrom-Json)
 $cases=@('pushing','damage','lost_support','moving_platform','no_completion','actor_teleport')
 if($c.name -like '*side-walls*'){$cases+=@('missing_wall','shifted_wall','unsafe_bypass')}
+if($c.name -like '*ascent*'){$cases+=@('early_wait','no_ascent_blocker','no_retreat')}
 foreach($case in $cases){
  $rows=@($source|ConvertFrom-Json);$human=@($actors|ConvertFrom-Json)
  $r=$rows|Where-Object elevator -eq exit_teammate_wait|Select-Object -First 1
  switch($case){
+ early_wait {($rows|Where-Object {$_.map -eq 'base2' -and $_.frame -eq 70}).elevator='exit_teammate_wait'}
+ no_ascent_blocker {foreach($v in $rows|Where-Object {$_.map -eq 'base2' -and $_.frame -lt 75}){$v|Add-Member -NotePropertyName teammate -NotePropertyValue @(100,1408,24.125) -Force}}
+ no_retreat {foreach($v in $rows|Where-Object elevator -eq exit_teammate_retreat){$v.elevator='landing_probe'}}
  missing_wall {$r.movers=@($r.movers|Where-Object {$_.model -ne 1 -or $_.origin[0] -ne -576})}
  shifted_wall {foreach($wall in $r.movers|Where-Object {$_.model -eq 1 -and $_.origin[0] -eq -576}){$wall.origin[1]+=100}}
  unsafe_bypass {$r.elevator='exit_teammate_bypass'}

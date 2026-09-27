@@ -3,9 +3,9 @@
   "scenarios": [
     "base2-elevator-ascent-block.json",
     "base2-elevator-ascent-release.json",
-    "base2-elevator-exit-teammate-block.json"
+    "base2-elevator-side-walls-block.json"
   ],
-  "runtime_root": "../../workspace/runtime/q2go-elevator-cycle-base2",
+  "runtime_root": "../../workspace/runtime/q2go-elevator-cycle-base2-side-walls",
   "base_port": 30046,
   "repetitions": 1,
   "version": 1,

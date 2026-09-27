@@ -25,4 +25,11 @@ function Assert-ElevatorAscentBlock($Rows,$Scenario,$ActorRows){
  }
  if($rising -lt 8 -or $blocked -lt 5 -or $near -lt 1){throw 'No occupied exit during observed ascent'}
  if(@($scene|Where-Object elevator -eq exit_teammate_bypass).Count){throw 'Unexpected bypass in ascent block fixture'}
+ $retreat=@($scene|Where-Object elevator -eq exit_teammate_retreat)
+ $wait=@($scene|Where-Object elevator -eq exit_teammate_wait)
+ if($retreat.Count -lt 3 -or !$wait.Count -or $wait[0].self[0] -gt -40 -or $retreat[0].self[0]-$wait[0].self[0] -lt 30){throw 'Missing retreat into platform before waiting'}
+ foreach($r in $retreat){
+  $z=($r.movers|Where-Object model -eq 50).origin[2]
+  if(!$r.on_ground -or [math]::Abs($z) -gt 0.125 -or [math]::Abs($r.self[2]-24.125) -gt 0.25 -or [math]::Abs($r.self[1]-1408) -gt 0.25){throw 'Unsafe retreat support'}
+ }
 }

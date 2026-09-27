@@ -1,0 +1,21 @@
+{
+  "evidence": "workspace/artifacts/scenario-suite-20260927-213447-467/run-000",
+  "scenario": "scripts/run_elevator_ascent_trial.ps1",
+  "fixture": "Для отдельной проверки ожидания боковые обходы закрыты двумя func_wall. Исходная сцена без стенок выявила также ложный разрыв опоры на стыке brush.",
+  "title": "Выход занят во время подъёма: ожидание вне триггера вызывает урон",
+  "map": "base2",
+  "id": "base2-elevator-ascent-block",
+  "reproduction": "ready",
+  "acceptance": {
+    "block_during_ascent": true,
+    "min_retreat_frames": 3,
+    "min_wait_frames": 25,
+    "health_loss": 0
+  },
+  "expected_result": "Безопасный обход или отступ внутрь платформы с ожиданием без урона; выход после ухода напарника.",
+  "missing_setup": [],
+  "observed_failure": "Бот ждёт в x=-9 вне удерживающего триггера. На кадре108 платформа опускается, на112 здоровье падает до90.",
+  "status": "verified_retreat_wait_resume_2x",
+  "kind": "combat_spacing",
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-214204-952/report.json"
+}

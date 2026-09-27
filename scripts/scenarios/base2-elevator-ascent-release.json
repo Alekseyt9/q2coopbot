@@ -1,5 +1,5 @@
 {
-  "name": "base2-elevator-ascent-release",
+  "name": "base2-elevator-ascent-side-walls-release",
   "version": 1,
   "bot_origin": [
     44.375,
@@ -30,7 +30,7 @@
       "id": "block-during-ascent"
     },
     {
-      "frames": 35,
+      "frames": 50,
       "action": "wait",
       "id": "hold-exit"
     },

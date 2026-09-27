@@ -1,0 +1,20 @@
+{
+  "diagnosis": "Трасса подтверждает позднее включение elevator FSM после совместного подъёма. Предыдущая защита ожидания напарника не применяется к wait_bottom.",
+  "title": "После совместного подъёма бот ждёт лифт внизу и погибает на выходе",
+  "evidence": "workspace/artifacts/live-lift-crush-20260927-214649/bot-full.jsonl",
+  "acceptance": {
+    "complete_exit": true,
+    "no_wait_bottom_on_upper_landing": true,
+    "health_loss_from_lift": 0
+  },
+  "reproduction": "observation_only",
+  "observed_failure": "Кадры964–975: бот поднялся в cover_teammate без elevator state. На985 контроллер начал approach, на987 перешёл в wait_bottom, уже находясь на верхнем уровне. С989 позиция[-3,1406.375,24.125]. Урон лифта50:1001,1044,1087,1130,1173,1216,1259; здоровье65→-5. Затем перерождение.",
+  "id": "base2-elevator-late-controller-crush",
+  "missing_setup": [
+    "Воспроизвести совместный подъём с целью cover_teammate без активного elevator-контроллера, затем уход напарника наверху"
+  ],
+  "status": "confirmed_live",
+  "live_runtime": "workspace/runtime/live-coop-20260927-214416",
+  "map": "base2",
+  "expected_result": "Распознать уже состоявшийся подъём при позднем включении контроллера и безопасно завершить сход; не ждать нижнюю остановку на верхнем выходе."
+}

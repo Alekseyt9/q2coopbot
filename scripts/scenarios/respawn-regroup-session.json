@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "name": "respawn-hidden-regroup",
+  "transition_timeout_ms": 10000,
+  "phases": [
+    {
+      "id": "base1",
+      "scenario": {
+        "version": 1,
+        "name": "hidden-regroup-base1",
+        "map": "base2",
+        "start_frame": 40,
+        "game_frames": 520,
+        "actor_origin": [
+          194,
+          1940,
+          -167.875
+        ],
+        "bot_origin": [
+          240,
+          1940,
+          -167.875
+        ],
+        "expect": {},
+        "steps": [
+          {
+            "action": "wait",
+            "id": "wait-for-return",
+            "frames": 430
+          }
+        ]
+      },
+      "observer_respawn_cycle": {
+        "recovery_frames": 300,
+        "after_frames": 40,
+        "timeout_frames": 40,
+        "policy_only": true
+      }
+    },
+    {
+      "id": "base2",
+      "scenario": {
+        "version": 1,
+        "name": "hidden-regroup-base2",
+        "map": "base2",
+        "start_frame": 40,
+        "game_frames": 520,
+        "actor_origin": [
+          194,
+          1940,
+          -167.875
+        ],
+        "bot_origin": [
+          240,
+          1940,
+          -167.875
+        ],
+        "expect": {},
+        "steps": [
+          {
+            "action": "wait",
+            "id": "wait-for-return",
+            "frames": 430
+          }
+        ]
+      },
+      "observer_respawn_cycle": {
+        "recovery_frames": 300,
+        "policy_only": true,
+        "after_frames": 40,
+        "timeout_frames": 40
+      }
+    }
+  ],
+  "readiness_barrier": true
+}

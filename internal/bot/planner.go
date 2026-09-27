@@ -97,6 +97,7 @@ type Planner struct {
 	searchApproachStarted     bool
 	teammateSoundCue          *TeammateSoundCue
 	teammateEvidence          *TeammateEvidence
+	respawnRegroup            *respawnRegroup
 }
 
 // setTestGroundEdgeGoal bypasses route selection only for the live edge fixture.
@@ -200,6 +201,7 @@ func (p *Planner) setMap(name, root string) {
 	p.routeIndex = 0
 	p.routeKnown = false
 	p.elevator = nil
+	p.respawnRegroup = nil
 	p.probeTarget = nil
 	p.searchAttempt = nil
 	p.probeAttempted = false
@@ -304,6 +306,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	p.observeShotTeammateMotion(s)
 	p.observeUrgentRetreat(s)
 	previous := p.World.Snapshot
+	p.observeRespawnRegroup(previous, s)
 	p.doorPrevious = previous
 	if previous.Frame > 0 && previous.Health <= 0 && s.Health > 0 {
 		p.deathFrame = 0
@@ -347,9 +350,15 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	p.World.Elevator = ""
 	p.hasGoal = false
 	searching := false
+	regrouping := false
 	if s.Teammate == nil {
-		p.elevator = nil
-		searchGoal, searchKind, ok := p.hiddenTeammateGoal(s)
+		searchGoal, ok := p.respawnRegroupGoal(s)
+		searchKind := "regroup_after_respawn"
+		regrouping = ok
+		if !ok {
+			p.elevator = nil
+			searchGoal, searchKind, ok = p.hiddenTeammateGoal(s)
+		}
 		p.World.SearchAttempt = p.searchAttempt
 		if !ok {
 			p.routeKnown = false
@@ -372,7 +381,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.searchApproachStarted = false
 		p.lastSeenSelf = s.Self
 		p.lastSeenSelfKnown = true
-		if previousGoal == "search_last_seen" || previousGoal == "probe_last_seen" || previousGoal == "wait_for_teammate" {
+		if previousGoal == "search_last_seen" || previousGoal == "probe_last_seen" || previousGoal == "wait_for_teammate" || previousGoal == "regroup_after_respawn" {
 			p.routeKnown = false
 		}
 	}
@@ -423,7 +432,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 	}
 	goal = p.budgetHealthGoal(s, goal)
-	if item, ok := p.pickupGoal(s); ok {
+	if item, ok := p.pickupGoal(s); ok && !regrouping {
 		goal = item
 		p.World.Goal = "collect_item"
 	}
@@ -468,7 +477,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.routeAt = now
 		p.target = goal
 		p.routeIndex = 0
-		if searching {
+		if searching && !regrouping {
 			p.route, p.routeOK = p.Nav.SearchRoute(s.Self, goal)
 			if !p.routeOK {
 				// Retain diagnostics for a graph path requiring forbidden travel;
@@ -495,7 +504,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 	}
 	routeOK := p.routeOK
-	if searching {
+	if searching && !regrouping {
 		maxTravel := 640.0
 		if p.World.Goal == "probe_last_seen" {
 			maxTravel = 320
@@ -679,7 +688,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 		flight, _ := p.jumpCommand(quake.UserCmd{Yaw: cmd.Yaw})
 		return flight
 	}
-	if p.World.Goal != "follow_teammate" && p.World.Goal != "collect_item" && p.World.Goal != "recover_health" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
+	if p.World.Goal != "follow_teammate" && p.World.Goal != "collect_item" && p.World.Goal != "recover_health" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" && p.World.Goal != "regroup_after_respawn" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
 		if p.World.Command.LimitReason == "" {
 			p.World.Command.LimitReason = "no_movement_goal"
 		}

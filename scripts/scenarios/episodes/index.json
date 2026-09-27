@@ -72,6 +72,8 @@
     "base2-elevator-exit-crush.json",
     "base2-elevator-floor-approach.json",
     "base2-elevator-exit-teammate-block.json",
-    "base2-elevator-side-walls.json"
+    "base2-elevator-side-walls.json",
+    "base2-elevator-ascent-block.json",
+    "base2-elevator-late-controller-crush.json"
   ]
 }

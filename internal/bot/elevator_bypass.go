@@ -43,14 +43,33 @@ func (p *Planner) elevatorBypassClear(s quake.Snapshot, mover quake.Mover, from,
 			probe := point
 			probe[0] += offset[0]
 			probe[1] += offset[1]
-			drop, ok := g.GroundDrop(probe, 0.5)
-			if ok && drop <= 0.5 {
-				continue
-			}
-			drop, ok = g.MoverFooting(mover, probe, 0.5)
-			if !ok || drop > 0.5 {
+			if !elevatorSupportedPoint(g, mover, probe) {
 				return false
 			}
+		}
+	}
+	return true
+}
+
+func elevatorSupportedPoint(g *quake.MapInfo, mover quake.Mover, point quake.Vec3) bool {
+	grounded := func(p quake.Vec3) bool {
+		if drop, ok := g.GroundDrop(p, 0.5); ok && drop <= 0.5 {
+			return true
+		}
+		drop, ok := g.MoverFooting(mover, p, 0.5)
+		return ok && drop <= 0.5
+	}
+	if grounded(point) {
+		return true
+	}
+	// Exact shared brush edges can reject a point trace. Require support
+	// on all four sides within one network coordinate quantum, not one side.
+	for _, offset := range []quake.Vec3{{-.125, -.125, 0}, {.125, -.125, 0}, {-.125, .125, 0}, {.125, .125, 0}} {
+		probe := point
+		probe[0] += offset[0]
+		probe[1] += offset[1]
+		if !grounded(probe) {
+			return false
 		}
 	}
 	return true

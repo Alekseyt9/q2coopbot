@@ -8,6 +8,9 @@ import (
 // At the upper stop, keep the lift controller active when a visible teammate
 // occupies the exit. Do not improvise a sidestep on unverified mover support.
 func elevatorTeammateBlocksExit(s quake.Snapshot, target quake.Vec3, model quake.BSPModel, mover quake.Mover) bool {
+	return elevatorTeammateBlocksPath(s, target, model, mover, 30)
+}
+func elevatorTeammateBlocksPath(s quake.Snapshot, target quake.Vec3, model quake.BSPModel, mover quake.Mover, lookahead float64) bool {
 	if s.Teammate == nil || !s.OnGround || math.Abs(mover.Origin[2]-model.Origin[2]) > 0.125 || math.Abs(s.Self[2]-s.Teammate[2]) > 48 {
 		return false
 	}
@@ -20,7 +23,7 @@ func elevatorTeammateBlocksExit(s quake.Snapshot, target quake.Vec3, model quake
 	if (s.Teammate[0]-s.Self[0])*dx+(s.Teammate[1]-s.Self[1])*dy <= 0 {
 		return false
 	}
-	for step := 0.0; step <= math.Min(30, distance); step += 2 {
+	for step := 0.0; step <= math.Min(lookahead, distance); step += 2 {
 		if math.Abs(s.Self[0]+dx*step-s.Teammate[0]) < 34 && math.Abs(s.Self[1]+dy*step-s.Teammate[1]) < 34 {
 			return true
 		}
@@ -45,11 +48,7 @@ func (p *Planner) elevatorExitMove(cmd quake.UserCmd, s quake.Snapshot, target q
 	if p.elevator != nil && p.elevator.waitAnchor != nil {
 		// Keep waiting while the teammate still occupies the actual exit,
 		// even after retreating beyond the short forward collision probe.
-		probe := s
-		probe.Self = *p.elevator.waitAnchor
-		dx, dy := target[0]-probe.Self[0], target[1]-probe.Self[1]
-		d := math.Hypot(dx, dy)
-		if d > 0 && s.Teammate != nil && quake.Horizontal(s.Self, *s.Teammate) < 100 && math.Abs(s.Self[2]-s.Teammate[2]) < 48 && (s.Teammate[0]-s.Self[0])*dx+(s.Teammate[1]-s.Self[1])*dy > 0 {
+		if elevatorTeammateBlocksPath(s, target, model, mover, 100) {
 			return p.elevatorWaitInside(cmd, s, model, mover)
 		}
 		p.elevator.waitAnchor = nil
