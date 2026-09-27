@@ -76,6 +76,10 @@
     "base2-elevator-ascent-block.json",
     "base2-elevator-late-controller-crush.json",
     "base2-live-missed-ammo.json",
-    "base2-live-missed-machinegun.json"
+    "base2-live-missed-machinegun.json",
+    "base3-live-no-verified-landing.json",
+    "base3-live-missed-ammo.json",
+    "base3-live-missed-shotgun.json",
+    "base3-live-fire-at-dead-monster.json"
   ]
 }

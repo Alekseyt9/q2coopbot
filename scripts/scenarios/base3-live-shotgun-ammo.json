@@ -1,0 +1,27 @@
+{
+  "start_frame": 40,
+  "steps": [
+    {
+      "frames": 190,
+      "id": "wait-for-pickup",
+      "action": "wait"
+    }
+  ],
+  "expect": {},
+  "bot_origin": [
+    916.875,
+    710.375,
+    -807.875
+  ],
+  "name": "base3-live-shotgun-ammo",
+  "version": 1,
+  "bot_invulnerable": true,
+  "actor_origin": [
+    882.625,
+    715.375,
+    -807.875
+  ],
+  "map": "base3",
+  "game_frames": 240,
+  "bot_health": 97
+}

@@ -1,0 +1,14 @@
+{
+  "map": "base3",
+  "observed_failure": "Кадры3353–3529: только Blaster, inventory_known=true. Видны ammo_shells76 [1168,712,-816.875],77 [1144,678,-816.875] и ammo_bullets382 [600,808,-816.875]. Нет попытки подбора.",
+  "evidence": "workspace/artifacts/live-ammo-missed-20260927-221218/bot-followup.jsonl",
+  "missing_setup": [
+    "Воспроизводимый E2E и диагностика отклонённых кандидатов подбора"
+  ],
+  "title": "Не подбирает видимые патроны рядом с новым оружием",
+  "diagnosis": "usefulPickup отвергает патроны без соответствующего оружия; дробовик также остаётся неподобранным.",
+  "expected_result": "Получить доступное новое оружие и подходящие патроны с безопасным маршрутом и последующим возвращением к напарнику.",
+  "status": "confirmed_live",
+  "reproduction": "observation_only",
+  "id": "base3-live-missed-ammo"
+}

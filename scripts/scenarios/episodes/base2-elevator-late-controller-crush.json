@@ -17,5 +17,6 @@
   "expected_result": "Распознать уже состоявшийся подъём при позднем включении контроллера и безопасно завершить сход; не ждать нижнюю остановку на верхнем выходе.",
   "scenario": "scripts/run_elevator_late_controller_trial.ps1",
   "kind": "combat_spacing",
-  "verification_report": "workspace/artifacts/scenario-suite-20260927-215929-136/trip-report.json"
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-220314-633/report.json",
+  "resolution": "Поздний контроллер распознаёт верхнюю остановку по OnGround, высоте цели и реальной brush-опоре платформы, переходит в landing_probe вместо повторной посадки/wait_bottom."
 }

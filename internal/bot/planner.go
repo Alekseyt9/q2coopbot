@@ -98,6 +98,7 @@ type Planner struct {
 	teammateSoundCue          *TeammateSoundCue
 	teammateEvidence          *TeammateEvidence
 	respawnRegroup            *respawnRegroup
+	machinegunBurst           machinegunBurst
 	// Experimental until the long return route passes its live acceptance.
 	testRespawnRegroup bool
 }
@@ -570,10 +571,11 @@ func (p *Planner) command(prev quake.UserCmd) quake.UserCmd {
 	return p.commandAt(prev, time.Now())
 }
 
-func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
+func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.UserCmd) {
 	cmd := quake.UserCmd{Yaw: prev.Yaw, Msec: 50}
 	p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none"}
 	s := p.World.Snapshot
+	defer func() { result = p.limitMachinegunBurst(s, result) }()
 	if !isRailgun(s.Weapon) || s.Health <= 0 {
 		p.railAim = railAim{}
 	}

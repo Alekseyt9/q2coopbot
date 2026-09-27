@@ -1,0 +1,14 @@
+{
+  "tail_frames": 5,
+  "runtime_root": "../../workspace/runtime/q2go-base3-pickup",
+  "timescales": [
+    2
+  ],
+  "version": 1,
+  "parallelism": 2,
+  "scenarios": [
+    "base3-live-shotgun-ammo.json"
+  ],
+  "base_port": 30210,
+  "repetitions": 2
+}

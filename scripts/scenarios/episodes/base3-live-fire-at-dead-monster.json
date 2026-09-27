@@ -1,0 +1,13 @@
+{
+  "expected_result": "Исключать подтверждённо погибших врагов из выбора цели и прекращать расход боеприпасов на труп.",
+  "title": "Стреляет в уже погибшего монстра",
+  "evidence": "workspace/artifacts/live-dead-target-20260927-221424/bot-full.jsonl",
+  "observed_failure": "Сообщение пользователя о стрельбе по трупу. Последний кадр4573: aim_entity343 monster_infantry, animation frame185, ATTACK1. Враги также включают parasite360. Момент смерти и ошибочность классификации ещё не подтверждены.",
+  "missing_setup": [
+    "Определить момент смерти и модель/анимацию по трассе; воспроизводимый контроль"
+  ],
+  "map": "base3",
+  "reproduction": "observation_only",
+  "status": "reported_live",
+  "id": "base3-live-fire-at-dead-monster"
+}

@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet('base2','base3')][string]$Map='base3',[switch]$SideWalls)
+param([ValidateSet('base2','base3')][string]$Map='base3',[switch]$SideWalls,[string]$RuntimeRoot='')
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 $runtime=Join-Path $repo ('workspace/runtime/q2go-elevator-cycle'+$(if($Map -eq 'base2'){'-base2'}))
@@ -7,6 +7,7 @@ if($SideWalls){
     if($Map -ne 'base2'){throw 'Side walls fixture requires base2'}
     $runtime+='-side-walls'
 }
+if($RuntimeRoot){$runtime=$RuntimeRoot}
 & "$PSScriptRoot/prepare_runtime.ps1" -RuntimeRoot $runtime | Out-Null
 Copy-Item -LiteralPath (Join-Path $repo "workspace/runtime/q2go/baseq2/maps/$Map.aas") -Destination (Join-Path $runtime "baseq2/maps/$Map.aas") -Force
 # Extract only the entity lump. The BSP, collision and native mover physics stay unchanged.
