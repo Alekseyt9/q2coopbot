@@ -1,0 +1,25 @@
+{
+  "id": "base2-elevator-floor-approach",
+  "title": "Подход к лифту50 с неподвижного нижнего пола",
+  "map": "base2",
+  "kind": "combat_spacing",
+  "status": "verified_static_floor_parallel_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_base2_elevator_floor_trial.ps1",
+  "missing_setup": [],
+  "expected_result": "Из двух точек вне платформы пройти обычный маршрут, подняться и полностью выйти без урона.",
+  "acceptance": {
+    "initial_floor_frames": 11,
+    "min_carried_height": 180,
+    "min_rising_frames": 10,
+    "min_supported_frames": 15,
+    "health_loss": 0
+  },
+  "remaining_validation": [
+    "Прибытие во время движения платформы",
+    "Выход, перекрытый напарником",
+    "Бой и живая игра"
+  ],
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-210457-106/report.json",
+  "detailed_report": "workspace/artifacts/scenario-suite-20260927-210500-009/trip-report.json"
+}

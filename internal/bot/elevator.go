@@ -80,11 +80,13 @@ func (p *Planner) elevatorCommand(cmd quake.UserCmd, board quake.Waypoint) quake
 	inside := s.Self[0] > model.Min[0]+mover.Origin[0]+12 && s.Self[0] < model.Max[0]+mover.Origin[0]-12 &&
 		s.Self[1] > model.Min[1]+mover.Origin[1]+12 && s.Self[1] < model.Max[1]+mover.Origin[1]-12
 	bottom := mover.Origin[2] <= model.Origin[2]-float64(board.Rise)+16
-	if ride.stage == "landing_unconfirmed" {
-		if s.OnGround && math.Abs(s.Self[2]-p.goalPoint[2]) < 32 && quake.Horizontal(s.Self, p.goalPoint) < 100 {
+	if ride.stage == "landing_unconfirmed" || ride.stage == "landing_probe" {
+		if s.OnGround && elevatorHullClear(s.Self, model, mover.Origin) && math.Abs(s.Self[2]-p.goalPoint[2]) < 32 {
 			return p.completeElevator(cmd, ride, s)
 		}
-		return cmd
+		if ride.stage == "landing_unconfirmed" {
+			return cmd
+		}
 	}
 	if ride.stage == "approach" || ride.stage == "probe_mover" || ride.stage == "waiting_for_mover" {
 		if inside && bottom {
@@ -104,13 +106,6 @@ func (p *Planner) elevatorCommand(cmd quake.UserCmd, board quake.Waypoint) quake
 		setStage("board")
 	}
 	if ride.stage == "board" {
-		// Stage toward the exit while retaining room for the standing hull.
-		// Centering too deeply leaves insufficient time to clear low ceilings.
-		dx, dy := ride.exit[0]-center[0], ride.exit[1]-center[1]
-		if distance := math.Hypot(dx, dy); distance > 0 {
-			center[0] = math.Max(model.Min[0]+mover.Origin[0]+32, math.Min(model.Max[0]+mover.Origin[0]-32, center[0]+16*dx/distance))
-			center[1] = math.Max(model.Min[1]+mover.Origin[1]+32, math.Min(model.Max[1]+mover.Origin[1]-32, center[1]+16*dy/distance))
-		}
 		if !bottom && !inside {
 			setStage("wait_bottom")
 			return cmd
@@ -130,22 +125,25 @@ func (p *Planner) elevatorCommand(cmd quake.UserCmd, board quake.Waypoint) quake
 		}
 		// The AAS exit can be below the final platform height. Begin moving
 		// toward it during ascent, before the upper wall blocks a late exit.
-		if mover.Origin[2] < model.Origin[2]-float64(board.Rise)+5 || !s.OnGround {
+		if mover.Origin[2] < model.Origin[2]-float64(board.Rise)+30 || !s.OnGround {
 			return cmd
 		}
 		setStage("exit")
 	}
 	if ride.stage == "exit" || ride.stage == "landing_probe" {
 		cmd.Up = -200
-		if mover.Origin[2] <= model.Origin[2]-float64(board.Rise)+1 && inside && quake.Horizontal(s.Self, ride.exit) > 32 {
+		if p.elevatorExitCanStand(s, ride.exit) {
+			cmd.Up = 0
+		}
+		if bottom && inside && quake.Horizontal(s.Self, ride.exit) > 32 {
 			setStage("ride")
 			return cmd
 		}
 		if ride.stage == "exit" && quake.Horizontal(s.Self, ride.exit) > 16 {
-			return elevatorMove(cmd, s, ride.exit)
+			return p.elevatorExitMove(cmd, s, ride.exit, model, *mover)
 		}
-		if s.Self[2]-p.goalPoint[2] > 40 {
-			if ride.stage == "exit" && (!s.OnGround || p.Nav.AreaFor(s.Self) != ride.toArea) {
+		if s.Self[2]-p.goalPoint[2] > 40 || !elevatorHullClear(s.Self, model, mover.Origin) {
+			if ride.stage == "exit" && !s.OnGround {
 				return cmd
 			}
 			// An AAS area may cover both the lift edge and a lower landing.
@@ -160,7 +158,7 @@ func (p *Planner) elevatorCommand(cmd quake.UserCmd, board quake.Waypoint) quake
 			}
 			landing := quake.Vec3{ride.exit[0] + 64*awayX/distance, ride.exit[1] + 64*awayY/distance, ride.exit[2]}
 			if quake.Horizontal(s.Self, landing) > 12 {
-				return elevatorMove(cmd, s, landing)
+				return p.elevatorExitMove(cmd, s, landing, model, *mover)
 			}
 			setStage("landing_unconfirmed")
 			return cmd
@@ -184,4 +182,28 @@ func (p *Planner) completeElevator(cmd quake.UserCmd, ride *elevatorRide, s quak
 
 func elevatorMove(cmd quake.UserCmd, s quake.Snapshot, target quake.Vec3) quake.UserCmd {
 	return worldMove(cmd, s, target[0]-s.Self[0], target[1]-s.Self[1], 300, false)
+}
+
+// Preserve full walking speed while headroom permits it. Always reserve an
+// additional 24 units of ascent before permitting the standing hull.
+func (p *Planner) elevatorExitCanStand(s quake.Snapshot, target quake.Vec3) bool {
+	g := p.World.Geometry
+	if g == nil || !s.OnGround || p.goalPoint[2]-s.Self[2] > 40 {
+		return false
+	}
+	dx, dy := target[0]-s.Self[0], target[1]-s.Self[1]
+	distance := math.Hypot(dx, dy)
+	if distance < 1 {
+		return false
+	}
+	raised := s.Self
+	raised[2] += 24
+	next := raised
+	next[0] += 30 * dx / distance
+	next[1] += 30 * dy / distance
+	return g.PlayerMoveClear(s.Self, raised) && g.PlayerMoveClear(raised, next)
+}
+
+func elevatorHullClear(pos quake.Vec3, model quake.BSPModel, origin quake.Vec3) bool {
+	return pos[0]-16 >= model.Max[0]+origin[0] || pos[0]+16 <= model.Min[0]+origin[0] || pos[1]-16 >= model.Max[1]+origin[1] || pos[1]+16 <= model.Min[1]+origin[1]
 }

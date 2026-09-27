@@ -1,0 +1,25 @@
+{
+  "id": "base2-elevator-exit-crush",
+  "title": "Сдавливание при выходе с платформы50 на base2",
+  "map": "base2",
+  "kind": "combat_spacing",
+  "status": "verified_prepared_exit_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_base2_elevator_exit_trial.ps1",
+  "missing_setup": [],
+  "evidence": "workspace/artifacts/scenario-suite-20260927-204314-888/suite-summary.json",
+  "observed_failure": "Оба варианта исходного положения (-36/-48,1408,-40) теряют10 здоровья при подъёме/выходе. Общий suite gate ошибку поведения не оценивает. Новый анализатор отвергает исходные трассы.",
+  "expected_result": "Сохранить здоровье100 и устойчиво выйти за платформу к напарнику. Одного completed недостаточно.",
+  "acceptance": {
+    "health_loss": 0,
+    "settled_frames": 21,
+    "min_exit_x": 0
+  },
+  "remaining_validation": [
+    "Обычная скорость1x и живая игра с пользователем",
+    "Подход с внешнего неподвижного пола на base2",
+    "Другие скорости/геометрия платформ и динамические препятствия"
+  ],
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-205706-938/report.json",
+  "resolution": "Выход не завершается до освобождения всего корпуса и опоры на высоте цели. Разрешена скорость стоя вблизи высоты выхода при проверенной статической геометрии с запасом24 единицы подъёма. landing_probe может подтвердить опору; снято ограничение100 единиц, мешавшее завершению безопасного схода."
+}

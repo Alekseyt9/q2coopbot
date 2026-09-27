@@ -1,0 +1,28 @@
+{
+  "id": "base2-elevator-exit-teammate-block",
+  "title": "Напарник перекрывает выход с лифта50",
+  "map": "base2",
+  "status": "verified_wait_and_resume_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_elevator_teammate_trial.ps1",
+  "scenario_tail_frames": 5,
+  "missing_setup": [],
+  "evidence": "workspace/artifacts/scenario-suite-20260927-210113-283/suite-summary.json",
+  "observed_failure": "После подъёма бот остаётся x=-22.125 y=1408 z=24.125 в landing_probe, продолжает Forward300 и упирается в напарника x=10. Полный выход не подтверждён.",
+  "expected_result": "Безопасно обойти напарника или восстановить движение после освобождения выхода; не объявлять completed при перекрытии платформы корпусом.",
+  "acceptance": {
+    "health_loss": 0,
+    "neutral_wait": true,
+    "min_waiting_frames": 25,
+    "resume_after_release": true,
+    "no_false_completion": true
+  },
+  "kind": "combat_spacing",
+  "remaining_validation": [
+    "Обход неподвижного напарника",
+    "Блокировка во время движения платформы",
+    "Другие выходы и бой"
+  ],
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-211013-623/report.json",
+  "resolution": "У верхней остановки при видимом напарнике на ближайших30 единицах пути бот выдаёт нейтральное движение и сохраняет контроллер лифта. После освобождения пути продолжает сход. Постоянного напарника пока не обходит."
+}

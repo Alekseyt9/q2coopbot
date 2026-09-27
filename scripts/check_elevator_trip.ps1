@@ -17,7 +17,7 @@ function Assert-ElevatorTrip($Rows,$Scenario) {
         if($m.Count -ne 1){throw 'Missing platform observation'}
         if($moverID -and $moverID -ne $m[0].id){throw 'Platform identity changed'}
         $moverID=$m[0].id;$stages+= $r.elevator
-        if($r.frame -lt $done[0].frame){
+        if([math]::Abs($r.self[2]+231.875) -gt 0.25){
             if($r.self[0] -lt 776 -or $r.self[0] -gt 888 -or $r.self[1] -lt 288 -or $r.self[1] -gt 392){throw 'Body left deck before upper landing'}
             if([math]::Abs($r.self[2]-$m[0].origin[2]+231.875) -gt 0.25){throw 'Deck support height mismatch'}
             $supported++

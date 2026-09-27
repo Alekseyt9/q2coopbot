@@ -1,0 +1,15 @@
+{
+  "parallelism": 2,
+  "scenarios": [
+    "base2-elevator-exit-teammate-block.json",
+    "base2-elevator-exit-teammate-release.json"
+  ],
+  "runtime_root": "../../workspace/runtime/q2go-elevator-cycle-base2",
+  "base_port": 29986,
+  "repetitions": 1,
+  "version": 1,
+  "timescales": [
+    2
+  ],
+  "tail_frames": 5
+}

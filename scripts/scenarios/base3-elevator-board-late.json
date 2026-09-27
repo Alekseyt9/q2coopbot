@@ -31,7 +31,7 @@
     {
       "id": "wait-for-companion",
       "action": "wait",
-      "frames": 85
+      "frames": 90
     }
   ]
 }

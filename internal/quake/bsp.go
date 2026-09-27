@@ -323,6 +323,7 @@ type bspPlane struct {
 }
 type bspBrush struct{ first, count, contents int }
 type CollisionMap struct {
+	modelBrushes [][]int
 	planes       []bspPlane
 	sides        []uint16
 	sideSurfaces []groundSurface
@@ -687,6 +688,7 @@ func LoadMap(root, name string) (MapInfo, error) {
 		}
 		c.brushes[i] = bspBrush{first, count, contents}
 	}
+	var collected []int
 	seenNode := map[int]bool{}
 	seenBrush := map[int]bool{}
 	var walk func(int) error
@@ -708,7 +710,7 @@ func LoadMap(root, name string) (MapInfo, error) {
 					return errors.New("BSP leaf brush index out of range")
 				}
 				if !seenBrush[brush] {
-					c.worldBrushes = append(c.worldBrushes, brush)
+					collected = append(collected, brush)
 					seenBrush[brush] = true
 				}
 			}
@@ -731,6 +733,16 @@ func LoadMap(root, name string) (MapInfo, error) {
 	}
 	if e = walk(int(int32(binary.LittleEndian.Uint32(models[36:])))); e != nil {
 		return MapInfo{}, e
+	}
+	c.worldBrushes = collected
+	c.modelBrushes = make([][]int, len(modelBounds))
+	for index := 1; index < len(modelBounds); index++ {
+		collected = nil
+		seenNode, seenBrush = map[int]bool{}, map[int]bool{}
+		if e = walk(int(int32(binary.LittleEndian.Uint32(models[index*48+36:])))); e != nil {
+			return MapInfo{}, e
+		}
+		c.modelBrushes[index] = collected
 	}
 	lighting, lightErr := parseBSPLight(lump, c.planes, nodes, models)
 	lightError := ""
