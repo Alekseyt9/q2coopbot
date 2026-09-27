@@ -74,6 +74,8 @@
     "base2-elevator-exit-teammate-block.json",
     "base2-elevator-side-walls.json",
     "base2-elevator-ascent-block.json",
-    "base2-elevator-late-controller-crush.json"
+    "base2-elevator-late-controller-crush.json",
+    "base2-live-missed-ammo.json",
+    "base2-live-missed-machinegun.json"
   ]
 }

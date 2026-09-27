@@ -118,7 +118,28 @@ func testWalkDiagnostic(s quake.Snapshot, target quake.Vec3, geometry *quake.Map
 		return cmd, "within_horizontal_tolerance"
 	}
 	if reason := geometry.GroundMoveHazardStep(nav, s.Self, dx, dy, math.Min(30, distance)); reason != "" {
-		return cmd, reason
+		// The actor may stand on a stopped platform rather than static BSP.
+		// Use the same exact mover/support checks as the companion's bypass.
+		clear := false
+		if reason == "no_ground_support" {
+			p := &Planner{World: World{Geometry: geometry}}
+			next := s.Self
+			next[0] += dx / distance * math.Min(30, distance)
+			next[1] += dy / distance * math.Min(30, distance)
+			for _, mover := range s.Movers {
+				model, ok := geometry.Model(mover.Model)
+				if !ok || quake.Distance(mover.Origin, model.Origin) > .125 {
+					continue
+				}
+				if drop, ok := geometry.MoverFooting(mover, s.Self, .5); ok && drop <= .5 && p.elevatorBypassClear(s, mover, s.Self, next) {
+					clear = true
+					break
+				}
+			}
+		}
+		if !clear {
+			return cmd, reason
+		}
 	}
 	cmd.Pitch = -s.DeltaAngles[0]
 	return worldMove(cmd, s, dx, dy, math.Min(300, distance*10), false), ""

@@ -98,6 +98,8 @@ type Planner struct {
 	teammateSoundCue          *TeammateSoundCue
 	teammateEvidence          *TeammateEvidence
 	respawnRegroup            *respawnRegroup
+	// Experimental until the long return route passes its live acceptance.
+	testRespawnRegroup bool
 }
 
 // setTestGroundEdgeGoal bypasses route selection only for the live edge fixture.
@@ -491,6 +493,9 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			}
 			if !p.routeOK {
 				p.route, p.routeOK = p.Nav.Route(s.Self, goal)
+			}
+			if !p.routeOK && regrouping {
+				p.route, p.routeOK = p.regroupEntryRoute(s, goal)
 			}
 			if !p.routeOK {
 				p.route, p.routeOK = p.localFlatRoute(s, goal)

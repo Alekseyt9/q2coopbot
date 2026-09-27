@@ -33,7 +33,7 @@ $runtime=Join-Path $out 'runtime'
 New-Item -ItemType Directory -Path (Join-Path $runtime 'baseq2/maps') -Force | Out-Null
 Get-ChildItem -LiteralPath $source -File | Where-Object Extension -in @('.exe','.dll') | Copy-Item -Destination $runtime
 Copy-Item -LiteralPath (Join-Path $source 'baseq2/game.dll') -Destination (Join-Path $runtime 'baseq2')
-foreach($asset in Get-ChildItem -LiteralPath (Join-Path $source 'baseq2') -Recurse -File | Where-Object Extension -in @('.pak','.bsp','.aas')) {
+foreach($asset in Get-ChildItem -LiteralPath (Join-Path $source 'baseq2') -Recurse -File | Where-Object Extension -in @('.pak','.bsp','.aas','.ent')) {
     $relative=[IO.Path]::GetRelativePath((Join-Path $source 'baseq2'),$asset.FullName)
     $dest=Join-Path (Join-Path $runtime 'baseq2') $relative
     New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null

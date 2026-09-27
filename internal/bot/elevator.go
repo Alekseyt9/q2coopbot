@@ -82,6 +82,12 @@ func (p *Planner) elevatorCommand(cmd quake.UserCmd, board quake.Waypoint) quake
 	inside := s.Self[0] > model.Min[0]+mover.Origin[0]+12 && s.Self[0] < model.Max[0]+mover.Origin[0]-12 &&
 		s.Self[1] > model.Min[1]+mover.Origin[1]+12 && s.Self[1] < model.Max[1]+mover.Origin[1]-12
 	bottom := mover.Origin[2] <= model.Origin[2]-float64(board.Rise)+16
+	// A player can ride alongside the teammate before following activates
+	// an AAS elevator reach. Adopt the observed landing instead of boarding
+	// the same lift again from its upper stop.
+	if (ride.stage == "approach" || ride.stage == "probe_mover" || ride.stage == "waiting_for_mover" || ride.stage == "wait_bottom" || ride.stage == "board") && p.elevatorAtUpperLanding(s, model, *mover) {
+		setStage("landing_probe")
+	}
 	if ride.stage == "landing_unconfirmed" || ride.stage == "landing_probe" {
 		if s.OnGround && elevatorHullClear(s.Self, model, mover.Origin) && math.Abs(s.Self[2]-p.goalPoint[2]) < 32 {
 			return p.completeElevator(cmd, ride, s)

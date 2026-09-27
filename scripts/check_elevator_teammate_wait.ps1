@@ -1,7 +1,9 @@
 . "$PSScriptRoot/check_base2_elevator_exit.ps1"
 . "$PSScriptRoot/check_elevator_moving_teammate.ps1"
 . "$PSScriptRoot/check_elevator_ascent.ps1"
+. "$PSScriptRoot/check_elevator_late_controller.ps1"
 function Assert-ElevatorTeammateWait($Rows,$Scenario,$ActorRows){
+ if($Scenario.name -eq 'base2-elevator-late-controller'){return Assert-ElevatorLateController $Rows $Scenario $ActorRows}
  if($Scenario.name -like 'base2-elevator-ascent-*'){Assert-ElevatorAscentBlock $Rows $Scenario $ActorRows}
  if($Scenario.name -like 'base2-elevator-exit-teammate-cross*'){return Assert-ElevatorMovingTeammate $Rows $Scenario $ActorRows}
  $scene=@($Rows|Where-Object {$_.map -eq 'base2' -and $_.frame -ge $Scenario.start_frame})

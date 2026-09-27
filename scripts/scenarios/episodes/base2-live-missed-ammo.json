@@ -1,0 +1,13 @@
+{
+  "observed_failure": "Кадр4317: ammo_bullets id85 в[760,2640,15] виден рядом, у бота только Blaster; usefulPickup запрещает пули без оружия.",
+  "expected_result": "Учитывать восстановление вооружения после смерти, не оставаться с одним Blaster при доступных предметах.",
+  "map": "base2",
+  "status": "confirmed_live",
+  "evidence": "workspace/artifacts/live-pickup-missed-20260927-215142/bot-full.jsonl",
+  "title": "Пропуск предмета после респавна: ammo",
+  "id": "base2-live-missed-ammo",
+  "reproduction": "observation_only",
+  "missing_setup": [
+    "Воспроизводимая сцена и согласованная политика приоритета нового оружия после респавна"
+  ]
+}

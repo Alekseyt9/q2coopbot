@@ -7,14 +7,15 @@
     "no_wait_bottom_on_upper_landing": true,
     "health_loss_from_lift": 0
   },
-  "reproduction": "observation_only",
+  "reproduction": "ready",
   "observed_failure": "Кадры964–975: бот поднялся в cover_teammate без elevator state. На985 контроллер начал approach, на987 перешёл в wait_bottom, уже находясь на верхнем уровне. С989 позиция[-3,1406.375,24.125]. Урон лифта50:1001,1044,1087,1130,1173,1216,1259; здоровье65→-5. Затем перерождение.",
   "id": "base2-elevator-late-controller-crush",
-  "missing_setup": [
-    "Воспроизвести совместный подъём с целью cover_teammate без активного elevator-контроллера, затем уход напарника наверху"
-  ],
-  "status": "confirmed_live",
+  "missing_setup": [],
+  "status": "verified_parallel_2x",
   "live_runtime": "workspace/runtime/live-coop-20260927-214416",
   "map": "base2",
-  "expected_result": "Распознать уже состоявшийся подъём при позднем включении контроллера и безопасно завершить сход; не ждать нижнюю остановку на верхнем выходе."
+  "expected_result": "Распознать уже состоявшийся подъём при позднем включении контроллера и безопасно завершить сход; не ждать нижнюю остановку на верхнем выходе.",
+  "scenario": "scripts/run_elevator_late_controller_trial.ps1",
+  "kind": "combat_spacing",
+  "verification_report": "workspace/artifacts/scenario-suite-20260927-215929-136/trip-report.json"
 }

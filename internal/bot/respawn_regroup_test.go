@@ -8,7 +8,7 @@ import (
 func TestRespawnRegroupLongRouteAndLifecycle(t *testing.T) {
 	last := quake.Vec3{2000, 0, 200}
 	n := &quake.Navigator{Areas: []quake.Area{{}, {Min: quake.Vec3{-10, -10, -10}, Max: quake.Vec3{10, 10, 40}}, {Min: quake.Vec3{1990, -10, 180}, Max: quake.Vec3{2010, 10, 240}}}, Edges: [][]quake.Edge{{}, {{To: 2, Start: quake.Vec3{32, 0, 24}, End: last, Kind: 2, Cost: 10}}, nil}}
-	p := &Planner{Nav: n, World: World{Map: "test", GeometryStatus: "ready", Snapshot: quake.Snapshot{Map: "test", Frame: 100, Health: -5}}}
+	p := &Planner{testRespawnRegroup: true, Nav: n, World: World{Map: "test", GeometryStatus: "ready", Snapshot: quake.Snapshot{Map: "test", Frame: 100, Health: -5}}}
 	age := 600
 	s := quake.Snapshot{Map: "test", Frame: 101, Health: 100, OnGround: true, Self: quake.Vec3{0, 0, 24}, LastTeammate: &last, LastTeammateEntity: 2, TeammateAgeFrames: &age}
 	p.update(s, "")
