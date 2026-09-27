@@ -109,6 +109,13 @@ func (p *Planner) markResourceVisit(at quake.Vec3) {
 // Memory detours are limited to supported walking routes. Existing command
 // guards still check doors and dynamic obstacles on every movement command.
 func (p *Planner) resourceRoute(from, at quake.Vec3) (float64, bool) {
+	cost, ok := p.resourceWalkingRoute(from, at)
+	return cost, ok && cost <= 512
+}
+
+// Health recovery has its own progress/time budget. Keep route validity
+// separate from the shorter optional weapon/ammo detour budget.
+func (p *Planner) resourceWalkingRoute(from, at quake.Vec3) (float64, bool) {
 	g := p.World.Geometry
 	if p.Nav == nil || !g.HasCollision() || !g.PlayerMoveClear(at, at) {
 		return 0, false
@@ -129,5 +136,5 @@ func (p *Planner) resourceRoute(from, at quake.Vec3) (float64, bool) {
 		prev = wp.Position
 	}
 	cost += quake.Distance(prev, at)
-	return cost, cost <= 512
+	return cost, true
 }

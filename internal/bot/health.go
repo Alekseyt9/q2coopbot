@@ -60,7 +60,7 @@ func (p *Planner) healthGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	if p.Nav != nil && p.World.Geometry.HasCollision() {
 		for _, item := range s.Pickups {
 			if item.Class == "item_health" && usefulHealth(s, item) && p.healthAllowed(item.Origin, s.Frame) && quake.Horizontal(s.Self, item.Origin) < 300 && math.Abs(healthStand(item.Origin)[2]-s.Self[2]) <= 64 {
-				if _, ok := p.resourceRoute(s.Self, healthStand(item.Origin)); ok {
+				if _, ok := p.resourceWalkingRoute(s.Self, healthStand(item.Origin)); ok {
 					localAlternative = true
 					break
 				}

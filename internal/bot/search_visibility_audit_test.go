@@ -37,7 +37,9 @@ func TestSearchVisibilityAudit(t *testing.T) {
 			t.Fatal("useful geometric viewpoint rejected")
 		}
 		v := p.searchAttempt.Visibility
-		if v.MaxNewlyVisible != 0 || v.AuditMaxGain <= 0 || v.noNewCoverage() {
+		// A regenerated AAS can let the coarse sampler see the witness
+		// directly. The audit is needed only when coarse gain is zero.
+		if v == nil || v.noNewCoverage() || (v.MaxNewlyVisible == 0 && v.AuditMaxGain <= 0) {
 			t.Fatalf("miss not detected: %+v", v)
 		}
 		t.Logf("self=%v audit=%+v", tc.self, v)

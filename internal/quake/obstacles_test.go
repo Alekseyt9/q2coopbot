@@ -2,6 +2,25 @@ package quake
 
 import "testing"
 
+func TestParasiteDeathAndRevivalClassification(t *testing.T) {
+	d := Decoder{Config: map[int]string{33: "models/monsters/parasite/tris.md2"}}
+	for _, frame := range []int{31, 32, 33, 38, 39, 31} {
+		for _, solid := range []uint16{0, 8290} {
+			s := d.Snapshot(Frame{Number: 1, Entities: map[int]Entity{360: {Number: 360, Model: 1, Frame: frame, Solid: solid}}})
+			dead := frame >= 32 && frame <= 38
+			if (len(s.Defeated) == 1) != dead || (len(s.Enemies) == 0) != dead || (len(s.Obstacles) == 1) != (solid != 0) {
+				t.Fatalf("frame=%d solid=%d snapshot=%+v", frame, solid, s)
+			}
+		}
+	}
+	// The same live report also contained Infantry185: that is attack102,
+	// not a corpse. Do not suppress living targets to fix Parasite38.
+	d.Config[33] = "models/monsters/infantry/tris.md2"
+	if s := d.Snapshot(Frame{Number: 2, Entities: map[int]Entity{343: {Number: 343, Model: 1, Frame: 185, Solid: 8290}}}); len(s.Enemies) != 1 {
+		t.Fatal("live infantry attack incorrectly classified as death")
+	}
+}
+
 func TestEntitySolidDeltaAndDeathObstacle(t *testing.T) {
 	e, err := parseEntity(&reader{data: []byte{0x20, 0x08}}, 7, 0x8000000, Entity{Number: 7})
 	if err != nil || e.Solid != 2080 {

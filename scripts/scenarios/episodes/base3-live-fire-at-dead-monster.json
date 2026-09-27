@@ -2,12 +2,23 @@
   "expected_result": "Исключать подтверждённо погибших врагов из выбора цели и прекращать расход боеприпасов на труп.",
   "title": "Стреляет в уже погибшего монстра",
   "evidence": "workspace/artifacts/live-dead-target-20260927-221424/bot-full.jsonl",
-  "observed_failure": "Сообщение пользователя о стрельбе по трупу. Последний кадр4573: aim_entity343 monster_infantry, animation frame185, ATTACK1. Враги также включают parasite360. Момент смерти и ошибочность классификации ещё не подтверждены.",
-  "missing_setup": [
-    "Определить момент смерти и модель/анимацию по трассе; воспроизводимый контроль"
-  ],
+  "observed_failure": "base3:352 кадра ATTACK по parasite360 в диапазоне смерти32–38, кадры4176–4552. Infantry343/185 из последнего кадра — живая атака102, не труп.",
+  "missing_setup": [],
   "map": "base3",
-  "reproduction": "observation_only",
-  "status": "reported_live",
-  "id": "base3-live-fire-at-dead-monster"
+  "reproduction": "ready",
+  "status": "verified_parallel_2x",
+  "id": "base3-live-fire-at-dead-monster",
+  "diagnosis": "В декодере отсутствовала классификация смерти Parasite. Добавлен диапазон32–38 из исходников baseq2; solid сохраняется как препятствие, но цель исключается из Enemies.",
+  "scenario": "scripts/run_parasite_death_trial.ps1",
+  "kind": "combat_spacing",
+  "acceptance": {
+    "real_kill": true,
+    "complete_death_animation": true,
+    "no_corpse_target": true,
+    "no_attack_without_enemies": true
+  },
+  "verification": [
+    "workspace/artifacts/parasite-death-a/death-report.json",
+    "workspace/artifacts/parasite-death-b/death-report.json"
+  ]
 }

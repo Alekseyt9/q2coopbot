@@ -23,5 +23,6 @@
   ],
   "map": "base3",
   "game_frames": 240,
-  "bot_health": 97
+  "bot_health": 97,
+  "map_entry": "base2a"
 }

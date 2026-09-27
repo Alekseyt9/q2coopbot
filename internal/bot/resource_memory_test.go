@@ -140,6 +140,10 @@ func TestBase1HealthRejectsExpensiveUpperFloor(t *testing.T) {
 	s := quake.Snapshot{Frame: 100, Health: 40, Self: quake.Vec3{940, 75, -167.875}, Pickups: []quake.Object{upper, lower}}
 	at, ok := p.healthGoal(s)
 	if !ok || at != healthStand(lower.Origin) {
+		for _, item := range s.Pickups {
+			cost, valid := p.resourceRoute(s.Self, healthStand(item.Origin))
+			t.Logf("item=%v cost=%v valid=%v", item.Origin, cost, valid)
+		}
 		t.Fatalf("goal=%v ok=%v", at, ok)
 	}
 }

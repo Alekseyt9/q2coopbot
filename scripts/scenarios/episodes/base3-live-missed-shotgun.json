@@ -3,12 +3,14 @@
   "observed_failure": "Кадры3353–3529: бот [916.875,710.375,-807.875], видимый weapon_shotgun383 [1168,752,-816.875], около255 единиц. Напарник рядом, здоровье97, cover_teammate/no_movement_goal. Попытки подбора нет.",
   "evidence": "workspace/artifacts/live-ammo-missed-20260927-221218/bot-followup.jsonl",
   "missing_setup": [
-    "Воспроизводимый E2E и диагностика отклонённых кандидатов подбора"
+    "Автоматическое подключение специализированной проверки к реестру; повтор полного живого эпизода с боем"
   ],
   "title": "Не берёт видимый дробовик, оставаясь с Blaster",
-  "diagnosis": "Дробовик укладывается в радиус256 и отсутствует в инвентаре. Причина дальнейшего отклонения (маршрут, временный запрет или другой фильтр) в текущей трассе не записана; требует воспроизведения.",
+  "diagnosis": "В живой папке отсутствовал base3.aas, поэтому Nav=nil и подбор запрещён. В конфиг добавлен общий client.aas_dir; после переподключения base3 загрузил3919 областей и6748 поддерживаемых переходов.",
   "expected_result": "Получить доступное новое оружие и подходящие патроны с безопасным маршрутом и последующим возвращением к напарнику.",
-  "status": "confirmed_live",
+  "status": "verified_fixture_parallel_2x",
   "reproduction": "observation_only",
-  "id": "base3-live-missed-shotgun"
+  "id": "base3-live-missed-shotgun",
+  "verification_report": "workspace/artifacts/scenario-suite-20260927-221933-921/suite-summary.json",
+  "verification_scope": "Два изолированных прогона2x: исходные координаты, без монстров, dropped shotgun заменён native pickup. Подтверждён дробовик,40 Shells и возврат. check_base3_pickup.ps1 принят. Полный живой эпизод с боем не повторён."
 }

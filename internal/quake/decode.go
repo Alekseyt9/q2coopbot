@@ -738,12 +738,7 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 			if entity.Solid != 0 {
 				s.Obstacles = append(s.Obstacles, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame})
 			}
-			// Baseq2 monster animation ranges (game/monster/*/*.h).
-			// Gunner's next frame, 201, starts a live duck animation.
-			if kind == "soldier" && entity.Frame >= 272 && entity.Frame <= 474 ||
-				kind == "infantry" && entity.Frame >= 125 && entity.Frame <= 178 ||
-				kind == "gunner" && entity.Frame >= 190 && entity.Frame <= 200 ||
-				kind == "tank" && entity.Frame >= 222 && entity.Frame <= 253 {
+			if monsterDeathAnimation(kind, entity.Frame) {
 				s.Defeated = append(s.Defeated, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame})
 				continue
 			}

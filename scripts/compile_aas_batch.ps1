@@ -46,12 +46,13 @@ $compile=Join-Path $PSScriptRoot 'compile_aas.ps1'
 @{maps=@($maps.BaseName);parallelism=$Parallelism;compiler_sha256=(Get-FileHash $compiler).Hash}|ConvertTo-Json -Depth 4|Set-Content (Join-Path $OutputRoot 'manifest.json')
 $results=@($maps | ForEach-Object -ThrottleLimit $Parallelism -Parallel {
     $ErrorActionPreference='Stop'
+    $mapName=$_.BaseName
     $out=Join-Path $using:OutputRoot $_.BaseName
     try {
         $summary=& $using:compile -BspPath $_.FullName -BspcExe $using:compiler -OutputRoot $out -Threads 1 -WallLimitSeconds $using:WallLimitSeconds
         [pscustomobject]@{map=$_.BaseName;accepted=$true;summary=$summary;error=''}
     } catch {
-        [pscustomobject]@{map=$_.BaseName;accepted=$false;summary=$null;error=$_.Exception.Message}
+        [pscustomobject]@{map=$mapName;accepted=$false;summary=$null;error=$_.Exception.Message}
     }
 })
 $results | Sort-Object map | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $OutputRoot 'report.json')

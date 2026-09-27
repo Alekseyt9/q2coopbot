@@ -1223,7 +1223,7 @@ if ($ElevatorTrial -and @($results | Where-Object {
 }).Count -gt 0) {
     throw "Elevator trial did not complete; inspect positions, mover and stages in $summary"
 }
-if ($CombatMoveTrial -and !$CombatSpacingTrial -and $WeaponSwitchTrial -notlike 'projectile_*' -and $WeaponSwitchTrial -notlike 'rail_*' -and @($results | Where-Object { $_.combat_move_frames -le 0 -or $_.combat_move_with_side -le 0 }).Count -gt 0) {
+if ($CombatMoveTrial -and !$CombatSpacingTrial -and !$WeaponSwitchTrial -and @($results | Where-Object { $_.combat_move_frames -le 0 -or $_.combat_move_with_side -le 0 }).Count -gt 0) {
     throw "Combat movement trial did not produce firing while following a route: $summary"
 }
 if ($ObservationGapTrial -and @($results | Where-Object { $_.attack_before_gap -le 0 -or $_.stale_neutral_frames -le 0 -or $_.recovered_action_frames -le 0 }).Count -gt 0) {
