@@ -8,11 +8,13 @@ import (
 
 // CommandDecision records which controller supplied each part of a usercmd.
 type CommandDecision struct {
-	MoveSource      string `json:"move_source"`
-	AimSource       string `json:"aim_source"`
-	Skill           string `json:"skill,omitempty"`
-	LimitReason     string `json:"limit_reason,omitempty"`
-	MoveLimitReason string `json:"move_limit_reason,omitempty"`
+	AimPoint        *quake.Vec3 `json:"aim_point,omitempty"`
+	LeadSeconds     float64     `json:"lead_seconds,omitempty"`
+	MoveSource      string      `json:"move_source"`
+	AimSource       string      `json:"aim_source"`
+	Skill           string      `json:"skill,omitempty"`
+	LimitReason     string      `json:"limit_reason,omitempty"`
+	MoveLimitReason string      `json:"move_limit_reason,omitempty"`
 }
 
 // worldMove converts an XY direction into forward/side commands in the final

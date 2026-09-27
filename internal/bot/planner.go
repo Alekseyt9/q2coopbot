@@ -38,6 +38,7 @@ type World struct {
 	Updated          time.Time         `json:"updated"`
 }
 type Planner struct {
+	enemyMotion              map[int]enemyMotion
 	resources                map[int]*ResourceMemory
 	healthStarted            int
 	pickup                   *pickupTask
@@ -293,6 +294,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			s.Enemies[i].ClearShot = &clear
 		}
 	}
+	p.observeEnemyMotion(s)
 	previous := p.World.Snapshot
 	if previous.Frame > 0 && previous.Health <= 0 && s.Health > 0 {
 		p.deathFrame = 0
@@ -472,6 +474,9 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			if !p.routeOK {
 				p.route, p.routeOK = p.Nav.Route(s.Self, goal)
 			}
+			if !p.routeOK {
+				p.route, p.routeOK = p.localFlatRoute(s, goal)
+			}
 		}
 		p.routeKnown = true
 	}
@@ -604,6 +609,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) quake.UserCmd {
 	}
 	if p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && tactic != "follow" && tactic != "recover" && enemy != nil && best < 650 && (s.Ammo > 0 || strings.Contains(strings.ToLower(s.Weapon), "blast")) && enemy.ClearShot != nil && *enemy.ClearShot {
 		from, to := s.EyePoint(), enemy.AimPoint()
+		to, leadSeconds := p.projectileAim(s, *enemy)
+		p.World.Command.AimPoint = &to
+		p.World.Command.LeadSeconds = leadSeconds
 		if s.Teammate != nil && teammateBlocksShot(from, to, *s.Teammate) {
 			p.World.Command.LimitReason = "friendly_line_of_fire"
 		} else {

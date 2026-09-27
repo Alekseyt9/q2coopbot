@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "name": "base1-low-ceiling-too-tight",
+  "map": "base1",
+  "start_frame": 40,
+  "game_frames": 180,
+  "actor_origin": [-270, -42, -23.875],
+  "bot_origin": [-510, -42, -33.875],
+  "bot_health": 100,
+  "bot_invulnerable": true,
+  "expect": {},
+  "steps": [{"id":"reject-tight-shortcut-and-follow","action":"wait","frames":130}]
+}

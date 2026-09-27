@@ -1,0 +1,106 @@
+package bot
+
+import (
+	"math"
+	"os"
+	"q2coopbot/internal/quake"
+	"testing"
+)
+
+func TestInterceptTime(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		v    quake.Vec3
+		ok   bool
+	}{
+		{"still", quake.Vec3{}, true}, {"crossing", quake.Vec3{0, 200, 0}, true},
+		{"approaching", quake.Vec3{-200, 0, 0}, true}, {"escaping", quake.Vec3{1200, 0, 0}, false},
+		{"same_speed_away", quake.Vec3{1000, 0, 0}, false}, {"same_speed_toward", quake.Vec3{-1000, 0, 0}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			at, ok := interceptTime(quake.Vec3{}, quake.Vec3{500, 0, 0}, tc.v, 1000)
+			if ok != tc.ok {
+				t.Fatalf("t=%v ok=%v", at, ok)
+			}
+			if ok {
+				pos := quake.Vec3{500 + tc.v[0]*at, tc.v[1] * at, tc.v[2] * at}
+				if math.Abs(quake.Distance(quake.Vec3{}, pos)-at*1000) > 1e-6 {
+					t.Fatal("intercept misses target")
+				}
+			}
+		})
+	}
+}
+
+func TestMotionRequiresStableContinuousObservations(t *testing.T) {
+	p := &Planner{}
+	s := quake.Snapshot{Map: "base1", Health: 100, Enemies: []quake.Object{{ID: 7, Class: "monster_infantry"}}}
+	step := func(frame int, x float64, want bool) {
+		t.Helper()
+		s.Frame = frame
+		s.Enemies[0].Origin = quake.Vec3{x, 0, 0}
+		p.observeEnemyMotion(s)
+		p.World.Snapshot = s
+		if p.enemyMotion[7].stable != want {
+			t.Fatalf("frame%d: %+v", frame, p.enemyMotion[7])
+		}
+	}
+	step(1, 0, false)
+	step(2, 5, false)
+	step(3, 10, true)
+	step(4, 5, false)
+	step(5, 0, true) // reversal needs a second matching velocity
+	step(7, -10, false)
+	step(8, -15, false)
+	step(9, -20, true)
+	step(10, 500, false)
+	step(11, 505, false)
+	step(12, 510, true)
+	s.Map = "base2"
+	step(13, 515, false)
+	s.Health = 0
+	step(14, 520, false)
+	s.Health = 100
+	step(15, 525, false)
+	s.Enemies = nil
+	s.Frame = 16
+	p.observeEnemyMotion(s)
+	if len(p.enemyMotion) != 0 {
+		t.Fatal("unobserved target retained")
+	}
+}
+
+func TestProjectileAimUsesCurrentWeaponAndGeometry(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires base1 BSP")
+	}
+	g, err := quake.LoadMap(root, "base1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := quake.Object{ID: 7, Class: "monster_infantry", Origin: quake.Vec3{96, -200, 24}, Solid: 8290}
+	s := quake.Snapshot{Frame: 3, Self: quake.Vec3{32, -224, 24}, Weapon: "Blaster"}
+	p := &Planner{World: World{Geometry: &g}, enemyMotion: map[int]enemyMotion{7: {class: e.Class, frame: 3, stable: true, velocity: quake.Vec3{0, 100, 0}}}}
+	for _, weapon := range []string{"Blaster", "models/weapons/v_hyperb/tris.md2"} {
+		s.Weapon = weapon
+		aim, flight := p.projectileAim(s, e)
+		if flight <= 0 || aim[1] <= e.AimPoint()[1] || aim[2] != e.AimPoint()[2] {
+			t.Fatalf("%s: %v %v", weapon, aim, flight)
+		}
+	}
+	s.Weapon = "models/weapons/v_rail/tris.md2"
+	if aim, flight := p.projectileAim(s, e); flight != 0 || aim != e.AimPoint() {
+		t.Fatal("hitscan given projectile lead")
+	}
+	s.Weapon = "Blaster"
+	s.Frame = 4
+	if _, flight := p.projectileAim(s, e); flight != 0 {
+		t.Fatal("stale velocity accepted")
+	}
+	s.Frame = 3
+	p.World.Geometry = nil
+	if _, flight := p.projectileAim(s, e); flight != 0 {
+		t.Fatal("unverified trajectory accepted")
+	}
+}

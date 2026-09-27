@@ -47,7 +47,14 @@ try {
                 $scenario = Join-Path $repo $episode.scenario
                 $definition = $null
                 if ($episode.kind -ne 'weapon_switch') { $definition = Get-Content $scenario -Raw | ConvertFrom-Json }
-				if ($episode.kind -eq 'weapon_switch') {
+				if ($episode.kind -eq 'crouch_passage') {
+					$cases=@('natural','too-tight')
+					if ($episode.acceptance.cases) { $cases=@($episode.acceptance.cases) }
+					& (Join-Path $PSScriptRoot 'run_crouch_passage_trial.ps1') -Timescales @($scale) -Port $Port -OutputRoot $trial -Cases $cases | Out-Host
+					$report = @(Get-Content (Join-Path $trial 'report.json') -Raw | ConvertFrom-Json)
+					if ($report.Count -ne $cases.Count -or @($report | Where-Object {!$_.accepted}).Count) { throw 'Crouch passage or tight-passage recovery rejected' }
+					$passed=$true; $reason='accepted'
+				} elseif ($episode.kind -eq 'weapon_switch') {
 					& $scenario -Timescales @($scale) -Port $Port -OutputRoot $trial | Out-Host
 					$report = @(Get-Content (Join-Path $trial 'report.json') -Raw | ConvertFrom-Json)
 					if ($report.Count -ne 2 -or @($report | Where-Object { !$_.accepted }).Count) { throw 'Weapon switch trial rejected' }

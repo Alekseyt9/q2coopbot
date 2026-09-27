@@ -37,6 +37,7 @@
     "base1-armor-yield.json",
     "base1-ammo-yield.json",
     "base1-weapon-economy.json",
-    "base1-weapon-economy-pair.json"
+    "base1-weapon-economy-pair.json",
+    "base1-tight-passage-fallback-stall.json"
   ]
 }
