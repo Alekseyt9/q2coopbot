@@ -47,7 +47,7 @@ foreach ($definition in $definitions) {
             Get-ChildItem -LiteralPath $sourceRuntime -File | Where-Object { $_.Extension -in @('.exe','.dll') } | Copy-Item -Destination $runtime
             Copy-Item -LiteralPath (Join-Path $sourceRuntime 'baseq2/game.dll') -Destination (Join-Path $runtime 'baseq2/game.dll')
             $assetRoot = Join-Path $sourceRuntime 'baseq2'
-            foreach ($asset in Get-ChildItem -LiteralPath $assetRoot -File -Recurse | Where-Object { $_.Extension -in @('.pak','.bsp','.aas') }) {
+            foreach ($asset in Get-ChildItem -LiteralPath $assetRoot -File -Recurse | Where-Object { $_.Extension -in @('.pak','.bsp','.aas','.ent') }) {
                 $relative = $asset.FullName.Substring($assetRoot.Length+1)
                 $dest = Join-Path (Join-Path $runtime 'baseq2') $relative
                 New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null

@@ -2,17 +2,14 @@
   "id": "base3-post-lift-frame-gap",
   "title": "После дальнего подхода к лифту в бою пропускается кадр122",
   "map": "base3",
-  "status": "open_observation_gap",
+  "status": "verified_packet_budget_2x",
   "reproduction": "ready",
   "scenario": "scripts/scenarios/base3-post-lift-frame-gap.json",
   "missing_setup": [],
-  "observed_failure": "После завершённой посадки и выхода при последующем бое трасса переходит с кадра121 на123. Повторено при параллелизме3 и2; observation gate отклоняет прогон. Причина пока не установлена.",
+  "observed_failure": "Кадр122 терялся на сервере: SV_SendClientDatagram не учитывал 8 байт заголовка netchan и надёжный блок. Netchan_Transmit отбрасывал весь unreliable payload вместе с кадром (dumped unreliable).",
   "evidence": "workspace/artifacts/scenario-suite-20260927-184204-305/run-001/summary.json",
   "expected_result": "Непрерывная трасса наблюдений и совпадение отправленных/применённых команд на всём эпизоде. Не ослаблять observation gate.",
-  "remaining_validation": [
-    "Локализовать пропуск в серверной отправке, клиентском декодировании или обработке кадра",
-    "Отдельная проверка после посадки"
-  ],
+  "remaining_validation": [],
   "acceptance": {
     "required_elevator_stages": [
       "board",
@@ -30,6 +27,16 @@
       855,
       -20,
       -210
+    ],
+    "required_frames": [
+      121,
+      122,
+      123,
+      132
     ]
-  }
+  },
+  "scenario_tail_frames": 5,
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-190730-226/report.json",
+  "parallel_verification_report": "workspace/artifacts/scenario-suite-20260927-190404-078/suite-summary.json",
+  "resolution": "SV_SendClientDatagram резервирует заголовок netchan и надёжные сообщения; если кадр не помещается вместе с надёжным блоком, блок отправляется отдельно. Дополнительные ненадёжные эффекты отбрасываются целиком при нехватке места. Исправленный q2ded установлен в workspace/runtime/q2go."
 }

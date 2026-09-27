@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "name": "base3-elevator-repeat-cycle",
+  "map": "base3",
+  "map_entry": "base2a",
+  "start_frame": 40,
+  "game_frames": 420,
+  "bot_release_frame": 50,
+  "bot_origin": [
+    833,
+    226.625,
+    -423.875
+  ],
+  "actor_origin": [
+    795.375,
+    -78.5,
+    -231.875
+  ],
+  "expect": {},
+  "steps": [
+    {
+      "target": [
+        795.375,
+        -78.5,
+        -231.875
+      ],
+      "id": "wait-at-exit",
+      "action": "place",
+      "timeout_frames": 10
+    },
+    {
+      "id": "wait-for-companion",
+      "action": "wait",
+      "frames": 60
+    },
+    {
+      "id": "return-to-lower-floor",
+      "action": "place",
+      "target": [
+        833,
+        194,
+        -423.875
+      ],
+      "timeout_frames": 10
+    },
+    {
+      "id": "wait-for-return",
+      "action": "wait",
+      "frames": 100
+    },
+    {
+      "id": "second-upper-meeting",
+      "action": "place",
+      "target": [
+        795.375,
+        -78.5,
+        -231.875
+      ],
+      "timeout_frames": 10
+    },
+    {
+      "id": "wait-for-second-ascent",
+      "action": "wait",
+      "frames": 130
+    }
+  ]
+}

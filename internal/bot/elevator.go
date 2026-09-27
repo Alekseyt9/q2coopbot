@@ -104,6 +104,13 @@ func (p *Planner) elevatorCommand(cmd quake.UserCmd, board quake.Waypoint) quake
 		setStage("board")
 	}
 	if ride.stage == "board" {
+		// Stage toward the exit while retaining room for the standing hull.
+		// Centering too deeply leaves insufficient time to clear low ceilings.
+		dx, dy := ride.exit[0]-center[0], ride.exit[1]-center[1]
+		if distance := math.Hypot(dx, dy); distance > 0 {
+			center[0] = math.Max(model.Min[0]+mover.Origin[0]+32, math.Min(model.Max[0]+mover.Origin[0]-32, center[0]+16*dx/distance))
+			center[1] = math.Max(model.Min[1]+mover.Origin[1]+32, math.Min(model.Max[1]+mover.Origin[1]-32, center[1]+16*dy/distance))
+		}
 		if !bottom && !inside {
 			setStage("wait_bottom")
 			return cmd
@@ -123,14 +130,14 @@ func (p *Planner) elevatorCommand(cmd quake.UserCmd, board quake.Waypoint) quake
 		}
 		// The AAS exit can be below the final platform height. Begin moving
 		// toward it during ascent, before the upper wall blocks a late exit.
-		if mover.Origin[2] < model.Origin[2]-float64(board.Rise)+30 || !s.OnGround {
+		if mover.Origin[2] < model.Origin[2]-float64(board.Rise)+5 || !s.OnGround {
 			return cmd
 		}
 		setStage("exit")
 	}
 	if ride.stage == "exit" || ride.stage == "landing_probe" {
 		cmd.Up = -200
-		if bottom && inside && quake.Horizontal(s.Self, ride.exit) > 32 {
+		if mover.Origin[2] <= model.Origin[2]-float64(board.Rise)+1 && inside && quake.Horizontal(s.Self, ride.exit) > 32 {
 			setStage("ride")
 			return cmd
 		}

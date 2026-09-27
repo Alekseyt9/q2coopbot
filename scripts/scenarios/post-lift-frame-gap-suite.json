@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "scenarios": [
+    "base3-post-lift-frame-gap.json"
+  ],
+  "timescales": [
+    2
+  ],
+  "repetitions": 2,
+  "parallelism": 2,
+  "base_port": 29980,
+  "runtime_root": "../../workspace/runtime/q2go",
+  "tail_frames": 5
+}
+

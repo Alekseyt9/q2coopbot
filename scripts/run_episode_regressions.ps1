@@ -75,10 +75,14 @@ try {
 				} else {
                 if ($definition.map -ne $episode.map) { throw 'Scenario map mismatch' }
                 $args = @{ActorScenario=$scenario;SynchronizedStart=$true;UnlimitedLoopbackRate=$true;GameFrames=$definition.game_frames;Timescales=@($scale);Port=$Port;OutputRoot=$trial;ClientExe=$exe}
+                if ($episode.scenario_tail_frames) { $args.ScenarioTailFrames = [int]$episode.scenario_tail_frames }
                 if ($episode.map -ne 'base1') { $args.TransitionMap = $episode.map }
                 & (Join-Path $PSScriptRoot 'run_speed_trial.ps1') @args | Out-Host
                 $rows = @(Get-Content (Join-Path $trial "scale-$scale-port-$Port-trace.jsonl") | ForEach-Object { ConvertFrom-Json $_ } | Where-Object map -eq $episode.map)
                 $accept = $episode.acceptance
+                foreach ($frame in $accept.required_frames) {
+                    if (@($rows | Where-Object frame -eq $frame).Count -ne 1) { throw "Required observation frame missing or duplicated: $frame" }
+                }
 				Assert-EpisodeSetup $rows $accept
 				$stageFrame = -1
 				if ($accept.ammo_yield) {

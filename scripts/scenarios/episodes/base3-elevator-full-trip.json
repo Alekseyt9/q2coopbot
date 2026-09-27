@@ -1,0 +1,26 @@
+{
+  "id": "base3-elevator-full-trip",
+  "title": "Полный подъём на платформе и выход на верхний пол",
+  "map": "base3",
+  "kind": "combat_spacing",
+  "status": "verified_full_ascent_exit_parallel_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_elevator_trip_trial.ps1",
+  "missing_setup": [],
+  "expected_result": "Три подхода: посадка, непрерывная опора при подъёме, перенос180 единиц, выход всем корпусом на верхний пол без урона.",
+  "acceptance": {
+    "cases": 3,
+    "min_carried_height": 180,
+    "min_rising_frames": 10,
+    "min_supported_frames": 15,
+    "max_ride_drift": 24,
+    "exit_ground_frames": 4,
+    "health_loss": 0
+  },
+  "remaining_validation": [
+    "Длительное ожидание наверху и повторный цикл лифта",
+    "Другие платформы и направления выхода"
+  ],
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-202751-116/report.json",
+  "detailed_report": "workspace/artifacts/scenario-suite-20260927-202753-782/trip-report.json"
+}

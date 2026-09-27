@@ -66,6 +66,8 @@
     "base2-door-closing-crush.json",
     "base2-door-moderate-speed-crush.json",
     "base3-elevator-boarding.json",
-    "base3-post-lift-frame-gap.json"
+    "base3-post-lift-frame-gap.json",
+    "base3-elevator-full-trip.json",
+    "base3-elevator-repeat-cycle.json"
   ]
 }

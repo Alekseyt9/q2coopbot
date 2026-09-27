@@ -1,0 +1,14 @@
+{
+  "repetitions": 2,
+  "tail_frames": 5,
+  "version": 1,
+  "runtime_root": "../../workspace/runtime/q2go-elevator-cycle",
+  "scenarios": [
+    "base3-elevator-repeat-cycle.json"
+  ],
+  "parallelism": 2,
+  "base_port": 29994,
+  "timescales": [
+    2
+  ]
+}

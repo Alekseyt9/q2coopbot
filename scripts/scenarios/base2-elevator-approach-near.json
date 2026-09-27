@@ -1,0 +1,25 @@
+{
+  "name": "base2-elevator-approach-near",
+  "version": 1,
+  "bot_origin": [
+    -36,
+    1408,
+    -40
+  ],
+  "expect": {},
+  "actor_origin": [
+    10,
+    1408,
+    85
+  ],
+  "game_frames": 200,
+  "steps": [
+    {
+      "action": "wait",
+      "id": "wait-at-top",
+      "frames": 100
+    }
+  ],
+  "start_frame": 40,
+  "map": "base2"
+}

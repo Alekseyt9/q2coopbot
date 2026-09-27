@@ -1,0 +1,26 @@
+{
+  "id": "base3-elevator-repeat-cycle",
+  "title": "Два подъёма с возвратом лифта и повторной посадкой",
+  "map": "base3",
+  "kind": "combat_spacing",
+  "status": "verified_two_ascents_parallel_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/run_elevator_cycle_trial.ps1",
+  "missing_setup": [],
+  "expected_result": "Два полных подъёма и выхода, возврат платформы между ними, ожидание на нижнем полу и удержание позиции наверху без боя и урона.",
+  "acceptance": {
+    "ascents": 2,
+    "min_return_height": 180,
+    "min_lower_wait_frames": 30,
+    "min_upper_hold_frames": 30,
+    "health_loss": 0,
+    "return_descent": "native_192_unit_ledge_fall_without_damage"
+  },
+  "remaining_validation": [
+    "Спуск на самой платформе: сначала выбрать механизм, допускающий движение вниз с пассажиром; обычный func_plat удерживается игроком наверху",
+    "Повторный цикл с боем",
+    "Другие платформы и направления выхода"
+  ],
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-203810-048/report.json",
+  "detailed_report": "workspace/artifacts/scenario-suite-20260927-203812-954/cycle-report.json"
+}
