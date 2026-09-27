@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "name": "base2-closing-door-stop",
+  "map": "base2",
+  "start_frame": 40,
+  "game_frames": 200,
+  "bot_release_frame": 90,
+  "bot_door_pass_probe": true,
+  "bot_origin": [
+    -64,
+    -800,
+    24
+  ],
+  "actor_origin": [
+    300,
+    -800,
+    24
+  ],
+  "expect": {},
+  "steps": [
+    {
+      "id": "activate-once",
+      "target": [
+        0,
+        -800,
+        24
+      ],
+      "action": "place",
+      "timeout_frames": 10
+    },
+    {
+      "id": "wait-open",
+      "frames": 20,
+      "action": "wait"
+    },
+    {
+      "id": "leave-trigger",
+      "target": [
+        300,
+        -800,
+        24
+      ],
+      "action": "place",
+      "timeout_frames": 10
+    },
+    {
+      "id": "wait-for-stop",
+      "frames": 110,
+      "action": "wait"
+    }
+  ]
+}

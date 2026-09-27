@@ -790,6 +790,13 @@ func (c *Client) run(ctx context.Context) error {
 					c.planner.World.Command.BrakeInput = &input
 					cmd = braked
 					c.planner.World.Command.MoveSource = "ground_coast_brake"
+				} else if c.planner.World.Command.MoveLimitReason == "dynamic_door_blocked" {
+					if braked, ok := brakeClosingDoorCoast(c.planner.doorPrevious, c.planner.World.Snapshot, cmd, c.planner.World.Geometry); ok {
+						input := cmd
+						c.planner.World.Command.BrakeInput = &input
+						cmd = braked
+						c.planner.World.Command.MoveSource = "door_coast_brake"
+					}
 				}
 			}
 			if cmd.Buttons&1 != 0 {

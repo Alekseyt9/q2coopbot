@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "name": "base2-closing-door-approach",
+  "map": "base2",
+  "start_frame": 40,
+  "game_frames": 200,
+  "bot_release_frame": 90,
+  "bot_door_pass_probe": true,
+  "bot_origin": [-64, -800, 24],
+  "actor_origin": [0, -800, 24],
+  "expect": {},
+  "steps": [
+    {"id":"open-door","action":"wait","frames":20},
+    {"id":"leave-door-trigger","action":"place","target":[300,-800,24],"timeout_frames":10},
+    {"id":"wait-for-companion","action":"wait","frames":120}
+  ]
+}

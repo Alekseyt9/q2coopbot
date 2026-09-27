@@ -1,0 +1,13 @@
+{
+  "id": "base2-closing-door-stop",
+  "title": "Закрывающаяся дверь без триггера приближения: остановка по инерции",
+  "map": "base2",
+  "kind": "combat_spacing",
+  "status": "verified_neutral_coast_stop_1x_2x",
+  "verification_report": "workspace/artifacts/closing-door-stop-synchronized-v2/report.json",
+  "reproduction": "ready",
+  "scenario": "scripts/run_closing_door_stop_trial.ps1",
+  "missing_setup": [],
+  "expected_result": "При скорости не менее290 снять движение перед закрывающейся дверью и остановиться с запасом корпуса не менее8, без урона и контакта; удержаться10 кадров после закрытия.",
+  "remaining_validation": ["Другие фазы закрытия и начальные позиции", "Активное торможение возле динамической геометрии", "Движущаяся опора и сдавливание", "Естественный маршрут вместо локальной тестовой цели"]
+}

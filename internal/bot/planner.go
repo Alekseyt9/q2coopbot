@@ -38,6 +38,7 @@ type World struct {
 	Updated          time.Time         `json:"updated"`
 }
 type Planner struct {
+	doorPrevious              quake.Snapshot
 	TestDisableProjectileLead bool
 	railAim                   railAim
 	enemyMotion               map[int]enemyMotion
@@ -302,6 +303,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	p.observeShotTeammateMotion(s)
 	p.observeUrgentRetreat(s)
 	previous := p.World.Snapshot
+	p.doorPrevious = previous
 	if previous.Frame > 0 && previous.Health <= 0 && s.Health > 0 {
 		p.deathFrame = 0
 		p.routeKnown = false

@@ -467,6 +467,7 @@ foreach ($scale in $Timescales) {
         if ($SearchApproachOnly) { $botConfig.test.disable_probe = $true }
         if ($actorScenarioDefinition) {
             $botConfig.test.teleport_map = $actorScenarioDefinition.map
+			if ($actorScenarioDefinition.bot_door_pass_probe) { $botConfig.test.door_pass_probe=$true }
 			if ($actorScenarioDefinition.bot_invulnerable) { $botConfig.test.invulnerable=$true }
 			if ($actorScenarioDefinition.bot_health) { $botConfig.test.initial_health=[int]$actorScenarioDefinition.bot_health }
 			if ($actorScenarioDefinition.map_entry) { $botConfig.test.change_entry=$actorScenarioDefinition.map_entry }

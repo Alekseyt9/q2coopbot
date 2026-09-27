@@ -1,0 +1,14 @@
+{
+  "id": "base2-closing-door-approach",
+  "title": "Закрывающаяся дверь: повторное открытие триггером при подходе",
+  "map": "base2",
+  "kind": "combat_spacing",
+  "status": "verified_native_reopening_1x_2x",
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-180022-608/report.json",
+  "reproduction": "ready",
+  "scenario": "scripts/run_closing_door_approach_trial.ps1",
+  "missing_setup": [],
+  "expected_result": "Начать подход во время закрытия двери27, вызвать штатное повторное открытие и пройти по земле без урона и статического торможения возле двери.",
+  "acceptance": {"min_closing_frames": 3, "min_reopening_frames": 3, "min_fast_near_frames": 2, "min_approach_speed": 250, "health_loss": 0, "crossed_grounded": true},
+  "remaining_validation": ["Торможение перед дверью, которая продолжает закрываться", "Сдавливание и движущиеся опоры", "Естественный маршрут без тестовой локальной цели"]
+}

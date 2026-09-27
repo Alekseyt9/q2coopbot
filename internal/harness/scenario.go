@@ -20,6 +20,7 @@ type Step struct {
 	Route   bool        `json:"route,omitempty"`
 }
 type Scenario struct {
+	BotDoorPassProbe    bool         `json:"bot_door_pass_probe,omitempty"`
 	ActorInventory      bool         `json:"actor_inventory,omitempty"`
 	BotReleaseOrigin    *quake.Vec3  `json:"bot_release_origin,omitempty"`
 	BotHideHealthFrames []int        `json:"bot_hide_health_frames,omitempty"`
@@ -75,6 +76,9 @@ func Load(path string) (Scenario, error) {
 }
 
 func (s Scenario) Validate() error {
+	if s.BotDoorPassProbe && (s.Map != "base2" || s.BotOrigin != (quake.Vec3{-64, -800, 24}) || s.BotReleaseFrame == 0 || s.BotReleaseOrigin != nil) {
+		return fmt.Errorf("bot_door_pass_probe requires base2 door origin and delayed release without relocation")
+	}
 	if len(s.BotHideHealthFrames) > 0 && (len(s.BotHideHealthFrames) != 2 || s.BotHideHealthFrames[0] < s.StartFrame || s.BotHideHealthFrames[1] <= s.BotHideHealthFrames[0] || s.BotHideHealthFrames[1] > s.GameFrames) {
 		return fmt.Errorf("bot_hide_health_frames requires [start,end) within scenario frames")
 	}
