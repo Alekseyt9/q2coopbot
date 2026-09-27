@@ -13,6 +13,8 @@ type elevatorRide struct {
 	model, toArea int
 	gate, exit    quake.Vec3
 	stage         string
+	bypass        []quake.Vec3
+	waitAnchor    *quake.Vec3
 }
 
 func (p *Planner) elevatorCommand(cmd quake.UserCmd, board quake.Waypoint) quake.UserCmd {

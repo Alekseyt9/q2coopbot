@@ -1,0 +1,56 @@
+{
+  "name": "base2-elevator-ascent-release",
+  "version": 1,
+  "bot_origin": [
+    44.375,
+    1408,
+    -167.875
+  ],
+  "expect": {},
+  "actor_origin": [
+    100,
+    1408,
+    24.125
+  ],
+  "game_frames": 300,
+  "steps": [
+    {
+      "frames": 22,
+      "action": "wait",
+      "id": "wait-for-ascent"
+    },
+    {
+      "target": [
+        26,
+        1408,
+        24.125
+      ],
+      "timeout_frames": 30,
+      "action": "walk",
+      "id": "block-during-ascent"
+    },
+    {
+      "frames": 35,
+      "action": "wait",
+      "id": "hold-exit"
+    },
+    {
+      "target": [
+        100,
+        1408,
+        24.125
+      ],
+      "timeout_frames": 30,
+      "action": "walk",
+      "id": "clear-lift-exit"
+    },
+    {
+      "frames": 60,
+      "action": "wait",
+      "id": "settle"
+    }
+  ],
+  "start_frame": 40,
+  "map": "base2",
+  "bot_release_frame": 50
+}

@@ -71,6 +71,7 @@
     "base3-elevator-repeat-cycle.json",
     "base2-elevator-exit-crush.json",
     "base2-elevator-floor-approach.json",
-    "base2-elevator-exit-teammate-block.json"
+    "base2-elevator-exit-teammate-block.json",
+    "base2-elevator-side-walls.json"
   ]
 }

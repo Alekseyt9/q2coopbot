@@ -28,10 +28,53 @@ func elevatorTeammateBlocksExit(s quake.Snapshot, target quake.Vec3, model quake
 	return false
 }
 func (p *Planner) elevatorExitMove(cmd quake.UserCmd, s quake.Snapshot, target quake.Vec3, model quake.BSPModel, mover quake.Mover) quake.UserCmd {
+	if p.elevator != nil && len(p.elevator.bypass) > 0 {
+		if moved, ok := p.elevatorBypass(cmd, s, target, model, mover); ok {
+			return moved
+		}
+	}
 	if elevatorTeammateBlocksExit(s, target, model, mover) {
-		p.World.Elevator = "exit_teammate_wait"
-		cmd.Forward, cmd.Side, cmd.Up = 0, 0, 0
-		return cmd
+		if p.elevator != nil && p.elevator.waitAnchor != nil {
+			return p.elevatorWaitInside(cmd, s, model, mover)
+		}
+		if moved, ok := p.elevatorBypass(cmd, s, target, model, mover); ok {
+			return moved
+		}
+		return p.elevatorWaitInside(cmd, s, model, mover)
+	}
+	if p.elevator != nil && p.elevator.waitAnchor != nil {
+		// Keep waiting while the teammate still occupies the actual exit,
+		// even after retreating beyond the short forward collision probe.
+		probe := s
+		probe.Self = *p.elevator.waitAnchor
+		dx, dy := target[0]-probe.Self[0], target[1]-probe.Self[1]
+		d := math.Hypot(dx, dy)
+		if d > 0 && s.Teammate != nil && quake.Horizontal(s.Self, *s.Teammate) < 100 && math.Abs(s.Self[2]-s.Teammate[2]) < 48 && (s.Teammate[0]-s.Self[0])*dx+(s.Teammate[1]-s.Self[1])*dy > 0 {
+			return p.elevatorWaitInside(cmd, s, model, mover)
+		}
+		p.elevator.waitAnchor = nil
 	}
 	return elevatorMove(cmd, s, target)
+}
+
+// Waiting at the outer edge may leave the native platform trigger and allow
+// the tall platform to descend onto the player. Retreat onto verified support.
+func (p *Planner) elevatorWaitInside(cmd quake.UserCmd, s quake.Snapshot, model quake.BSPModel, mover quake.Mover) quake.UserCmd {
+	if p.elevator != nil && p.elevator.waitAnchor == nil {
+		anchor := s.Self
+		for axis := 0; axis < 2; axis++ {
+			anchor[axis] = math.Max(model.Min[axis]+mover.Origin[axis]+32, math.Min(model.Max[axis]+mover.Origin[axis]-32, anchor[axis]))
+		}
+		if p.elevatorBypassClear(s, mover, s.Self, anchor) {
+			p.elevator.waitAnchor = &anchor
+		}
+	}
+	if p.elevator != nil && p.elevator.waitAnchor != nil && quake.Horizontal(s.Self, *p.elevator.waitAnchor) > 4 && p.elevatorBypassClear(s, mover, s.Self, *p.elevator.waitAnchor) {
+		p.World.Elevator = "exit_teammate_retreat"
+		cmd.Up = 0
+		return worldMove(cmd, s, p.elevator.waitAnchor[0]-s.Self[0], p.elevator.waitAnchor[1]-s.Self[1], 60, false)
+	}
+	p.World.Elevator = "exit_teammate_wait"
+	cmd.Forward, cmd.Side, cmd.Up = 0, 0, 0
+	return cmd
 }

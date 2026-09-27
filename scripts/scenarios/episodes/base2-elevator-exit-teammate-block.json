@@ -2,7 +2,7 @@
   "id": "base2-elevator-exit-teammate-block",
   "title": "Напарник перекрывает выход с лифта50",
   "map": "base2",
-  "status": "verified_wait_and_resume_2x",
+  "status": "verified_stationary_and_crossing_2x",
   "reproduction": "ready",
   "scenario": "scripts/run_elevator_teammate_trial.ps1",
   "scenario_tail_frames": 5,
@@ -11,18 +11,21 @@
   "observed_failure": "После подъёма бот остаётся x=-22.125 y=1408 z=24.125 в landing_probe, продолжает Forward300 и упирается в напарника x=10. Полный выход не подтверждён.",
   "expected_result": "Безопасно обойти напарника или восстановить движение после освобождения выхода; не объявлять completed при перекрытии платформы корпусом.",
   "acceptance": {
+    "fallback_wait": true,
+    "stationary_blocker_until_exit": true,
+    "min_bypass_frames": 5,
+    "min_lateral_offset": 36,
+    "max_lateral_offset": 44,
     "health_loss": 0,
-    "neutral_wait": true,
-    "min_waiting_frames": 25,
-    "resume_after_release": true,
-    "no_false_completion": true
+    "moving_blocker_wait_and_resume": true,
+    "sustained_wait_after_crossing": true
   },
   "kind": "combat_spacing",
   "remaining_validation": [
-    "Обход неподвижного напарника",
-    "Блокировка во время движения платформы",
+    "Блокировка во время подъёма",
     "Другие выходы и бой"
   ],
-  "verification_report": "workspace/artifacts/episode-regressions-20260927-211013-623/report.json",
-  "resolution": "У верхней остановки при видимом напарнике на ближайших30 единицах пути бот выдаёт нейтральное движение и сохраняет контроллер лифта. После освобождения пути продолжает сход. Постоянного напарника пока не обходит."
+  "verification_report": "workspace/artifacts/scenario-suite-20260927-212606-095/trip-report.json",
+  "resolution": "Проверенный короткий обход на верхней остановке: BSP мира и фактические brush-поверхности платформы, опора под корпусом, проверка напарника/наблюдаемых препятствий. Повторная проверка пути каждый кадр. При невозможности обхода сохраняется ожидание. E2E: напарник обычной ходьбой перекрывает выбранную сторону после начала обхода. Бот отменяет непроходимое продолжение, ждёт без движения и после освобождения завершает выход. При удержании блокировки ждёт до конца сцены.",
+  "side_walls_episode": "base2-elevator-side-walls"
 }

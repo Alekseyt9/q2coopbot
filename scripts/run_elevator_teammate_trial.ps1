@@ -1,8 +1,9 @@
 [CmdletBinding()]
-param([string]$Config="$PSScriptRoot/scenarios/base2-elevator-teammate-suite.json",[int[]]$Timescales=@(),[int]$Port=0,[string]$OutputRoot='')
+param([string]$Config="$PSScriptRoot/scenarios/base2-elevator-teammate-suite.json",[int[]]$Timescales=@(),[int]$Port=0,[string]$OutputRoot='',[switch]$SideWalls)
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot/check_elevator_teammate_wait.ps1"
-& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map base2 | Out-Null
+if($SideWalls -and !$PSBoundParameters.ContainsKey('Config')){$Config="$PSScriptRoot/scenarios/base2-elevator-side-walls-suite.json"}
+& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map base2 -SideWalls:$SideWalls | Out-Null
 if($Timescales.Count -or $Port -or $OutputRoot){
     $original=(Resolve-Path $Config).Path;$base=Split-Path $original -Parent
     $cfg=Get-Content $original -Raw|ConvertFrom-Json

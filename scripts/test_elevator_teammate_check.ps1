@@ -8,10 +8,15 @@ $s=Get-Content (Join-Path $run.directory 'summary.json') -Raw|ConvertFrom-Json
 $c=Get-Content (Join-Path $run.directory 'scenario.json') -Raw|ConvertFrom-Json
 $source=Get-Content $s.trace_jsonl;$actors=Get-Content $s.human_trace_jsonl
 $null=Assert-ElevatorTeammateWait @($source|ConvertFrom-Json) $c @($actors|ConvertFrom-Json)
-foreach($case in @('pushing','damage','lost_support','moving_platform','no_completion','actor_teleport')){
+$cases=@('pushing','damage','lost_support','moving_platform','no_completion','actor_teleport')
+if($c.name -like '*side-walls*'){$cases+=@('missing_wall','shifted_wall','unsafe_bypass')}
+foreach($case in $cases){
  $rows=@($source|ConvertFrom-Json);$human=@($actors|ConvertFrom-Json)
  $r=$rows|Where-Object elevator -eq exit_teammate_wait|Select-Object -First 1
  switch($case){
+ missing_wall {$r.movers=@($r.movers|Where-Object {$_.model -ne 1 -or $_.origin[0] -ne -576})}
+ shifted_wall {foreach($wall in $r.movers|Where-Object {$_.model -eq 1 -and $_.origin[0] -eq -576}){$wall.origin[1]+=100}}
+ unsafe_bypass {$r.elevator='exit_teammate_bypass'}
  pushing {$r.sent_command.Forward=300}
  damage {$r.health=90}
  lost_support {$r.on_ground=$false}

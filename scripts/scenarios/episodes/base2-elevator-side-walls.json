@@ -1,0 +1,20 @@
+{
+  "verification_report": "workspace/artifacts/episode-regressions-20260927-213034-938/report.json",
+  "scenario": "scripts/run_elevator_side_walls_trial.ps1",
+  "reproduction": "ready",
+  "map": "base2",
+  "fixture": "Две видимые func_wall из BSP model1; отдельный runtime. Центральный проход56 единиц. Без монстров, штатная физика лифта.",
+  "observed_failure": "Защитная регрессия: при закрытых боковых путях бот должен отказаться от обхода напарника.",
+  "missing_setup": [],
+  "id": "base2-elevator-side-walls",
+  "status": "verified_wait_and_resume_2x",
+  "kind": "combat_spacing",
+  "acceptance": {
+    "bypass_frames": 0,
+    "observed_side_walls": 2,
+    "health_loss": 0,
+    "min_wait_frames": 25
+  },
+  "title": "Оба боковых обхода выхода лифта закрыты",
+  "expected_result": "Ждать без толчков и урона; после ухода напарника завершить прямой выход."
+}
