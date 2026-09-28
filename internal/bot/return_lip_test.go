@@ -43,6 +43,100 @@ func TestBase3ReturnLip(t *testing.T) {
 	}
 }
 
+func TestBase3RampLandingWalkable(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("assets")
+	}
+	g, err := quake.LoadMap(root, "base3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base3.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	from := quake.Vec3{107, 634.5, -727.625}
+	to := quake.Vec3{64, 624.9, -727.875}
+	p := &Planner{Nav: n, World: World{Geometry: &g}}
+	if !p.jumpLandingOK(from, to) {
+		t.Fatal("supported ramp landing was counted as a miss")
+	}
+	if !p.jumpLandingOK(quake.Vec3{116.5, 626.875, -727.625}, to) {
+		t.Fatal("early supported ramp landing was counted as a miss")
+	}
+	if p.jumpLandingOK(quake.Vec3{130, 634.5, -727.625}, to) {
+		t.Fatal("far landing was counted as safe")
+	}
+	if p.jumpLandingOK(quake.Vec3{107, 634.5, -760}, to) {
+		t.Fatal("lower landing was counted as safe")
+	}
+}
+
+func TestBase3FirstLipKeepsApproachMomentum(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("assets")
+	}
+	g, err := quake.LoadMap(root, "base3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base3.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := quake.Snapshot{Map: "base3", Frame: 113, Health: 100, OnGround: true,
+		Self: quake.Vec3{1503.375, 1397, -804.875}, SelfVelocity: quake.Vec3{-112.375, -42, 21.125}}
+	goal := quake.Vec3{-148.375, -802.875, -231.875}
+	p := &Planner{Nav: n, World: World{Map: s.Map, Geometry: &g, GeometryStatus: "ready", Snapshot: s, Goal: "regroup_after_respawn"}, goalPoint: goal}
+	p.World.Route, _ = n.Route(s.Self, goal)
+	if !p.planGapJump() || p.jump.phase != 2 || p.jump.runup != (quake.Vec3{}) {
+		t.Fatalf("expected direct first-lip takeoff, got %+v", p.jump)
+	}
+}
+
+func TestBase1CornerLoopEscape(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("assets")
+	}
+	g, err := quake.LoadMap(root, "base1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base1.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := quake.Snapshot{Map: "base1", Frame: 230, Health: 100, OnGround: true, Self: quake.Vec3{-21.25, -565, -79.875}}
+	goal := quake.Vec3{960, 408, -167.875}
+	p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "regroup_after_respawn", Snapshot: s}, goalPoint: goal}
+	p.World.Route, _ = n.Route(s.Self, goal)
+	for i := 0; i < 4; i++ {
+		p.cornerHistory = append(p.cornerHistory,
+			quake.Vec3{-31.25, -570.75, -79.875},
+			quake.Vec3{-28.125, -569.375, -79.875},
+			quake.Vec3{-21.25, -565, -79.875})
+	}
+	target, ok := p.regroupCornerEscape(s)
+	if !ok || target[0] < 96 || p.cornerEscapeUntil != s.Frame+12 {
+		t.Fatalf("no bounded escape toward the later route: %v %v", target, ok)
+	}
+	if p.cornerEscapeApproachClear(quake.Snapshot{Self: quake.Vec3{-43.875, -596.375, -79.75}}, target) {
+		t.Fatal("early bypass enters a wall after the first clear step")
+	}
+	s.Frame++
+	s.Self = quake.Vec3{11, -565, -79.875}
+	if next, active := p.regroupCornerEscape(s); !active || next != target {
+		t.Fatalf("escape was not held across replan: %v %v", next, active)
+	}
+	s.Frame += 13
+	if _, active := p.regroupCornerEscape(s); active {
+		t.Fatal("expired corner override remained active")
+	}
+}
+
 func TestBlockedWalkingCornerDoesNotAuthorizeJump(t *testing.T) {
 	p := &Planner{World: World{Snapshot: quake.Snapshot{Self: quake.Vec3{641.75, 2504.875, -231.875}}, Route: []quake.Waypoint{{Position: quake.Vec3{640, 2521, -232}, Kind: 2}, {Position: quake.Vec3{640, 2526, -231.875}, Kind: 2}}}}
 	if p.blockedDropApproach() {
@@ -249,5 +343,30 @@ func TestBase3LaterReturnRampMomentum(t *testing.T) {
 	}
 	if p.jump.phase == 2 {
 		t.Fatalf("unsafe direct launch: %+v", *p.jump)
+	}
+}
+
+func TestBase3ShortRampStandingAcceleration(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("assets")
+	}
+	g, err := quake.LoadMap(root, "base3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base3.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	self := quake.Vec3{159.25, 665.375, -743.875}
+	goal := quake.Vec3{-148.375, -802.875, -231.875}
+	route, ok := n.Route(self, goal)
+	if !ok {
+		t.Fatal("missing route")
+	}
+	p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "regroup_after_respawn", Snapshot: quake.Snapshot{Map: "base3", Frame: 244, Health: 100, OnGround: true, Self: self, SelfVelocity: quake.Vec3{-54.5, -11.5, 0}}, Route: route}, goalPoint: goal}
+	if !p.planRampJump() || p.jump.phase != 2 || p.jump.speed != 400 {
+		t.Fatalf("standing ramp needs accelerated launch: %+v", p.jump)
 	}
 }

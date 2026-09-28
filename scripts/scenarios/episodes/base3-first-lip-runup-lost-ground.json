@@ -1,0 +1,17 @@
+{
+  "id": "base3-first-lip-runup-lost-ground",
+  "title": "Возврат base3: разбег теряет опору на первом уступе",
+  "map": "base3",
+  "status": "verified_full_return_parallel_2x",
+  "reproduction": "observation_only",
+  "evidence": "workspace/artifacts/base3-return-after-ramp-probe/run-000/second.jsonl",
+  "observed_failure": "На первом уступе бот из [1503.375,1397,-804.875] при скорости около [-112,-42] планировал нижнюю площадку [1415,1395,-839.875], но отступал для разбега. На кадре 115 он потерял опору, затем застрял у [1512.625,1391.125,-799] с постоянным static_hull_blocked.",
+  "expected_result": "Использовать уже набранную подходящую скорость для проверенного прыжка с края, без отхода на неустойчивую опору; завершить возврат к точке смерти.",
+  "short_probe": "scripts/run_memory_restart_suite.ps1 -Map base3 -FirstLipProbe",
+  "short_probe_verification": "workspace/artifacts/base3-first-lip-probe-220/report.json",
+  "verification": "workspace/artifacts/base3-return-first-lip-220/report.json",
+  "verification_repeated": "workspace/artifacts/base3-return-first-lip-220-r2/report.json",
+  "base2_verification": "workspace/artifacts/base2-return-first-lip-220/report.json",
+  "diagnosis": "При движении к проверенной нижней площадке с достаточной продольной скоростью и небольшой боковой скоростью планировщик теперь прыгает сразу. Ввод движения не ниже 220 компенсирует нативное ускорение в полёте. Короткая сцена первого уступа прошла 2/2 при 2x без runup_lost_ground и jump_missed. Полный base3-возврат прошёл 4/4 на двух независимых парах серверов при 2x: 0 runup_lost_ground, 0 jump_missed, лифт завершён. Base2 прошёл 2/2 без промахов.",
+  "missing_setup": ["Проверка в живой игре с человеком"]
+}

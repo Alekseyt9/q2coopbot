@@ -104,6 +104,10 @@ type Planner struct {
 	deathPoint                *quake.Vec3
 	machinegunBurst           machinegunBurst
 	laserEvidence             map[quake.Vec3]*laserMemory
+	cornerHistory             []quake.Vec3
+	cornerEscapeTarget        quake.Vec3
+	cornerEscapeStart         quake.Vec3
+	cornerEscapeUntil         int
 }
 
 // setTestGroundEdgeGoal bypasses route selection only for the live edge fixture.
@@ -200,6 +204,8 @@ func (p *Planner) setMap(name, root string) {
 	p.resources = nil
 	p.pickup, p.pickupBanned, p.pickupNext = nil, nil, 0
 	p.jump = nil
+	p.cornerHistory = nil
+	p.cornerEscapeUntil = 0
 	p.buttonCooldown = 0
 	p.failures = 0
 	p.decision = nil
@@ -746,6 +752,11 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 			jump = wp.Jump
 			break
 		}
+	}
+	if escape, ok := p.regroupCornerEscape(s); ok {
+		target = escape
+		jump = false
+		p.World.Command.Skill = "route_corner_escape"
 	}
 	if quake.Horizontal(s.Self, target) < 10 {
 		if p.World.Command.LimitReason == "" {

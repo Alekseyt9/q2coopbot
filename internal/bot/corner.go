@@ -49,3 +49,81 @@ func (p *Planner) regroupCornerStep(s quake.Snapshot, target quake.Vec3) (float6
 	}
 	return 0, 0, false
 }
+
+// A locally safe sidestep may reselect the previous AAS area and repeat
+// forever. After observing the same small patch several times, aim briefly
+// for a later waypoint. The ordinary per-tick ground and door guards still
+// validate every movement command; the override expires even if blocked.
+func (p *Planner) regroupCornerEscape(s quake.Snapshot) (quake.Vec3, bool) {
+	if p.World.Goal != "regroup_after_respawn" || !s.OnGround || p.Nav == nil || p.World.Geometry == nil || len(p.World.Route) == 0 {
+		p.cornerHistory = nil
+		p.cornerEscapeUntil = 0
+		return quake.Vec3{}, false
+	}
+	if p.cornerEscapeUntil >= s.Frame {
+		if quake.Horizontal(s.Self, p.cornerEscapeStart) <= 48 && quake.Horizontal(s.Self, p.cornerEscapeTarget) > 16 {
+			return p.cornerEscapeTarget, true
+		}
+		p.cornerEscapeUntil = 0
+	}
+	if len(p.cornerHistory) >= 12 {
+		p.cornerHistory = p.cornerHistory[1:]
+	}
+	p.cornerHistory = append(p.cornerHistory, s.Self)
+	repeats := 0
+	for i := 0; i+3 < len(p.cornerHistory); i++ {
+		if quake.Horizontal(p.cornerHistory[i], s.Self) <= 5 {
+			repeats++
+		}
+	}
+	if repeats < 3 {
+		return quake.Vec3{}, false
+	}
+	for _, wp := range p.World.Route {
+		if wp.Kind == 11 {
+			break
+		}
+		if quake.Horizontal(s.Self, wp.Position) < 96 || math.Abs(s.Self[2]-wp.Position[2]) > 32 {
+			continue
+		}
+		if !p.cornerEscapeApproachClear(s, wp.Position) {
+			continue
+		}
+		p.cornerEscapeStart = s.Self
+		p.cornerEscapeTarget = wp.Position
+		p.cornerEscapeUntil = s.Frame + 12
+		p.cornerHistory = nil
+		return wp.Position, true
+	}
+	return quake.Vec3{}, false
+}
+
+// Check several short steps before committing to a bypass. A single clear
+// step can lead straight into the next wall and waste the whole override.
+func (p *Planner) cornerEscapeApproachClear(s quake.Snapshot, target quake.Vec3) bool {
+	at := s.Self
+	g := p.World.Geometry
+	for i := 0; i < 3; i++ {
+		dx, dy := target[0]-at[0], target[1]-at[1]
+		distance := math.Hypot(dx, dy)
+		if distance <= 16 {
+			return true
+		}
+		if g.GroundMoveHazardStep(p.Nav, at, dx, dy, 16) != "" || g.DoorMoveHazard(s.Movers, at, dx, dy) != "" {
+			return false
+		}
+		end := at
+		end[0] += dx / distance * 16
+		end[1] += dy / distance * 16
+		if !g.PlayerMoveClear(end, end) {
+			return false
+		}
+		for _, mover := range s.Movers {
+			if !g.MoverHullClear(mover, at, end) {
+				return false
+			}
+		}
+		at = end
+	}
+	return true
+}

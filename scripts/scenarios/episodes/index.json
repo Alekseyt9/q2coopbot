@@ -89,6 +89,8 @@
     "base3-lethal-laser-corridor.json",
     "base3-return-ramp-momentum-overshoot.json",
     "base3-return-ramp-lateral-overshoot.json",
-    "base3-return-ramp-runup-lost-ground.json"
+    "base3-return-ramp-runup-lost-ground.json",
+    "base3-first-lip-runup-lost-ground.json",
+    "base1-far-death-return-corner-loop.json"
   ]
 }

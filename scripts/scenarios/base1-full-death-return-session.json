@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "name": "base1-full-death-return",
+  "transition_timeout_ms": 10000,
+  "phases": [
+    {
+      "id": "base1-first",
+      "scenario": {
+        "version": 1,
+        "name": "base1-full-death-first",
+        "map": "base1",
+        "start_frame": 40,
+        "game_frames": 850,
+        "actor_origin": [-1883.375, 1816.75, 120.125],
+        "bot_origin": [-376, -532, -79.875],
+        "expect": {},
+        "steps": [{"id": "stay-hidden", "action": "wait", "frames": 750}],
+        "map_entry": "base1"
+      },
+      "observer_respawn_cycle": {
+        "after_frames": 40,
+        "timeout_frames": 40,
+        "recovery_frames": 300,
+        "policy_only": true
+      }
+    },
+    {
+      "id": "base1-second",
+      "scenario": {
+        "version": 1,
+        "name": "base1-full-death-second",
+        "map": "base1",
+        "start_frame": 40,
+        "game_frames": 850,
+        "actor_origin": [-1883.375, 1816.75, 120.125],
+        "bot_origin": [-376, -532, -79.875],
+        "expect": {},
+        "steps": [{"id": "stay-hidden", "action": "wait", "frames": 750}],
+        "map_entry": "base1"
+      },
+      "observer_respawn_cycle": {
+        "after_frames": 40,
+        "timeout_frames": 40,
+        "recovery_frames": 300,
+        "policy_only": true
+      }
+    }
+  ],
+  "readiness_barrier": true
+}

@@ -1,8 +1,8 @@
 [CmdletBinding()]
-param([ValidateSet('base2','base3')][string]$Map='base3',[switch]$SideWalls,[string]$RuntimeRoot='')
+param([ValidateSet('base1','base2','base3')][string]$Map='base3',[switch]$SideWalls,[string]$RuntimeRoot='')
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
-$runtime=Join-Path $repo ('workspace/runtime/q2go-elevator-cycle'+$(if($Map -eq 'base2'){'-base2'}))
+$runtime=Join-Path $repo ('workspace/runtime/q2go-elevator-cycle'+$(if($Map -eq 'base3'){''}else{'-'+$Map}))
 if($SideWalls){
     if($Map -ne 'base2'){throw 'Side walls fixture requires base2'}
     $runtime+='-side-walls'

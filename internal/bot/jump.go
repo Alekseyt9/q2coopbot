@@ -169,7 +169,7 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 		if !clear {
 			continue
 		}
-		if maxRise > 16 && d <= 100 && speed <= 180 {
+		if maxRise > 16 && d <= 120 && speed <= 180 {
 			if math.Hypot(s.SelfVelocity[0], s.SelfVelocity[1]) > 80 {
 				// A standing arc is only valid after the approach momentum has
 				// bled off; otherwise native air control carries us past it.
@@ -178,8 +178,27 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 			// This short ramp has no reliable ground run-up: the BSP probe
 			// may approve retreat that native physics immediately loses.
 			// Take off from the current grounded point along the checked arc.
-			p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: speed, phase: 2}
+			launchSpeed := speed
+			if d > 100 {
+				// A longer grounded launch from rest needs acceleration
+				// during flight. The average-speed estimate alone leaves
+				// the bot short under native PM_AirMove.
+				launchSpeed = 400
+			}
+			p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: launchSpeed, phase: 2}
 			return true
+		}
+		if landing[2] < s.Self[2]-16 {
+			ux, uy := (landing[0]-s.Self[0])/d, (landing[1]-s.Self[1])/d
+			along := s.SelfVelocity[0]*ux + s.SelfVelocity[1]*uy
+			cross := math.Abs(s.SelfVelocity[0]*uy - s.SelfVelocity[1]*ux)
+			if along >= 60 && along <= speed+30 && cross <= 50 {
+				// The bot is already moving toward a verified lower landing.
+				// Retreating from a sloped lip can lose ground support before
+				// the run-up begins.
+				p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: math.Max(speed, 220), phase: 2}
+				return true
+			}
 		}
 		if landing[2] > s.Self[2]+8 {
 			ux, uy := (landing[0]-s.Self[0])/d, (landing[1]-s.Self[1])/d
@@ -305,7 +324,7 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 	}
 	if j.airborne && s.OnGround {
 		reason := prefix + "_landed"
-		if quake.Horizontal(s.Self, j.landing) > 32 || math.Abs(s.Self[2]-j.landing[2]) > 18 {
+		if !p.jumpLandingOK(s.Self, j.landing) {
 			reason = prefix + "_missed"
 		}
 		p.jump = nil
@@ -322,6 +341,35 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 	}
 	p.World.Command = CommandDecision{MoveSource: skill, AimSource: "route", Skill: skill, LimitReason: phase}
 	return cmd, true
+}
+
+// AAS can place a waypoint near the far side of a wide landing. Landing a
+// little short is still successful when the remaining ground path is safe.
+func (p *Planner) jumpLandingOK(at, landing quake.Vec3) bool {
+	distance := quake.Horizontal(at, landing)
+	if math.Abs(at[2]-landing[2]) > 18 {
+		return false
+	}
+	if distance <= 32 {
+		return true
+	}
+	if distance > 64 || p.World.Geometry == nil || p.Nav == nil {
+		return false
+	}
+	for traveled := 0.0; traveled < distance; traveled += 16 {
+		dx, dy := landing[0]-at[0], landing[1]-at[1]
+		remaining := math.Hypot(dx, dy)
+		if remaining <= 0.001 {
+			break
+		}
+		step := math.Min(16, remaining)
+		if p.World.Geometry.GroundMoveHazardStep(p.Nav, at, dx, dy, step) != "" {
+			return false
+		}
+		at[0] += dx / remaining * step
+		at[1] += dy / remaining * step
+	}
+	return true
 }
 
 // A blocked walking corner is not evidence of a gap. Only a nearby paired
