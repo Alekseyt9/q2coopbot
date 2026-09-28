@@ -86,6 +86,9 @@
     "base2-death-point-return.json",
     "base2-return-corner-false-jump.json",
     "base3-death-return-lift-37.json",
-    "base3-lethal-laser-corridor.json"
+    "base3-lethal-laser-corridor.json",
+    "base3-return-ramp-momentum-overshoot.json",
+    "base3-return-ramp-lateral-overshoot.json",
+    "base3-return-ramp-runup-lost-ground.json"
   ]
 }

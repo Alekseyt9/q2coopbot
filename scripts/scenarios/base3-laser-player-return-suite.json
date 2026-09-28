@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "repetitions": 2,
+  "scenarios": ["base3-laser-player-return.json"],
+  "parallelism": 2,
+  "runtime_root": "../../workspace/runtime/q2go-elevator-cycle",
+  "timescales": [2],
+  "base_port": 30760,
+  "tail_frames": 5
+}

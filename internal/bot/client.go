@@ -875,6 +875,7 @@ func (c *Client) run(ctx context.Context) error {
 					Goal               string                  `json:"goal"`
 					GoalPoint          *quake.Vec3             `json:"goal_point,omitempty"`
 					Route              []quake.Waypoint        `json:"route,omitempty"`
+					Jump               *JumpTrace              `json:"jump_plan,omitempty"`
 					Pickups            []quake.Object          `json:"pickups,omitempty"`
 					Obstacles          []quake.Object          `json:"obstacles,omitempty"`
 					Defeated           []quake.Object          `json:"defeated,omitempty"`
@@ -927,7 +928,7 @@ func (c *Client) run(ctx context.Context) error {
 					WeaponReason: c.weaponSwitch.reason,
 					Inventory:    c.planner.World.Snapshot.Inventory, InventoryKnown: c.planner.World.Snapshot.InventoryKnown, InventoryAgeFrames: c.planner.World.Snapshot.InventoryAgeFrames,
 					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
-					Route: c.planner.World.Route, Pickups: c.planner.World.Snapshot.Pickups,
+					Route: c.planner.World.Route, Jump: c.planner.World.Jump, Pickups: c.planner.World.Snapshot.Pickups,
 					Beams:            c.planner.World.Snapshot.Beams,
 					RemovedEntities:  c.planner.World.Snapshot.RemovedEntities,
 					DeltaFrame:       c.planner.World.Snapshot.DeltaFrame,

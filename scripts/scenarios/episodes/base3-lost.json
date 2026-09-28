@@ -3,12 +3,13 @@
   "title": "Потеря сопровождения после движения за игроком",
   "map": "base3",
   "status": "verified_search_only",
-  "reproduction": "native_udp_2x_parallel",
+  "reproduction": "observation_only",
+  "verification_mode": "native_udp_2x_parallel",
   "scenario": "scripts/scenarios/base3-lost-follow.json",
   "evidence": "workspace/artifacts/live-lost-20260926-192240/trace.jsonl",
   "symptom": "Игрок сообщает: бот потерялся, хотя сначала шёл следом. frame=8776; self=-174,125,-1153,25,-279,875; health=90; goal=wait_for_teammate; navigation=ready; reason=no_movement_goal; teammate_age=991",
   "missing_setup": [
-    "После повторного обнаружения игрока бот прежде погибал от target_laser; безопасная остановка проверена в base3-lethal-laser-corridor, но обход и возобновление после отключения лазера ещё открыты",
+    "После повторного обнаружения игрока бот прежде погибал от target_laser; безопасная остановка, тестовое отключение и возврат игрока проверены отдельно, но штатное отключение или физический обход на base3 остаются открыты",
     "Живая проверка с человеком остаётся отдельным этапом"
   ],
   "acceptance": "scripts/check_base3_lost_follow.ps1",

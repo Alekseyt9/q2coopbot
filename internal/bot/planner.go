@@ -32,6 +32,7 @@ type World struct {
 	Strategy         *StrategyDecision `json:"strategy,omitempty"`
 	Tactic           *TacticalDecision `json:"tactic,omitempty"`
 	Route            []quake.Waypoint  `json:"route,omitempty"`
+	Jump             *JumpTrace        `json:"jump_plan,omitempty"`
 	Elevator         string            `json:"elevator,omitempty"`
 	Command          CommandDecision   `json:"command"`
 	LaserEvidence    []LaserEvidence   `json:"laser_evidence,omitempty"`
@@ -604,6 +605,7 @@ func (p *Planner) command(prev quake.UserCmd) quake.UserCmd {
 func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.UserCmd) {
 	cmd := quake.UserCmd{Yaw: prev.Yaw, Msec: 50}
 	p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none"}
+	p.World.Jump = nil
 	s := p.World.Snapshot
 	defer func() { result = p.limitMachinegunBurst(s, p.limitLaserMovement(s, result)) }()
 	if !isRailgun(s.Weapon) || s.Health <= 0 {

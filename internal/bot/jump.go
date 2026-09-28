@@ -14,8 +14,22 @@ type jumpFlight struct {
 	airborne      bool
 	speed         float64
 	runup         quake.Vec3
-	phase         int  // 0: retreat; 1: accelerate; 2: takeoff/flight
+	phase         int  // 0: retreat; 1: accelerate; 2: takeoff/flight; 3: brake and replan
 	drop          bool // verified walk-off reach; never apply a jump impulse
+}
+
+type JumpTrace struct {
+	From     quake.Vec3 `json:"from"`
+	Landing  quake.Vec3 `json:"landing"`
+	Runup    quake.Vec3 `json:"runup"`
+	Speed    float64    `json:"speed"`
+	Phase    int        `json:"phase"`
+	Airborne bool       `json:"airborne"`
+	Drop     bool       `json:"drop"`
+}
+
+func (j *jumpFlight) trace() *JumpTrace {
+	return &JumpTrace{From: j.from, Landing: j.landing, Runup: j.runup, Speed: j.speed, Phase: j.phase, Airborne: j.airborne, Drop: j.drop}
 }
 
 func (p *Planner) planGapJump() bool {
@@ -76,6 +90,7 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 			candidates = append(candidates, quake.Waypoint{Position: at})
 		}
 	}
+	brakeForAlignment := false
 	for _, wp := range candidates {
 		if wp.Kind == 11 {
 			break
@@ -170,11 +185,16 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 			ux, uy := (landing[0]-s.Self[0])/d, (landing[1]-s.Self[1])/d
 			along := s.SelfVelocity[0]*ux + s.SelfVelocity[1]*uy
 			cross := math.Abs(s.SelfVelocity[0]*uy - s.SelfVelocity[1]*ux)
-			if along >= 160 && cross <= 140 {
+			if along >= 160 && along <= speed+20 && cross <= 50 {
 				// The bot already has a grounded takeoff run toward the
-				// landing. Retreating to a synthetic run-up can leave a lip.
+				// landing. Excess momentum would carry it past the checked
+				// arc, while lateral momentum would miss it; use a measured
+				// run-up then.
 				p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: speed, phase: 2}
 				return true
+			}
+			if along >= 160 && along <= speed+20 && cross > 50 {
+				brakeForAlignment = true
 			}
 		}
 		back := s.Self
@@ -205,6 +225,13 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 		p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: launchSpeed, runup: back}
 		return true
 	}
+	if brakeForAlignment {
+		// There is a checked landing, but the current lateral momentum
+		// cannot be corrected in the air and the retreat is unsafe. Let
+		// ground friction reduce it, then replan from the new position.
+		p.jump = &jumpFlight{from: s.Self, frame: s.Frame, phase: 3}
+		return true
+	}
 	return false
 }
 
@@ -213,6 +240,7 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 	if j == nil {
 		return cmd, false
 	}
+	defer func() { p.World.Jump = j.trace() }()
 	s := p.World.Snapshot
 	skill, prefix := "gap_jump", "jump"
 	if j.drop {
@@ -228,6 +256,16 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 		// Shed the approach velocity before stepping off: air braking is weak.
 		p.World.Command = CommandDecision{MoveSource: "none", Skill: skill, LimitReason: "drop_prepare"}
 		return cmd, true
+	}
+	if j.phase == 3 {
+		if !s.OnGround || math.Hypot(s.SelfVelocity[0], s.SelfVelocity[1]) <= 80 {
+			p.jump = nil
+			p.routeKnown = false
+			p.World.Command = CommandDecision{MoveSource: "none", Skill: skill, LimitReason: "jump_braked"}
+			return quake.UserCmd{Yaw: cmd.Yaw}, true
+		}
+		p.World.Command = CommandDecision{MoveSource: "none", Skill: skill, LimitReason: "jump_braking"}
+		return quake.UserCmd{Yaw: cmd.Yaw}, true
 	}
 	if j.phase < 2 {
 		if !s.OnGround {

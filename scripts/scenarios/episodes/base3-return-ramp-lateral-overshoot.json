@@ -1,0 +1,14 @@
+{
+  "id": "base3-return-ramp-lateral-overshoot",
+  "title": "Возврат base3: боковой перелёт площадки на позднем подъёме",
+  "map": "base3",
+  "status": "verified_full_return_parallel_2x",
+  "reproduction": "observation_only",
+  "verification_session": "scripts/scenarios/base3-full-death-return-session.json",
+  "evidence": "workspace/artifacts/base3-return-momentum-guard-tight/run-000/second.jsonl",
+  "observed_failure": "На кадре 249 бот начинал прыжок из [203.25,706.75,-759.875] к площадке [64,672.9,-743.875] со скоростью [-259.25,45.125,0]. Боковая инерция уводила его к y=721: приземление на кадре 254 давало jump_missed, хотя возврат продолжался.",
+  "expected_result": "Не отрываться с большой поперечной скоростью, приземляться на проверенную площадку и завершать возврат.",
+  "verification": "workspace/artifacts/base3-return-lateral-brake/report.json",
+  "diagnosis": "Для прямого отрыва поперечная скорость ограничена 50 ед./с. Когда дуга пригодна, но инерция не позволяет ни оторваться сразу, ни безопасно отступить для разбега, бот гасит скорость на земле и пересчитывает маршрут. Два полных возврата base3 при 2x дошли до точки смерти без jump_missed и потери здоровья; base2 прошёл 2/2 без jump_missed. В base3 осталось по три runup_lost_ground на сервер, поэтому оптимизация разбега ещё нужна.",
+  "missing_setup": ["Короткая нативная сцена со скрытой целью возврата", "Устранение runup_lost_ground", "Проверка в живой игре с человеком"]
+}

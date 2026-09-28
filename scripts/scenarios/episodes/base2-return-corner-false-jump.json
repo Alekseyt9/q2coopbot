@@ -10,5 +10,5 @@
   "expected_result": "Возврат по обычному маршруту к точке смерти без gap_jump; встреча игрока отменяет возврат до цели.",
   "kind": "combat_spacing",
   "missing_setup": [],
-  "reproduction": "ready"
+  "reproduction": "observation_only"
 }

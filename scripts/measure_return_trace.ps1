@@ -38,6 +38,9 @@ $netY=[double]$rows[-1].self[1]-[double]$rows[0].self[1]
 $net=[math]::Sqrt($netX*$netX+$netY*$netY)
 $reasons=@($rows|ForEach-Object {$_.arbitration.limit_reason})
 $sources=@($rows|ForEach-Object {$_.arbitration.move_source})
+$jumpFailures=@($rows|Where-Object {$_.arbitration.limit_reason -in @('runup_lost_ground','jump_missed','jump_aborted')}|Select-Object -First 12|ForEach-Object {
+    [pscustomobject]@{frame=$_.frame;reason=$_.arbitration.limit_reason;position=$_.self;velocity=$_.self_velocity;from=$_.jump_plan.from;runup=$_.jump_plan.runup;landing=$_.jump_plan.landing;speed=$_.jump_plan.speed;phase=$_.jump_plan.phase}
+})
 [pscustomobject]@{
     start_frame=$rows[0].frame
     end_frame=$rows[-1].frame
@@ -52,6 +55,7 @@ $sources=@($rows|ForEach-Object {$_.arbitration.move_source})
     longest_stall_frames=$longest
     jump_missed=@($reasons|Where-Object {$_ -eq 'jump_missed'}).Count
     runup_lost_ground=@($reasons|Where-Object {$_ -eq 'runup_lost_ground'}).Count
+    jump_failures=$jumpFailures
     static_hull_blocked=@($reasons|Where-Object {$_ -eq 'static_hull_blocked'}).Count
     no_verified_landing=@($reasons|Where-Object {$_ -eq 'no_verified_landing'}).Count
     corner_bypass_frames=@($sources|Where-Object {$_ -eq 'route_corner_bypass'}).Count

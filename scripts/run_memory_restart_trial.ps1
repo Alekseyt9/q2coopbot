@@ -22,7 +22,7 @@ foreach($asset in Get-ChildItem (Join-Path $source 'baseq2') -Recurse -File|Wher
 $client=Join-Path $out 'q2coopbot.exe'
 Push-Location $repo
 try{go build -o $client ./cmd/q2coopbot;if($LASTEXITCODE){throw 'Client build failed'}}finally{Pop-Location}
-$session=if($SessionPath){(Resolve-Path -LiteralPath $SessionPath).Path}else{Join-Path $repo 'scripts/scenarios/death-point-memory-restart-session.json'}
+$session=if($SessionPath){(Resolve-Path -LiteralPath $SessionPath).Path}else{Join-Path $repo ('scripts/scenarios/'+$(if($Map -eq 'base3'){'base3-full-death-return-session.json'}else{'death-point-memory-restart-session.json'}))}
 $memory=Join-Path $out 'travel-memory.json'
 $stop=Join-Path $out 'first.stop'
 $token=[guid]::NewGuid().ToString('N')

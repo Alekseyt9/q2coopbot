@@ -144,8 +144,15 @@ func TestBase3ReturnSecondRampPlan(t *testing.T) {
 	if !p.planGapJump() {
 		t.Fatal("missing verified jump")
 	}
-	if p.jump.phase != 2 || p.jump.landing[0] > 100 || p.jump.landing[2] <= self[2] {
-		t.Fatalf("did not use the grounded approach momentum: %+v", *p.jump)
+	if p.jump.landing[0] > 100 || p.jump.landing[2] <= self[2] {
+		t.Fatalf("wrong upward ramp target: %+v", *p.jump)
+	}
+	if p.jump.phase == 2 {
+		dx, dy := p.jump.landing[0]-self[0], p.jump.landing[1]-self[1]
+		along := (-188*dx - 242*dy) / math.Hypot(dx, dy)
+		if along > p.jump.speed+20 {
+			t.Fatalf("unsafe direct takeoff: %+v", *p.jump)
+		}
 	}
 }
 
@@ -178,5 +185,69 @@ func TestBase3ReturnThirdRampPlan(t *testing.T) {
 	dx, dy, step := p.regroupCornerStep(p.World.Snapshot, p.World.Route[0].Position)
 	if !step || dx <= 0 || g.GroundMoveHazardStep(n, self, dx, dy, 16) != "" {
 		t.Fatalf("no safe local sidestep: %v,%v,%v", dx, dy, step)
+	}
+}
+
+func TestBase3FirstReturnRampMomentum(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("assets")
+	}
+	g, err := quake.LoadMap(root, "base3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base3.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	self := quake.Vec3{298.125, 725.75, -807.875}
+	goal := quake.Vec3{-148.375, -802.875, -231.875}
+	route, ok := n.Route(self, goal)
+	if !ok {
+		t.Fatal("missing route")
+	}
+	p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "regroup_after_respawn", Snapshot: quake.Snapshot{Map: "base3", Frame: 226, Health: 100, OnGround: true, Self: self, SelfVelocity: quake.Vec3{-229.125, -193.625, 0}}, Route: route}, goalPoint: goal}
+	if !p.planRampJump() {
+		t.Fatal("missing ramp jump")
+	}
+	if p.jump.phase == 2 {
+		dx, dy := p.jump.landing[0]-self[0], p.jump.landing[1]-self[1]
+		along := (-229.125*dx - 193.625*dy) / math.Hypot(dx, dy)
+		if along > p.jump.speed+20 {
+			t.Fatalf("launched with excessive approach momentum: %+v", *p.jump)
+		}
+	}
+}
+
+func TestBase3LaterReturnRampMomentum(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("assets")
+	}
+	g, err := quake.LoadMap(root, "base3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base3.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	self := quake.Vec3{203.25, 706.75, -759.875}
+	goal := quake.Vec3{-148.375, -802.875, -231.875}
+	route := []quake.Waypoint{
+		{Position: quake.Vec3{174.9, 704, -760}, Kind: 2},
+		{Position: quake.Vec3{170, 704, -744}, Kind: 2},
+		{Position: quake.Vec3{142.9, 640, -744}, Kind: 2},
+		{Position: quake.Vec3{138, 640, -728}, Kind: 2},
+		{Position: quake.Vec3{64, 624.9, -728}, Kind: 2},
+		{Position: quake.Vec3{64, 620, -727.875}, Kind: 2},
+	}
+	p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "regroup_after_respawn", Snapshot: quake.Snapshot{Map: "base3", Frame: 249, Health: 100, OnGround: true, Self: self, SelfVelocity: quake.Vec3{-259.25, 45.125, 0}}, Route: route}, goalPoint: goal}
+	if !p.planRampJump() {
+		t.Fatal("missing ramp jump")
+	}
+	if p.jump.phase == 2 {
+		t.Fatalf("unsafe direct launch: %+v", *p.jump)
 	}
 }

@@ -1,0 +1,20 @@
+{
+  "id": "base3-return-ramp-runup-lost-ground",
+  "title": "Возврат base3: потеря опоры при отступлении для разбега",
+  "map": "base3",
+  "status": "observed_full_return_parallel_2x",
+  "reproduction": "observation_only",
+  "verification_session": "scripts/scenarios/base3-full-death-return-session.json",
+  "evidence": "workspace/artifacts/base3-return-lateral-brake/run-000/second.jsonl",
+  "observed_failure": "В полном возврате бот трижды получает runup_lost_ground: отступает с узких ступеней около [159,665,-744], [158,679,-744] и [60,654,-728]. После падения маршрут восстанавливается, здоровье остаётся 100. Первый пакет имел 0 jump_missed; повтор с добавленной телеметрией плана прыжка завершился 2/2, но на одном сервере возник один поздний jump_missed.",
+  "expected_result": "Исключить отход с края без новых jump_missed, зависаний и потери здоровья; сохранить полный возврат base3 и base2.",
+  "diagnosis": "BSP GroundDrop для расчётных точек отступления первых двух прыжков не находит опору в пределах 24 единиц; третья точка ведёт на пол примерно на 16 единиц ниже. AAS-близость сама по себе недостаточна для такого разбега. Проверенные варианты отклонены: общий короткий разбег застревал на маршруте; запрет неподдержанных точек дал 3–4 jump_missed; короткий разбег только при скорости до 180 и прямой прыжок с места дали по 2 jump_missed. Алгоритм движения сохранён. Трасса jump_plan и отчёт jump_failures теперь раскрывают план каждого неудачного прыжка; повторный пакет показывает, что ноль промахов пока не является устойчивым результатом.",
+  "telemetry_verification": "workspace/artifacts/base3-return-jump-telemetry/report.json",
+  "rejected_evidence": [
+    "workspace/artifacts/base3-return-short-runup",
+    "workspace/artifacts/base3-return-ramp-support/report.json",
+    "workspace/artifacts/base3-return-selective-runup/report.json",
+    "workspace/artifacts/base3-return-first-standing/report.json"
+  ],
+  "missing_setup": ["Воспроизводимая короткая нативная сцена со скрытой целью death-only возврата", "Физически подтверждённый разгон без ухода с края", "Проверка в живой игре с человеком"]
+}

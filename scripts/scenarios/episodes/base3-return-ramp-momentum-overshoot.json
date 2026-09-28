@@ -1,0 +1,15 @@
+{
+  "id": "base3-return-ramp-momentum-overshoot",
+  "title": "Возврат base3: перелёт площадки на первом подъёме",
+  "map": "base3",
+  "status": "improved_full_return_parallel_2x",
+  "reproduction": "observation_only",
+  "verification_session": "scripts/scenarios/base3-full-death-return-session.json",
+  "evidence": "workspace/artifacts/base3-return-landing-refresh/run-000/second.jsonl",
+  "observed_failure": "На кадре 226 бот прыгал с [298.125,725.75,-807.875] при горизонтальной скорости около 300 к площадке [210,680,-775.875], рассчитанной на скорость 190. На кадре 230 он касался стены и приземлялся в [238.5,648.875,-775.875], получая jump_missed. На полном возврате повторялось пять jump_missed на каждом из двух серверов.",
+  "expected_result": "Не начинать прямой прыжок, если текущая скорость вдоль дуги заметно превышает расчётную; сохранить безопасный возврат к точке смерти.",
+  "verification": "workspace/artifacts/base3-return-momentum-guard-tight/report.json",
+  "diagnosis": "Прямой старт теперь разрешён только при скорости вдоль дуги не выше расчётной более чем на 20 ед./с. Go-тест фиксирует начальную геометрию и скорость. Полный возврат base3 при 2x на двух серверах завершён: суммарно 2 jump_missed вместо 10, 415 кадров вместо 443. Base2 на двух серверах также завершён без jump_missed. Один другой промах на каждом сервере остаётся для отдельной диагностики.",
+  "missing_setup": ["Короткая нативная сцена со скрытой целью возврата", "Проверка в живой игре с человеком"],
+  "follow_up_episode": "base3-return-ramp-lateral-overshoot"
+}

@@ -62,3 +62,29 @@ func TestGapJumpUnexpectedFallDuringRunupCancels(t *testing.T) {
 		t.Fatal("unexpected fall was treated as planned jump")
 	}
 }
+
+func TestJumpBrakesLateralMomentumBeforeReplanning(t *testing.T) {
+	p := &Planner{jump: &jumpFlight{from: quake.Vec3{}, frame: 40, phase: 3}, routeKnown: true, World: World{Snapshot: quake.Snapshot{Frame: 41, Health: 100, OnGround: true, SelfVelocity: quake.Vec3{250, 80, 0}}}}
+	cmd, active := p.jumpCommand(quake.UserCmd{Forward: 400, Up: 200})
+	if !active || p.jump == nil || cmd.Forward != 0 || cmd.Up != 0 || p.World.Command.LimitReason != "jump_braking" {
+		t.Fatalf("braking must hold movement on the ground: %+v %+v", cmd, p.World.Command)
+	}
+	p.World.Snapshot.Frame++
+	p.World.Snapshot.SelfVelocity = quake.Vec3{45, 20, 0}
+	cmd, active = p.jumpCommand(quake.UserCmd{Forward: 400})
+	if !active || p.jump != nil || cmd.Forward != 0 || p.World.Command.LimitReason != "jump_braked" || p.routeKnown {
+		t.Fatalf("braking did not yield to a fresh route: %+v %+v", cmd, p.World.Command)
+	}
+}
+
+func TestJumpTraceKeepsPlanOnLandingFrame(t *testing.T) {
+	p := &Planner{jump: &jumpFlight{from: quake.Vec3{}, landing: quake.Vec3{100, 20, 16}, runup: quake.Vec3{-48, 0, 0}, speed: 180, phase: 2, airborne: true, frame: 40}, World: World{Snapshot: quake.Snapshot{Frame: 44, Health: 100, OnGround: true, Self: quake.Vec3{50, 60, 16}}}}
+	_, active := p.jumpCommand(quake.UserCmd{})
+	if !active || p.World.Command.LimitReason != "jump_missed" || p.jump != nil || p.World.Jump == nil || p.World.Jump.Landing != (quake.Vec3{100, 20, 16}) || p.World.Jump.Phase != 2 {
+		t.Fatalf("lost planned landing on failure frame: %+v", p.World.Jump)
+	}
+	p.commandAt(quake.UserCmd{}, time.Now())
+	if p.World.Jump != nil {
+		t.Fatal("stale jump plan leaked into next frame")
+	}
+}

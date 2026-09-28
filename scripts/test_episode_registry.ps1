@@ -3,6 +3,9 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $actual = Read-EpisodeRegistry (Join-Path $repo 'scripts/scenarios/episodes/index.json')
 if (!$actual.episodes.Count) { throw 'Empty registry' }
+foreach ($episode in $actual.episodes) {
+    if ($episode.reproduction -notin @('ready','observation_only')) { throw "Invalid reproduction: $($episode.id)" }
+}
 $root = Join-Path $repo ('workspace/artifacts/registry-test-' + [guid]::NewGuid().ToString('N'))
 foreach ($case in @('valid','duplicate-id','duplicate-file','missing-file','unlisted','outside')) {
     $dir = Join-Path $root $case

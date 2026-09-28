@@ -1,7 +1,7 @@
 {
   "observed_failure": "После восстановления цели[-766.25,-774.5,-279.875] бот дошёл до[1518,1400.25,-807.875] и остановился static_hull_blocked перед kind7. AAS готов, маршрут214 точек.",
   "id": "base3-memory-return-static-hull",
-  "reproduction": "ready",
+  "reproduction": "observation_only",
   "evidence": "workspace/artifacts/live-memory-return-block-20260927-224905/bot-full.jsonl",
   "missing_setup": [
     "Полный живой возврат до места смерти после перезапуска ещё не проверен"
