@@ -184,6 +184,35 @@ func TestBase3ReturnRampJump(t *testing.T) {
 	}
 }
 
+func TestBase1FarReturnFirstRise(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("assets")
+	}
+	g, err := quake.LoadMap(root, "base1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base1.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	self := quake.Vec3{747.5, -408.25, -71.875}
+	goal := quake.Vec3{960, 408, -167.875}
+	route, ok := n.Route(self, goal)
+	if !ok {
+		t.Fatal("missing AAS route")
+	}
+	p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "regroup_after_respawn", Snapshot: quake.Snapshot{Map: "base1", Frame: 301, Health: 100, OnGround: true, Self: self}, Route: route}, goalPoint: goal}
+	if !p.blockedRiseApproach() || !p.planRampJump() {
+		t.Fatal("first rise needs a verified landing")
+	}
+	landing := p.jump.landing
+	if landing[0] != 769 || landing[2] <= -41 || !g.PlayerMoveClear(landing, landing) || !n.GroundedNear(landing) {
+		t.Fatalf("invalid corrected landing: %+v", landing)
+	}
+}
+
 func TestBase3ReturnCornerStep(t *testing.T) {
 	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
 	if root == "" {

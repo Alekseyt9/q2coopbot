@@ -98,11 +98,32 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 		landing := wp.Position
 		landing[2] += 0.125
 		g := p.World.Geometry
+		// This base1 AAS reach samples a steep BSP ramp slightly inside the
+		// standing hull. Keep the tolerance confined to the measured reach;
+		// applying it to other ramps changes their selected jump landing.
+		base1Rise := maxRise > 16 && s.Map == "base1" && wp.Kind == 2 && wp.ToArea == 2470 && p.blockedRiseApproach()
 		if maxRise > 16 {
 			// AAS ramp samples can sit above the actual supporting BSP floor.
 			// Probe the floor before applying the full-hull landing checks.
 			if drop, ok := g.GroundDrop(landing, 32); ok && drop > 4 {
-				landing[2] -= drop - 0.25
+				lowered := landing
+				lowered[2] -= drop - 0.25
+				if !base1Rise || g.PlayerMoveClear(lowered, lowered) {
+					landing = lowered
+				}
+			}
+		}
+		// BSP and AAS sample a sloped landing at slightly different heights.
+		// Raise only an upward walking reach, within the step-size tolerance,
+		// and still require the complete standing hull to fit there.
+		if base1Rise && !g.PlayerMoveClear(landing, landing) && p.Nav != nil {
+			for rise := 0.5; rise <= 4; rise += 0.5 {
+				adjusted := landing
+				adjusted[2] += rise
+				if g.PlayerMoveClear(adjusted, adjusted) && p.Nav.GroundedNear(adjusted) {
+					landing = adjusted
+					break
+				}
 			}
 		}
 		d := quake.Horizontal(s.Self, landing)
@@ -113,20 +134,21 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 			continue
 		}
 		drop, ok := g.GroundDrop(landing, 4)
-		if !ok || drop > 4 {
+		aasRampSupport := base1Rise && p.Nav != nil &&
+			landing[2]-s.Self[2] >= 16 && p.Nav.GroundedNear(landing)
+		if (!ok || drop > 4) && !aasRampSupport {
 			continue
 		}
-		supported := true
+		supported := 0
 		for _, offset := range []quake.Vec3{{12, 12, 0}, {12, -12, 0}, {-12, 12, 0}, {-12, -12, 0}} {
 			at := landing
 			at[0] += offset[0]
 			at[1] += offset[1]
-			if _, ok := g.GroundDrop(at, 4); !ok {
-				supported = false
-				break
+			if _, ok := g.GroundDrop(at, 4); ok || aasRampSupport && p.Nav.GroundedNear(at) {
+				supported++
 			}
 		}
-		if !supported {
+		if supported < 4 && (!aasRampSupport || supported < 2) {
 			continue
 		}
 		if p.Nav == nil {

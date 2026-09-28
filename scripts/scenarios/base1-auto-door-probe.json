@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "base1-auto-door-probe",
+  "map": "base1",
+  "start_frame": 40,
+  "game_frames": 190,
+  "actor_origin": [-960, 1630, -23.875],
+  "bot_origin": [-1180, 1630, -23.875],
+  "bot_invulnerable": true,
+  "expect": {},
+  "steps": [{"id":"wait-after-door","action":"wait","frames":140}]
+}

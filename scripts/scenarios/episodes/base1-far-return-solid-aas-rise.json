@@ -1,0 +1,16 @@
+{
+  "id": "base1-far-return-solid-aas-rise",
+  "title": "Возврат base1: AAS ведёт в непроходимый подъём",
+  "map": "base1",
+  "status": "verified_short_parallel_2x",
+  "reproduction": "observation_only",
+  "verification_session": "scripts/scenarios/base1-far-death-return-session.json",
+  "evidence": "workspace/artifacts/base1-far-return-corner-escape/run-000/second.jsonl",
+  "observed_failure": "После выхода из прежнего поворота бот идёт до [747.5,-408.25,-71.875]. Следующий waypoint AAS около [769,-346,-41] расположен в BSP-коллизии для полного корпуса, движение в его сторону получает static_hull_blocked. Оба параллельных прогона при 2x стоят здесь до конца.",
+  "expected_result": "Обходить недействительный переход AAS по физически проверенному пути либо признавать этот путь недоступным без бесконечного ожидания.",
+  "diagnosis": "AAS-точка лежит примерно на 0.6–1 единицу ниже положения, где полный корпус уже помещается. BSP GroundDrop(32) предлагает опустить точку ещё на 8 единиц, что снова помещает корпус в solid. Для конкретного проверенного AAS-перехода base1/area 2470 высота корректируется вверх в пределах 4 единиц только при свободном корпусе и подтверждённой близкой grounded AAS-области. Короткая нативная сцена с настоящей death-only целью и посадкой после первого подъёма прошла 2/2 при 2x, без промаха и потери опоры. Полный маршрут остаётся открытым из-за следующего участка.",
+  "short_probe": "scripts/run_memory_restart_suite.ps1 -Map base1 -RiseProbe",
+  "short_probe_verification": "workspace/artifacts/base1-rise-scoped-r1/report.json",
+  "follow_up_episode": "base1-far-return-second-ramp-runup",
+  "missing_setup": ["Полный дальний возврат после исправления следующего подъёма", "Проверка в живой игре с человеком"]
+}

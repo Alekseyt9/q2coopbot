@@ -1,0 +1,16 @@
+{
+  "id": "base1-far-return-second-ramp-runup",
+  "title": "Возврат base1: потеря опоры на следующем подъёме",
+  "map": "base1",
+  "status": "verified_short_parallel_2x",
+  "reproduction": "observation_only",
+  "verification_session": "scripts/scenarios/base1-far-death-return-session.json",
+  "evidence": "workspace/artifacts/base1-far-return-rise-scoped/run-000/second.jsonl",
+  "observed_failure": "После исправленного первого подъёма бот проходит до следующего участка, но не завершает дальний возврат. С окончательной ограниченной поправкой один прогон стоит с no_verified_landing у [833.5,-318.75,-25.875], другой после повторных прыжков возвращается к [743.875,-367.75,-71.875] и стоит с static_hull_blocked. Оба независимых прогона при 2x дошли до предела сценария без точки смерти.",
+  "expected_result": "Проходить следующий подъём и продолжать возврат без повторных опасных прыжков либо ограниченно признавать путь недоступным.",
+  "diagnosis": "У короткого восходящего AAS-перехода в области 2452/2453 полная проверка 40 единиц видела отсутствие опоры или статическую преграду за ближайшей безопасной частью склона. Теперь только на этих переходах base1 бот идёт короткими шагами по 8 единиц со скоростью 80 после той же проверки опоры и корпуса. Короткий нативный death-only сценарий прошёл 2/2 при 2x без jump_missed и runup_lost_ground. Полный дальний маршрут всё ещё нестабилен ранее, при подходе к первому подъёму.",
+  "short_probe": "scripts/run_memory_restart_suite.ps1 -Map base1 -SecondRiseProbe",
+  "short_probe_verification": "workspace/artifacts/base1-second-rise-scoped-r1/report.json",
+  "follow_up_episode": "base1-far-return-first-rise-approach-momentum",
+  "missing_setup": ["Полный дальний возврат после исправления подхода к первому подъёму", "Проверка в живой игре с человеком"]
+}

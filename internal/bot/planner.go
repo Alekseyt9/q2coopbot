@@ -784,6 +784,17 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		probeDistance = math.Min(probeDistance, math.Hypot(dx, dy))
 	}
 	hazard := p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, probeDistance)
+	// At the measured base1 second rise, a full-speed tick skips beyond a
+	// nearby grounded AAS walking reach. Other ramps must keep their existing
+	// jump planning; taking short steps there can spoil a safe run-up.
+	if s.OnGround && s.Map == "base1" && (hazard == "no_ground_support" || hazard == "static_hull_blocked") && len(p.World.Route) > 0 &&
+		p.World.Route[0].Kind == 2 && (p.World.Route[0].ToArea == 2452 || p.World.Route[0].ToArea == 2453) &&
+		target[2]-s.Self[2] > 0 && target[2]-s.Self[2] <= 18 &&
+		quake.Horizontal(s.Self, target) <= 24 &&
+		p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, 8) == "" {
+		moveSpeedLimit, probeDistance = 80, 8
+		hazard = ""
+	}
 	if s.OnGround && (hazard == "no_ground_support" || hazard == "static_hull_blocked" && (p.blockedDropApproach() || p.blockedRiseApproach())) {
 		verified := p.planWalkOff()
 		if !verified && hazard == "no_ground_support" && !p.lastProgress.IsZero() && now.Sub(p.lastProgress) >= 700*time.Millisecond && math.Hypot(s.SelfVelocity[0], s.SelfVelocity[1]) < 80 {
