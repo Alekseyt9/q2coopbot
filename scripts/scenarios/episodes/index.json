@@ -85,6 +85,7 @@
     "base3-memory-return-static-hull.json",
     "base2-death-point-return.json",
     "base2-return-corner-false-jump.json",
-    "base3-death-return-lift-37.json"
+    "base3-death-return-lift-37.json",
+    "base3-lethal-laser-corridor.json"
   ]
 }

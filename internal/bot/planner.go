@@ -95,6 +95,7 @@ type Planner struct {
 	lastSeenSelf              quake.Vec3
 	lastSeenSelfKnown         bool
 	searchApproachStarted     bool
+	longSearch                bool
 	teammateSoundCue          *TeammateSoundCue
 	teammateEvidence          *TeammateEvidence
 	respawnRegroup            *respawnRegroup
@@ -211,6 +212,7 @@ func (p *Planner) setMap(name, root string) {
 	p.probeProgressFrame = 0
 	p.lastSeenSelfKnown = false
 	p.searchApproachStarted = false
+	p.longSearch = false
 	p.teammateSoundCue = nil
 	p.teammateEvidence = nil
 	p.observed = false
@@ -311,6 +313,11 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	previous := p.World.Snapshot
 	p.observeRespawnRegroup(previous, s)
 	p.doorPrevious = previous
+	if previous.Frame > 0 && !previous.OnGround && s.OnGround && p.elevator == nil && !p.routeOK {
+		// AAS may have no route from an airborne area. Refresh it as soon
+		// as a supported landing gives us a valid starting area again.
+		p.routeKnown = false
+	}
 	if previous.Frame > 0 && previous.Health <= 0 && s.Health > 0 {
 		p.deathFrame = 0
 		p.routeKnown = false
@@ -382,6 +389,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.probeTarget = nil
 		p.probeAttempted = false
 		p.searchApproachStarted = false
+		p.longSearch = false
 		p.lastSeenSelf = s.Self
 		p.lastSeenSelfKnown = true
 		if previousGoal == "search_last_seen" || previousGoal == "probe_last_seen" || previousGoal == "wait_for_teammate" || previousGoal == "regroup_after_respawn" {
@@ -506,13 +514,12 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	}
 	if p.routeOK {
 		for p.routeIndex < len(p.route) && p.route[p.routeIndex].Kind != 11 && quake.Horizontal(s.Self, p.route[p.routeIndex].Position) <= 10 {
-			maxHeight := 64.0
-			if p.route[p.routeIndex].Kind == 2 {
-				// Walking reaches can climb successive 16-unit steps. Being
-				// horizontally close does not mean the bot has climbed one.
-				maxHeight = 8
-			}
-			if math.Abs(s.Self[2]-p.route[p.routeIndex].Position[2]) > maxHeight {
+			// Walking reaches can climb successive 16-unit steps. Being
+			// horizontally close does not mean the bot has climbed one.
+			// On a descent the bot may already be supported above the AAS
+			// sample by a lift, so retain the wider downward tolerance.
+			if p.route[p.routeIndex].Kind == 2 && p.route[p.routeIndex].Position[2]-s.Self[2] > 8 ||
+				math.Abs(s.Self[2]-p.route[p.routeIndex].Position[2]) > 64 {
 				break
 			}
 			p.routeIndex++
@@ -523,10 +530,20 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		maxTravel := 640.0
 		if p.World.Goal == "probe_last_seen" {
 			maxTravel = 320
+		} else if p.longSearch {
+			maxTravel = 1400
 		}
 		check := &SearchRouteCheck{FromArea: p.Nav.AreaFor(s.Self), ToArea: p.Nav.AreaFor(goal), GraphRouteFound: p.routeOK, Limit: maxTravel, Reason: "route_missing"}
 		if p.routeOK {
 			travel, reason := checkSearchRoute(p.route[p.routeIndex:], s.Self, goal, maxTravel)
+			if p.longSearch && reason == "ready" {
+				for _, wp := range p.route[p.routeIndex:] {
+					if wp.Kind != 2 && wp.Kind != 3 {
+						reason = "requires_nonwalking_transition"
+						break
+					}
+				}
+			}
 			check.Travel, check.Reason = &travel, reason
 			routeOK = reason == "ready"
 		}
@@ -584,7 +601,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	cmd := quake.UserCmd{Yaw: prev.Yaw, Msec: 50}
 	p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none"}
 	s := p.World.Snapshot
-	defer func() { result = p.limitMachinegunBurst(s, result) }()
+	defer func() { result = p.limitMachinegunBurst(s, p.limitLaserMovement(s, result)) }()
 	if !isRailgun(s.Weapon) || s.Health <= 0 {
 		p.railAim = railAim{}
 	}
@@ -752,7 +769,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	hazard := p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, probeDistance)
 	if s.OnGround && (hazard == "no_ground_support" || hazard == "static_hull_blocked" && (p.blockedDropApproach() || p.blockedRiseApproach())) {
 		verified := p.planWalkOff()
-		if !verified && hazard == "no_ground_support" {
+		if !verified && hazard == "no_ground_support" && !p.lastProgress.IsZero() && now.Sub(p.lastProgress) >= 700*time.Millisecond && math.Hypot(s.SelfVelocity[0], s.SelfVelocity[1]) < 80 {
+			// A controlled short descent is a recovery option after the
+			// normal lift approach has genuinely stopped making progress.
 			verified = p.planShortWalkDown()
 		}
 		if !verified && p.blockedRiseApproach() {

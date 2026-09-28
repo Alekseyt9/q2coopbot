@@ -1,0 +1,18 @@
+{
+  "id": "base3-lethal-laser-corridor-20260928",
+  "title": "Лазер убивает бота на обратном пути к игроку",
+  "map": "base3",
+  "status": "verified_safety_only",
+  "reproduction": "native_udp_2x_parallel",
+  "scenario": "scripts/scenarios/base3-laser-corridor.json",
+  "evidence": "workspace/artifacts/scenario-suite-20260928-125716-666/run-000/scale-2-port-30710-trace.jsonl",
+  "symptom": "После повторного обнаружения игрока бот пересекал y=-400 около x=-729 и мгновенно погибал от target_laser (100 урона).",
+  "diagnosis": "В BSP два включённых target_laser с направлением 180 градусов и высотами -280/-232. Планировщик движения не учитывал луч и инерцию после команды. При 2x сервер выполняет команду за 100 мс, хотя контроллер создаёт её с Msec=50.",
+  "acceptance": "scripts/check_base3_laser_corridor.ps1",
+  "verification": "workspace/artifacts/scenario-suite-20260928-134237-620/laser-corridor-report.json",
+  "expected_result": "Бот не входит в активный смертельный луч; если проход закрыт, ждёт или выбирает проверенный обход и возобновляет сопровождение после отключения луча.",
+  "remaining_validation": [
+    "Сейчас проверена безопасная остановка перед лучом, не обход и не возобновление после отключения",
+    "Нужна проверка состояния переключаемого лазера по сетевым снимкам и отдельная сцена его отключения"
+  ]
+}

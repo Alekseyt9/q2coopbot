@@ -58,12 +58,22 @@ func (p *Planner) hiddenTeammateGoal(s quake.Snapshot) (quake.Vec3, string, bool
 		p.probeTarget = nil
 		p.probeAttempted = false
 		p.searchApproachStarted = false
+		p.longSearch = false
 		p.lastSeenSelfKnown = false
 		p.routeKnown = false
 	}
+	if s.LastTeammate != nil && s.TeammateAgeFrames != nil && *s.TeammateAgeFrames <= 2 &&
+		p.lastSeenSelfKnown && quake.Horizontal(s.Self, *s.LastTeammate) > 512 &&
+		quake.Horizontal(s.Self, *s.LastTeammate) <= 1024 {
+		p.longSearch = true
+	}
+	maxAge, maxDirect := 40, 512.0
+	if p.longSearch {
+		maxAge, maxDirect = 200, 1200
+	}
 	if s.LastTeammate == nil || s.TeammateAgeFrames == nil || *s.TeammateAgeFrames <= 0 ||
-		*s.TeammateAgeFrames > 40 || p.World.GeometryStatus != "ready" || p.Nav == nil ||
-		s.Health <= 0 || !s.OnGround || quake.Horizontal(s.Self, *s.LastTeammate) > 512 ||
+		*s.TeammateAgeFrames > maxAge || p.World.GeometryStatus != "ready" || p.Nav == nil ||
+		s.Health <= 0 || !s.OnGround || quake.Horizontal(s.Self, *s.LastTeammate) > maxDirect ||
 		math.Abs(s.Self[2]-(*s.LastTeammate)[2]) > 80 {
 		p.finishSearchAttempt(s.Frame, "preconditions_lost")
 		return quake.Vec3{}, "", false

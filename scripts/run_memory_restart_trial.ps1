@@ -89,7 +89,8 @@ try{
     $distance=[math]::Sqrt([math]::Pow($return[0].self[0]-$saved.death[0],2)+[math]::Pow($return[0].self[1]-$saved.death[1],2))
     $maxFrames=if($Map -eq 'base3'){800}else{400}
     if($distance -le 640 -or $arrived[0].frame-$return[0].frame -gt $maxFrames -or $firstRows[-1].frame -ge $rows[0].frame){throw 'Restart identity/distance/deadline failed'}
-    @{accepted=$true;server_pid=$server.Id;first_pid=$first.Id;second_pid=$second.Id;server_session=$saved.server;generation=$saved.generation;death=$saved.death;saved_frame=$saved.frame;restart_frame=$rows[0].frame;return_frame=$return[0].frame;arrival_frame=$arrived[0].frame;initial_distance=$distance;first_trace='first.jsonl';second_trace='second.jsonl'}|ConvertTo-Json -Depth 5|Set-Content (Join-Path $out 'report.json')
+    $routeMetrics=& "$PSScriptRoot/measure_return_trace.ps1" -TracePath (Join-Path $out 'second.jsonl') -StartFrame $return[0].frame -EndFrame $arrived[0].frame
+    @{accepted=$true;server_pid=$server.Id;first_pid=$first.Id;second_pid=$second.Id;server_session=$saved.server;generation=$saved.generation;death=$saved.death;saved_frame=$saved.frame;restart_frame=$rows[0].frame;return_frame=$return[0].frame;arrival_frame=$arrived[0].frame;initial_distance=$distance;route_metrics=$routeMetrics;first_trace='first.jsonl';second_trace='second.jsonl'}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'report.json')
     Write-Output "PASS: $out"
 }finally{
     $env:Q2COOPBOT_TEST_RCON=$oldRcon

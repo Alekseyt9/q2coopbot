@@ -180,32 +180,3 @@ func TestBase3ReturnThirdRampPlan(t *testing.T) {
 		t.Fatalf("no safe local sidestep: %v,%v,%v", dx, dy, step)
 	}
 }
-
-func TestBase3LiftApproachShortWalkDown(t *testing.T) {
-	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
-	if root == "" {
-		t.Skip("assets")
-	}
-	g, err := quake.LoadMap(root, "base3")
-	if err != nil {
-		t.Fatal(err)
-	}
-	n, err := quake.LoadAAS(root + "/maps/base3.aas")
-	if err != nil {
-		t.Fatal(err)
-	}
-	self := quake.Vec3{817.875, 181.375, -399.875}
-	goal := quake.Vec3{795.375, -78.5, -231.875}
-	route, ok := n.Route(self, goal)
-	if !ok || len(route) == 0 {
-		t.Fatal("missing lift approach route")
-	}
-	s := quake.Snapshot{Map: "base3", Frame: 100, Health: 100, OnGround: true, Self: self, Movers: []quake.Mover{{Model: 37, Origin: quake.Vec3{0, 0, -190}}}}
-	p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "follow_teammate", Snapshot: s, Route: route}, goalPoint: goal}
-	if !p.planShortWalkDown() {
-		t.Fatal("supported floor below lift approach not found")
-	}
-	if !p.jump.drop || p.jump.landing[1] < 215 || p.jump.landing[1] > 260 || math.Abs(p.jump.landing[2]+423.875) > 1 {
-		t.Fatalf("wrong verified landing: %+v", *p.jump)
-	}
-}

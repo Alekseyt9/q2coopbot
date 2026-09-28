@@ -30,7 +30,12 @@ try{
         Get-Content $path -Raw|ConvertFrom-Json
     })
     if(@($reports|Where-Object {!$_.accepted -or $_.first_pid -eq $_.second_pid}).Count -or $reports[0].server_session -eq $reports[1].server_session -or $reports[0].server_pid -eq $reports[1].server_pid){throw 'Independent process/server restart not verified'}
-    @{accepted=$true;map=$Map;parallelism=2;timescale=2;reports=$reports}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $root 'report.json')
+    if(@($reports|Where-Object {!$_.route_metrics -or !$_.route_metrics.elevator_completed -and $Map -eq 'base3'}).Count){throw 'Return route metrics incomplete'}
+    $frames=@($reports|ForEach-Object {[int]$_.route_metrics.elapsed_frames})
+    $paths=@($reports|ForEach-Object {[double]$_.route_metrics.horizontal_path})
+    $misses=@($reports|ForEach-Object {[int]$_.route_metrics.jump_missed})
+    $summary=@{elapsed_frames_min=($frames|Measure-Object -Minimum).Minimum;elapsed_frames_max=($frames|Measure-Object -Maximum).Maximum;horizontal_path_min=($paths|Measure-Object -Minimum).Minimum;horizontal_path_max=($paths|Measure-Object -Maximum).Maximum;jump_missed_total=($misses|Measure-Object -Sum).Sum}
+    @{accepted=$true;map=$Map;parallelism=2;timescale=2;route_metrics_summary=$summary;reports=$reports}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $root 'report.json')
     Write-Output "PASS: $root"
 }finally{
     $jobs|Remove-Job -Force -ErrorAction SilentlyContinue

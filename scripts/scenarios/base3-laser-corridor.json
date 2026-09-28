@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "base3-laser-corridor",
+  "map": "base3",
+  "map_entry": "base2a",
+  "start_frame": 40,
+  "game_frames": 300,
+  "bot_origin": [-147.125, -808, -231.875],
+  "actor_origin": [-538.375, -334.125, -263.875],
+  "expect": {},
+  "steps": [{"id": "hold-position", "action": "wait", "frames": 250}]
+}

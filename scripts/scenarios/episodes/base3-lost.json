@@ -2,14 +2,16 @@
   "id": "base3-lost-20260926-192240",
   "title": "Потеря сопровождения после движения за игроком",
   "map": "base3",
-  "status": "open",
-  "reproduction": "observation_only",
-  "scenario": "",
+  "status": "verified_isolated",
+  "reproduction": "native_udp_2x_parallel",
+  "scenario": "scripts/scenarios/base3-lost-follow.json",
   "evidence": "workspace/artifacts/live-lost-20260926-192240/trace.jsonl",
   "symptom": "Игрок сообщает: бот потерялся, хотя сначала шёл следом. frame=8776; self=-174,125,-1153,25,-279,875; health=90; goal=wait_for_teammate; navigation=ready; reason=no_movement_goal; teammate_age=991",
   "missing_setup": [
-    "Восстановить маршрут игрока и момент потери контакта; проверить связь с предыдущим эпизодом лифта"
+    "После повторного обнаружения игрока бот прежде погибал от target_laser; безопасная остановка проверена в base3-lethal-laser-corridor, но обход и возобновление после отключения лазера ещё открыты",
+    "Живая проверка с человеком остаётся отдельным этапом"
   ],
-  "acceptance": null,
+  "acceptance": "scripts/check_base3_lost_follow.ps1",
+  "diagnosis": "Последний видимый игрок находился примерно в 900 единицах. Старый предел поиска 512 сразу переводил бота в ожидание. AAS предоставляет обходной пеший путь примерно 1250 единиц. Короткий путь через уступ в нативном прогоне упёрся в статическую геометрию и не используется.",
   "expected_result": "После потери видимости бот обоснованно ищет игрока и восстанавливает сопровождение либо явно фиксирует причину отказа."
 }

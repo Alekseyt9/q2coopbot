@@ -17,6 +17,8 @@ type MapEntity struct {
 	Class      string `json:"class"`
 	Model      int    `json:"model,omitempty"`
 	Origin     Vec3   `json:"origin"`
+	Angles     Vec3   `json:"angles,omitempty"`
+	Damage     int    `json:"damage,omitempty"`
 	Target     string `json:"target,omitempty"`
 	TargetName string `json:"target_name,omitempty"`
 	Health     int    `json:"health,omitempty"`
@@ -36,6 +38,7 @@ type MapInfo struct {
 	visibility    *bspVisibility
 	lighting      *bspLight
 	LightingError string `json:"lighting_error,omitempty"`
+	laserBeams    []laserBeam
 }
 
 type BSPModel struct{ Min, Max, Origin Vec3 }
@@ -561,6 +564,7 @@ func parseMapEntities(text string) []MapEntity {
 				if class != "" {
 					e := MapEntity{Class: class, Target: props["target"], TargetName: props["targetname"], Map: props["map"]}
 					e.Health, _ = strconv.Atoi(props["health"])
+					e.Damage, _ = strconv.Atoi(props["dmg"])
 					e.SpawnFlags, _ = strconv.Atoi(props["spawnflags"])
 					if strings.HasPrefix(props["model"], "*") {
 						e.Model, _ = strconv.Atoi(strings.TrimPrefix(props["model"], "*"))
@@ -570,6 +574,14 @@ func parseMapEntities(text string) []MapEntity {
 						for i, v := range values {
 							e.Origin[i], _ = strconv.ParseFloat(v, 64)
 						}
+					}
+					values = strings.Fields(props["angles"])
+					if len(values) == 3 {
+						for i, v := range values {
+							e.Angles[i], _ = strconv.ParseFloat(v, 64)
+						}
+					} else if v, err := strconv.ParseFloat(props["angle"], 64); err == nil {
+						e.Angles[1] = v
 					}
 					out = append(out, e)
 				}
@@ -749,6 +761,8 @@ func LoadMap(root, name string) (MapInfo, error) {
 	if lightErr != nil {
 		lightError = lightErr.Error()
 	}
-	return MapInfo{Name: name, BSPSource: source, Planes: len(planes) / 20, Nodes: len(nodes) / 28, Leaves: len(leaves) / 28, Brushes: len(brushes) / 12, Entities: parseMapEntities(string(entities)), Models: modelBounds, collision: c, lighting: lighting, LightingError: lightError,
-		visibility: parseBSPVisibility(visibilityData, nodes, leaves, c.planes)}, nil
+	info := MapInfo{Name: name, BSPSource: source, Planes: len(planes) / 20, Nodes: len(nodes) / 28, Leaves: len(leaves) / 28, Brushes: len(brushes) / 12, Entities: parseMapEntities(string(entities)), Models: modelBounds, collision: c, lighting: lighting, LightingError: lightError,
+		visibility: parseBSPVisibility(visibilityData, nodes, leaves, c.planes)}
+	info.initStaticLasers()
+	return info, nil
 }
