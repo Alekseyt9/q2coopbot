@@ -74,6 +74,9 @@ func (c *Client) saveTravelMemory(s quake.Snapshot, returning bool) {
 	completedBefore := m.Completed
 	deathChanged := m.Death != c.planner.deathPoint
 	m.Death = c.planner.deathPoint
+	if deathChanged && m.Death != nil {
+		m.Completed = false
+	}
 	if s.Teammate != nil {
 		point := *s.Teammate
 		m.Player = &point

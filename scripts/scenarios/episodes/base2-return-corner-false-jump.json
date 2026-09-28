@@ -1,0 +1,14 @@
+{
+  "observed_failure": "При [641.75,2504.875,-231.875] static_hull_blocked запускал gap_jump на walking kind2; бот попадал на выступ [537.5,2523.375,-191.875] и останавливался.",
+  "evidence": "workspace/artifacts/death-point-return-verified-final/report.json",
+  "title": "Ложный прыжок на обычном повороте маршрута возврата",
+  "failure_evidence": "workspace/artifacts/scenario-suite-20260928-000041-195/run-000/observer.jsonl",
+  "scenario": "scripts/run_death_point_return_trial.ps1",
+  "map": "base2",
+  "id": "base2-return-corner-false-jump",
+  "status": "verified_parallel_2x",
+  "expected_result": "Возврат по обычному маршруту к точке смерти без gap_jump; встреча игрока отменяет возврат до цели.",
+  "kind": "combat_spacing",
+  "missing_setup": [],
+  "reproduction": "ready"
+}

@@ -78,3 +78,34 @@ func TestTravelMemoryRestartAndSessionIsolation(t *testing.T) {
 		}
 	}
 }
+
+func TestNewDeathReopensCompletedTravelMemory(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "memory.json")
+	death := quake.Vec3{700, 20, 24}
+	c := &Client{address: &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 29110}, memoryFile: file, memorySession: "server-a", spawncount: 123, planner: &Planner{}}
+	s := quake.Snapshot{Map: "base2", Frame: 100, Health: 100}
+	c.prepareTravelMemory(s)
+	c.planner.deathPoint = &death
+	c.saveTravelMemory(s, false)
+	s.Frame++
+	c.saveTravelMemory(s, true)
+	if !c.travelMemory.Completed {
+		t.Fatal("arrival not completed")
+	}
+	// A second death can happen at exactly the same coordinates.
+	again := death
+	c.planner.deathPoint = &again
+	s.Frame++
+	s.Health = 0
+	c.saveTravelMemory(s, false)
+	if c.travelMemory.Completed {
+		t.Fatal("new death kept obsolete completed flag")
+	}
+	r := &Client{address: c.address, memoryFile: file, memorySession: c.memorySession, spawncount: 123, planner: &Planner{}}
+	s.Frame++
+	s.Health = 100
+	r.prepareTravelMemory(s)
+	if r.planner.respawnRegroup == nil || r.planner.respawnRegroup.target != death {
+		t.Fatal("new death was not restored after restart")
+	}
+}

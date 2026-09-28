@@ -20,13 +20,20 @@ type jumpFlight struct {
 
 func (p *Planner) planGapJump() bool {
 	s := p.World.Snapshot
-	if p.World.Goal != "follow_teammate" || !s.OnGround || s.Health <= 0 || p.button != nil || p.elevator != nil {
+	if (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn") || !s.OnGround || s.Health <= 0 || p.button != nil || p.elevator != nil {
 		return false
 	}
 	// Prefer the nearest supported point along the remaining route, rather
 	// than the endpoint of a walk-off reach, which may still be over a gap.
-	candidates := append([]quake.Waypoint(nil), p.World.Route...)
-	for _, wp := range p.World.Route {
+	route := p.World.Route
+	for i, wp := range route {
+		if wp.Kind == 11 {
+			route = route[:i]
+			break
+		}
+	}
+	candidates := append([]quake.Waypoint(nil), route...)
+	for _, wp := range route {
 		if wp.Kind == 11 {
 			break
 		}
@@ -42,8 +49,8 @@ func (p *Planner) planGapJump() bool {
 			}
 		}
 	}
-	for i := 0; i+1 < len(p.World.Route); i++ {
-		a, b := p.World.Route[i], p.World.Route[i+1]
+	for i := 0; i+1 < len(route); i++ {
+		a, b := route[i], route[i+1]
 		if a.Kind == 11 || b.Kind == 11 {
 			break
 		}
@@ -64,7 +71,7 @@ func (p *Planner) planGapJump() bool {
 		landing := wp.Position
 		landing[2] += 0.125
 		d := quake.Horizontal(s.Self, landing)
-		if d < 48 || d > 180 || math.Abs(landing[2]-s.Self[2]) > 16 {
+		if d < 48 || d > 180 || landing[2]-s.Self[2] > 16 || landing[2]-s.Self[2] < -64 {
 			continue
 		}
 		g := p.World.Geometry
@@ -100,16 +107,30 @@ func (p *Planner) planGapJump() bool {
 		if speed > 280 || speed < 60 {
 			continue
 		}
+		// Validate both the continuous arc and the lower envelope produced by
+		// 100 ms semi-implicit gravity steps (270 - gravity*dt/2 = 230).
+		// Shorter commands fall between these two envelopes.
+		impulses := []float64{270}
+		if landing[2] < s.Self[2]-16 {
+			impulses = append(impulses, 230)
+		}
 		prev, clear := s.Self, true
-		for i := 1; i <= 24; i++ {
-			u := float64(i) / 24
-			tm := duration * u
-			at := quake.Vec3{s.Self[0] + (landing[0]-s.Self[0])*u, s.Self[1] + (landing[1]-s.Self[1])*u, s.Self[2] + 270*tm - 400*tm*tm}
-			if !g.PlayerMoveClear(prev, at) || g.DoorShotBlocked(s.Movers, prev, at) {
-				clear = false
+		for _, impulse := range impulses {
+			flight := (impulse + math.Sqrt(impulse*impulse-1600*(landing[2]-s.Self[2]))) / 800
+			prev = s.Self
+			for i := 1; i <= 24; i++ {
+				u := float64(i) / 24
+				tm := flight * u
+				at := quake.Vec3{s.Self[0] + (landing[0]-s.Self[0])*u, s.Self[1] + (landing[1]-s.Self[1])*u, s.Self[2] + impulse*tm - 400*tm*tm}
+				if !g.PlayerMoveClear(prev, at) || g.DoorShotBlocked(s.Movers, prev, at) {
+					clear = false
+					break
+				}
+				prev = at
+			}
+			if !clear {
 				break
 			}
-			prev = at
 		}
 		if !clear {
 			continue
@@ -131,7 +152,13 @@ func (p *Planner) planGapJump() bool {
 		if !clear {
 			continue
 		}
-		p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: 280, runup: back}
+		// Lower landings need the calculated speed: full run speed would
+		// carry the bot beyond the verified landing before it reaches the floor.
+		launchSpeed := 280.0
+		if landing[2] < s.Self[2]-16 {
+			launchSpeed = d / ((230 + math.Sqrt(230*230-1600*(landing[2]-s.Self[2]))) / 800)
+		}
+		p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: launchSpeed, runup: back}
 		return true
 	}
 	return false
@@ -168,7 +195,11 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 		if j.phase == 0 && quake.Horizontal(s.Self, j.runup) < 8 {
 			j.phase = 1
 		}
-		if j.phase == 1 && quake.Horizontal(s.Self, j.from) <= 22 {
+		takeoffRadius := 22.0
+		if j.landing[2] < j.from[2]-16 {
+			takeoffRadius = 8
+		}
+		if j.phase == 1 && quake.Horizontal(s.Self, j.from) <= takeoffRadius {
 			j.phase = 2
 		}
 		if j.phase < 2 {
@@ -178,7 +209,7 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 				target = j.from
 				reason = "jump_runup"
 			}
-			speed := 280.0
+			speed := j.speed
 			if j.phase == 0 {
 				speed = math.Min(speed, quake.Horizontal(s.Self, target)*10)
 			}
@@ -209,4 +240,15 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 	}
 	p.World.Command = CommandDecision{MoveSource: skill, AimSource: "route", Skill: skill, LimitReason: phase}
 	return cmd, true
+}
+
+// A blocked walking corner is not evidence of a gap. Only a nearby paired
+// walk-off reach permits replacing its blocked entry with a verified jump.
+func (p *Planner) blockedDropApproach() bool {
+	r := p.World.Route
+	if len(r) < 2 || r[0].Kind != 7 || r[1].Kind != 7 || r[0].ToArea != r[1].ToArea {
+		return false
+	}
+	dz := p.World.Snapshot.Self[2] - r[1].Position[2]
+	return dz >= 24 && dz <= 64 && quake.Horizontal(p.World.Snapshot.Self, r[0].Position) <= 128
 }

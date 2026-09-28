@@ -740,14 +740,17 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	if moveSpeedLimit < 400 {
 		probeDistance = math.Min(probeDistance, math.Hypot(dx, dy))
 	}
-	if s.OnGround && p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, probeDistance) == "no_ground_support" {
+	hazard := p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, probeDistance)
+	if s.OnGround && (hazard == "no_ground_support" || hazard == "static_hull_blocked" && p.blockedDropApproach()) {
 		if p.planWalkOff() || p.planGapJump() {
 			flight, _ := p.jumpCommand(cmd)
 			return flight
 		}
-		p.World.Command.MoveLimitReason = "no_verified_landing"
-		p.World.Command.LimitReason = "no_verified_landing"
-		return cmd
+		if hazard == "no_ground_support" {
+			p.World.Command.MoveLimitReason = "no_verified_landing"
+			p.World.Command.LimitReason = "no_verified_landing"
+			return cmd
+		}
 	}
 	p.World.Command.MoveSource = "route"
 	if jump || target[2]-s.Self[2] > 32 {

@@ -81,6 +81,9 @@
     "base3-live-missed-ammo.json",
     "base3-live-missed-shotgun.json",
     "base3-live-fire-at-dead-monster.json",
-    "base2-respawn-hidden-regroup.json"
+    "base2-respawn-hidden-regroup.json",
+    "base3-memory-return-static-hull.json",
+    "base2-death-point-return.json",
+    "base2-return-corner-false-jump.json"
   ]
 }

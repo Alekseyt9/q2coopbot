@@ -1,0 +1,14 @@
+{
+  "timescales": [
+    2
+  ],
+  "parallelism": 2,
+  "base_port": 30410,
+  "repetitions": 2,
+  "runtime_root": "../../workspace/runtime/q2go-elevator-cycle-base2",
+  "version": 1,
+  "tail_frames": 5,
+  "sessions": [
+    "death-point-return-session.json"
+  ]
+}

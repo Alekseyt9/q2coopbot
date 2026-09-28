@@ -1,0 +1,14 @@
+{
+  "observed_failure": "Не было UDP-приёмки death-only fallback; после завершённого возврата новая смерть сохраняла Completed=true.",
+  "evidence": "workspace/artifacts/death-point-return-verified-final/report.json",
+  "title": "Возврат к месту смерти без памяти игрока и встреча по пути",
+  "failure_evidence": "workspace/artifacts/scenario-suite-20260928-000041-195/run-000/observer.jsonl",
+  "scenario": "scripts/run_death_point_return_trial.ps1",
+  "map": "base2",
+  "id": "base2-death-point-return",
+  "status": "verified_parallel_2x",
+  "expected_result": "Возврат по обычному маршруту к точке смерти без gap_jump; встреча игрока отменяет возврат до цели.",
+  "kind": "combat_spacing",
+  "missing_setup": [],
+  "reproduction": "ready"
+}

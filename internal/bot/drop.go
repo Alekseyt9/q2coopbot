@@ -8,7 +8,7 @@ import (
 // floor throughout the descent corridor. It cannot authorize arbitrary cliffs.
 func (p *Planner) planWalkOff() bool {
 	s, g := p.World.Snapshot, p.World.Geometry
-	if p.World.Goal != "follow_teammate" || !s.OnGround || s.Health <= 0 || p.Nav == nil || !g.HasCollision() || p.elevator != nil || p.button != nil {
+	if (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn") || !s.OnGround || s.Health <= 0 || p.Nav == nil || !g.HasCollision() || p.elevator != nil || p.button != nil {
 		return false
 	}
 	r := p.World.Route

@@ -1,0 +1,14 @@
+{
+  "repetitions": 2,
+  "scenarios": [
+    "base3-return-lip.json"
+  ],
+  "parallelism": 2,
+  "version": 1,
+  "runtime_root": "../../workspace/runtime/q2go-elevator-cycle",
+  "timescales": [
+    2
+  ],
+  "base_port": 30330,
+  "tail_frames": 5
+}
