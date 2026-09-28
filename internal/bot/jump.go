@@ -19,6 +19,14 @@ type jumpFlight struct {
 }
 
 func (p *Planner) planGapJump() bool {
+	return p.planVerifiedJump(16)
+}
+
+func (p *Planner) planRampJump() bool {
+	return p.planVerifiedJump(40)
+}
+
+func (p *Planner) planVerifiedJump(maxRise float64) bool {
 	s := p.World.Snapshot
 	if (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn") || !s.OnGround || s.Health <= 0 || p.button != nil || p.elevator != nil {
 		return false
@@ -40,8 +48,12 @@ func (p *Planner) planGapJump() bool {
 		if d := quake.Horizontal(s.Self, wp.Position); d < 48 || d > 180 {
 			continue
 		}
-		for _, dx := range []float64{0, -24, 24} {
-			for _, dy := range []float64{-24, 24, 0} {
+		xOffsets, yOffsets := []float64{0, -24, 24}, []float64{-24, 24, 0}
+		if maxRise > 16 {
+			yOffsets = append(yOffsets, -48, 48)
+		}
+		for _, dx := range xOffsets {
+			for _, dy := range yOffsets {
 				at := wp.Position
 				at[0] += dx
 				at[1] += dy
@@ -70,11 +82,18 @@ func (p *Planner) planGapJump() bool {
 		}
 		landing := wp.Position
 		landing[2] += 0.125
+		g := p.World.Geometry
+		if maxRise > 16 {
+			// AAS ramp samples can sit above the actual supporting BSP floor.
+			// Probe the floor before applying the full-hull landing checks.
+			if drop, ok := g.GroundDrop(landing, 32); ok && drop > 4 {
+				landing[2] -= drop - 0.25
+			}
+		}
 		d := quake.Horizontal(s.Self, landing)
-		if d < 48 || d > 180 || landing[2]-s.Self[2] > 16 || landing[2]-s.Self[2] < -64 {
+		if d < 48 || d > 180 || landing[2]-s.Self[2] > maxRise || landing[2]-s.Self[2] < -64 {
 			continue
 		}
-		g := p.World.Geometry
 		if !g.PlayerMoveClear(landing, landing) {
 			continue
 		}
@@ -135,6 +154,29 @@ func (p *Planner) planGapJump() bool {
 		if !clear {
 			continue
 		}
+		if maxRise > 16 && d <= 100 && speed <= 180 {
+			if math.Hypot(s.SelfVelocity[0], s.SelfVelocity[1]) > 80 {
+				// A standing arc is only valid after the approach momentum has
+				// bled off; otherwise native air control carries us past it.
+				continue
+			}
+			// This short ramp has no reliable ground run-up: the BSP probe
+			// may approve retreat that native physics immediately loses.
+			// Take off from the current grounded point along the checked arc.
+			p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: speed, phase: 2}
+			return true
+		}
+		if landing[2] > s.Self[2]+8 {
+			ux, uy := (landing[0]-s.Self[0])/d, (landing[1]-s.Self[1])/d
+			along := s.SelfVelocity[0]*ux + s.SelfVelocity[1]*uy
+			cross := math.Abs(s.SelfVelocity[0]*uy - s.SelfVelocity[1]*ux)
+			if along >= 160 && cross <= 140 {
+				// The bot already has a grounded takeoff run toward the
+				// landing. Retreating to a synthetic run-up can leave a lip.
+				p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: speed, phase: 2}
+				return true
+			}
+		}
 		back := s.Self
 		back[0] -= (landing[0] - s.Self[0]) / d * 48
 		back[1] -= (landing[1] - s.Self[1]) / d * 48
@@ -155,7 +197,9 @@ func (p *Planner) planGapJump() bool {
 		// Lower landings need the calculated speed: full run speed would
 		// carry the bot beyond the verified landing before it reaches the floor.
 		launchSpeed := 280.0
-		if landing[2] < s.Self[2]-16 {
+		if maxRise > 16 {
+			launchSpeed = speed
+		} else if landing[2] < s.Self[2]-16 {
 			launchSpeed = d / ((230 + math.Sqrt(230*230-1600*(landing[2]-s.Self[2]))) / 800)
 		}
 		p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: launchSpeed, runup: back}
@@ -196,7 +240,7 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 			j.phase = 1
 		}
 		takeoffRadius := 22.0
-		if j.landing[2] < j.from[2]-16 {
+		if j.speed < 200 || j.landing[2] < j.from[2]-16 {
 			takeoffRadius = 8
 		}
 		if j.phase == 1 && quake.Horizontal(s.Self, j.from) <= takeoffRadius {
@@ -251,4 +295,20 @@ func (p *Planner) blockedDropApproach() bool {
 	}
 	dz := p.World.Snapshot.Self[2] - r[1].Position[2]
 	return dz >= 24 && dz <= 64 && quake.Horizontal(p.World.Snapshot.Self, r[0].Position) <= 128
+}
+
+// A walking reach can climb a ramp which the conservative BSP hull probe
+// marks blocked. Only a nearby paired upward reach permits a verified jump.
+func (p *Planner) blockedRiseApproach() bool {
+	r := p.World.Route
+	for i := 0; i+1 < len(r) && i < 6; i++ {
+		if r[i].Kind != 2 || r[i+1].Kind != 2 || r[i].ToArea != r[i+1].ToArea {
+			continue
+		}
+		rise := r[i+1].Position[2] - p.World.Snapshot.Self[2]
+		if rise >= 16 && rise <= 40 && quake.Horizontal(p.World.Snapshot.Self, r[i].Position) <= 128 {
+			return true
+		}
+	}
+	return false
 }

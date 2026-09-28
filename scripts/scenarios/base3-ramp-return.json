@@ -1,0 +1,28 @@
+{
+  "name": "base3-ramp-return",
+  "bot_health": 97,
+  "steps": [
+    {
+      "id": "cross-ramp",
+      "frames": 230,
+      "action": "wait"
+    }
+  ],
+  "bot_invulnerable": true,
+  "version": 1,
+  "start_frame": 40,
+  "bot_origin": [
+    1315,
+    1525,
+    -839.875
+  ],
+  "map": "base3",
+  "expect": {},
+  "map_entry": "base2a",
+  "actor_origin": [
+    1196,
+    1391,
+    -807.875
+  ],
+  "game_frames": 280
+}

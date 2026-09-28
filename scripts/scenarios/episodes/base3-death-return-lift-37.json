@@ -1,0 +1,14 @@
+{
+  "id": "base3-death-return-lift-37",
+  "title": "Возврат после смерти останавливается перед лифтом 37",
+  "map": "base3",
+  "status": "open",
+  "reproduction": "scripts/scenarios/base3-full-death-return-session.json",
+  "evidence": "workspace/artifacts/base3-full-death-return-waypoint/second.jsonl",
+  "observed_failure": "После восстановления death-only memory новый процесс проходит от респавна до [817.875,181.375,-399.875] примерно за 430 кадров. Далее no_verified_landing повторяется до конца сценария. Маршрут ведёт к входу лифта model 37 [832,293,-432], затем к переходу kind 11.",
+  "expected_result": "Безопасно войти в лифт, доехать до нужного уровня и продолжить путь к сохранённой точке смерти [-148.375,-802.875,-231.875].",
+  "missing_setup": [
+    "Отдельная короткая сцена входа в лифт model 37 с проверкой полного выхода",
+    "Повтор полного return после исправления"
+  ]
+}

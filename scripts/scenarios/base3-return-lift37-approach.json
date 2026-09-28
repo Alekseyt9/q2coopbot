@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "base3-return-lift37-approach",
+  "map": "base3",
+  "map_entry": "base2a",
+  "start_frame": 40,
+  "game_frames": 260,
+  "bot_origin": [817.875, 181.375, -399.875],
+  "actor_origin": [795.375, -78.5, -231.875],
+  "expect": {},
+  "steps": [{"id":"wait-upper-floor","action":"wait","frames":210}]
+}

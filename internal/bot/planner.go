@@ -505,7 +505,16 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.routeKnown = true
 	}
 	if p.routeOK {
-		for p.routeIndex < len(p.route) && p.route[p.routeIndex].Kind != 11 && quake.Horizontal(s.Self, p.route[p.routeIndex].Position) <= 10 && math.Abs(s.Self[2]-p.route[p.routeIndex].Position[2]) <= 64 {
+		for p.routeIndex < len(p.route) && p.route[p.routeIndex].Kind != 11 && quake.Horizontal(s.Self, p.route[p.routeIndex].Position) <= 10 {
+			maxHeight := 64.0
+			if p.route[p.routeIndex].Kind == 2 {
+				// Walking reaches can climb successive 16-unit steps. Being
+				// horizontally close does not mean the bot has climbed one.
+				maxHeight = 8
+			}
+			if math.Abs(s.Self[2]-p.route[p.routeIndex].Position[2]) > maxHeight {
+				break
+			}
 			p.routeIndex++
 		}
 	}
@@ -741,8 +750,17 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		probeDistance = math.Min(probeDistance, math.Hypot(dx, dy))
 	}
 	hazard := p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, probeDistance)
-	if s.OnGround && (hazard == "no_ground_support" || hazard == "static_hull_blocked" && p.blockedDropApproach()) {
-		if p.planWalkOff() || p.planGapJump() {
+	if s.OnGround && (hazard == "no_ground_support" || hazard == "static_hull_blocked" && (p.blockedDropApproach() || p.blockedRiseApproach())) {
+		verified := p.planWalkOff()
+		if !verified && hazard == "no_ground_support" {
+			verified = p.planShortWalkDown()
+		}
+		if !verified && p.blockedRiseApproach() {
+			verified = p.planRampJump()
+		} else if !verified {
+			verified = p.planGapJump()
+		}
+		if verified {
 			flight, _ := p.jumpCommand(cmd)
 			return flight
 		}
@@ -801,6 +819,15 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 			moveSpeedLimit = 160
 		}
 		if hazard != "" {
+			if hazard == "static_hull_blocked" {
+				if sx, sy, ok := p.regroupCornerStep(s, target); ok {
+					p.routeKnown = false
+					p.World.Command.MoveSource = "route_corner_bypass"
+					p.World.Command.Skill = "route_corner_bypass"
+					p.World.Command.LimitReason = "verified_corner_step"
+					return worldMove(cmd, s, sx, sy, 80, false)
+				}
+			}
 			p.World.Command.MoveSource = "none"
 			p.World.Command.MoveLimitReason = hazard
 			if p.World.Command.LimitReason == "" {

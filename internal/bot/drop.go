@@ -1,8 +1,83 @@
 package bot
 
 import (
+	"math"
+
 	"q2coopbot/internal/quake"
 )
+
+// planShortWalkDown handles a small ledge where AAS calls the next reach a
+// walk, but the conservative one-tick ground probe sees a 24+ unit drop.
+// It requires a nearby static floor with full hull support and a route onward.
+func (p *Planner) planShortWalkDown() bool {
+	s, g := p.World.Snapshot, p.World.Geometry
+	if (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn") || !s.OnGround || s.Health <= 0 || p.Nav == nil || g == nil || !g.HasCollision() || p.elevator != nil || p.button != nil || len(p.World.Route) == 0 || p.World.Route[0].Kind != 2 {
+		return false
+	}
+	target := p.World.Route[0].Position
+	dx, dy := target[0]-s.Self[0], target[1]-s.Self[1]
+	distance := math.Hypot(dx, dy)
+	if distance < 24 {
+		return false
+	}
+	for _, step := range []float64{40, 48, 56, 64} {
+		probe := s.Self
+		probe[0] += dx / distance * step
+		probe[1] += dy / distance * step
+		drop, ok := g.GroundDrop(probe, 40)
+		if !ok || drop < 24 || drop > 40 {
+			continue
+		}
+		landing := probe
+		landing[2] -= drop - 0.25
+		if !g.PlayerMoveClear(landing, landing) {
+			continue
+		}
+		valid := true
+		for _, offset := range []quake.Vec3{{}, {12, 12, 0}, {12, -12, 0}, {-12, 12, 0}, {-12, -12, 0}} {
+			at := landing
+			at[0] += offset[0]
+			at[1] += offset[1]
+			if floor, supported := g.GroundDrop(at, 4); !supported || floor > 4 {
+				valid = false
+				break
+			}
+		}
+		above := landing
+		above[2] = s.Self[2]
+		if !valid || !g.PlayerMoveClear(s.Self, above) || !g.PlayerMoveClear(above, landing) || g.DoorShotBlocked(s.Movers, s.Self, above) || g.DoorShotBlocked(s.Movers, above, landing) {
+			continue
+		}
+		for _, mover := range s.Movers {
+			if !g.MoverHullClear(mover, s.Self, above) || !g.MoverHullClear(mover, above, landing) {
+				valid = false
+				break
+			}
+		}
+		if !valid {
+			continue
+		}
+		for i := 0; i <= 8; i++ {
+			at := s.Self
+			at[0] += (landing[0] - s.Self[0]) * float64(i) / 8
+			at[1] += (landing[1] - s.Self[1]) * float64(i) / 8
+			floor, supported := g.GroundDrop(at, 40)
+			if !supported || floor > 40 {
+				valid = false
+				break
+			}
+		}
+		if !valid {
+			continue
+		}
+		if _, ok := p.Nav.Route(landing, p.goalPoint); !ok {
+			continue
+		}
+		p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: 60, phase: 2, drop: true}
+		return true
+	}
+	return false
+}
 
 // planWalkOff accepts only a short AAS walk-off reach with a BSP-verified
 // floor throughout the descent corridor. It cannot authorize arbitrary cliffs.
