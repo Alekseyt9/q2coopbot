@@ -34,6 +34,7 @@ type World struct {
 	Route            []quake.Waypoint  `json:"route,omitempty"`
 	Elevator         string            `json:"elevator,omitempty"`
 	Command          CommandDecision   `json:"command"`
+	LaserEvidence    []LaserEvidence   `json:"laser_evidence,omitempty"`
 	Snapshot         quake.Snapshot    `json:"snapshot"`
 	Updated          time.Time         `json:"updated"`
 }
@@ -101,6 +102,7 @@ type Planner struct {
 	respawnRegroup            *respawnRegroup
 	deathPoint                *quake.Vec3
 	machinegunBurst           machinegunBurst
+	laserEvidence             map[quake.Vec3]*laserMemory
 }
 
 // setTestGroundEdgeGoal bypasses route selection only for the live edge fixture.
@@ -188,6 +190,7 @@ func (p *Planner) setMap(name, root string) {
 		return
 	}
 	p.World = World{Map: name, Navigation: "aas_missing", GeometryStatus: "unavailable"}
+	p.laserEvidence = nil
 	p.Nav = nil
 	p.button = nil
 	p.deathFrame = 0
@@ -311,6 +314,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	p.observeShotTeammateMotion(s)
 	p.observeUrgentRetreat(s)
 	previous := p.World.Snapshot
+	p.observeLasers(previous, s)
 	p.observeRespawnRegroup(previous, s)
 	p.doorPrevious = previous
 	if previous.Frame > 0 && !previous.OnGround && s.OnGround && p.elevator == nil && !p.routeOK {

@@ -43,9 +43,26 @@ func (m *MapInfo) initStaticLasers() {
 
 func (m *MapInfo) HasStaticLethalLasers() bool { return m != nil && len(m.laserBeams) > 0 }
 
+func (m *MapInfo) StaticLethalLaserOrigins() []Vec3 {
+	if m == nil {
+		return nil
+	}
+	result := make([]Vec3, 0, len(m.laserBeams))
+	for _, beam := range m.laserBeams {
+		result = append(result, beam.start)
+	}
+	return result
+}
+
 // LaserMoveHazard checks the standing player's full hull plus a small margin
 // along a planned ground segment. It is conservative near a beam end.
 func (m *MapInfo) LaserMoveHazard(from, to Vec3) bool {
+	return m.LaserMoveHazardExcept(from, to, nil)
+}
+
+// LaserMoveHazardExcept omits only emitters with fresh off evidence. Unknown
+// emitters remain hazardous, including start-on beams outside the PVS.
+func (m *MapInfo) LaserMoveHazardExcept(from, to Vec3, off []Vec3) bool {
 	if m == nil {
 		return false
 	}
@@ -55,6 +72,16 @@ func (m *MapInfo) LaserMoveHazard(from, to Vec3) bool {
 		steps = 1
 	}
 	for _, beam := range m.laserBeams {
+		skipped := false
+		for _, origin := range off {
+			if Distance(beam.start, origin) < 1 {
+				skipped = true
+				break
+			}
+		}
+		if skipped {
+			continue
+		}
 		for i := 0; i <= steps; i++ {
 			t := float64(i) / float64(steps)
 			p := Vec3{from[0] + t*(to[0]-from[0]), from[1] + t*(to[1]-from[1]), from[2] + t*(to[2]-from[2])}

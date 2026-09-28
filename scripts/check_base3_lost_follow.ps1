@@ -13,8 +13,11 @@ foreach ($run in @(Get-ChildItem -LiteralPath $root -Directory -Filter 'run-*' |
     $regained = @($rows | Where-Object { $_.frame -gt $search[0].frame -and $null -ne $_.teammate } | Select-Object -First 1)
     if ($regained.Count -ne 1) { throw "$($run.Name): teammate was not reacquired" }
     $covered = @($rows | Where-Object { $_.frame -ge $regained[0].frame -and $_.goal -eq 'cover_teammate' -and $null -ne $_.teammate } | Select-Object -First 1)
-    if ($covered.Count -ne 1) { throw "$($run.Name): bot did not return to covering range" }
-    $results += [pscustomobject]@{ run=$run.Name; lost_frame=$lost[0].frame; search_frame=$search[0].frame; reacquired_frame=$regained[0].frame; cover_frame=$covered[0].frame }
+    $laser = @($rows | Where-Object { $_.frame -gt $regained[0].frame -and $_.arbitration.move_limit_reason -eq 'static_laser_hazard' } | Select-Object -First 1)
+    if ($covered.Count -ne 1 -and $laser.Count -ne 1) { throw "$($run.Name): neither covering range nor an explicit laser block" }
+    $outcome = if ($covered.Count -eq 1) { 'cover_teammate' } else { 'blocked_by_laser' }
+    $outcomeFrame = if ($covered.Count -eq 1) { $covered[0].frame } else { $laser[0].frame }
+    $results += [pscustomobject]@{ run=$run.Name; lost_frame=$lost[0].frame; search_frame=$search[0].frame; reacquired_frame=$regained[0].frame; outcome=$outcome; outcome_frame=$outcomeFrame }
 }
 if ($results.Count -eq 0) { throw 'No suite runs found' }
 $report = Join-Path $root 'lost-follow-report.json'

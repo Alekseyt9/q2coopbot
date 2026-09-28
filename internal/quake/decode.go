@@ -66,19 +66,23 @@ func (r *reader) skip(n int) error { _, e := r.take(n); return e }
 
 type Entity struct {
 	Number, Model, Frame int
+	RenderFX             int
 	Solid                uint16
 	Origin               Vec3
+	OldOrigin            Vec3
 }
 type Frame struct {
-	Number      int
-	Suppressed  byte
-	Origin      Vec3
-	Velocity    Vec3
-	PMFlags     byte
-	Stats       [32]int16
-	Gun         int
-	DeltaAngles [3]int16
-	Entities    map[int]Entity
+	Number          int
+	DeltaFrame      int
+	Suppressed      byte
+	RemovedEntities []int
+	Origin          Vec3
+	Velocity        Vec3
+	PMFlags         byte
+	Stats           [32]int16
+	Gun             int
+	DeltaAngles     [3]int16
+	Entities        map[int]Entity
 }
 type SoundEvent struct {
 	Index       byte    `json:"index"`
@@ -201,7 +205,28 @@ func parseEntity(r *reader, number int, b uint32, old Entity) (Entity, error) {
 		if b&pair[0] != 0 && b&pair[1] != 0 {
 			n = 4
 		}
-		if e := r.skip(n); e != nil {
+		if pair[0] == 0x1000 && n > 0 {
+			switch n {
+			case 1:
+				v, e := r.byte()
+				if e != nil {
+					return out, e
+				}
+				out.RenderFX = int(v)
+			case 2:
+				v, e := r.ushort()
+				if e != nil {
+					return out, e
+				}
+				out.RenderFX = int(v)
+			case 4:
+				v, e := r.long()
+				if e != nil {
+					return out, e
+				}
+				out.RenderFX = int(uint32(v))
+			}
+		} else if e := r.skip(n); e != nil {
 			return out, e
 		}
 	}
@@ -222,8 +247,12 @@ func parseEntity(r *reader, number int, b uint32, old Entity) (Entity, error) {
 		}
 	}
 	if b&0x1000000 != 0 {
-		if e := r.skip(6); e != nil {
-			return out, e
+		for i := range out.OldOrigin {
+			v, e := r.short()
+			if e != nil {
+				return out, e
+			}
+			out.OldOrigin[i] = float64(v) / 8
 		}
 	}
 	if b&0x8000000 != 0 {
@@ -345,6 +374,8 @@ func (d *Decoder) frame(r *reader) (Frame, error) {
 	}
 	f := old
 	f.Number = int(number)
+	f.DeltaFrame = int(delta)
+	f.RemovedEntities = nil
 	f.Entities = make(map[int]Entity, len(old.Entities))
 	for k, v := range old.Entities {
 		f.Entities[k] = v
@@ -388,6 +419,7 @@ func (d *Decoder) frame(r *reader) (Frame, error) {
 		}
 		if b&0x40 != 0 {
 			delete(f.Entities, id)
+			f.RemovedEntities = append(f.RemovedEntities, id)
 			continue
 		}
 		oldEntity, ok := old.Entities[id]
@@ -536,6 +568,11 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 				if e = r.skip(12); e != nil {
 					return frames, e
 				}
+			} else if effect == 15 {
+				// TE_LASER_SPARKS: count, position, direction, color.
+				if e = r.skip(9); e != nil {
+					return frames, e
+				}
 			} else if effect == 5 || effect == 6 || effect == 7 || effect == 8 || effect == 17 || effect == 18 {
 				// Explosion temporary entities carry one packed position.
 				if e = r.skip(6); e != nil {
@@ -646,37 +683,47 @@ type Mover struct {
 	Model  int  `json:"model"`
 	Origin Vec3 `json:"origin"`
 }
+type BeamObservation struct {
+	ID     int  `json:"id"`
+	Origin Vec3 `json:"origin"`
+	End    Vec3 `json:"end"`
+	Frame  int  `json:"frame"`
+}
 type Snapshot struct {
-	Ducked             bool            `json:"ducked"`
-	Inventory          []InventoryItem `json:"inventory,omitempty"`
-	InventoryKnown     bool            `json:"inventory_known"`
-	InventoryAgeFrames int             `json:"inventory_age_frames"`
-	InventoryOpen      bool            `json:"inventory_open"`
-	Map                string          `json:"map"`
-	Frame              int             `json:"frame"`
-	Self               Vec3            `json:"self"`
-	SelfVelocity       Vec3            `json:"self_velocity"`
-	OnGround           bool            `json:"on_ground"`
-	Teammate           *Vec3           `json:"teammate,omitempty"`
-	TeammateEntity     int             `json:"teammate_entity,omitempty"`
-	LastTeammate       *Vec3           `json:"last_teammate,omitempty"`
-	LastTeammateEntity int             `json:"last_teammate_entity,omitempty"`
-	TeammateAgeFrames  *int            `json:"teammate_age_frames,omitempty"`
-	Health             int16           `json:"health"`
-	Armor              int16           `json:"armor"`
-	Ammo               int16           `json:"ammo"`
-	Weapon             string          `json:"weapon"`
-	DeltaAngles        [3]int16        `json:"delta_angles"`
-	Enemies            []Object        `json:"enemies"`
-	Obstacles          []Object        `json:"obstacles,omitempty"`
-	Defeated           []Object        `json:"defeated,omitempty"`
-	Pickups            []Object        `json:"pickups"`
-	Movers             []Mover         `json:"movers,omitempty"`
-	Sounds             []SoundEvent    `json:"sounds,omitempty"`
+	Ducked             bool              `json:"ducked"`
+	Inventory          []InventoryItem   `json:"inventory,omitempty"`
+	InventoryKnown     bool              `json:"inventory_known"`
+	InventoryAgeFrames int               `json:"inventory_age_frames"`
+	InventoryOpen      bool              `json:"inventory_open"`
+	Map                string            `json:"map"`
+	Frame              int               `json:"frame"`
+	DeltaFrame         int               `json:"delta_frame,omitempty"`
+	Self               Vec3              `json:"self"`
+	SelfVelocity       Vec3              `json:"self_velocity"`
+	OnGround           bool              `json:"on_ground"`
+	Teammate           *Vec3             `json:"teammate,omitempty"`
+	TeammateEntity     int               `json:"teammate_entity,omitempty"`
+	LastTeammate       *Vec3             `json:"last_teammate,omitempty"`
+	LastTeammateEntity int               `json:"last_teammate_entity,omitempty"`
+	TeammateAgeFrames  *int              `json:"teammate_age_frames,omitempty"`
+	Health             int16             `json:"health"`
+	Armor              int16             `json:"armor"`
+	Ammo               int16             `json:"ammo"`
+	Weapon             string            `json:"weapon"`
+	DeltaAngles        [3]int16          `json:"delta_angles"`
+	Enemies            []Object          `json:"enemies"`
+	Obstacles          []Object          `json:"obstacles,omitempty"`
+	Defeated           []Object          `json:"defeated,omitempty"`
+	Pickups            []Object          `json:"pickups"`
+	Movers             []Mover           `json:"movers,omitempty"`
+	Beams              []BeamObservation `json:"beams,omitempty"`
+	RemovedEntities    []int             `json:"removed_entities,omitempty"`
+	Suppressed         byte              `json:"suppressed,omitempty"`
+	Sounds             []SoundEvent      `json:"sounds,omitempty"`
 }
 
 func (d *Decoder) Snapshot(f Frame) Snapshot {
-	s := Snapshot{Map: d.Map, Frame: f.Number, Self: f.Origin, SelfVelocity: f.Velocity, Ducked: f.PMFlags&1 != 0, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles}
+	s := Snapshot{Map: d.Map, Frame: f.Number, DeltaFrame: f.DeltaFrame, Self: f.Origin, SelfVelocity: f.Velocity, Ducked: f.PMFlags&1 != 0, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles, RemovedEntities: append([]int(nil), f.RemovedEntities...), Suppressed: f.Suppressed}
 	s.InventoryKnown, s.InventoryOpen = d.InventoryKnown, f.Stats[13]&2 != 0
 	if d.InventoryKnown {
 		s.InventoryAgeFrames = max(0, f.Number-d.InventoryFrame)
@@ -703,6 +750,9 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 		s.Weapon = gun
 	}
 	for _, entity := range f.Entities {
+		if entity.RenderFX&128 != 0 && entity.Model != 0 {
+			s.Beams = append(s.Beams, BeamObservation{ID: entity.Number, Origin: entity.Origin, End: entity.OldOrigin, Frame: entity.Frame})
+		}
 		if entity.Number > 0 && entity.Number <= maxclients && entity.Number != d.PlayerNumber && entity.Model == 255 {
 			p := entity.Origin
 			if s.TeammateEntity == 0 || entity.Number < s.TeammateEntity {

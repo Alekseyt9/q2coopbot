@@ -836,67 +836,72 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			if c.traceFile != nil && c.framePaced {
 				entry := struct {
-					LightSource        string                 `json:"light_source"`
-					Connection         int                    `json:"connection"`
-					ObserverKill       bool                   `json:"test_observer_kill,omitempty"`
-					ObserverRespawn    bool                   `json:"test_observer_respawn,omitempty"`
-					SessionStartFrame  int                    `json:"session_start_frame,omitempty"`
-					Session            *harness.SessionStatus `json:"session,omitempty"`
-					Map                string                 `json:"map"`
-					Spawncount         int                    `json:"spawncount"`
-					EpisodeFrame       int                    `json:"episode_frame"`
-					Frame              int                    `json:"frame"`
-					ObservationFrame   int                    `json:"observation_frame"`
-					ObservationAgeMS   int64                  `json:"observation_age_ms"`
-					RelativeFrame      int                    `json:"relative_frame"`
-					ClientSequence     uint32                 `json:"client_sequence"`
-					Self               quake.Vec3             `json:"self"`
-					SelfEntity         int                    `json:"self_entity"`
-					Teammate           *quake.Vec3            `json:"teammate,omitempty"`
-					TeammateEntity     int                    `json:"teammate_entity,omitempty"`
-					LastTeammate       *quake.Vec3            `json:"last_teammate,omitempty"`
-					TeammateAgeFrames  *int                   `json:"teammate_age_frames,omitempty"`
-					Health             int16                  `json:"health"`
-					Ammo               int16                  `json:"ammo"`
-					Armor              int16                  `json:"armor"`
-					Weapon             string                 `json:"weapon"`
-					WeaponRequest      string                 `json:"weapon_request,omitempty"`
-					WeaponReason       string                 `json:"weapon_reason,omitempty"`
-					Inventory          []quake.InventoryItem  `json:"inventory,omitempty"`
-					InventoryKnown     bool                   `json:"inventory_known"`
-					InventoryAgeFrames int                    `json:"inventory_age_frames"`
-					OnGround           bool                   `json:"on_ground"`
-					SelfVelocity       quake.Vec3             `json:"self_velocity"`
-					GroundPrediction   *GroundPrediction      `json:"ground_prediction,omitempty"`
-					GroundSurface      string                 `json:"ground_surface"`
-					GroundDynamicModel int                    `json:"ground_dynamic_model,omitempty"`
-					Ducked             bool                   `json:"ducked"`
-					DeltaAngles        [3]int16               `json:"delta_angles"`
-					Goal               string                 `json:"goal"`
-					GoalPoint          *quake.Vec3            `json:"goal_point,omitempty"`
-					Route              []quake.Waypoint       `json:"route,omitempty"`
-					Pickups            []quake.Object         `json:"pickups,omitempty"`
-					Obstacles          []quake.Object         `json:"obstacles,omitempty"`
-					Defeated           []quake.Object         `json:"defeated,omitempty"`
-					Pickup             *PickupAttempt         `json:"pickup,omitempty"`
-					ResourceYield      *ResourceYield         `json:"resource_yield,omitempty"`
-					Resources          []ResourceMemory       `json:"resource_memory,omitempty"`
-					TestHealthMasked   bool                   `json:"test_health_masked,omitempty"`
-					Scenario           *harness.Status        `json:"scenario,omitempty"`
-					SearchTarget       *quake.Vec3            `json:"search_target,omitempty"`
-					SearchAttempt      *SearchAttempt         `json:"search_attempt,omitempty"`
-					SearchRoute        *SearchRouteCheck      `json:"search_route,omitempty"`
-					TeammateSound      *TeammateSoundCue      `json:"teammate_sound,omitempty"`
-					TeammateMotion     *TeammateMotion        `json:"teammate_motion,omitempty"`
-					TeammateEvidence   *TeammateEvidence      `json:"teammate_evidence,omitempty"`
-					Navigation         string                 `json:"navigation"`
-					GeometryStatus     string                 `json:"geometry_status"`
-					Elevator           string                 `json:"elevator,omitempty"`
-					Movers             []quake.Mover          `json:"movers,omitempty"`
-					Sounds             []quake.SoundEvent     `json:"sounds,omitempty"`
-					Enemies            []quake.Object         `json:"enemies,omitempty"`
-					Arbitration        CommandDecision        `json:"arbitration"`
-					Command            quake.UserCmd          `json:"sent_command"`
+					LightSource        string                  `json:"light_source"`
+					Connection         int                     `json:"connection"`
+					ObserverKill       bool                    `json:"test_observer_kill,omitempty"`
+					ObserverRespawn    bool                    `json:"test_observer_respawn,omitempty"`
+					SessionStartFrame  int                     `json:"session_start_frame,omitempty"`
+					Session            *harness.SessionStatus  `json:"session,omitempty"`
+					Map                string                  `json:"map"`
+					Spawncount         int                     `json:"spawncount"`
+					EpisodeFrame       int                     `json:"episode_frame"`
+					Frame              int                     `json:"frame"`
+					ObservationFrame   int                     `json:"observation_frame"`
+					ObservationAgeMS   int64                   `json:"observation_age_ms"`
+					RelativeFrame      int                     `json:"relative_frame"`
+					ClientSequence     uint32                  `json:"client_sequence"`
+					Self               quake.Vec3              `json:"self"`
+					SelfEntity         int                     `json:"self_entity"`
+					Teammate           *quake.Vec3             `json:"teammate,omitempty"`
+					TeammateEntity     int                     `json:"teammate_entity,omitempty"`
+					LastTeammate       *quake.Vec3             `json:"last_teammate,omitempty"`
+					TeammateAgeFrames  *int                    `json:"teammate_age_frames,omitempty"`
+					Health             int16                   `json:"health"`
+					Ammo               int16                   `json:"ammo"`
+					Armor              int16                   `json:"armor"`
+					Weapon             string                  `json:"weapon"`
+					WeaponRequest      string                  `json:"weapon_request,omitempty"`
+					WeaponReason       string                  `json:"weapon_reason,omitempty"`
+					Inventory          []quake.InventoryItem   `json:"inventory,omitempty"`
+					InventoryKnown     bool                    `json:"inventory_known"`
+					InventoryAgeFrames int                     `json:"inventory_age_frames"`
+					OnGround           bool                    `json:"on_ground"`
+					SelfVelocity       quake.Vec3              `json:"self_velocity"`
+					GroundPrediction   *GroundPrediction       `json:"ground_prediction,omitempty"`
+					GroundSurface      string                  `json:"ground_surface"`
+					GroundDynamicModel int                     `json:"ground_dynamic_model,omitempty"`
+					Ducked             bool                    `json:"ducked"`
+					DeltaAngles        [3]int16                `json:"delta_angles"`
+					Goal               string                  `json:"goal"`
+					GoalPoint          *quake.Vec3             `json:"goal_point,omitempty"`
+					Route              []quake.Waypoint        `json:"route,omitempty"`
+					Pickups            []quake.Object          `json:"pickups,omitempty"`
+					Obstacles          []quake.Object          `json:"obstacles,omitempty"`
+					Defeated           []quake.Object          `json:"defeated,omitempty"`
+					Pickup             *PickupAttempt          `json:"pickup,omitempty"`
+					ResourceYield      *ResourceYield          `json:"resource_yield,omitempty"`
+					Resources          []ResourceMemory        `json:"resource_memory,omitempty"`
+					TestHealthMasked   bool                    `json:"test_health_masked,omitempty"`
+					Scenario           *harness.Status         `json:"scenario,omitempty"`
+					SearchTarget       *quake.Vec3             `json:"search_target,omitempty"`
+					SearchAttempt      *SearchAttempt          `json:"search_attempt,omitempty"`
+					SearchRoute        *SearchRouteCheck       `json:"search_route,omitempty"`
+					TeammateSound      *TeammateSoundCue       `json:"teammate_sound,omitempty"`
+					TeammateMotion     *TeammateMotion         `json:"teammate_motion,omitempty"`
+					TeammateEvidence   *TeammateEvidence       `json:"teammate_evidence,omitempty"`
+					Navigation         string                  `json:"navigation"`
+					GeometryStatus     string                  `json:"geometry_status"`
+					Elevator           string                  `json:"elevator,omitempty"`
+					Movers             []quake.Mover           `json:"movers,omitempty"`
+					Beams              []quake.BeamObservation `json:"beams,omitempty"`
+					RemovedEntities    []int                   `json:"removed_entities,omitempty"`
+					DeltaFrame         int                     `json:"delta_frame,omitempty"`
+					Suppressed         byte                    `json:"suppressed,omitempty"`
+					LaserEvidence      []LaserEvidence         `json:"laser_evidence,omitempty"`
+					Sounds             []quake.SoundEvent      `json:"sounds,omitempty"`
+					Enemies            []quake.Object          `json:"enemies,omitempty"`
+					Arbitration        CommandDecision         `json:"arbitration"`
+					Command            quake.UserCmd           `json:"sent_command"`
 				}{
 					Connection:   c.connection,
 					ObserverKill: observerKill, ObserverRespawn: observerRespawn,
@@ -923,6 +928,11 @@ func (c *Client) run(ctx context.Context) error {
 					Inventory:    c.planner.World.Snapshot.Inventory, InventoryKnown: c.planner.World.Snapshot.InventoryKnown, InventoryAgeFrames: c.planner.World.Snapshot.InventoryAgeFrames,
 					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
 					Route: c.planner.World.Route, Pickups: c.planner.World.Snapshot.Pickups,
+					Beams:            c.planner.World.Snapshot.Beams,
+					RemovedEntities:  c.planner.World.Snapshot.RemovedEntities,
+					DeltaFrame:       c.planner.World.Snapshot.DeltaFrame,
+					Suppressed:       c.planner.World.Snapshot.Suppressed,
+					LaserEvidence:    c.planner.World.LaserEvidence,
 					Pickup:           c.planner.World.Pickup,
 					Obstacles:        c.planner.World.Snapshot.Obstacles,
 					Defeated:         c.planner.World.Snapshot.Defeated,

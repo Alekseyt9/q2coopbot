@@ -2,7 +2,7 @@
   "id": "base3-lost-20260926-192240",
   "title": "Потеря сопровождения после движения за игроком",
   "map": "base3",
-  "status": "verified_isolated",
+  "status": "verified_search_only",
   "reproduction": "native_udp_2x_parallel",
   "scenario": "scripts/scenarios/base3-lost-follow.json",
   "evidence": "workspace/artifacts/live-lost-20260926-192240/trace.jsonl",
@@ -12,6 +12,7 @@
     "Живая проверка с человеком остаётся отдельным этапом"
   ],
   "acceptance": "scripts/check_base3_lost_follow.ps1",
+  "verification": "workspace/artifacts/scenario-suite-20260928-134543-496/lost-follow-report.json",
   "diagnosis": "Последний видимый игрок находился примерно в 900 единицах. Старый предел поиска 512 сразу переводил бота в ожидание. AAS предоставляет обходной пеший путь примерно 1250 единиц. Короткий путь через уступ в нативном прогоне упёрся в статическую геометрию и не используется.",
   "expected_result": "После потери видимости бот обоснованно ищет игрока и восстанавливает сопровождение либо явно фиксирует причину отказа."
 }

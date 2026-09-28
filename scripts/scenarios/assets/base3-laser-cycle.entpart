@@ -1,0 +1,10 @@
+{
+"classname" "trigger_always"
+"target" "t145"
+"delay" "15"
+}
+{
+"classname" "trigger_always"
+"target" "t145"
+"delay" "20"
+}

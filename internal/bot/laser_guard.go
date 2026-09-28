@@ -39,14 +39,15 @@ func (p *Planner) laserCommandUnsafe(s quake.Snapshot, cmd quake.UserCmd) bool {
 	if remaining != nil {
 		tail = laserStopEnd(end, predicted.Velocity, remaining.NeutralStopDistance)
 	}
-	return p.World.Geometry.LaserMoveHazard(s.Self, end) || p.World.Geometry.LaserMoveHazard(end, tail)
+	off := p.laserOffOrigins(s.Frame)
+	return p.World.Geometry.LaserMoveHazardExcept(s.Self, end, off) || p.World.Geometry.LaserMoveHazardExcept(end, tail, off)
 }
 
 // A laser can kill before the next snapshot. Check the issued command and its
 // stopping tail, so a late neutral command does not coast through the beam.
 func (p *Planner) limitLaserMovement(s quake.Snapshot, cmd quake.UserCmd) quake.UserCmd {
 	if p.World.Geometry == nil || !p.World.Geometry.HasStaticLethalLasers() || !s.OnGround || s.Health <= 0 ||
-		p.World.Geometry.LaserMoveHazard(s.Self, s.Self) || !p.laserCommandUnsafe(s, cmd) {
+		p.World.Geometry.LaserMoveHazardExcept(s.Self, s.Self, p.laserOffOrigins(s.Frame)) || !p.laserCommandUnsafe(s, cmd) {
 		return cmd
 	}
 	cmd.Forward, cmd.Side, cmd.Up = 0, 0, 0

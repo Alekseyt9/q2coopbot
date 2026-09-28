@@ -10,7 +10,17 @@ $configPath = (Resolve-Path -LiteralPath $Config).Path
 $base = Split-Path -Parent $configPath
 $cfg = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
 foreach ($key in $cfg.PSObject.Properties.Name) {
-    if ($key -notin @('version','scenarios','sessions','timescales','repetitions','parallelism','base_port','runtime_root','tail_frames')) { throw "Unknown suite field: $key" }
+    if ($key -notin @('version','scenarios','sessions','timescales','repetitions','parallelism','base_port','runtime_root','tail_frames','entity_append')) { throw "Unknown suite field: $key" }
+}
+$entityAppend = $null
+if ($null -ne $cfg.entity_append) {
+    if ($cfg.entity_append.PSObject.Properties.Name.Count -ne 2 -or
+        @($cfg.entity_append.PSObject.Properties.Name | Where-Object { $_ -notin @('map','file') }).Count -ne 0 -or
+        $cfg.entity_append.map -cnotmatch '^[a-zA-Z0-9_]+$') { throw 'Invalid entity_append configuration.' }
+    $entityAppend = (Resolve-Path -LiteralPath (Join-Path $base $cfg.entity_append.file)).Path
+    if (-not $entityAppend.EndsWith('.entpart', [StringComparison]::OrdinalIgnoreCase)) { throw 'entity_append requires an .entpart file.' }
+    $entityText = [IO.File]::ReadAllText($entityAppend)
+    if ($entityText -notmatch '(?s)^\s*\{.*\}\s*$' -or $entityText.Length -gt 4096) { throw 'Invalid entity_append content.' }
 }
 $definitions=@()
 foreach($path in $cfg.scenarios) {if($path) {$definitions+=@{path=$path;kind='scenario'}}}
@@ -22,6 +32,7 @@ $sourceRuntime = (Resolve-Path -LiteralPath (Join-Path $base $cfg.runtime_root))
 $output = Join-Path $repo ('workspace/artifacts/scenario-suite-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
 New-Item -ItemType Directory -Path $output | Out-Null
 Copy-Item -LiteralPath $configPath -Destination (Join-Path $output 'suite-config.json')
+if ($entityAppend) { Copy-Item -LiteralPath $entityAppend -Destination (Join-Path $output 'entity-addition.entpart') }
 $client = Join-Path $output 'q2coopbot.exe'
 $reporter = Join-Path $output 'q2scenario-report.exe'
 Push-Location $repo
@@ -53,6 +64,14 @@ foreach ($definition in $definitions) {
                 New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
                 try { New-Item -ItemType HardLink -Path $dest -Target $asset.FullName -ErrorAction Stop | Out-Null }
                 catch { Copy-Item -LiteralPath $asset.FullName -Destination $dest }
+            }
+            if ($entityAppend) {
+                $entityDest = Join-Path $runtime ('baseq2/maps/' + $cfg.entity_append.map + '.ent')
+                if (-not (Test-Path -LiteralPath $entityDest)) { throw "Entity source unavailable: $entityDest" }
+                # The base .ent can be a hardlink. Break it before writing the private fixture.
+                $baseEntityText = [IO.File]::ReadAllText($entityDest)
+                Remove-Item -LiteralPath $entityDest
+                [IO.File]::WriteAllText($entityDest, $baseEntityText + "`n" + $entityText + "`n", [Text.UTF8Encoding]::new($false))
             }
             $snapshot = Join-Path $dir 'scenario.json'
             Copy-Item -LiteralPath $scenario -Destination $snapshot
