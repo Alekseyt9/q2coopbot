@@ -122,6 +122,7 @@ type Client struct {
 	testWalkPath                            testWalkPath
 	testWalkAfterFrames                     int
 	testWalkFrames                          int
+	testRunInSpeed                          int
 	testSetupHoldFrames                     int
 	testHideHealthFrames                    []int
 	testScenarioFrameOrigin                 int
@@ -286,6 +287,10 @@ func (c *Client) handle(packet []byte) {
 			if c.firstMoveFrame < 0 || c.testGapFrames == 0 || relativeFrame < c.testGapStart || relativeFrame >= c.testGapStart+c.testGapFrames {
 				c.planner.testSetupHold = c.testSetupHoldFrames > 0 && s.Map == c.testTeleportMap &&
 					(!c.testTeleportSent || c.testScenarioAge(s.Frame) < c.testSetupHoldFrames)
+				if c.testWalkRunIn && !c.testCombatBarrier && s.Map == c.testTeleportMap &&
+					c.testScenarioAge(s.Frame) < c.testWalkAfterFrames+c.testWalkFrames {
+					c.planner.testSetupHold = true
+				}
 				s = c.maskTestHealth(s)
 				c.prepareTravelMemory(s)
 				returning := c.planner.respawnRegroup != nil
@@ -769,12 +774,18 @@ func (c *Client) run(ctx context.Context) error {
 				age := c.testWalkAge(frame)
 				if age >= c.testWalkAfterFrames && age < c.testWalkAfterFrames+c.testWalkFrames {
 					cmd = testWalkCommand(c.planner.World.Snapshot, c.testWalkTarget, c.planner.World.Geometry, c.planner.Nav)
+					if c.testRunInSpeed > 0 {
+						cmd = testRunInCommand(c.planner.World.Snapshot, c.testWalkTarget, float64(c.testRunInSpeed), c.planner.World.Geometry, c.planner.Nav)
+					}
 					if c.testWalkRoute {
 						cmd = c.testWalkPath.command(c.planner.World.Snapshot, c.testWalkTarget, c.planner.World.Geometry, c.planner.Nav)
 					}
 					c.planner.World.Command = CommandDecision{MoveSource: "test_walk", AimSource: "test_walk"}
 					if c.testWalkRunIn {
-						c.planner.World.Command.MoveSource = "test_combat_run_in"
+						c.planner.World.Command.MoveSource = "test_movement_run_in"
+						if c.testCombatBarrier {
+							c.planner.World.Command.MoveSource = "test_combat_run_in"
+						}
 					}
 				}
 			}

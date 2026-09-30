@@ -14,22 +14,24 @@ type jumpFlight struct {
 	airborne      bool
 	speed         float64
 	runup         quake.Vec3
-	phase         int  // 0: retreat; 1: accelerate; 2: takeoff/flight; 3: brake and replan
+	phase         int  // 0: retreat; 1: accelerate; 2: flight; 3: brake; 4: grounded alignment
 	drop          bool // verified walk-off reach; never apply a jump impulse
+	steerVelocity bool // measured short ramp needs correction of approach inertia
 }
 
 type JumpTrace struct {
-	From     quake.Vec3 `json:"from"`
-	Landing  quake.Vec3 `json:"landing"`
-	Runup    quake.Vec3 `json:"runup"`
-	Speed    float64    `json:"speed"`
-	Phase    int        `json:"phase"`
-	Airborne bool       `json:"airborne"`
-	Drop     bool       `json:"drop"`
+	From          quake.Vec3 `json:"from"`
+	Landing       quake.Vec3 `json:"landing"`
+	Runup         quake.Vec3 `json:"runup"`
+	Speed         float64    `json:"speed"`
+	Phase         int        `json:"phase"`
+	Airborne      bool       `json:"airborne"`
+	Drop          bool       `json:"drop"`
+	SteerVelocity bool       `json:"steer_velocity,omitempty"`
 }
 
 func (j *jumpFlight) trace() *JumpTrace {
-	return &JumpTrace{From: j.from, Landing: j.landing, Runup: j.runup, Speed: j.speed, Phase: j.phase, Airborne: j.airborne, Drop: j.drop}
+	return &JumpTrace{From: j.from, Landing: j.landing, Runup: j.runup, Speed: j.speed, Phase: j.phase, Airborne: j.airborne, Drop: j.drop, SteerVelocity: j.steerVelocity}
 }
 
 func (p *Planner) planGapJump() bool {
@@ -127,7 +129,11 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 			}
 		}
 		d := quake.Horizontal(s.Self, landing)
-		if d < 48 || d > 180 || landing[2]-s.Self[2] > maxRise || landing[2]-s.Self[2] < -64 {
+		minimumDistance := 48.0
+		if base1Rise {
+			minimumDistance = 8
+		}
+		if d < minimumDistance || d > 180 || landing[2]-s.Self[2] > maxRise || landing[2]-s.Self[2] < -64 {
 			continue
 		}
 		if !g.PlayerMoveClear(landing, landing) {
@@ -135,7 +141,7 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 		}
 		drop, ok := g.GroundDrop(landing, 4)
 		aasRampSupport := base1Rise && p.Nav != nil &&
-			landing[2]-s.Self[2] >= 16 && p.Nav.GroundedNear(landing)
+			landing[2]-s.Self[2] >= 4 && p.Nav.GroundedNear(landing)
 		if (!ok || drop > 4) && !aasRampSupport {
 			continue
 		}
@@ -160,6 +166,9 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 		// Standard Quake II jump: vertical impulse 270, gravity 800.
 		duration := (270 + math.Sqrt(270*270-1600*(landing[2]-s.Self[2]))) / 800
 		speed := d / duration
+		if base1Rise {
+			speed = math.Max(60, speed)
+		}
 		if speed > 280 || speed < 60 {
 			continue
 		}
@@ -207,7 +216,22 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 				// the bot short under native PM_AirMove.
 				launchSpeed = 400
 			}
-			p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: launchSpeed, phase: 2}
+			p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: launchSpeed, phase: 2, steerVelocity: base1Rise}
+			if base1Rise && d > 32 {
+				// Prefer cancellation along the axis carrying the larger drift.
+				directions := []quake.Vec3{{landing[0] - s.Self[0], 0, 0}, {0, landing[1] - s.Self[1], 0}}
+				if math.Abs(s.SelfVelocity[1]) > math.Abs(s.SelfVelocity[0]) {
+					directions[0], directions[1] = directions[1], directions[0]
+				}
+				for _, dir := range directions {
+					distance := math.Hypot(dir[0], dir[1])
+					if distance > 8 && g.GroundMoveHazardStep(p.Nav, s.Self, dir[0], dir[1], 6) == "" {
+						p.jump.phase = 4
+						p.jump.runup = quake.Vec3{s.Self[0] + dir[0]/distance*6, s.Self[1] + dir[1]/distance*6, s.Self[2]}
+						break
+					}
+				}
+			}
 			return true
 		}
 		if landing[2] < s.Self[2]-16 {
@@ -281,7 +305,13 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 	if j == nil {
 		return cmd, false
 	}
-	defer func() { p.World.Jump = j.trace() }()
+	defer func() {
+		if p.jump != nil {
+			p.World.Jump = p.jump.trace()
+		} else {
+			p.World.Jump = j.trace()
+		}
+	}()
 	s := p.World.Snapshot
 	skill, prefix := "gap_jump", "jump"
 	if j.drop {
@@ -307,6 +337,21 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 		}
 		p.World.Command = CommandDecision{MoveSource: "none", Skill: skill, LimitReason: "jump_braking"}
 		return quake.UserCmd{Yaw: cmd.Yaw}, true
+	}
+	if j.phase == 4 {
+		if !s.OnGround || s.Frame > j.frame {
+			// Revalidate the arc from the actual end of the bounded approach.
+			p.jump = nil
+			if !s.OnGround || !p.planRampJump() {
+				p.World.Command = CommandDecision{MoveSource: "none", Skill: skill, LimitReason: "jump_alignment_failed"}
+				return cmd, true
+			}
+			p.jump.phase = 2
+			return p.jumpCommand(cmd)
+		}
+		cmd = worldMove(cmd, s, j.runup[0]-s.Self[0], j.runup[1]-s.Self[1], 60, false)
+		p.World.Command = CommandDecision{MoveSource: "gap_jump", AimSource: "route", Skill: skill, LimitReason: "jump_align_ground"}
+		return cmd, true
 	}
 	if j.phase < 2 {
 		if !s.OnGround {
@@ -356,6 +401,22 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 	}
 	dx, dy := j.landing[0]-s.Self[0], j.landing[1]-s.Self[1]
 	cmd = worldMove(cmd, s, dx, dy, math.Min(j.speed, math.Hypot(dx, dy)*10), false)
+	if j.steerVelocity {
+		// PM_AirMove accelerates toward the requested direction rather than
+		// replacing velocity. Aim the acceleration at the remaining velocity
+		// error, so sideways motion is corrected before it carries us off ramp.
+		vz := s.SelfVelocity[2]
+		if !j.airborne {
+			vz = 230 // lower envelope of the first 100 ms gravity step
+		}
+		disc := vz*vz - 1600*(j.landing[2]-s.Self[2])
+		remaining := .15
+		if disc > 0 {
+			remaining = math.Max(.15, (vz+math.Sqrt(disc))/800)
+		}
+		ex, ey := dx/remaining-s.SelfVelocity[0], dy/remaining-s.SelfVelocity[1]
+		cmd = worldMove(cmd, s, ex, ey, math.Min(400, math.Hypot(ex, ey)*10), false)
+	}
 	phase := prefix + "_flight"
 	if !j.airborne && !j.drop {
 		cmd.Up = 200
@@ -414,7 +475,11 @@ func (p *Planner) blockedRiseApproach() bool {
 			continue
 		}
 		rise := r[i+1].Position[2] - p.World.Snapshot.Self[2]
-		if rise >= 16 && rise <= 40 && quake.Horizontal(p.World.Snapshot.Self, r[i].Position) <= 128 {
+		minimumRise := 16.0
+		if p.World.Snapshot.Map == "base1" && r[i].ToArea == 2470 {
+			minimumRise = 4
+		}
+		if rise >= minimumRise && rise <= 40 && quake.Horizontal(p.World.Snapshot.Self, r[i].Position) <= 128 {
 			return true
 		}
 	}

@@ -211,6 +211,25 @@ func TestBase1FarReturnFirstRise(t *testing.T) {
 	if landing[0] != 769 || landing[2] <= -41 || !g.PlayerMoveClear(landing, landing) || !n.GroundedNear(landing) {
 		t.Fatalf("invalid corrected landing: %+v", landing)
 	}
+	// The failed native approach must align on supported ground, rather than
+	// launch the standing arc while still moving west.
+	p.World.Snapshot.Self = quake.Vec3{741.875, -410.5, -71.875}
+	p.World.Snapshot.SelfVelocity = quake.Vec3{-55.125, -23.5, 0}
+	p.World.Route, _ = n.Route(p.World.Snapshot.Self, goal)
+	if !p.planRampJump() || p.jump.phase != 4 || p.jump.runup[0] <= p.World.Snapshot.Self[0] {
+		t.Fatalf("missing supported alignment: %+v", p.jump)
+	}
+	if g.GroundMoveHazardStep(n, p.World.Snapshot.Self, p.jump.runup[0]-p.World.Snapshot.Self[0], p.jump.runup[1]-p.World.Snapshot.Self[1], 6) != "" {
+		t.Fatal("alignment crossed unsupported ground")
+	}
+	// Native physics can land on the slope before the AAS reach. The short
+	// continuation still needs a checked arc and a route beyond the rise.
+	p.World.Snapshot.Self = quake.Vec3{774, -360, -47.5}
+	p.World.Snapshot.SelfVelocity = quake.Vec3{}
+	p.World.Route, _ = n.Route(p.World.Snapshot.Self, goal)
+	if !p.planRampJump() || p.jump.phase != 2 || !p.jump.steerVelocity || p.jump.landing[2] <= -41 {
+		t.Fatalf("missing verified continuation: %+v", p.jump)
+	}
 }
 
 func TestBase3ReturnCornerStep(t *testing.T) {

@@ -1,6 +1,7 @@
 [CmdletBinding()]
-param([int]$BasePort=30520,[string]$OutputRoot='',[ValidateSet('base1','base2','base3')][string]$Map='base2',[string]$SessionPath='',[switch]$RampProbe,[switch]$FirstLipProbe,[switch]$CornerProbe,[switch]$RiseProbe,[switch]$SecondRiseProbe)
+param([int]$BasePort=30520,[string]$OutputRoot='',[ValidateSet('base1','base2','base3')][string]$Map='base2',[string]$SessionPath='',[switch]$RampProbe,[switch]$FirstLipProbe,[switch]$CornerProbe,[switch]$RiseProbe,[switch]$SecondRiseProbe,[switch]$MomentumProbe)
 $ErrorActionPreference='Stop'
+if($MomentumProbe){$RiseProbe=$true}
 $repo=Split-Path $PSScriptRoot -Parent
 if(!$OutputRoot){$OutputRoot=Join-Path $repo ('workspace/artifacts/memory-restart-suite-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))}
 $root=if([IO.Path]::IsPathRooted($OutputRoot)){[IO.Path]::GetFullPath($OutputRoot)}else{[IO.Path]::GetFullPath((Join-Path (Get-Location) $OutputRoot))}
@@ -13,9 +14,9 @@ try{
     foreach($index in 0..1){
         $port=$BasePort+$index
         $dir=Join-Path $root ('run-{0:D3}' -f $index)
-        $jobs+=Start-ThreadJob -ArgumentList @($script,$port,$dir,$Map,$SessionPath,$RampProbe.IsPresent,$FirstLipProbe.IsPresent,$CornerProbe.IsPresent,$RiseProbe.IsPresent,$SecondRiseProbe.IsPresent) -ScriptBlock {
-            param($script,$port,$dir,$map,$session,[bool]$rampProbe,[bool]$firstLipProbe,[bool]$cornerProbe,[bool]$riseProbe,[bool]$secondRiseProbe)
-            & $script -Port $port -OutputRoot $dir -Map $map -SessionPath $session -PreparedRuntime -RampProbe:$rampProbe -FirstLipProbe:$firstLipProbe -CornerProbe:$cornerProbe -RiseProbe:$riseProbe -SecondRiseProbe:$secondRiseProbe
+        $jobs+=Start-ThreadJob -ArgumentList @($script,$port,$dir,$Map,$SessionPath,$RampProbe.IsPresent,$FirstLipProbe.IsPresent,$CornerProbe.IsPresent,$RiseProbe.IsPresent,$SecondRiseProbe.IsPresent,$MomentumProbe.IsPresent) -ScriptBlock {
+            param($script,$port,$dir,$map,$session,[bool]$rampProbe,[bool]$firstLipProbe,[bool]$cornerProbe,[bool]$riseProbe,[bool]$secondRiseProbe,[bool]$momentumProbe)
+            & $script -Port $port -OutputRoot $dir -Map $map -SessionPath $session -PreparedRuntime -RampProbe:$rampProbe -FirstLipProbe:$firstLipProbe -CornerProbe:$cornerProbe -RiseProbe:$riseProbe -SecondRiseProbe:$secondRiseProbe -MomentumProbe:$momentumProbe
         }
     }
     $jobs|Wait-Job|Out-Null
@@ -35,7 +36,7 @@ try{
     $paths=@($reports|ForEach-Object {[double]$_.route_metrics.horizontal_path})
     $misses=@($reports|ForEach-Object {[int]$_.route_metrics.jump_missed})
     $summary=@{elapsed_frames_min=($frames|Measure-Object -Minimum).Minimum;elapsed_frames_max=($frames|Measure-Object -Maximum).Maximum;horizontal_path_min=($paths|Measure-Object -Minimum).Minimum;horizontal_path_max=($paths|Measure-Object -Maximum).Maximum;jump_missed_total=($misses|Measure-Object -Sum).Sum}
-    @{accepted=$true;map=$Map;ramp_probe=[bool]$RampProbe;first_lip_probe=[bool]$FirstLipProbe;corner_probe=[bool]$CornerProbe;rise_probe=[bool]$RiseProbe;second_rise_probe=[bool]$SecondRiseProbe;parallelism=2;timescale=2;route_metrics_summary=$summary;reports=$reports}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $root 'report.json')
+    @{accepted=$true;map=$Map;ramp_probe=[bool]$RampProbe;first_lip_probe=[bool]$FirstLipProbe;corner_probe=[bool]$CornerProbe;rise_probe=[bool]$RiseProbe;second_rise_probe=[bool]$SecondRiseProbe;momentum_probe=[bool]$MomentumProbe;parallelism=2;timescale=2;route_metrics_summary=$summary;reports=$reports}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $root 'report.json')
     Write-Output "PASS: $root"
 }finally{
     $jobs|Remove-Job -Force -ErrorAction SilentlyContinue

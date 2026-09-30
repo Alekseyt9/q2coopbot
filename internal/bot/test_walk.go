@@ -28,9 +28,14 @@ func (c *Client) testWalkAge(frame int) int {
 
 // Test walking uses normal usercmd physics; only the initial placement teleports.
 func validateTestWalk(cfg Config) (quake.Vec3, error) {
+	if cfg.TestRunInSpeed < 0 || cfg.TestRunInSpeed > 300 || cfg.TestRunInSpeed > 0 && !cfg.TestWalkRunIn {
+		return quake.Vec3{}, fmt.Errorf("test.run_in_speed requires walk_run_in and a speed in 1..300")
+	}
 	if cfg.TestWalkRunIn {
-		if !cfg.FramePaced || cfg.Idle || !cfg.TestCombatBarrier || cfg.TestTeleport == "" || cfg.TestWalkTarget == "" || cfg.TestWalkAfterFrames != 0 || cfg.TestWalkFrames < 1 || cfg.TestWalkFrames > 5 || cfg.TestWalkRoute || cfg.TestTeleportAfter != "" || cfg.TestLineCross {
-			return quake.Vec3{}, fmt.Errorf("test.walk_run_in requires active frame-paced combat barrier, initial teleport, 1..5 immediate straight walk frames")
+		combat := cfg.TestCombatBarrier && cfg.TestWalkAfterFrames == 0
+		movement := !cfg.TestCombatBarrier && cfg.TestSetupHoldFrames > 0 && cfg.TestWalkAfterFrames == cfg.TestSetupHoldFrames
+		if !cfg.FramePaced || cfg.Idle || (!combat && !movement) || cfg.TestTeleport == "" || cfg.TestWalkTarget == "" || cfg.TestWalkFrames < 1 || cfg.TestWalkFrames > 5 || cfg.TestWalkRoute || cfg.TestTeleportAfter != "" || cfg.TestLineCross {
+			return quake.Vec3{}, fmt.Errorf("test.walk_run_in requires active frame pacing, combat release or setup hold, initial teleport and 1..5 straight walk frames")
 		}
 		return parseTestTeleport(cfg.TestWalkTarget)
 	}
@@ -54,6 +59,19 @@ type testWalkPath struct {
 	ready     bool
 	mapName   string
 	lastFrame int
+}
+
+// A bounded prelude accelerates through native usercmd physics, without
+// substituting an invented velocity into the planner's observation.
+func testRunInCommand(s quake.Snapshot, target quake.Vec3, speed float64, g *quake.MapInfo, nav *quake.Navigator) quake.UserCmd {
+	if s.Health <= 0 || !s.OnGround || g == nil || !g.MovementComplete() {
+		return quake.UserCmd{}
+	}
+	dx, dy := target[0]-s.Self[0], target[1]-s.Self[1]
+	if g.GroundMoveHazardStep(nav, s.Self, dx, dy, speed/10) != "" {
+		return quake.UserCmd{}
+	}
+	return worldMove(quake.UserCmd{Pitch: -s.DeltaAngles[0]}, s, dx, dy, speed, false)
 }
 
 func (p *testWalkPath) command(s quake.Snapshot, target quake.Vec3, geometry *quake.MapInfo, nav *quake.Navigator) quake.UserCmd {

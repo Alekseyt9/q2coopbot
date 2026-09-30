@@ -1,6 +1,7 @@
 [CmdletBinding()]
-param([int]$Port=30520,[string]$OutputRoot='',[ValidateSet('base1','base2','base3')][string]$Map='base2',[string]$SessionPath='',[switch]$PreparedRuntime,[switch]$RampProbe,[switch]$FirstLipProbe,[switch]$CornerProbe,[switch]$RiseProbe,[switch]$SecondRiseProbe)
+param([int]$Port=30520,[string]$OutputRoot='',[ValidateSet('base1','base2','base3')][string]$Map='base2',[string]$SessionPath='',[switch]$PreparedRuntime,[switch]$RampProbe,[switch]$FirstLipProbe,[switch]$CornerProbe,[switch]$RiseProbe,[switch]$SecondRiseProbe,[switch]$MomentumProbe)
 $ErrorActionPreference='Stop'
+if($MomentumProbe){$RiseProbe=$true}
 if(($RampProbe -or $FirstLipProbe) -and $Map -ne 'base3' -or ($RampProbe -and $FirstLipProbe)){throw 'Select one base3 probe'}
 if(($CornerProbe -or $RiseProbe -or $SecondRiseProbe) -and ($Map -ne 'base1' -or $RampProbe -or $FirstLipProbe -or ($CornerProbe -and ($RiseProbe -or $SecondRiseProbe)) -or ($RiseProbe -and $SecondRiseProbe))){throw 'Select one base1 probe'}
 $repo=Split-Path $PSScriptRoot -Parent
@@ -35,6 +36,7 @@ $secondCfg=@{server=$common.server;client=@{name='GoCoopMate';game_dir=(Join-Pat
 if($RampProbe){$secondCfg.test=@{teleport_map='base3';teleport='158.75,666.125,-743.875';setup_hold_frames=2}}
 if($CornerProbe){$secondCfg.test=@{teleport_map='base1';teleport='-48.875,-593.25,-79.875';setup_hold_frames=2}}
 if($RiseProbe){$secondCfg.test=@{teleport_map='base1';teleport='747.5,-408.25,-71.875';setup_hold_frames=2}}
+if($MomentumProbe){$secondCfg.test=(Get-Content -Raw -Encoding UTF8 (Join-Path $repo 'scripts/scenarios/base1-first-rise-momentum.json')|ConvertFrom-Json -AsHashtable).test}
 if($SecondRiseProbe){$secondCfg.test=@{teleport_map='base1';teleport='833.5,-318.75,-25.875';setup_hold_frames=2}}
 foreach($pair in @(@('actor',$actorCfg),@('first',$firstCfg),@('second',$secondCfg))){$pair[1]|ConvertTo-Json -Depth 8|Set-Content (Join-Path $out ($pair[0]+'-config.json'))}
 function Read-Trace([string]$Path){
@@ -88,6 +90,8 @@ try{
             $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.self[0] -lt 1440 -and $_.self[1] -gt 1320 -and $_.self[1] -lt 1460 -and $_.self[2] -lt -825}|Select-Object -First 1)
         }elseif($CornerProbe){
             $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.self[0] -gt 75 -and $_.self[1] -gt -620 -and $_.self[1] -lt -480 -and $_.self[2] -gt -100}|Select-Object -First 1)
+        }elseif($MomentumProbe){
+            $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.self[0] -gt 750 -and $_.self[1] -gt -335 -and $_.self[2] -gt -43}|Select-Object -First 1)
         }elseif($RiseProbe){
             $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.self[0] -gt 750 -and $_.self[1] -gt -385 -and $_.self[2] -gt -60 -and $_.arbitration.limit_reason -eq 'jump_landed'}|Select-Object -First 1)
         }elseif($SecondRiseProbe){
@@ -105,13 +109,18 @@ try{
     if($return[0].spawncount -ne $saved.generation -or $return[0].frame -le $saved.frame){throw 'Memory restored across wrong generation/frame'}
     foreach($axis in 0..2){if([math]::Abs($return[0].goal_point[$axis]-$saved.death[$axis]) -gt .125){throw 'Restored wrong target'}}
     $distance=[math]::Sqrt([math]::Pow($return[0].self[0]-$saved.death[0],2)+[math]::Pow($return[0].self[1]-$saved.death[1],2))
-    $maxFrames=if($RampProbe){45}elseif($FirstLipProbe){50}elseif($CornerProbe){35}elseif($RiseProbe){40}elseif($SecondRiseProbe){60}elseif($Map -eq 'base3'){800}else{400}
+    $maxFrames=if($RampProbe){45}elseif($FirstLipProbe){50}elseif($CornerProbe){35}elseif($MomentumProbe){60}elseif($RiseProbe){40}elseif($SecondRiseProbe){60}elseif($Map -eq 'base3'){800}else{400}
     $minimumDistance=if($Map -eq 'base1'){400}else{640}
     if((!$RampProbe -and $distance -le $minimumDistance) -or $arrived[0].frame-$return[0].frame -gt $maxFrames -or $firstRows[-1].frame -ge $rows[0].frame){throw 'Restart identity/distance/deadline failed'}
     $routeMetrics=& "$PSScriptRoot/measure_return_trace.ps1" -TracePath (Join-Path $out 'second.jsonl') -StartFrame $return[0].frame -EndFrame $arrived[0].frame
+    if($MomentumProbe){
+        $prelude=@($rows|Where-Object {$_.arbitration.move_source -eq 'test_movement_run_in'}|Select-Object -First 1)
+        $nativeRunInWitness=@($rows|Where-Object {$prelude.Count -and $_.frame -eq $prelude[0].frame+1 -and $_.on_ground -and $_.self_velocity[0] -lt -25 -and $_.arbitration.limit_reason -in @('jump_takeoff','jump_align_ground')}|Select-Object -First 1)
+        if(!$nativeRunInWitness.Count){throw 'Native lateral run-in was not observed before takeoff'}
+    }
     if($RiseProbe -and ($routeMetrics.jump_missed -ne 0 -or $routeMetrics.runup_lost_ground -ne 0)){throw 'Base1 rise probe did not land cleanly'}
     if(($RampProbe -or $FirstLipProbe) -and ($routeMetrics.jump_missed -ne 0 -or $routeMetrics.runup_lost_ground -ne 0 -or !@($rows|Where-Object {$_.frame -ge $return[0].frame -and $_.frame -le $arrived[0].frame -and $_.jump_plan.phase -eq 2}).Count)){throw 'Base3 probe jump was not cleanly executed'}
-    @{accepted=$true;ramp_probe=[bool]$RampProbe;first_lip_probe=[bool]$FirstLipProbe;corner_probe=[bool]$CornerProbe;rise_probe=[bool]$RiseProbe;second_rise_probe=[bool]$SecondRiseProbe;server_pid=$server.Id;first_pid=$first.Id;second_pid=$second.Id;server_session=$saved.server;generation=$saved.generation;death=$saved.death;saved_frame=$saved.frame;restart_frame=$rows[0].frame;return_frame=$return[0].frame;arrival_frame=$arrived[0].frame;initial_distance=$distance;route_metrics=$routeMetrics;first_trace='first.jsonl';second_trace='second.jsonl'}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'report.json')
+    @{accepted=$true;native_run_in_velocity=$(if($MomentumProbe){$nativeRunInWitness[0].self_velocity}else{$null});ramp_probe=[bool]$RampProbe;first_lip_probe=[bool]$FirstLipProbe;corner_probe=[bool]$CornerProbe;rise_probe=[bool]$RiseProbe;second_rise_probe=[bool]$SecondRiseProbe;momentum_probe=[bool]$MomentumProbe;server_pid=$server.Id;first_pid=$first.Id;second_pid=$second.Id;server_session=$saved.server;generation=$saved.generation;death=$saved.death;saved_frame=$saved.frame;restart_frame=$rows[0].frame;return_frame=$return[0].frame;arrival_frame=$arrived[0].frame;initial_distance=$distance;route_metrics=$routeMetrics;first_trace='first.jsonl';second_trace='second.jsonl'}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'report.json')
     Write-Output "PASS: $out"
 }finally{
     $env:Q2COOPBOT_TEST_RCON=$oldRcon

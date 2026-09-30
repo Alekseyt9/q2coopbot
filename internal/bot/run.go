@@ -44,6 +44,7 @@ type Config struct {
 	TestWalkRoute                       bool
 	TestWalkRunIn                       bool
 	TestWalkAfterFrames, TestWalkFrames int
+	TestRunInSpeed                      int
 	Host, Name, GameDir, AASDir         string
 	WorldFile, TracePath, StopFile      string
 	System1Model, System2Model          string
@@ -306,9 +307,10 @@ func Run(ctx context.Context, cfg Config) error {
 		testInvulnerable:        cfg.TestInvulnerable,
 		testChangeEntry:         cfg.TestChangeEntry,
 		testWalkTarget:          walkTarget, testWalkAfterFrames: cfg.TestWalkAfterFrames, testWalkFrames: cfg.TestWalkFrames,
-		testWalkRoute: cfg.TestWalkRoute,
-		testWalkRunIn: cfg.TestWalkRunIn,
-		conn:          conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
+		testRunInSpeed: cfg.TestRunInSpeed,
+		testWalkRoute:  cfg.TestWalkRoute,
+		testWalkRunIn:  cfg.TestWalkRunIn,
+		conn:           conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
 		decoder: quake.NewDecoder(), planner: &Planner{AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53, TestDisableProjectileLead: cfg.TestDisableProjectileLead},
 		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name,
 		memoryFile: cfg.MemoryFile, memorySession: cfg.MemorySession,

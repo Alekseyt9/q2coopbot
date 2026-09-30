@@ -58,6 +58,24 @@ func TestCombatRunInRequiresBoundedExplicitFixture(t *testing.T) {
 	}
 }
 
+func TestMovementRunInRequiresSettledPlacement(t *testing.T) {
+	valid := Config{FramePaced: true, TestWalkRunIn: true, TestTeleport: "764,-391,-63", TestWalkTarget: "750,-385,-63", TestSetupHoldFrames: 6, TestWalkAfterFrames: 6, TestWalkFrames: 1}
+	if _, err := validateTestWalk(valid); err != nil {
+		t.Fatal(err)
+	}
+	valid.TestWalkAfterFrames--
+	if _, err := validateTestWalk(valid); err == nil {
+		t.Fatal("run-in must start after setup hold")
+	}
+	valid.TestWalkAfterFrames++
+	for _, speed := range []int{-1, 301} {
+		valid.TestRunInSpeed = speed
+		if _, err := validateTestWalk(valid); err == nil {
+			t.Fatalf("accepted unbounded run-in speed %d", speed)
+		}
+	}
+}
+
 func TestRoutePreflightReasons(t *testing.T) {
 	s := quake.Snapshot{Map: "test", Frame: 40, Health: 100, OnGround: true}
 	p := testWalkPath{}
