@@ -1,0 +1,25 @@
+{
+  "id": "jail2-live-door-blocked-20260930",
+  "title": "Застревание jail2: маршрут есть, движение блокирует дверь",
+  "map": "jail2",
+  "kind": "dynamic_door",
+  "status": "open",
+  "reproduction": "observation_only",
+  "scenario": null,
+  "observed_failure": "Игрок сообщил о новом застревании. Кадр1478: self[126.625,-300.5,8.125], teammate[-32,27.125,24.125], health68; follow_teammate, navigation=ready; move_source=none, limit_reason и move_limit_reason=dynamic_door_blocked.",
+  "expected_result": "Корректно распознать состояние двери и способ открытия, дождаться безопасного прохода либо выбрать достижимый обход; возобновить сопровождение без бесконечного стояния.",
+  "diagnosis": "В сохранённом кадре AAS-маршрут найден, но динамическая проверка двери запрещает движение. Нужно определить brush-модель, её фактическое состояние, требуемую кнопку/триггер и геометрию короткого подхода. Причина блокировки пока не установлена.",
+  "evidence": "workspace/artifacts/live-stuck-20260930-204022/bot-tail.jsonl",
+  "additional_evidence": [
+    "workspace/artifacts/live-stuck-20260930-204022/last-world.json"
+  ],
+  "missing_setup": [
+    "Native воспроизведение двери с состояниями movers из трассы",
+    "Проверка активации/ожидания двери и безопасного восстановления движения"
+  ],
+  "acceptance": {
+    "no_unbounded_stall": true,
+    "safe_door_passage": true,
+    "follow_resumes": true
+  }
+}

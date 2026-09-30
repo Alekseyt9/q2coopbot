@@ -1,0 +1,74 @@
+{
+  "phases": [
+    {
+      "scenario": {
+        "version": 1,
+        "name": "base2-low-health-supershotgun",
+        "bot_health": 38,
+        "steps": [
+          {
+            "id": "allow-safe-pickup",
+            "action": "wait",
+            "frames": 300
+          }
+        ],
+        "expect": {},
+        "game_frames": 420,
+        "actor_origin": [
+          111.125,
+          -1903.5,
+          -81.875
+        ],
+        "bot_origin": [
+          143.25,
+          -1882.25,
+          -81.875
+        ],
+        "map_entry": "base1",
+        "start_frame": 40,
+        "map": "base2"
+      },
+      "id": "acquire-supplies"
+    },
+    {
+      "scenario": {
+        "bot_origin": [
+          64,
+          -224,
+          24
+        ],
+        "version": 1,
+        "map_entry": "",
+        "map": "base1",
+        "game_frames": 500,
+        "actor_origin": [
+          160,
+          -224,
+          24
+        ],
+        "start_frame": 40,
+        "name": "base1-inventory-after-map",
+        "expect": {},
+        "steps": [
+          {
+            "frames": 360,
+            "id": "observe-inventory-through-death",
+            "action": "wait"
+          }
+        ]
+      },
+      "observer_respawn_cycle": {
+        "recovery_frames": 150,
+        "timeout_frames": 40,
+        "policy_only": true,
+        "after_frames": 60
+      },
+      "id": "preserve-through-map-and-death",
+      "entry": "gamemap"
+    }
+  ],
+  "version": 1,
+  "readiness_barrier": true,
+  "name": "coop-map-inventory",
+  "transition_timeout_ms": 10000
+}

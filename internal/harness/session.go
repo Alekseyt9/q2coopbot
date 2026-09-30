@@ -65,7 +65,7 @@ func (s Session) Validate() error {
 	}
 	ids := map[string]bool{}
 	for index, phase := range s.Phases {
-		if phase.Entry != "" && phase.Entry != "reconnect" || phase.Entry == "reconnect" && (index == 0 || phase.Scenario.Map != s.Phases[index-1].Scenario.Map) {
+		if phase.Entry != "" && phase.Entry != "reconnect" && phase.Entry != "gamemap" || phase.Entry == "reconnect" && (index == 0 || phase.Scenario.Map != s.Phases[index-1].Scenario.Map) || phase.Entry == "gamemap" && (index == 0 || phase.Scenario.MapEntry != "") {
 			return fmt.Errorf("invalid phase entry %s", phase.ID)
 		}
 		if f := phase.ObserverRespawn; f != nil {

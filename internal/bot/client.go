@@ -203,6 +203,25 @@ func (c *Client) reconnect() error {
 	log.Printf("full reconnect started")
 	return c.oob("getchallenge\n")
 }
+
+// A map-change reconnect is a new signon on the existing netchannel. Dropping
+// the client here makes the server discard its persistent coop inventory.
+func (c *Client) resumeMapSignon() error {
+	c.begun, c.frameReady = false, false
+	c.reconnected = false
+	c.beginPending = ""
+	c.firstMoveFrame, c.lastMoveFrame = -1, -1
+	c.previous = quake.UserCmd{}
+	c.decoder = quake.NewDecoder()
+	c.pendingSounds = nil
+	c.seenCommands = map[string]bool{}
+	c.planner.setMap("", c.root)
+	c.memoryLoaded = false
+	// Keep connection identity as well as the UDP socket, qport and sequence.
+	// Map generations identify the new phase on this same connection.
+	log.Printf("map signon resumed on existing UDP channel")
+	return c.command("new")
+}
 func (c *Client) handle(packet []byte) {
 	if len(packet) >= 4 && string(packet[:4]) == "\xff\xff\xff\xff" {
 		message := string(packet[4:])
@@ -335,13 +354,17 @@ func (c *Client) handle(packet []byte) {
 			c.lastMoveFrame = -1
 			c.seenCommands = map[string]bool{}
 			c.planner.setMap("", c.root)
-		case request == "reconnect":
+		case request == "reconnect" || request == "server_reconnect":
 			if c.exitOnReconnect {
 				log.Printf("test client leaving on map reconnect")
 				c.stopOnReconnect = true
 				return
 			}
-			_ = c.reconnect()
+			if request == "server_reconnect" {
+				_ = c.reconnect()
+			} else {
+				_ = c.resumeMapSignon()
+			}
 			return
 		case strings.HasPrefix(request, "cmd configstrings "), strings.HasPrefix(request, "cmd baselines "):
 			_ = c.command(strings.TrimPrefix(request, "cmd "))
@@ -455,6 +478,13 @@ func (c *Client) run(ctx context.Context) error {
 				continue
 			}
 			entry := c.planner.World.Map
+			if c.sessionDefinition.Phases[c.sessionPhase+1].Entry == "gamemap" {
+				if err := c.oob(fmt.Sprintf("rcon %s gamemap %s\n", c.testRconPassword, c.sessionPendingMap)); err != nil {
+					return err
+				}
+				c.sessionPendingMap = ""
+				continue
+			}
 			if explicit := c.sessionDefinition.Phases[c.sessionPhase+1].Scenario.MapEntry; explicit != "" {
 				entry = explicit
 			}

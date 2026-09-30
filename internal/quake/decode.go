@@ -542,7 +542,9 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 			}
 			d.Commands = append(d.Commands, strings.TrimSpace(v))
 		case 8:
-			d.Commands = append(d.Commands, "reconnect")
+			// svc_reconnect drops the netchannel (e.g. server restart). It is
+			// distinct from stufftext reconnect used by ordinary map changes.
+			d.Commands = append(d.Commands, "server_reconnect")
 		case 15, 4:
 			_, e = r.str()
 			if e != nil {

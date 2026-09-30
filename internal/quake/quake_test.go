@@ -206,8 +206,12 @@ func TestMapReconnectOpcode(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(d.Commands) != 1 || d.Commands[0] != "reconnect" {
+	if len(d.Commands) != 1 || d.Commands[0] != "server_reconnect" {
 		t.Fatalf("commands=%v", d.Commands)
+	}
+	_, e = d.Parse(append([]byte{11}, []byte("reconnect\n\x00")...))
+	if e != nil || len(d.Commands) != 1 || d.Commands[0] != "reconnect" {
+		t.Fatalf("stufftext map reconnect conflated with channel drop: %v %v", d.Commands, e)
 	}
 }
 func TestDecodeExplosionTemporaryEntity(t *testing.T) {

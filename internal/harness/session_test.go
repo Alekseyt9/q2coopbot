@@ -13,6 +13,23 @@ func sessionFixture() Session {
 	return Session{Version: 1, Name: "maps", TransitionTimeoutMS: 1000, Phases: []Phase{{ID: "first", Scenario: a}, {ID: "second", Scenario: b}}}
 }
 
+func TestSessionGamemapEntryValidation(t *testing.T) {
+	s := sessionFixture()
+	s.Phases[1].Entry = "gamemap"
+	if err := s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	s.Phases[0].Entry = "gamemap"
+	if s.Validate() == nil {
+		t.Fatal("initial gamemap accepted")
+	}
+	s.Phases[0].Entry = ""
+	s.Phases[1].Scenario.MapEntry = "base2"
+	if s.Validate() == nil {
+		t.Fatal("ambiguous gamemap spawnpoint accepted")
+	}
+}
+
 func TestSessionRecoveryExpectationValidation(t *testing.T) {
 	s := sessionFixture()
 	s.ReadinessBarrier = true

@@ -3,7 +3,7 @@
   "title": "Ручная граната взрывается в руке и убивает бота и игрока",
   "map": "base3",
   "kind": "combat_weapon",
-  "status": "open",
+  "status": "mitigated_guard_parallel_2x",
   "priority": "blocker",
   "reproduction": "observation_only",
   "scenario": null,
@@ -16,8 +16,8 @@
     "workspace/artifacts/live-grenade-not-thrown-20260930-194230/server-tail.log"
   ],
   "missing_setup": [
-    "Воспроизводимый native эпизод с ручной гранатой, игроком рядом и противником",
-    "Проверка времени удержания и обязательного отпускания ATTACK, в том числе при потере цели"
+    "Расчёт траектории, отскоков и точек раннего взрыва на мобах; безопасность бота и напарника",
+    "Native тест уже заряженной гранаты, потери цели и движения напарника"
   ],
   "acceptance": {
     "no_grenade_teammate_kill": true,
@@ -28,5 +28,10 @@
     "collision_explosion_safety": true,
     "predicted_self_and_teammate_safety": true
   },
-  "engine_reference": "F:/src/quake2/yquake2/src/game/g_weapon.c:614 Grenade_Touch: столкновение с takedamage вызывает Grenade_Explode сразу; геометрия даёт отскок. Контакт с владельцем игнорируется."
+  "engine_reference": "F:/src/quake2/yquake2/src/game/g_weapon.c:614 Grenade_Touch: столкновение с takedamage вызывает Grenade_Explode сразу; геометрия даёт отскок. Контакт с владельцем игнорируется.",
+  "resolution": "Общая логика ATTACK больше не может начать или удерживать ручную гранату: общий guard отпускает ATTACK на всех путях команд живого бота, weaponSwitch запрашивает Blaster независимо от здоровья/известности инвентаря. Ограничение временное: безопасный бросок ещё не реализован.",
+  "verification": [
+    "workspace/artifacts/hand-grenade-guard-a/guard-report.json"
+  ],
+  "verification_scope": "Два native прогона2x параллельно: выбран v_handgr, ноль ATTACK с ним, переключение на Blaster, Grenades5 сохраняются,57 кадров дальнейшего боя, финальное здоровье100. Воспроизводится предотвращение подготовки, а не безопасный бросок уже заряженной гранаты."
 }

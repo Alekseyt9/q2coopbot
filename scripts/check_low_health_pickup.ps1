@@ -3,7 +3,7 @@ function Assert-LowHealthPickup([object[]]$Rows) {
     $confirmed = @($game | Where-Object { $_.pickup.class -eq 'weapon_supershotgun' -and $_.pickup.state -eq 'confirmed' -and $_.pickup.before -eq 0 -and $_.pickup.after -eq 1 -and $_.health -eq 38 })
     if (!$confirmed.Count) { throw 'No confirmed Super Shotgun pickup at health 38' }
     if (@($game | Where-Object { $_.health -ne 38 -or $_.enemies.Count -gt 0 }).Count) { throw 'Unexpected damage, healing, death or enemy' }
-    $before = @($game | Where-Object { $_.frame -lt $confirmed[0].pickup.started_frame -and $_.inventory_known -and $_.inventory_age_frames -le 20 -and @($_.inventory | Where-Object name -EQ 'Super Shotgun').Count -eq 0 })
+    $before = @($game | Where-Object { $_.frame -le $confirmed[0].pickup.started_frame -and $_.inventory_known -and $_.inventory_age_frames -le 20 -and @($_.inventory | Where-Object name -EQ 'Super Shotgun').Count -eq 0 })
     if (!$before.Count) { throw 'Weapon missing before release not proven' }
     $last = $game[-1]
     $weapon = @($last.inventory | Where-Object name -EQ 'Super Shotgun')

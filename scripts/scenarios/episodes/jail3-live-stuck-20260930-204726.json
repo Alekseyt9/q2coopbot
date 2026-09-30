@@ -1,0 +1,19 @@
+{
+  "id": "jail3-live-stuck-20260930-204726",
+  "title": "Повторное живое застревание jail3",
+  "map": "jail3",
+  "kind": "navigation",
+  "status": "open",
+  "reproduction": "observation_only",
+  "scenario": null,
+  "observed_failure": "Игрок сообщил о новом застревании. Кадр2054, self=-753,5,-648,75,840,125, teammate=-336,125,-680,125,776,125, goal=follow_teammate, navigation=ready, reason=no_verified_landing",
+  "expected_result": "Безопасно восстановить сопровождение игрока; не оставаться неподвижным бесконечно.",
+  "evidence": "workspace/artifacts/live-stuck-20260930-204726/bot-tail.jsonl",
+  "additional_evidence": [
+    "workspace/artifacts/live-stuck-20260930-204726/last-world.json"
+  ],
+  "missing_setup": [
+    "Определить причину по геометрии, состояниям movers и маршруту",
+    "Подготовить native воспроизведение"
+  ]
+}
