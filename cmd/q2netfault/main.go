@@ -47,6 +47,9 @@ func run() error {
 	if cfg.ArmBarrierDir != "" && !filepath.IsAbs(cfg.ArmBarrierDir) {
 		cfg.ArmBarrierDir = filepath.Join(filepath.Dir(*path), cfg.ArmBarrierDir)
 	}
+	if cfg.ArmSignalPath != "" && !filepath.IsAbs(cfg.ArmSignalPath) {
+		cfg.ArmSignalPath = filepath.Join(filepath.Dir(*path), cfg.ArmSignalPath)
+	}
 	output := cfg.Events
 	if !filepath.IsAbs(output) {
 		output = filepath.Join(filepath.Dir(*path), output)

@@ -27,7 +27,7 @@ type Phase struct {
 }
 
 type ObserverRespawn struct {
-	RecoveryExpectation string `json:"recovery_expectation,omitempty"` // contact (default), return_active, death_point_arrival
+	RecoveryExpectation string `json:"recovery_expectation,omitempty"` // contact (default), return_active, death_point_arrival, last_player_arrival
 	PolicyOnly          bool   `json:"policy_only,omitempty"`
 	AfterFrames         int    `json:"after_frames"`
 	TimeoutFrames       int    `json:"timeout_frames"`
@@ -70,7 +70,7 @@ func (s Session) Validate() error {
 		}
 		if f := phase.ObserverRespawn; f != nil {
 			if f.RecoveryExpectation != "" && f.RecoveryExpectation != "contact" &&
-				(f.RecoveryExpectation != "return_active" && f.RecoveryExpectation != "death_point_arrival" || !f.PolicyOnly) {
+				(f.RecoveryExpectation != "return_active" && f.RecoveryExpectation != "death_point_arrival" && f.RecoveryExpectation != "last_player_arrival" || !f.PolicyOnly) {
 				return fmt.Errorf("invalid observer recovery expectation in phase %s", phase.ID)
 			}
 			if !s.ReadinessBarrier || f.AfterFrames < 1 || f.TimeoutFrames < 2 || f.RecoveryFrames < 1 || f.AfterFrames+f.TimeoutFrames+f.RecoveryFrames > phase.Scenario.GameFrames-phase.Scenario.StartFrame {

@@ -234,6 +234,12 @@ func (c *Client) handle(packet []byte) {
 	if first&0x80000000 != 0 {
 		c.serverReliable ^= 1
 	}
+	// Signon has no frame-paced movement packets to carry acknowledgements.
+	// A repeated stufftext command can be intentionally ignored below, but
+	// its packet still needs an ack so the server can release/retry signon data.
+	if c.connected && !c.begun {
+		_ = c.send(nil, false)
+	}
 	payload := packet[8:]
 	frames, e := c.decoder.Parse(payload)
 	if e != nil {

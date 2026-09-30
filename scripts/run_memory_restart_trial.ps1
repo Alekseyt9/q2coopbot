@@ -99,7 +99,8 @@ try{
         if($witness.Count){
             if(!$ActiveReturnRestart){break}
             $active=@(Read-Trace (Join-Path $out 'first.jsonl')|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.health -gt 0 -and !$_.teammate -and !$_.last_teammate})
-            if($active.Count -ge 20 -and $active[-1].frame-$active[0].frame -ge 19 -and [math]::Sqrt([math]::Pow($active[-1].self[0]-$active[0].self[0],2)+[math]::Pow($active[-1].self[1]-$active[0].self[1],2)) -ge 128){break}
+            # Leave room for the final stop/disconnect tick to change position.
+            if($active.Count -ge 20 -and $active[-1].frame-$active[0].frame -ge 19 -and [math]::Sqrt([math]::Pow($active[-1].self[0]-$active[0].self[0],2)+[math]::Pow($active[-1].self[1]-$active[0].self[1],2)) -ge 160){break}
         }
         Start-Sleep -Milliseconds 100
     }

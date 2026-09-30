@@ -1,0 +1,26 @@
+{
+  "id": "base2-visible-player-spawn-route",
+  "title": "Сопровождение застревает на спавне при видимом игроке",
+  "map": "base2",
+  "status": "verified_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/process-restart-visible-player-session.json",
+  "evidence": "workspace/artifacts/process-restart-visible-player-r1/run-001/second.jsonl",
+  "symptom": "Бот выбирает follow_teammate, но остаётся на [876,2232,-231.875] с navigation=unreachable: у области спавна нет пригодного выхода в граф AAS.",
+  "missing_setup": [],
+  "expected_result": "Игрок виден уже в первом снимке нового процесса. Бот выходит к связному графу по проверенной геометрии, сопровождает игрока и не возобновляет старый возврат к месту смерти.",
+  "verification_command": "pwsh -NoProfile -File scripts/run_memory_restart_suite.ps1 -VisiblePlayerAtRestart",
+  "verification": "workspace/artifacts/process-restart-visible-player-r3/report.json",
+  "acceptance": {
+    "visible_player_first_snapshot": true,
+    "forbidden_goal": "regroup_after_respawn",
+    "min_follow_frames": 3,
+    "min_bot_displacement": 64,
+    "min_player_displacement": 64,
+    "max_final_horizontal_distance": 128,
+    "max_final_vertical_distance": 40,
+    "preserve_death_point": true,
+    "save_observed_player": true
+  },
+  "limitations": ["Проверено при 2x со сценарным актёром; человеческая сессия и 1x отдельно не проверены."]
+}

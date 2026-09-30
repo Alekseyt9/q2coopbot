@@ -1,0 +1,22 @@
+{
+  "id": "base2-reconnect-handshake-stall",
+  "title": "Актёр не завершает загрузку configstrings после reconnect",
+  "map": "base2",
+  "status": "captured_infrastructure_failure",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/combined-death-return-session.json",
+  "evidence": "workspace/artifacts/scenario-suite-20260930-154854-244/run-000/actor.err",
+  "symptom": "После управляемого reconnect в третьей фазе актёр повторяет configstrings 141811479 96 каждые две секунды и не доходит до begin. Через 10 секунд SessionRunner выдаёт map_transition_timeout; бот остаётся на readiness barrier. Память содержит прежнюю Death и Completed=false, игровая фаза возврата ещё не началась.",
+  "missing_setup": [
+    "Причина незавершённого handshake пока не установлена; детерминированная постановка этого отказа отсутствует."
+  ],
+  "expected_result": "Оба клиента завершают handshake и readiness barrier; прежняя цель возврата восстановлена в том же поколении без новой смерти.",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_return_trial.ps1 -CombinedReturn",
+  "subsequent_run": "workspace/artifacts/combined-death-return-r2/report.json",
+  "confirmed_gap": "Во время signon нет обычных команд движения, несущих ACK. Если запрос stufftext уже обработан, он пропускается, но раньше отдельный ACK серверного пакета не отправлялся. Это лишает reliable-канал обратной связи до повтора команды по таймеру.",
+  "candidate_fix": "Client.handle отправляет пустой netchan ACK на каждый новый серверный пакет, пока connected=true и begun=false. Повторные/старые sequence по-прежнему отклоняются; в игровой фазе дополнительные ACK не отправляются.",
+  "unit_verification": "internal/bot/handshake_ack_test.go: TestHandshakeAcknowledgesRepeatedRequest",
+  "native_verification": "workspace/artifacts/combined-handshake-ack-r1/report.json",
+  "reconnect_regression": "workspace/artifacts/reconnect-handshake-ack-regression-r1/report.json",
+  "resolution": "Пробел ACK исправлен и проверен UDP-тестом; комбинированная и прежняя reconnect-серии прошли по 2/2 при 2x. Точная причина исходного перемежающегося отказа не доказана, карточка остаётся открытой: старые логи не содержат истории пакетов. Долгий сетевой обрыв не проверялся."
+}

@@ -514,8 +514,13 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			if !p.routeOK {
 				p.route, p.routeOK = p.Nav.Route(s.Self, goal)
 			}
-			if !p.routeOK && regrouping {
+			// A visible player can take priority immediately after spawning,
+			// while the spawn area still lacks outgoing AAS links.
+			if !p.routeOK && (regrouping || p.World.Goal == "follow_teammate") {
 				p.route, p.routeOK = p.regroupEntryRoute(s, goal)
+				if !p.routeOK {
+					p.route, p.routeOK = p.supportedReturnRoute(s, goal)
+				}
 			}
 			if !p.routeOK {
 				p.route, p.routeOK = p.localFlatRoute(s, goal)

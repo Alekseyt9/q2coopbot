@@ -28,3 +28,13 @@ foreach($case in @('continued-return','wrong-goal','new-death','no-return','late
     if(!$rejected){throw "Invalid meeting accepted: $case"}
 }
 Write-Output 'PASS: positive meeting and 10 negative controls'
+$visible=@($positive | Where-Object teammate)
+$null=Test-ReconnectMeeting -Rows $visible -DeathPoint @(0,0,24) -VisibleAtStart
+foreach($case in @('late-contact','old-return')){
+    $rows=@(($visible | ConvertTo-Json -Depth 8)|ConvertFrom-Json)
+    if($case -eq 'late-contact'){$rows[0].teammate=$null}else{$rows[0].goal='regroup_after_respawn'}
+    $rejected=$false
+    try{$null=Test-ReconnectMeeting -Rows $rows -DeathPoint @(0,0,24) -VisibleAtStart}catch{$rejected=$true}
+    if(!$rejected){throw "Invalid startup meeting accepted: $case"}
+}
+Write-Output 'PASS: visible startup meeting and 2 negative controls'

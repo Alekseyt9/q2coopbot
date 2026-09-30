@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"time"
 
+	"q2coopbot/internal/harness/coord"
 	"q2coopbot/internal/quake"
 )
 
@@ -20,6 +21,7 @@ type Config struct {
 	DecodeQuake   bool   `json:"decode_quake,omitempty"`
 	ArmBarrierDir string `json:"arm_barrier_dir,omitempty"`
 	ArmPhase      int    `json:"arm_phase,omitempty"`
+	ArmSignalPath string `json:"arm_signal_path,omitempty"`
 }
 
 type GameFrame struct {
@@ -39,11 +41,15 @@ type Event struct {
 	DecodeError string           `json:"decode_error,omitempty"`
 	Control     string           `json:"control,omitempty"`
 	Barrier     *BarrierEvidence `json:"barrier,omitempty"`
+	Trigger     *coord.Ready     `json:"trigger,omitempty"`
 }
 
-// AfterMS starts at the first server datagram, not process startup or a game
-// frame. Duration is wall time and does not scale with server timescale.
+// AfterMS starts at the first server datagram, or at the configured readiness
+// barrier/state signal. Duration is wall time, independent of server timescale.
 func (c Config) Validate() error {
+	if c.ArmSignalPath != "" && (!c.DecodeQuake || c.ArmBarrierDir != "" || c.ArmPhase != 0) {
+		return fmt.Errorf("invalid state signal configuration")
+	}
 	if c.ArmBarrierDir != "" && (!c.DecodeQuake || c.ArmPhase < 0 || c.ArmPhase > 15) || c.ArmBarrierDir == "" && c.ArmPhase != 0 {
 		return fmt.Errorf("invalid readiness barrier configuration")
 	}
@@ -140,7 +146,7 @@ func Serve(ctx context.Context, c Config, emit func(Event) error, ready func(str
 				if peer.String() != p.from.String() {
 					return fmt.Errorf("relay client endpoint changed")
 				}
-			} else if started.IsZero() && c.ArmBarrierDir == "" {
+			} else if started.IsZero() && c.ArmBarrierDir == "" && c.ArmSignalPath == "" {
 				started = time.Now()
 			}
 			e := Event{Direction: p.direction, Bytes: len(p.data), Action: "forward", Stage: "unarmed"}
@@ -170,6 +176,18 @@ func Serve(ctx context.Context, c Config, emit func(Event) error, ready func(str
 						for _, f := range frames {
 							e.Frames = append(e.Frames, GameFrame{Map: decoder.Map, Generation: decoder.Spawncount, Frame: f.Number})
 						}
+					}
+				}
+			}
+			if started.IsZero() && c.ArmSignalPath != "" {
+				for _, f := range e.Frames {
+					e.Trigger, err = signalAt(c.ArmSignalPath, f)
+					if err != nil {
+						return err
+					}
+					if e.Trigger != nil {
+						started = time.Now()
+						break
 					}
 				}
 			}

@@ -99,6 +99,12 @@ func checkObserverCycle(f ObserverRespawn, start int, rows []Trace) ObserverCycl
 		r.Reason = "policy_respawn_contact_not_verified"
 		return r
 	}
+	if f.RecoveryExpectation == "last_player_arrival" {
+		if reason := checkLastPlayerReturn(rows, r.DeathFrame, r.RespawnFrame, f.RecoveryFrames); reason != "" {
+			r.Reason = reason
+			return r
+		}
+	}
 	if f.RecoveryExpectation == "return_active" || f.RecoveryExpectation == "death_point_arrival" {
 		var death *quake.Vec3
 		var last *Trace

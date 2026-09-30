@@ -23,5 +23,8 @@
     "completed_process_restart_verification":  "workspace/artifacts/completed-process-restart-r2/report.json",
     "completed_process_restart_command":  "pwsh -NoProfile -File scripts/run_memory_restart_suite.ps1 -CompletedReturnRestart",
     "process_restart_meeting_verification":  "workspace/artifacts/process-restart-meet-player-r2/report.json",
-    "process_restart_meeting_scenario":  "scripts/scenarios/process-restart-meet-player-session.json"
+    "process_restart_meeting_scenario":  "scripts/scenarios/process-restart-meet-player-session.json",
+    "combined_meeting_verification": "workspace/artifacts/combined-return-meet-player-r1/report.json",
+    "combined_meeting_scenario": "scripts/scenarios/combined-return-meet-player-session.json",
+    "combined_meeting_command": "pwsh -NoProfile -File scripts/run_campaign_return_trial.ps1 -CombinedReturn -MeetPlayer"
 }

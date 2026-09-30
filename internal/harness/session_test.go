@@ -18,7 +18,7 @@ func TestSessionRecoveryExpectationValidation(t *testing.T) {
 	s.ReadinessBarrier = true
 	f := &ObserverRespawn{AfterFrames: 1, TimeoutFrames: 6, RecoveryFrames: 3, PolicyOnly: true}
 	s.Phases[0].ObserverRespawn = f
-	for _, expectation := range []string{"", "contact", "return_active", "death_point_arrival"} {
+	for _, expectation := range []string{"", "contact", "return_active", "death_point_arrival", "last_player_arrival"} {
 		f.RecoveryExpectation = expectation
 		if err := s.Validate(); err != nil {
 			t.Fatalf("%s: %v", expectation, err)

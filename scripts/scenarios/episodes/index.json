@@ -100,6 +100,8 @@
     "base1-early-ramp-runup-loss.json",
     "base2-return-slope-stop.json",
     "base3-stair-opposite-momentum.json",
-    "base2-reconnect-death-return.json"
+    "base2-reconnect-death-return.json",
+    "base2-visible-player-spawn-route.json",
+    "base2-reconnect-handshake-stall.json"
   ]
 }
