@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "name": "base2-player-personal-space",
+  "map": "base2",
+  "map_entry": "base1",
+  "start_frame": 40,
+  "game_frames": 350,
+  "actor_origin": [400.125, -2401.75, -81.875],
+  "bot_origin": [424.375, -2369.625, -81.875],
+  "bot_health": 22,
+  "expect": {},
+  "steps": [
+    {"id": "restore-space", "action": "wait", "frames": 100},
+    {"id": "walk-through-passage", "action": "walk", "target": [400.125, -2300, -71.875], "timeout_frames": 130},
+    {"id": "resume-cover", "action": "wait", "frames": 60}
+  ]
+}

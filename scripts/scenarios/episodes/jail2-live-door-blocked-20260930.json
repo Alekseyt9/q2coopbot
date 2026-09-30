@@ -3,23 +3,29 @@
   "title": "Застревание jail2: маршрут есть, движение блокирует дверь",
   "map": "jail2",
   "kind": "dynamic_door",
-  "status": "open",
+  "status": "verified_fixture_parallel_2x",
   "reproduction": "observation_only",
-  "scenario": null,
+  "scenario": "scripts/scenarios/jail2-open-door-follow.json",
   "observed_failure": "Игрок сообщил о новом застревании. Кадр1478: self[126.625,-300.5,8.125], teammate[-32,27.125,24.125], health68; follow_teammate, navigation=ready; move_source=none, limit_reason и move_limit_reason=dynamic_door_blocked.",
   "expected_result": "Корректно распознать состояние двери и способ открытия, дождаться безопасного прохода либо выбрать достижимый обход; возобновить сопровождение без бесконечного стояния.",
-  "diagnosis": "В сохранённом кадре AAS-маршрут найден, но динамическая проверка двери запрещает движение. Нужно определить brush-модель, её фактическое состояние, требуемую кнопку/триггер и геометрию короткого подхода. Причина блокировки пока не установлена.",
+  "diagnosis": "Створки49/50 открыты, смещения+98/-98. Общий AABB отвергал безопасный короткий шаг; далее отъехавшая створка пересекала старые AAS walking reaches. Добавлена точная проверка translated brush hull и поддержанный ограниченный обход к более поздней пешей точке.",
   "evidence": "workspace/artifacts/live-stuck-20260930-204022/bot-tail.jsonl",
   "additional_evidence": [
     "workspace/artifacts/live-stuck-20260930-204022/last-world.json"
   ],
   "missing_setup": [
-    "Native воспроизведение двери с состояниями movers из трассы",
-    "Проверка активации/ожидания двери и безопасного восстановления движения"
+    "Подключить специализированный runtime и анализатор к общей команде run_episode_regressions.ps1"
   ],
   "acceptance": {
     "no_unbounded_stall": true,
     "safe_door_passage": true,
     "follow_resumes": true
-  }
+  },
+  "verification_report": "workspace/artifacts/jail2-door-r6/report.json",
+  "runtime_preparation": "scripts/prepare_jail2_door_runtime.ps1",
+  "verification_checker": "scripts/check_jail2_door.ps1",
+  "remaining_validation": [
+    "Человеческая сессия, другие неплоские/движущиеся дверные проходы"
+  ],
+  "resolution": "2/2 native при2x параллельно:24 кадра проверенного обхода, итоговая дистанция121.15, cover_teammate, health68. Дополнительно4/4 регрессий уступания и подбора Super Shotgun/Shells. Изменения не загружены в живого бота."
 }

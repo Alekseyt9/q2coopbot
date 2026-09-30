@@ -241,6 +241,12 @@ func (m *MapInfo) DoorMoveBlockStep(movers []Mover, origin Vec3, dx, dy, step fl
 			continue
 		}
 		if sweptBoxAABB(origin, next, min, max, playerMin, playerMax) {
+			// Nonrectangular sliding doors can leave walkable space inside
+			// their bounds. Confirm against the observed translated brushes;
+			// missing brush data remains conservative.
+			if visible && m.MoverHullClear(mover, origin, next) {
+				continue
+			}
 			if visible && m.doorStepClear(movers, origin, next, max[2]) {
 				continue
 			}

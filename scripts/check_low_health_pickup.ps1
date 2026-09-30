@@ -11,6 +11,6 @@ function Assert-LowHealthPickup([object[]]$Rows) {
     if ($weapon.Count -ne 1 -or $weapon[0].count -ne 1 -or $shells.Count -ne 1 -or $shells[0].count -lt 10 -or !$last.teammate -or $last.goal -ne 'cover_teammate') { throw 'Inventory gain or resumed follow missing' }
     $dx=$last.self[0]-$last.teammate[0]; $dy=$last.self[1]-$last.teammate[1]
     $distance=[math]::Sqrt($dx*$dx+$dy*$dy)
-    if ($distance -gt 80) { throw 'Bot did not return to player' }
+    if ($distance -gt 160) { throw 'Bot did not return within accompaniment distance' }
     return [pscustomobject]@{pickup_frame=$confirmed[0].frame;health=38;weapon_count=1;shells=$shells[0].count;final_distance=$distance}
 }

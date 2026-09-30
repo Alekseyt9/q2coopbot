@@ -14,10 +14,7 @@
     "workspace/artifacts/live-respawn-inventory-20260930-194911/bot-full.jsonl",
     "workspace/artifacts/live-respawn-inventory-20260930-194911/server.log"
   ],
-  "missing_setup": [
-    "Повтор в человеческой сессии после явного запроса на обновление бота",
-    "Проверка естественных выходов карты и переходов внутри других игровых блоков"
-  ],
+  "missing_setup": [],
   "source_references": [
     "internal/bot/client.go:173",
     "internal/bot/client.go:338",
@@ -25,5 +22,9 @@
   ],
   "resolution": "Разделены stufftext reconnect (новый signon на прежнем UDP-канале без disconnect) и svc_reconnect (полный reconnect при перезапуске сервера). Socket/qport/seq/connection сохраняются при обычном переходе, клиентские данные карты сбрасываются. Харнес поддерживает entry=gamemap для настоящего coop-перехода с сохранением pers.",
   "verification_report": "workspace/artifacts/coop-map-inventory-r3/inventory-report.json",
-  "verification_scope": "2/2 native сессии2x параллельно: реальный подбор Super Shotgun и20 Shells на base2, gamemap base1, одно соединение, смерть, обычный policy-респавн,70/71 свежих наблюдений оружия до смерти и284/282 после респавна. Отдельная регрессия forced base1/base2/base3 —2/2. Текущая человеческая сессия не обновлялась."
+  "verification_scope": "2/2 native сессии2x параллельно: реальный подбор Super Shotgun и20 Shells на base2, gamemap base1, одно соединение, смерть, обычный policy-респавн,70/71 свежих наблюдений оружия до смерти и284/282 после респавна. Отдельная регрессия forced base1/base2/base3 —2/2. Текущая человеческая сессия не обновлялась.",
+  "remaining_validation": [
+    "Повтор в человеческой сессии после явного запроса на обновление бота",
+    "Проверка естественных выходов карты и переходов внутри других игровых блоков"
+  ]
 }

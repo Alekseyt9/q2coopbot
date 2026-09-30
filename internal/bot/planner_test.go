@@ -31,7 +31,7 @@ func TestFollowClosesDistanceBeforeCover(t *testing.T) {
 	for i, tc := range []struct {
 		x    float64
 		goal string
-	}{{10, "follow_teammate"}, {30, "cover_teammate"}} {
+	}{{-40, "follow_teammate"}, {-28, "follow_teammate"}, {-27, "cover_teammate"}, {30, "cover_teammate"}} {
 		p.update(quake.Snapshot{Map: "test", Frame: i + 1, Self: quake.Vec3{tc.x, 0, 0}, Teammate: &goal, Health: 100}, "")
 		if p.World.Goal != tc.goal {
 			t.Fatalf("distance=%g: got %s want %s", 100-tc.x, p.World.Goal, tc.goal)
@@ -61,9 +61,9 @@ func TestNewFollowGoalDoesNotInheritStalledHealthDetour(t *testing.T) {
 func TestPlannerKeepsWorldRouteWhileAimingAndFiring(t *testing.T) {
 	n := &quake.Navigator{Areas: []quake.Area{{},
 		{Min: quake.Vec3{-10, -10, -10}, Max: quake.Vec3{10, 10, 10}},
-		{Min: quake.Vec3{90, -10, -10}, Max: quake.Vec3{110, 10, 10}},
-	}, Edges: [][]quake.Edge{{}, {{To: 2, Start: quake.Vec3{32, 0, 0}, End: quake.Vec3{92, 0, 0}, Kind: 2, Cost: 10}}, nil}}
-	goal := quake.Vec3{100, 0, 0}
+		{Min: quake.Vec3{190, -10, -10}, Max: quake.Vec3{210, 10, 10}},
+	}, Edges: [][]quake.Edge{{}, {{To: 2, Start: quake.Vec3{32, 0, 0}, End: quake.Vec3{192, 0, 0}, Kind: 2, Cost: 10}}, nil}}
+	goal := quake.Vec3{200, 0, 0}
 	clear := true
 	p := &Planner{Nav: n, World: World{Map: "test"}}
 	s := quake.Snapshot{Map: "test", Frame: 1, Self: quake.Vec3{0, 0, 0}, Teammate: &goal,
@@ -87,13 +87,13 @@ func TestPlannerKeepsWorldRouteWhileAimingAndFiring(t *testing.T) {
 func TestPlannerAvoidsFriendlyFireWhileFollowing(t *testing.T) {
 	n := &quake.Navigator{Areas: []quake.Area{{},
 		{Min: quake.Vec3{-10, -10, -10}, Max: quake.Vec3{10, 10, 10}},
-		{Min: quake.Vec3{90, -10, -10}, Max: quake.Vec3{110, 10, 10}},
-	}, Edges: [][]quake.Edge{{}, {{To: 2, Start: quake.Vec3{32, 0, 0}, End: quake.Vec3{92, 0, 0}, Kind: 2, Cost: 10}}, nil}}
-	goal := quake.Vec3{100, 0, 0}
+		{Min: quake.Vec3{190, -10, -10}, Max: quake.Vec3{210, 10, 10}},
+	}, Edges: [][]quake.Edge{{}, {{To: 2, Start: quake.Vec3{32, 0, 0}, End: quake.Vec3{192, 0, 0}, Kind: 2, Cost: 10}}, nil}}
+	goal := quake.Vec3{200, 0, 0}
 	clear := true
 	p := &Planner{Nav: n, World: World{Map: "test"}}
 	s := quake.Snapshot{Map: "test", Frame: 1, Self: quake.Vec3{0, 0, 0}, Teammate: &goal,
-		Health: 100, Ammo: 10, Weapon: "Blaster", Enemies: []quake.Object{{Origin: quake.Vec3{200, 0, 0}, ClearShot: &clear}}}
+		Health: 100, Ammo: 10, Weapon: "Blaster", Enemies: []quake.Object{{Origin: quake.Vec3{300, 0, 0}, ClearShot: &clear}}}
 	p.update(s, "")
 	cmd := p.command(quake.UserCmd{})
 	if cmd.Buttons != 0 || cmd.Forward <= 0 || p.World.Command.MoveSource != "route" || p.World.Command.LimitReason != "friendly_line_of_fire" {
@@ -295,9 +295,9 @@ func TestTeammateBlocksShot(t *testing.T) {
 func TestPlannerStopsOnStaleObservationAndRecovers(t *testing.T) {
 	n := &quake.Navigator{Areas: []quake.Area{{},
 		{Min: quake.Vec3{-10, -10, -10}, Max: quake.Vec3{10, 10, 10}},
-		{Min: quake.Vec3{90, -10, -10}, Max: quake.Vec3{110, 10, 10}},
-	}, Edges: [][]quake.Edge{{}, {{To: 2, Start: quake.Vec3{32, 0, 0}, End: quake.Vec3{92, 0, 0}, Kind: 2, Cost: 10}}, nil}}
-	goal, clear := quake.Vec3{100, 0, 0}, true
+		{Min: quake.Vec3{190, -10, -10}, Max: quake.Vec3{210, 10, 10}},
+	}, Edges: [][]quake.Edge{{}, {{To: 2, Start: quake.Vec3{32, 0, 0}, End: quake.Vec3{192, 0, 0}, Kind: 2, Cost: 10}}, nil}}
+	goal, clear := quake.Vec3{200, 0, 0}, true
 	p := &Planner{Nav: n, World: World{Map: "test"}}
 	s := quake.Snapshot{Map: "test", Frame: 1, Self: quake.Vec3{0, 0, 0}, Teammate: &goal,
 		Health: 100, Ammo: 10, Weapon: "Blaster", Enemies: []quake.Object{{Origin: quake.Vec3{100, 100, 0}, ClearShot: &clear}}}

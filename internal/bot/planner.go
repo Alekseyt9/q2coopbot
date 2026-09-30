@@ -429,7 +429,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	}
 	if searching { /* the last known point is a search target, not a visible teammate */
 	} else if p.World.Goal == "recover_health" || standalonePickup { /* keep resource objective */
-	} else if quake.Horizontal(s.Self, goal) < 80 && math.Abs(s.Self[2]-goal[2]) < 40 && !p.bridgeNeedsApproach(goal) {
+	} else if quake.Horizontal(s.Self, goal) < followStandOff && math.Abs(s.Self[2]-goal[2]) < 40 && !p.bridgeNeedsApproach(goal) {
 		p.World.Goal = "cover_teammate"
 	} else {
 		p.World.Goal = "follow_teammate"
@@ -717,6 +717,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 			}
 		}
 	}
+	if yield, ok := p.playerYieldCommand(s, cmd); ok {
+		return yield
+	}
 	profile := combatSpacing(s)
 	p.World.Command.CombatSpacing = profile
 	if (p.World.Goal == "cover_teammate" || p.World.Goal == "follow_teammate") && profile != nil && profile.Distance < profile.Minimum+32 && s.Teammate != nil && quake.Distance(s.Self, *s.Teammate) <= combatLeash(profile) && (tactic == "" || tactic == "attack" || tactic == "retreat") {
@@ -906,6 +909,14 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		}
 		if hazard != "" {
 			cmd.Up = 0
+			if hazard == "dynamic_door_blocked" {
+				if bypass, ok := p.doorRouteBypass(s); ok {
+					p.World.Command.MoveSource = "door_route_bypass"
+					p.World.Command.Skill = "door_route_bypass"
+					p.World.Command.MoveLimitReason = "verified_door_route_bypass"
+					return worldMove(cmd, s, bypass[0]-s.Self[0], bypass[1]-s.Self[1], 80, p.World.Command.AimSource == "enemy")
+				}
+			}
 			p.World.Command.MoveSource = "none"
 			p.World.Command.MoveLimitReason = hazard
 			if p.World.Command.LimitReason == "" {

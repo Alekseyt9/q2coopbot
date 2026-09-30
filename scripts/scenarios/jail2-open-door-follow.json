@@ -1,0 +1,15 @@
+{
+ "version":1,
+ "name":"jail2-open-door-follow",
+ "map":"jail2",
+ "map_entry":"jail1",
+ "start_frame":40,
+ "bot_release_frame":100,
+ "game_frames":500,
+ "actor_origin":[-32,27.125,14.125],
+ "bot_origin":[126.625,-300.5,-1.875],
+ "bot_health":68,
+ "expect":{},
+ "steps":[{"id":"open-and-follow","action":"wait","frames":400}]
+}
+

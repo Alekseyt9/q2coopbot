@@ -13,10 +13,11 @@
   "additional_evidence": [
     "workspace/artifacts/live-shotgun-missed-20260930-195217/last-world.json"
   ],
-  "missing_setup": [
-    "Повтор живой игровой сессии после явного запроса на обновление бота"
-  ],
+  "missing_setup": [],
   "verification_report": "workspace/artifacts/low-health-supershotgun-r2/pickup-report.json",
   "resolution": "Без врагов здоровье1–44 разрешает видимые полезные предметы на пешем маршруте<=256. recover_health сохраняет приоритет; поиск неизвестных ресурсов из памяти при низком здоровье запрещён. При угрозе подбор прерывается.",
-  "verification_scope": "Исходные координаты, native Super Shotgun/патроны, здоровье38 без invulnerability, без монстров и аптечек. 2/2 при2x параллельно: подтверждениеSS на кадре51,Shells20, возврат к Player38.87, здоровье38. Живая игра пока использует прежний бинарник."
+  "verification_scope": "Исходные координаты, native Super Shotgun/патроны, здоровье38 без invulnerability, без монстров и аптечек. 2/2 при2x параллельно: подтверждениеSS на кадре51,Shells20, возврат к Player38.87, здоровье38. Живая игра пока использует прежний бинарник.",
+  "remaining_validation": [
+    "Повтор живой игровой сессии после явного запроса на обновление бота"
+  ]
 }
