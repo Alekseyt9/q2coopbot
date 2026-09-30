@@ -4,7 +4,7 @@
   "map": "base2",
   "map_entry": "base1",
   "start_frame": 40,
-  "game_frames": 400,
+  "game_frames": 600,
   "bot_release_frame": 140,
   "bot_origin": [300, -800, 24],
   "bot_release_origin": [746.5, 2277, -231.875],

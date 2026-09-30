@@ -1,0 +1,8 @@
+{
+"classname" "weapon_machinegun"
+"origin" "804 2232 -230"
+}
+{
+"classname" "ammo_bullets"
+"origin" "760 2232 -230"
+}

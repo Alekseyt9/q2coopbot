@@ -22,5 +22,8 @@
     "save_observed_player": true,
     "no_extra_death_after_respawn": true
   },
-  "limitations": ["Две независимые сессии при 2x со сценарным актёром. Без боя, человеческой сессии и отдельной проверки при 1x."]
+  "limitations": [
+    "Две независимые сессии при 2x со сценарным актёром. Без боя, человеческой сессии и отдельной проверки при 1x."
+  ],
+  "post_meeting_map_verification": "workspace/artifacts/meeting-map-reset-r1/report.json"
 }

@@ -372,6 +372,8 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	p.hasGoal = false
 	searching := false
 	regrouping := false
+	standalonePickup := false
+	goal := quake.Vec3{}
 	if s.Teammate == nil {
 		searchGoal, ok := p.respawnRegroupGoal(s)
 		searchKind := "regroup_after_respawn"
@@ -382,12 +384,20 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 		p.World.SearchAttempt = p.searchAttempt
 		if !ok {
-			p.routeKnown = false
-			return
+			searchGoal, ok = p.pickupGoal(s)
+			if !ok {
+				p.routeKnown = false
+				return
+			}
+			standalonePickup = true
+			searchKind = "collect_item"
 		}
-		searching = true
+		searching = !standalonePickup
+		goal = searchGoal
 		p.World.Goal = searchKind
-		p.World.SearchTarget = &searchGoal
+		if searching {
+			p.World.SearchTarget = &searchGoal
+		}
 		if previousGoal != searchKind {
 			p.routeKnown = false
 		}
@@ -407,10 +417,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			p.routeKnown = false
 		}
 	}
-	goal := quake.Vec3{}
-	if searching {
-		goal = *p.World.SearchTarget
-	} else {
+	if s.Teammate != nil {
 		goal = *s.Teammate
 	}
 	p.hasGoal = true
@@ -421,13 +428,13 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 	}
 	if searching { /* the last known point is a search target, not a visible teammate */
-	} else if p.World.Goal == "recover_health" { /* keep health objective */
+	} else if p.World.Goal == "recover_health" || standalonePickup { /* keep resource objective */
 	} else if quake.Horizontal(s.Self, goal) < 80 && math.Abs(s.Self[2]-goal[2]) < 40 && !p.bridgeNeedsApproach(goal) {
 		p.World.Goal = "cover_teammate"
 	} else {
 		p.World.Goal = "follow_teammate"
 	}
-	if !searching && p.World.Strategy != nil {
+	if !searching && !standalonePickup && p.World.Strategy != nil {
 		switch p.World.Strategy.Choice {
 		case "recover":
 			if health, ok := p.healthGoal(s); ok {
@@ -447,14 +454,14 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			}
 		}
 	}
-	if !searching && p.World.Tactic != nil && p.World.Tactic.Action == "recover" {
+	if !searching && !standalonePickup && p.World.Tactic != nil && p.World.Tactic.Action == "recover" {
 		if health, ok := p.healthGoal(s); ok {
 			goal = health
 			p.World.Goal = "recover_health"
 		}
 	}
 	goal = p.budgetHealthGoal(s, goal)
-	if item, ok := p.pickupGoal(s); ok && !regrouping {
+	if item, ok := p.pickupGoal(s); ok {
 		goal = item
 		p.World.Goal = "collect_item"
 	}

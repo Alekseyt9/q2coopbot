@@ -36,6 +36,7 @@ type PickupAttempt struct {
 }
 type pickupTask struct {
 	attempt           PickupAttempt
+	duringReturn      bool
 	last              quake.Vec3
 	progress, missing int
 }
@@ -95,15 +96,18 @@ func (p *Planner) finishPickup(s quake.Snapshot, state string) {
 }
 func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	p.World.ResourceYield = nil
-	allowed := !p.testSetupHold && s.Health >= 45 && s.Teammate != nil && quake.Horizontal(s.Self, *s.Teammate) < 384 &&
-		(p.World.Goal == "follow_teammate" || p.World.Goal == "cover_teammate") && p.elevator == nil && p.button == nil && p.jump == nil
+	allowed := !p.testSetupHold && s.Health >= 45 && p.World.Goal != "recover_health" &&
+		p.elevator == nil && p.button == nil && p.jump == nil
+	returning := !p.testSetupHold && s.Health >= 45 && s.Teammate == nil && p.respawnRegroup != nil &&
+		p.World.Goal == "regroup_after_respawn" && p.elevator == nil && p.button == nil && p.jump == nil
+	allowed = allowed || returning
 	if p.pickup != nil {
 		t := p.pickup
 		if s.Health > 0 && quake.Distance(s.Self, t.attempt.Target) <= 64 && s.InventoryKnown && s.InventoryAgeFrames <= 20 && pickupCount(s, pickupSpecs[t.attempt.Class]) > t.attempt.Before {
 			p.finishPickup(s, "confirmed")
 			return quake.Vec3{}, false
 		}
-		if !allowed || !s.InventoryKnown || s.InventoryAgeFrames > 20 || s.Frame < t.attempt.Started {
+		if !allowed || (t.duringReturn && !returning) || !s.InventoryKnown || s.InventoryAgeFrames > 20 || s.Frame < t.attempt.Started {
 			p.finishPickup(s, "interrupted")
 			return quake.Vec3{}, false
 		}
@@ -149,17 +153,19 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	best := math.Inf(1)
 	var selected *pickupTask
 	candidates := append([]quake.Object(nil), s.Pickups...)
-	candidates = append(candidates, p.rememberedCandidates(s)...)
+	if !returning {
+		candidates = append(candidates, p.rememberedCandidates(s)...)
+	}
 	for _, item := range candidates {
 		if !usefulPickup(s, item.Class) {
 			continue
 		}
 		at := healthStand(item.Origin)
-		if s.Frame < p.pickupBanned[at] || quake.Distance(s.Self, at) > 256 || quake.Distance(*s.Teammate, at) > 384 {
+		if s.Frame < p.pickupBanned[at] || quake.Distance(s.Self, at) > 256 {
 			continue
 		}
 		cost, ok := p.resourceRoute(s.Self, at)
-		if !ok {
+		if !ok || (returning && !returnPickupWithinBudget(s.Self, at, p.respawnRegroup.target, cost)) {
 			continue
 		}
 		if p.yieldPickup(s, item.ID, item.Class, at) {
@@ -171,7 +177,7 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 			continue
 		}
 		best = score
-		selected = &pickupTask{attempt: PickupAttempt{Entity: item.ID, Class: item.Class, Name: sp.name, Target: at, Started: s.Frame, State: "approach", Before: pickupCount(s, sp)}, last: s.Self, progress: s.Frame}
+		selected = &pickupTask{attempt: PickupAttempt{Entity: item.ID, Class: item.Class, Name: sp.name, Target: at, Started: s.Frame, State: "approach", Before: pickupCount(s, sp)}, duringReturn: returning, last: s.Self, progress: s.Frame}
 	}
 	if selected == nil {
 		return quake.Vec3{}, false
@@ -184,4 +190,10 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	p.World.Pickup = &selected.attempt
 	p.routeKnown = false
 	return selected.attempt.Target, true
+}
+
+// Only a short, supported walking diversion is allowed while returning. The
+// parent rendezvous remains intact; unseen remembered supplies cannot divert it.
+func returnPickupWithinBudget(from, item, target quake.Vec3, cost float64) bool {
+	return cost <= 96 && cost+quake.Distance(item, target)-quake.Distance(from, target) <= 48
 }

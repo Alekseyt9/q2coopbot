@@ -1,0 +1,350 @@
+{
+  "transition_timeout_ms": 10000,
+  "readiness_barrier": true,
+  "phases": [
+    {
+      "scenario": {
+        "steps": [
+          {
+            "frames": 110,
+            "id": "stay-hidden",
+            "action": "wait"
+          }
+        ],
+        "game_frames": 1000,
+        "version": 1,
+        "actor_origin": [
+          -1883.375,
+          1816.75,
+          120.125
+        ],
+        "name": "campaign-base1",
+        "map": "base1",
+        "expect": {},
+        "bot_origin": [
+          960,
+          408,
+          -167.875
+        ],
+        "start_frame": 40
+      },
+      "observer_respawn_cycle": {
+        "recovery_expectation": "return_active",
+        "timeout_frames": 40,
+        "after_frames": 40,
+        "policy_only": true,
+        "recovery_frames": 20
+      },
+      "id": "base1-active"
+    },
+    {
+      "scenario": {
+        "steps": [
+          {
+            "frames": 110,
+            "id": "stay-hidden",
+            "action": "wait"
+          }
+        ],
+        "game_frames": 1000,
+        "version": 1,
+        "actor_origin": [
+          300,
+          -800,
+          24
+        ],
+        "map_entry": "base1",
+        "name": "campaign-base2",
+        "map": "base2",
+        "expect": {},
+        "bot_origin": [
+          194,
+          1940,
+          -167.875
+        ],
+        "start_frame": 40
+      },
+      "observer_respawn_cycle": {
+        "recovery_expectation": "return_active",
+        "timeout_frames": 40,
+        "after_frames": 40,
+        "policy_only": true,
+        "recovery_frames": 20
+      },
+      "id": "base2-active"
+    },
+    {
+      "scenario": {
+        "steps": [
+          {
+            "frames": 60,
+            "id": "stay-hidden",
+            "action": "wait"
+          }
+        ],
+        "game_frames": 800,
+        "version": 1,
+        "actor_origin": [
+          300,
+          -800,
+          24
+        ],
+        "map_entry": "base1",
+        "name": "reconnect-death-after",
+        "map": "base2",
+        "expect": {},
+        "bot_origin": [
+          828,
+          2232,
+          -231.875
+        ],
+        "start_frame": 40
+      },
+      "id": "base2-reconnect-active",
+      "entry": "reconnect"
+    },
+    {
+      "scenario": {
+        "steps": [
+          {
+            "frames": 110,
+            "id": "stay-hidden",
+            "action": "wait"
+          }
+        ],
+        "game_frames": 800,
+        "version": 1,
+        "actor_origin": [
+          300,
+          -800,
+          24
+        ],
+        "map_entry": "base1",
+        "name": "same-map-death-2",
+        "map": "base2",
+        "expect": {},
+        "bot_origin": [
+          -198,
+          1856,
+          -167.875
+        ],
+        "start_frame": 40
+      },
+      "observer_respawn_cycle": {
+        "recovery_expectation": "return_active",
+        "timeout_frames": 40,
+        "after_frames": 40,
+        "policy_only": true,
+        "recovery_frames": 20
+      },
+      "id": "base2-reload-active"
+    },
+    {
+      "scenario": {
+        "steps": [
+          {
+            "frames": 110,
+            "id": "stay-hidden",
+            "action": "wait"
+          }
+        ],
+        "game_frames": 1000,
+        "version": 1,
+        "actor_origin": [
+          -284,
+          -1244,
+          -279.875
+        ],
+        "map_entry": "base2a",
+        "name": "campaign-base3",
+        "map": "base3",
+        "expect": {},
+        "bot_origin": [
+          -148.375,
+          -802.875,
+          -231.875
+        ],
+        "start_frame": 40
+      },
+      "observer_respawn_cycle": {
+        "recovery_expectation": "return_active",
+        "timeout_frames": 40,
+        "after_frames": 40,
+        "policy_only": true,
+        "recovery_frames": 20
+      },
+      "id": "base3-active"
+    },
+    {
+      "scenario": {
+        "steps": [
+          {
+            "frames": 110,
+            "id": "stay-hidden",
+            "action": "wait"
+          }
+        ],
+        "game_frames": 800,
+        "version": 1,
+        "actor_origin": [
+          300,
+          -800,
+          24
+        ],
+        "map_entry": "base1",
+        "name": "reconnect-death-before",
+        "map": "base2",
+        "expect": {},
+        "bot_origin": [
+          194,
+          1940,
+          -167.875
+        ],
+        "start_frame": 40
+      },
+      "observer_respawn_cycle": {
+        "recovery_expectation": "return_active",
+        "timeout_frames": 40,
+        "after_frames": 40,
+        "policy_only": true,
+        "recovery_frames": 20
+      },
+      "id": "base2-return-after-base3"
+    },
+    {
+      "scenario": {
+        "steps": [
+          {
+            "frames": 12,
+            "id": "return-without-player",
+            "action": "wait"
+          },
+          {
+            "target": [
+              600,
+              2520,
+              -231.875
+            ],
+            "timeout_frames": 40,
+            "id": "meet-returning-bot",
+            "action": "place"
+          },
+          {
+            "frames": 20,
+            "id": "allow-contact",
+            "action": "wait"
+          },
+          {
+            "target": [
+              480,
+              2520,
+              -231.875
+            ],
+            "timeout_frames": 100,
+            "id": "lead-away-from-death",
+            "action": "walk"
+          },
+          {
+            "frames": 40,
+            "id": "verify-follow",
+            "action": "wait"
+          },
+          {
+            "target": [
+              300,
+              -800,
+              24
+            ],
+            "timeout_frames": 40,
+            "id": "hide-after-meeting",
+            "action": "place"
+          },
+          {
+            "frames": 220,
+            "id": "wait-hidden-return",
+            "action": "wait"
+          },
+          {
+            "target": [
+              464.125,
+              2520,
+              -231.875
+            ],
+            "timeout_frames": 40,
+            "id": "meet-after-respawn",
+            "action": "place"
+          },
+          {
+            "frames": 60,
+            "id": "verify-rejoined-player",
+            "action": "wait"
+          }
+        ],
+        "game_frames": 800,
+        "version": 1,
+        "actor_origin": [
+          300,
+          -800,
+          24
+        ],
+        "map_entry": "base1",
+        "name": "reconnect-meet-player",
+        "map": "base2",
+        "expect": {},
+        "bot_origin": [
+          828,
+          2232,
+          -231.875
+        ],
+        "start_frame": 40
+      },
+      "id": "base2-reconnect-meeting",
+      "entry": "reconnect",
+      "observer_respawn_cycle": {
+        "recovery_expectation": "last_player_arrival",
+        "timeout_frames": 40,
+        "after_frames": 140,
+        "policy_only": true,
+        "recovery_frames": 100
+      }
+    },
+    {
+      "scenario": {
+        "steps": [
+          {
+            "frames": 800,
+            "id": "stay-hidden",
+            "action": "wait"
+          }
+        ],
+        "game_frames": 1000,
+        "version": 1,
+        "actor_origin": [
+          -284,
+          -1244,
+          -279.875
+        ],
+        "map_entry": "base2a",
+        "name": "campaign-base3",
+        "map": "base3",
+        "expect": {},
+        "bot_origin": [
+          -148.375,
+          -802.875,
+          -231.875
+        ],
+        "start_frame": 40
+      },
+      "observer_respawn_cycle": {
+        "recovery_expectation": "death_point_arrival",
+        "timeout_frames": 40,
+        "after_frames": 40,
+        "policy_only": true,
+        "recovery_frames": 600
+      },
+      "id": "base3-after-player-meeting"
+    }
+  ],
+  "name": "combined-meeting-map-change",
+  "version": 1
+}

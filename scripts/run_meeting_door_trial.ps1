@@ -27,7 +27,8 @@ $results=@(foreach($run in $suite.results){
         if(!$run.accepted -or !$suite.provenance_valid){throw 'Native suite or provenance rejected'}
         $trace=Join-Path $run.directory ('scale-2-port-'+$run.port+'-trace.jsonl')
         $rows=@(Get-Content $trace|ForEach-Object {$_|ConvertFrom-Json})
-        $proof=Test-MeetingDoor -Rows $rows
+        $scenario=Get-Content (Join-Path $run.directory 'scenario.json') -Raw|ConvertFrom-Json
+        $proof=Test-MeetingDoor -Rows $rows -ReleaseFrame $scenario.bot_release_frame
         @{accepted=$true;directory=$run.directory;port=$run.port;proof=$proof}
     }catch{@{accepted=$false;directory=$run.directory;port=$run.port;reason=$_.Exception.Message}}
 })

@@ -1,0 +1,26 @@
+{
+  "steps": [
+    {
+      "frames": 320,
+      "action": "wait",
+      "id": "stay-hidden"
+    }
+  ],
+  "bot_origin": [
+    828,
+    2232,
+    -231.875
+  ],
+  "map_entry": "base1",
+  "actor_origin": [
+    300,
+    -800,
+    24
+  ],
+  "expect": {},
+  "start_frame": 40,
+  "name": "base2-unaccompanied-supplies",
+  "map": "base2",
+  "version": 1,
+  "game_frames": 450
+}
