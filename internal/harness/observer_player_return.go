@@ -32,7 +32,7 @@ func checkLastPlayerReturn(rows []Trace, death, respawn, recovery int) string {
 			}
 			returns++
 		}
-		if returns >= 3 && row.Self != nil && row.Health != nil && *row.Health > 0 && quake.Horizontal(*row.Self, *player) <= 64 && math.Abs((*row.Self)[2]-(*player)[2]) <= 40 {
+		if returns >= 3 && row.Teammate == nil && row.Self != nil && row.Health != nil && *row.Health > 0 && quake.Horizontal(*row.Self, *player) <= 64 && math.Abs((*row.Self)[2]-(*player)[2]) <= 40 {
 			arrived = true
 		}
 	}

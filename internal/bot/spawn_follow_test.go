@@ -51,34 +51,19 @@ func TestBase2SecondSpawnReturnsToRememberedPlayer(t *testing.T) {
 	player := quake.Vec3{464.125, 2520, -231.875}
 	s := quake.Snapshot{Map: "base2", Frame: 355, Health: 100, OnGround: true, Self: quake.Vec3{856, 2356, -231.875}, LastTeammate: &player, LastTeammateEntity: 2}
 	p := &Planner{Nav: n, World: World{Map: "base2", Geometry: &g, GeometryStatus: "ready"}, respawnRegroup: &respawnRegroup{entity: 2, target: player}}
-	if _, ok := p.regroupEntryRoute(s, player); ok {
+	if _, ok := n.Route(s.Self, player); ok {
 		t.Fatal("original disconnected spawn not reproduced")
+	}
+	s.Movers = []quake.Mover{{ID: 293, Model: 44}, {ID: 290, Model: 41}, {ID: 291, Model: 42}, {ID: 292, Model: 43}}
+	if _, ok := p.regroupEntryRouteStep(s, player, 16); ok {
+		t.Fatal("coarse grid no longer reproduces the missed entry")
 	}
 	p.update(s, "")
 	if p.World.Goal != "regroup_after_respawn" || !p.routeOK {
-		for _, max := range []float64{2, 18, 24, 32, 64} {
-			drop, ok := g.GroundDrop(s.Self, max)
-			t.Logf("support max=%v drop=%v ok=%v", max, drop, ok)
-		}
-		d := quake.Horizontal(s.Self, player)
-		dx, dy := (player[0]-s.Self[0])/d, (player[1]-s.Self[1])/d
-		for at := 0.0; at < d; at += 16 {
-			a := quake.Vec3{s.Self[0] + dx*at, s.Self[1] + dy*at, s.Self[2]}
-			b := quake.Vec3{a[0] + dx*16, a[1] + dy*16, a[2]}
-			if !g.PlayerMoveClear(a, b) || g.GroundMoveHazardStep(n, a, dx, dy, 16) != "" {
-				t.Logf("blocked at %v hull=%v hazard=%v", a, g.PlayerMoveClear(a, b), g.GroundMoveHazardStep(n, a, dx, dy, 16))
-				break
-			}
-		}
 		t.Fatalf("no supported return: %s %s", p.World.Goal, p.World.Navigation)
 	}
-	for _, bad := range []quake.Vec3{{-1000, 2520, -231.875}, {464.125, 2520, -200}, {856, 2200, -231.875}} {
-		if _, ok := p.supportedReturnRoute(s, bad); ok {
-			t.Fatalf("unsafe route accepted: %v", bad)
-		}
-	}
 	s.OnGround = false
-	if _, ok := p.supportedReturnRoute(s, player); ok {
+	if _, ok := p.regroupEntryRoute(s, player); ok {
 		t.Fatal("airborne walk accepted")
 	}
 }

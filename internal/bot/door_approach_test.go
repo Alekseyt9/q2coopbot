@@ -63,3 +63,37 @@ func TestBunk1OpenDoorShortWaypoint(t *testing.T) {
 		})
 	}
 }
+
+// Captured frame 260 from scenario-suite-20260930-175059-185/run-000.
+func TestBase2MeetingDoorApproach(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires local base2 BSP")
+	}
+	g, err := quake.LoadMap(root, "base2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base2.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	self := quake.Vec3{746.5, 2277, -231.875}
+	wp := quake.Vec3{738.9000244140625, 2250, -232}
+	movers := []quake.Mover{{Model: 42, Origin: quake.Vec3{0, -66, 0}}, {Model: 41}, {Model: 43, Origin: quake.Vec3{0, 66, 0}}, {Model: 44}}
+	if _, reason := g.DoorMoveBlockStep(movers, self, wp[0]-self[0], wp[1]-self[1], 40); reason != "dynamic_door_blocked" {
+		t.Fatal("captured full-speed obstruction not reproduced")
+	}
+	if _, reason := g.DoorMoveBlockStep(movers, self, wp[0]-self[0], wp[1]-self[1], 16); reason != "" {
+		t.Fatal(reason)
+	}
+	now := time.Now()
+	p := &Planner{Nav: n, hasGoal: true, goalPoint: wp, World: World{Map: "base2", Geometry: &g, GeometryStatus: "ready", Navigation: "ready", Goal: "follow_teammate", Updated: now, Snapshot: quake.Snapshot{Map: "base2", Frame: 260, Self: self, OnGround: true, Health: 100, Movers: movers}, Route: []quake.Waypoint{{Position: wp, Kind: 2}}}}
+	cmd := p.commandAt(quake.UserCmd{}, now)
+	if cmd.Forward == 0 && cmd.Side == 0 {
+		t.Fatalf("stalled approach: cmd=%+v decision=%+v", cmd, p.World.Command)
+	}
+	if cmd.Forward > 80 || cmd.Forward < -80 || cmd.Side > 80 || cmd.Side < -80 || cmd.Up != 0 || p.World.Command.MoveLimitReason != "door_short_approach" {
+		t.Fatalf("unchecked approach: %+v %+v", cmd, p.World.Command)
+	}
+}

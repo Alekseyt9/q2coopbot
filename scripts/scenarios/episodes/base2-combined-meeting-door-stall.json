@@ -1,0 +1,15 @@
+{
+  "id": "base2-combined-meeting-door-stall",
+  "title": "Сопровождение после встречи останавливается перед дверью base2",
+  "map": "base2",
+  "status": "captured_behavior_failure",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/combined-return-meet-player-session.json",
+  "evidence": "workspace/artifacts/scenario-suite-20260930-175059-185/run-000/observer.jsonl",
+  "symptom": "В седьмой фазе игрок виден, цель follow_teammate, navigation=ready; бот стоит на [746.5,2277,-231.875], затем [724,2224.25,-231.875]. Движение блокирует dynamic_door_blocked. В конце игрок [464.125,2520,-231.875], бот не догнал его. Специализированная проверка встречи отклонила прогон: Following bot did not move. Вторая параллельная сессия прошла.",
+  "missing_setup": ["Нужна детерминированная постановка подхода к двери из сохранённого снимка; причина различия двух сессий пока не доказана."],
+  "expected_result": "Бот проходит дверь допустимым контроллером или строит безопасный обход, затем догоняет игрока. Запрет движения через закрытый mover сохраняется.",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_return_trial.ps1 -CombinedReturn -MeetPlayer",
+  "evaluation": "workspace/artifacts/combined-meeting-fine-entry-regression-r1/meeting-evaluation.json",
+  "resolution": "Открыто. Полная регрессия сопровождения не принята; успешный цикл повторной смерти не закрывает этот эпизод."
+}

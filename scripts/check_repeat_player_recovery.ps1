@@ -16,7 +16,7 @@ function Test-RepeatPlayerRecovery($Rows,$OldDeath) {
         if($row.teammate -or !$row.last_teammate -or !$row.goal_point){throw 'Unproven hidden player return'}
         foreach($axis in 0..2){if([math]::Abs($row.goal_point[$axis]-$player[$axis]) -gt .125 -or [math]::Abs($row.last_teammate[$axis]-$player[$axis]) -gt .125){throw 'Repeated death used stale target'}}
     }
-    $arrival=@($alive|Where-Object {$_.frame -ge $return[2].frame -and (Get-MeetingXYDistance $_.self $player) -le 64 -and [math]::Abs($_.self[2]-$player[2]) -le 40}|Select-Object -First 1)
+    $arrival=@($alive|Where-Object {$_.frame -ge $return[2].frame -and !$_.teammate -and (Get-MeetingXYDistance $_.self $player) -le 64 -and [math]::Abs($_.self[2]-$player[2]) -le 40}|Select-Object -First 1)
     if(!$arrival.Count){throw 'Bot did not reach remembered player position'}
     $contact=@($alive|Where-Object teammate|Select-Object -First 1)
     if(!$contact.Count -or $contact[0].frame -le $return[2].frame){throw 'No player reacquisition after hidden recovery'}

@@ -57,6 +57,15 @@ func (p *Planner) regroupEntryRoute(s quake.Snapshot, goal quake.Vec3) ([]quake.
 	if !s.OnGround || g == nil || !g.HasCollision() || p.Nav == nil {
 		return nil, false
 	}
+	if route, ok := p.regroupEntryRouteStep(s, goal, 16); ok {
+		return route, true
+	}
+	// A coarse grid can skip the narrow strip connecting an isolated spawn.
+	return p.regroupEntryRouteStep(s, goal, 4)
+}
+
+func (p *Planner) regroupEntryRouteStep(s quake.Snapshot, goal quake.Vec3, step float64) ([]quake.Waypoint, bool) {
+	g := p.World.Geometry
 	type node struct {
 		at   quake.Vec3
 		path []quake.Waypoint
@@ -65,20 +74,20 @@ func (p *Planner) regroupEntryRoute(s quake.Snapshot, goal quake.Vec3) ([]quake.
 	seen := map[quake.Vec3]bool{s.Self: true}
 	for head := 0; head < len(queue); head++ {
 		current := queue[head]
-		if len(current.path) >= 16 {
+		if float64(len(current.path))*step >= 256 {
 			continue
 		}
 		for _, dir := range []quake.Vec3{{-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}} {
 			at := current.at
-			at[0] += dir[0] * 16
-			at[1] += dir[1] * 16
+			at[0] += dir[0] * step
+			at[1] += dir[1] * step
 			if seen[at] || math.Abs(at[0]-s.Self[0]) > 128 || math.Abs(at[1]-s.Self[1]) > 128 {
 				continue
 			}
-			if !g.PlayerMoveClear(current.at, at) || !regroupGroundSupported(g, current.at, dir) {
+			if !g.PlayerMoveClear(current.at, at) || !regroupGroundSupported(g, current.at, dir, step) {
 				continue
 			}
-			if _, reason := g.DoorMoveBlockStep(s.Movers, current.at, dir[0], dir[1], 16); reason != "" {
+			if _, reason := g.DoorMoveBlockStep(s.Movers, current.at, dir[0], dir[1], step); reason != "" {
 				continue
 			}
 			clear := true
@@ -106,8 +115,8 @@ func (p *Planner) regroupEntryRoute(s quake.Snapshot, goal quake.Vec3) ([]quake.
 // Sample a short walk with at most one ordinary step down, not the two-unit
 // flat-floor tolerance used by crouching passages. Command-time guards still
 // check the observed floor, velocity, movers and hazards on every tick.
-func regroupGroundSupported(g *quake.MapInfo, from, dir quake.Vec3) bool {
-	for d := 0.0; d <= 16; d += 2 {
+func regroupGroundSupported(g *quake.MapInfo, from, dir quake.Vec3, step float64) bool {
+	for d := 0.0; d <= step; d += 2 {
 		at := from
 		at[0] += dir[0] * d
 		at[1] += dir[1] * d

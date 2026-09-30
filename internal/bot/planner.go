@@ -518,9 +518,6 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			// while the spawn area still lacks outgoing AAS links.
 			if !p.routeOK && (regrouping || p.World.Goal == "follow_teammate") {
 				p.route, p.routeOK = p.regroupEntryRoute(s, goal)
-				if !p.routeOK {
-					p.route, p.routeOK = p.supportedReturnRoute(s, goal)
-				}
 			}
 			if !p.routeOK {
 				p.route, p.routeOK = p.localFlatRoute(s, goal)
@@ -890,10 +887,10 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	}
 	if s.OnGround {
 		hazard := p.World.Geometry.DoorMoveHazard(s.Movers, s.Self, dx, dy)
-		// A short waypoint before a turn need not clear a full-speed tick
-		// beyond that turn. Keep both static and dynamic hull checks, and
-		// use half the checked distance as the requested 100 ms movement.
-		if hazard != "" && cmd.Up == 0 && p.World.Command.MoveSource == "route" && math.Hypot(dx, dy) <= 24 && p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, 16) == "" {
+		// A clear short approach need not clear an entire full-speed tick.
+		// Recheck static and dynamic hulls every tick, and request only half
+		// the checked distance in 100 ms, even for a distant waypoint.
+		if hazard != "" && cmd.Up == 0 && p.World.Command.MoveSource == "route" && p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, 16) == "" {
 			if _, shortHazard := p.World.Geometry.DoorMoveBlockStep(s.Movers, s.Self, dx, dy, 16); shortHazard == "" {
 				hazard = ""
 				moveSpeedLimit = math.Min(moveSpeedLimit, 80)

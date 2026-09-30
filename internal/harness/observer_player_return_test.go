@@ -37,7 +37,7 @@ func TestLastPlayerRecoveryRejectsDeathTargetAndMissingArrival(t *testing.T) {
 	if report := checkObserverCycle(f, 50, fixture()); !report.Passed {
 		t.Fatal(report)
 	}
-	for _, name := range []string{"no-player", "death-target", "wrong-memory", "visible-return", "no-arrival", "new-death"} {
+	for _, name := range []string{"no-player", "death-target", "wrong-memory", "visible-return", "visible-arrival", "no-arrival", "new-death"} {
 		t.Run(name, func(t *testing.T) {
 			r := fixture()
 			switch name {
@@ -55,6 +55,8 @@ func TestLastPlayerRecoveryRejectsDeathTargetAndMissingArrival(t *testing.T) {
 				r[6].Teammate = &player
 			case "no-arrival":
 				r[len(r)-1].Self = &quake.Vec3{800, 200, 24}
+			case "visible-arrival":
+				r[len(r)-1].Teammate = &player
 			case "new-death":
 				hp := int16(0)
 				r[len(r)-1].Health = &hp

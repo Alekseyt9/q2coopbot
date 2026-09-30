@@ -102,6 +102,8 @@
     "base3-stair-opposite-momentum.json",
     "base2-reconnect-death-return.json",
     "base2-visible-player-spawn-route.json",
+    "base2-repeat-death-player-return.json",
+    "base2-combined-meeting-door-stall.json",
     "base2-reconnect-handshake-stall.json"
   ]
 }

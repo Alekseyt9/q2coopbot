@@ -1,0 +1,26 @@
+{
+  "id": "base2-repeat-death-player-return",
+  "title": "После повторной смерти бот застревает на другом кооперативном спавне",
+  "map": "base2",
+  "status": "verified_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/combined-meeting-repeat-death-session.json",
+  "evidence": "workspace/artifacts/scenario-suite-20260930-172819-779/run-000/observer.jsonl",
+  "symptom": "После встречи и повторной смерти бот выбирает правильную последнюю Player [464.125,2520,-231.875], но остаётся на спавне [856,2356,-231.875] с navigation=unreachable. У области спавна нет выхода в граф AAS; сетка локального входа с шагом 16 пропускает узкую полосу связной области. Прямое движение к игроку пересекает стену.",
+  "missing_setup": [],
+  "expected_result": "После обычного респавна бот доходит до последнего наблюдаемого положения игрока, пока тот скрыт; при появлении игрока возобновляет сопровождение. Новая Death заменяет старую, Player соответствует последнему наблюдению.",
+  "verification_command": "pwsh -NoProfile -File scripts/run_campaign_return_trial.ps1 -RepeatDeath",
+  "verification": "workspace/artifacts/combined-meeting-repeat-death-r2/report.json",
+  "fix": "После неудачи локального поиска с шагом 16 повторить его с шагом 4. Прежние пределы 128 по каждой оси и 256 длины пути сохранены, как и проверки полной коллизии, пола, дверей и движущихся объектов.",
+  "acceptance": {
+    "min_hidden_return_frames": 3,
+    "max_target_error": 0.125,
+    "max_hidden_arrival_horizontal_distance": 64,
+    "max_hidden_arrival_vertical_distance": 40,
+    "max_final_player_distance": 128,
+    "replace_old_death_point": true,
+    "save_observed_player": true,
+    "no_extra_death_after_respawn": true
+  },
+  "limitations": ["Две независимые сессии при 2x со сценарным актёром. Без боя, человеческой сессии и отдельной проверки при 1x."]
+}

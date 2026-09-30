@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "base2-meeting-door-approach",
+  "map": "base2",
+  "map_entry": "base1",
+  "start_frame": 40,
+  "game_frames": 400,
+  "bot_release_frame": 140,
+  "bot_origin": [300, -800, 24],
+  "bot_release_origin": [746.5, 2277, -231.875],
+  "bot_health": 100,
+  "actor_origin": [800, 2277, -231.875],
+  "expect": {},
+  "steps": [
+    {"id": "open-door", "action": "walk", "target": [720, 2277, -231.875], "timeout_frames": 100},
+    {"id": "hold-door-open", "action": "wait", "frames": 80},
+    {"id": "player-beyond-door", "action": "place", "target": [600, 2520, -231.875], "timeout_frames": 20},
+    {"id": "allow-contact", "action": "wait", "frames": 30},
+    {"id": "lead-away-from-door", "action": "walk", "target": [480, 2520, -231.875], "timeout_frames": 100},
+    {"id": "verify-follow", "action": "wait", "frames": 100}
+  ]
+}
