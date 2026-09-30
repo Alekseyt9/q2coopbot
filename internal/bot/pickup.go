@@ -96,9 +96,9 @@ func (p *Planner) finishPickup(s quake.Snapshot, state string) {
 }
 func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	p.World.ResourceYield = nil
-	allowed := !p.testSetupHold && s.Health >= 45 && p.World.Goal != "recover_health" &&
+	allowed := !p.testSetupHold && pickupExposureAllowed(s) && p.World.Goal != "recover_health" &&
 		p.elevator == nil && p.button == nil && p.jump == nil
-	returning := !p.testSetupHold && s.Health >= 45 && s.Teammate == nil && p.respawnRegroup != nil &&
+	returning := !p.testSetupHold && pickupExposureAllowed(s) && s.Teammate == nil && p.respawnRegroup != nil &&
 		p.World.Goal == "regroup_after_respawn" && p.elevator == nil && p.button == nil && p.jump == nil
 	allowed = allowed || returning
 	if p.pickup != nil {
@@ -153,7 +153,7 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	best := math.Inf(1)
 	var selected *pickupTask
 	candidates := append([]quake.Object(nil), s.Pickups...)
-	if !returning {
+	if !returning && s.Health >= 45 {
 		candidates = append(candidates, p.rememberedCandidates(s)...)
 	}
 	for _, item := range candidates {
@@ -165,7 +165,7 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 			continue
 		}
 		cost, ok := p.resourceRoute(s.Self, at)
-		if !ok || (returning && !returnPickupWithinBudget(s.Self, at, p.respawnRegroup.target, cost)) {
+		if !ok || (s.Health < 45 && cost > 256) || (returning && !returnPickupWithinBudget(s.Self, at, p.respawnRegroup.target, cost)) {
 			continue
 		}
 		if p.yieldPickup(s, item.ID, item.Class, at) {
@@ -190,6 +190,13 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	p.World.Pickup = &selected.attempt
 	p.routeKnown = false
 	return selected.attempt.Target, true
+}
+
+// Low health prioritizes a reachable kit via recover_health, but is not by
+// itself a reason to ignore a useful weapon on a short, safe walking route.
+// Without a healing objective, keep low-health diversions out of combat.
+func pickupExposureAllowed(s quake.Snapshot) bool {
+	return s.Health > 0 && (s.Health >= 45 || len(s.Enemies) == 0)
 }
 
 // Only a short, supported walking diversion is allowed while returning. The

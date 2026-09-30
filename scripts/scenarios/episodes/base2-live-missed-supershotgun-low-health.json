@@ -1,0 +1,20 @@
+{
+  "id": "base2-live-missed-supershotgun-low-health",
+  "title": "Не подбирает Super Shotgun, оставаясь с бластером",
+  "map": "base2",
+  "kind": "resource_pickup",
+  "status": "open",
+  "reproduction": "observation_only",
+  "scenario": null,
+  "observed_failure": "Игрок сообщил, что бот не берёт дробовик при наличии только бластера. Снимок base2 frame1877: health38, inventory Blaster:1, cover_teammate; виден weapon_supershotgun209 [304,-1888,-80.875], pickup=null.",
+  "expected_result": "Оценить безопасный подбор доступного нового оружия при низком здоровье. Приоритет лечения должен учитывать наличие доступной аптечки и угроз; низкое здоровье само по себе не должно навсегда исключать полезный безопасный подбор.",
+  "diagnosis": "В pickupGoal есть безусловный порог Health>=45; на снимке Health=38, поэтому подбор исключён ещё до оценки маршрута. Безопасность и доступность конкретного пути пока не проверены.",
+  "evidence": "workspace/artifacts/live-shotgun-missed-20260930-195217/bot-full.jsonl",
+  "additional_evidence": [
+    "workspace/artifacts/live-shotgun-missed-20260930-195217/last-world.json"
+  ],
+  "missing_setup": [
+    "Воспроизведение точных координат и угроз из трассы",
+    "Проверка доступности Super Shotgun и сценарий безопасного подбора при Health<45"
+  ]
+}

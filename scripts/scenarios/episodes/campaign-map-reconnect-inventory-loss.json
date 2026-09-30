@@ -1,0 +1,26 @@
+{
+  "id": "campaign-map-reconnect-inventory-loss",
+  "title": "Полный reconnect при смене карты теряет снаряжение для последующего респавна",
+  "map": "base3",
+  "kind": "session_inventory",
+  "status": "open",
+  "reproduction": "observation_only",
+  "scenario": null,
+  "observed_failure": "Игрок сохраняет оружие после смерти, бот теряет. base3 перед смертью frame1749: Shotgun1, Machinegun1, Grenades5, Shells40, Bullets100; после респавна frame1765–1830 только Blaster1. Сервер при переходах пишет повторное GoCoopMate connected, тогда как Player только entered.",
+  "expected_result": "Обычная смена карты должна сохранять соединение и серверное coop-снаряжение бота так же, как у игрового клиента. Настоящее переподключение должно быть отдельным действием.",
+  "diagnosis": "Обработчик серверного reconnect вызывает Client.reconnect(), который отправляет disconnect, открывает новый UDP socket и qport. Native coop-респавн восстанавливает resp.coop_respawn — снаряжение при входе на карту, а не весь набор перед смертью. После полного нового входа база восстановления бота содержит только Blaster. Требуется контрольный native тест без disconnect при map transition.",
+  "evidence": "workspace/artifacts/live-respawn-inventory-20260930-194911/respawn-inventory-comparison.json",
+  "additional_evidence": [
+    "workspace/artifacts/live-respawn-inventory-20260930-194911/bot-full.jsonl",
+    "workspace/artifacts/live-respawn-inventory-20260930-194911/server.log"
+  ],
+  "missing_setup": [
+    "Native переход карты с заранее подобранным оружием и патронами",
+    "Смерть после перехода и проверка серверного восстановления инвентаря без выдачи предметов"
+  ],
+  "source_references": [
+    "internal/bot/client.go:173",
+    "internal/bot/client.go:338",
+    "F:/src/quake2/yquake2/src/game/player/client.c:1572"
+  ]
+}

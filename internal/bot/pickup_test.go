@@ -59,11 +59,54 @@ func TestBase2PickupWithoutVisiblePlayer(t *testing.T) {
 			p.World.Goal = "regroup_after_respawn"
 			p.respawnRegroup = &respawnRegroup{target: quake.Vec3{194, 1940, -167.875}}
 		}
-		s := quake.Snapshot{Frame: 100, Health: 100, InventoryKnown: true, OnGround: true, Self: quake.Vec3{828, 2232, -231.875}, Pickups: []quake.Object{{ID: 5, Class: "weapon_machinegun", Origin: quake.Vec3{804, 2232, -241}}}}
+		s := quake.Snapshot{Frame: 100, Health: 38, InventoryKnown: true, OnGround: true, Self: quake.Vec3{828, 2232, -231.875}, Pickups: []quake.Object{{ID: 5, Class: "weapon_machinegun", Origin: quake.Vec3{804, 2232, -241}}}}
 		if at, ok := p.pickupGoal(s); !ok || at != healthStand(s.Pickups[0].Origin) {
 			cost, valid := p.resourceRoute(s.Self, healthStand(s.Pickups[0].Origin))
 			t.Fatalf("returning=%v cost=%v valid=%v pickup=%+v", returning, cost, valid, p.World.Pickup)
 		}
+	}
+}
+
+func TestLowHealthPickupAvoidsCombatAndHealingOverride(t *testing.T) {
+	for _, hp := range []int16{1, 38, 44} {
+		s := quake.Snapshot{Health: hp}
+		if !pickupExposureAllowed(s) {
+			t.Fatal("low health alone blocked pickup")
+		}
+		s.Enemies = []quake.Object{{Class: "monster_soldier"}}
+		if pickupExposureAllowed(s) {
+			t.Fatal("low health pickup entered combat")
+		}
+	}
+	if pickupExposureAllowed(quake.Snapshot{}) {
+		t.Fatal("dead pickup allowed")
+	}
+	p := &Planner{World: World{Goal: "recover_health"}}
+	if _, ok := p.pickupGoal(quake.Snapshot{Frame: 10, Health: 38}); ok {
+		t.Fatal("pickup replaced healing")
+	}
+}
+
+func TestBase2LowHealthSuperShotgunEpisode(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires local BSP/AAS")
+	}
+	g, err := quake.LoadMap(root, "base2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base2.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := quake.Object{ID: 209, Class: "weapon_supershotgun", Origin: quake.Vec3{304, -1888, -80.875}}
+	self, mate := quake.Vec3{143.25, -1882.25, -71.875}, quake.Vec3{111.125, -1903.5, -71.875}
+	p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "cover_teammate"}}
+	s := quake.Snapshot{Frame: 1877, Health: 38, InventoryKnown: true, OnGround: true, Self: self, Teammate: &mate, Pickups: []quake.Object{item}, Inventory: []quake.InventoryItem{{Name: "Blaster", Count: 1}}}
+	if at, ok := p.pickupGoal(s); !ok || at != healthStand(item.Origin) {
+		cost, valid := p.resourceRoute(self, healthStand(item.Origin))
+		t.Fatalf("cost=%v valid=%v pickup=%+v", cost, valid, p.World.Pickup)
 	}
 }
 

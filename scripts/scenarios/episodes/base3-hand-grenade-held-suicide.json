@@ -1,0 +1,32 @@
+{
+  "id": "base3-hand-grenade-held-suicide",
+  "title": "Ручная граната взрывается в руке и убивает бота и игрока",
+  "map": "base3",
+  "kind": "combat_weapon",
+  "status": "open",
+  "priority": "blocker",
+  "reproduction": "observation_only",
+  "scenario": null,
+  "observed_failure": "По сообщению игрока бот зарядил ручную гранату, не бросил её и взрывом убил себя и игрока. В сохранённой UDP-трассе base3 кадры 1705–1749: v_handgr, ATTACK=1; кадр 1750: здоровье бота -8, ATTACK=0.",
+  "expected_result": "Рассчитывать траекторию, время полёта, отскоки и время до взрыва ручной гранаты. Проверять безопасность бота и напарника в точке взрыва, в том числе при раннем столкновении с мобом. После начала подготовки обязательно вовремя отпускать ATTACK; потеря цели не должна приводить к удержанию до взрыва. Если безопасный бросок не найден — не начинать подготовку гранаты и выбрать другое оружие.",
+  "diagnosis": "Трасса подтверждает непрерывное удержание ATTACK с ручной гранатой перед смертью. Причину и точный цикл оружия нужно проверить по исходникам и воспроизводимому сценарию; смерть игрока зафиксирована по его сообщению.",
+  "evidence": "workspace/artifacts/live-grenade-not-thrown-20260930-194230/bot-full.jsonl",
+  "additional_evidence": [
+    "workspace/artifacts/live-grenade-not-thrown-20260930-194230/grenade-death-events.json",
+    "workspace/artifacts/live-grenade-not-thrown-20260930-194230/server-tail.log"
+  ],
+  "missing_setup": [
+    "Воспроизводимый native эпизод с ручной гранатой, игроком рядом и противником",
+    "Проверка времени удержания и обязательного отпускания ATTACK, в том числе при потере цели"
+  ],
+  "acceptance": {
+    "no_grenade_teammate_kill": true,
+    "no_grenade_self_kill": true,
+    "release_after_arming": true,
+    "real_native_throw": true,
+    "bounded_grenade_hold": true,
+    "collision_explosion_safety": true,
+    "predicted_self_and_teammate_safety": true
+  },
+  "engine_reference": "F:/src/quake2/yquake2/src/game/g_weapon.c:614 Grenade_Touch: столкновение с takedamage вызывает Grenade_Explode сразу; геометрия даёт отскок. Контакт с владельцем игнорируется."
+}

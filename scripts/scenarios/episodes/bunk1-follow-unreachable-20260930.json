@@ -1,0 +1,25 @@
+{
+  "id": "bunk1-follow-unreachable-20260930",
+  "title": "Застревание на bunk1: видимый игрок, маршрут unreachable",
+  "map": "bunk1",
+  "kind": "navigation",
+  "status": "open",
+  "reproduction": "observation_only",
+  "scenario": null,
+  "observed_failure": "Игрок сообщил, что бот застрял. Кадр2311: бот [-495,-208.75,24.125], игрок [-513.875,112.625,24.125], health87; follow_teammate, navigation=unreachable, route=null, move_source=none, no_movement_goal.",
+  "expected_result": "Найти и безопасно выполнить путь к видимому игроку; если прямой путь закрыт, корректно обработать дверь или найти доступный обход. Не оставаться неподвижным бесконечно.",
+  "diagnosis": "Подтверждён отказ маршрутизации при видимом игроке примерно в322 единицах. Причина (AAS, дверь, динамическая геометрия или область старта) пока не установлена.",
+  "evidence": "workspace/artifacts/live-stuck-20260930-200347/bot-tail.jsonl",
+  "additional_evidence": [
+    "workspace/artifacts/live-stuck-20260930-200347/last-world.json"
+  ],
+  "missing_setup": [
+    "Воспроизведение координат с состояниями movers из сохранённой трассы",
+    "Проверка областей AAS, переходов и геометрии пути"
+  ],
+  "acceptance": {
+    "follow_resumes": true,
+    "safe_route_to_player": true,
+    "no_unbounded_stall": true
+  }
+}

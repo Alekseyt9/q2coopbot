@@ -25,7 +25,7 @@ param(
     [switch]$ProjectileComparison,
     [string]$ProjectileFixture='',
     [ValidateSet('near','far')][string]$ProjectileRange='near',
-	[ValidateSet('','blaster','stocked','economy_weak','economy_armed','economy_pair_weak','economy_pair_heavy','projectile_blaster','projectile_hyper','rail_precision','rail_friend_behind')][string]$WeaponSwitchTrial = '',
+	[ValidateSet('','blaster','stocked','economy_weak','economy_armed','economy_pair_weak','economy_pair_heavy','projectile_blaster','projectile_hyper','rail_precision','rail_friend_behind','hand_grenade_guard')][string]$WeaponSwitchTrial = '',
     [switch]$ObservationGapTrial,
     [switch]$FriendlyFireTrial,
     [switch]$GroundEdgeTrial,
@@ -320,7 +320,7 @@ foreach ($scale in $Timescales) {
 			if ($WeaponSwitchTrial -like 'rail_*') {
 				$humanConfig.test.spawn_class='monster_tank'
 				$humanConfig.test.teleport_map='base1'
-				$humanConfig.test.teleport=if ($WeaponSwitchTrial -eq 'rail_friend_behind') {'192,-164,24'} else {'128,-320,24'}
+				$humanConfig.test.teleport=if ($WeaponSwitchTrial -eq 'rail_friend_behind','hand_grenade_guard') {'192,-164,24'} else {'128,-320,24'}
 				$humanConfig.test.invulnerable=$true
 			}
 			if ($WeaponSwitchTrial -like 'projectile_*') {

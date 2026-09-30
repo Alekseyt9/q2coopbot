@@ -1,0 +1,27 @@
+{
+  "id": "base2-tight-passage-player-block",
+  "title": "Бот зажимает игрока в узком проходе, обойти невозможно",
+  "map": "base2",
+  "kind": "teammate_spacing",
+  "status": "open",
+  "priority": "blocker",
+  "reproduction": "observation_only",
+  "scenario": null,
+  "observed_failure": "Игрок сообщил, что бот зажал его в узком проходе, обойти невозможно. Снимок frame4915: бот [424.375,-2369.625,-71.875], игрок [400.125,-2401.75,-71.875], дистанция около40; cover_teammate, move_source=none, no_movement_goal. Health бота22.",
+  "expected_result": "При блокировании движения игрока бот уступает проход: выбирает безопасный отход вдоль прохода к свободному месту, не предполагая возможность обойти сбоку. Режим прикрытия не должен удерживать бота перед игроком. Не сталкивать игрока в опасную область.",
+  "diagnosis": "В сохранённом кадре close-contact переводит бота в неподвижное прикрытие. Причину блокировки и направление безопасного отхода требуется воспроизвести на настоящей геометрии.",
+  "evidence": "workspace/artifacts/live-player-passage-block-20260930-195731/bot-tail.jsonl",
+  "additional_evidence": [
+    "workspace/artifacts/live-player-passage-block-20260930-195731/last-world.json"
+  ],
+  "missing_setup": [
+    "Native эпизод с движущимся игроком в этом узком проходе",
+    "Проверка уступания вдоль прохода, отсутствия столкновения и восстановления сопровождения"
+  ],
+  "acceptance": {
+    "safe_supported_retreat": true,
+    "player_can_pass": true,
+    "follow_resumes": true,
+    "bounded_blocking_time": true
+  }
+}

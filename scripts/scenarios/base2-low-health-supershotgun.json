@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "base2-low-health-supershotgun",
+  "bot_health": 38,
+  "steps": [
+    {
+      "id": "allow-safe-pickup",
+      "action": "wait",
+      "frames": 300
+    }
+  ],
+  "expect": {},
+  "game_frames": 420,
+  "actor_origin": [
+    111.125,
+    -1903.5,
+    -81.875
+  ],
+  "bot_origin": [
+    143.25,
+    -1882.25,
+    -81.875
+  ],
+  "map_entry": "base1",
+  "start_frame": 40,
+  "map": "base2"
+}

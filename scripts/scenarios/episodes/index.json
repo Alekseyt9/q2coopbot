@@ -104,6 +104,12 @@
     "base2-visible-player-spawn-route.json",
     "base2-repeat-death-player-return.json",
     "base2-combined-meeting-door-stall.json",
-    "base2-reconnect-handshake-stall.json"
+    "base2-reconnect-handshake-stall.json",
+    "base3-hand-grenade-held-suicide.json",
+    "base2-live-missed-supershotgun-low-health.json",
+    "campaign-map-reconnect-inventory-loss.json",
+    "base2-tight-passage-player-block.json",
+    "bunk1-follow-unreachable-20260930.json",
+    "bunk1-dynamic-bridge-wrong-elevator.json"
   ]
 }

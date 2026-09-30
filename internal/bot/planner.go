@@ -622,7 +622,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none"}
 	p.World.Jump = nil
 	s := p.World.Snapshot
-	defer func() { result = p.limitMachinegunBurst(s, p.limitLaserMovement(s, result)) }()
+	defer func() { result = p.guardHandGrenade(s, p.limitMachinegunBurst(s, p.limitLaserMovement(s, result))) }()
 	if !isRailgun(s.Weapon) || s.Health <= 0 {
 		p.railAim = railAim{}
 	}

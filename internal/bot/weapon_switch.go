@@ -23,6 +23,14 @@ func (w *weaponSwitch) command(s quake.Snapshot) string {
 	if s.Health <= 0 || s.Map == "" || s.Weapon == "" {
 		return ""
 	}
+	if isHandGrenade(s.Weapon) {
+		if w.requestAt != 0 && s.Frame-w.requestAt < 20 {
+			return ""
+		}
+		w.requestAt = s.Frame
+		w.reason = "hand_grenade_requires_safe_throw"
+		return "use Blaster"
+	}
 	if s.Weapon == "Blaster" || s.Ammo > 0 {
 		w.emptyAt, w.requestAt, w.attempts = 0, 0, 0
 		return w.economyCommand(s)
