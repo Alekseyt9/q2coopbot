@@ -19,15 +19,25 @@ type Ready struct {
 
 func Read(path string) (Ready, error) {
 	var r Ready
-	data, err := os.ReadFile(path)
+	data, err := ReadFile(path)
 	if err != nil {
-		if runtime.GOOS == "windows" && (errors.Is(err, syscall.Errno(32)) || errors.Is(err, syscall.Errno(33))) {
-			return r, errors.Join(os.ErrNotExist, err)
-		}
 		return r, err
 	}
 	err = json.Unmarshal(data, &r)
 	return r, err
+}
+
+// ReadFile leaves temporarily locked Windows signals pending. The calling
+// coordinator retries on its next tick under the normal scenario watchdog.
+func ReadFile(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if runtime.GOOS == "windows" && (errors.Is(err, syscall.Errno(32)) || errors.Is(err, syscall.Errno(33))) {
+			return nil, errors.Join(os.ErrNotExist, err)
+		}
+		return nil, err
+	}
+	return data, nil
 }
 
 func Start(a, b Ready, mapName string, generation, phase int) (int, error) {

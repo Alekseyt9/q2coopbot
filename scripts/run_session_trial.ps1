@@ -92,6 +92,7 @@ try {
         ($report.accepted -and ($reportExit -ne 0 -or $report.state -ne 'passed')) -or
         (-not $report.accepted -and ($reportExit -ne 1 -or $report.state -eq 'passed'))) {throw 'Invalid session analyzer verdict or exit code'}
     $executionTimer.Stop()
+    @{server_pid=$server.Id;actor_pid=$actor.Id;observer_pid=$observer.Id;port=$cfg.port} | ConvertTo-Json | Set-Content (Join-Path $out 'session-processes.json') -Encoding utf8
     @{orchestration_wall_seconds=$executionTimer.Elapsed.TotalSeconds;tail_frames=$tail} | ConvertTo-Json | Set-Content (Join-Path $out 'session-timing.json') -Encoding utf8
     if(-not $report.accepted -and -not $ReturnRejectedReport) {throw "Session analysis rejected: $($report.reason); inspect $out"}
     Write-Output "Session $($report.state): $out"

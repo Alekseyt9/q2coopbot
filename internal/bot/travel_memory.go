@@ -39,7 +39,7 @@ func (m *travelMemory) matches(server string, generation int, s quake.Snapshot) 
 }
 
 func (c *Client) prepareTravelMemory(s quake.Snapshot) {
-	if c.memoryFile == "" {
+	if c.memoryFile == "" || c.travelMemorySetupPending(s.Frame) {
 		return
 	}
 	server := c.address.String() + "|" + c.memorySession
@@ -67,7 +67,7 @@ func (c *Client) prepareTravelMemory(s quake.Snapshot) {
 }
 
 func (c *Client) saveTravelMemory(s quake.Snapshot, returning bool) {
-	if c.memoryFile == "" || c.travelMemory == nil {
+	if c.memoryFile == "" || c.travelMemory == nil || c.travelMemorySetupPending(s.Frame) {
 		return
 	}
 	m := c.travelMemory
@@ -103,4 +103,15 @@ func (c *Client) saveTravelMemory(s quake.Snapshot, returning bool) {
 	if err != nil {
 		log.Printf("travel memory save: %v", err)
 	}
+}
+
+// Fixture placement is not gameplay: clients can briefly see each other at
+// default spawn positions before the readiness barrier releases the scenario.
+func (c *Client) travelMemorySetupPending(frame int) bool {
+	if c.planner.testSetupHold {
+		return true
+	}
+	return c.sessionDefinition != nil && c.sessionDefinition.ReadinessBarrier &&
+		(c.sessionConnection != c.connection || c.sessionGeneration != c.spawncount ||
+			c.sessionStartFrame == 0 || frame < c.sessionStartFrame)
 }

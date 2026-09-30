@@ -13,6 +13,28 @@ func sessionFixture() Session {
 	return Session{Version: 1, Name: "maps", TransitionTimeoutMS: 1000, Phases: []Phase{{ID: "first", Scenario: a}, {ID: "second", Scenario: b}}}
 }
 
+func TestSessionRecoveryExpectationValidation(t *testing.T) {
+	s := sessionFixture()
+	s.ReadinessBarrier = true
+	f := &ObserverRespawn{AfterFrames: 1, TimeoutFrames: 6, RecoveryFrames: 3, PolicyOnly: true}
+	s.Phases[0].ObserverRespawn = f
+	for _, expectation := range []string{"", "contact", "return_active", "death_point_arrival"} {
+		f.RecoveryExpectation = expectation
+		if err := s.Validate(); err != nil {
+			t.Fatalf("%s: %v", expectation, err)
+		}
+	}
+	f.RecoveryExpectation = "anything"
+	if s.Validate() == nil {
+		t.Fatal("unknown recovery expectation accepted")
+	}
+	f.RecoveryExpectation = "return_active"
+	f.PolicyOnly = false
+	if s.Validate() == nil {
+		t.Fatal("scripted respawn accepted for policy return")
+	}
+}
+
 func TestSessionWaitsForDynamicBarrier(t *testing.T) {
 	s := sessionFixture()
 	s.ReadinessBarrier = true

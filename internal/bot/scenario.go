@@ -2,9 +2,11 @@ package bot
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"q2coopbot/internal/harness"
+	"q2coopbot/internal/harness/coord"
 )
 
 type scenarioCompletion struct {
@@ -49,8 +51,8 @@ func (c *Client) publishScenarioCompletion() error {
 
 func (c *Client) scenarioShouldStop() (bool, error) {
 	if c.scenarioCompletion == nil {
-		data, err := os.ReadFile(c.scenarioResultPath)
-		if os.IsNotExist(err) {
+		data, err := coord.ReadFile(c.scenarioResultPath)
+		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
 		}
 		if err != nil {

@@ -11,44 +11,7 @@
                                                           "action":  "wait"
                                                       }
                                                   ],
-                                        "game_frames":  1000,
-                                        "version":  1,
-                                        "actor_origin":  [
-                                                             -1883.375,
-                                                             1816.75,
-                                                             120.125
-                                                         ],
-                                        "name":  "campaign-base1",
-                                        "map":  "base1",
-                                        "expect":  {
-
-                                                   },
-                                        "bot_origin":  [
-                                                           960,
-                                                           408,
-                                                           -167.875
-                                                       ],
-                                        "start_frame":  40
-                                    },
-                       "observer_respawn_cycle":  {
-                                                      "recovery_expectation":  "return_active",
-                                                      "timeout_frames":  40,
-                                                      "after_frames":  40,
-                                                      "policy_only":  true,
-                                                      "recovery_frames":  20
-                                                  },
-                       "id":  "base1"
-                   },
-                   {
-                       "scenario":  {
-                                        "steps":  [
-                                                      {
-                                                          "frames":  110,
-                                                          "id":  "stay-hidden",
-                                                          "action":  "wait"
-                                                      }
-                                                  ],
-                                        "game_frames":  1000,
+                                        "game_frames":  800,
                                         "version":  1,
                                         "actor_origin":  [
                                                              300,
@@ -56,7 +19,7 @@
                                                              24
                                                          ],
                                         "map_entry":  "base1",
-                                        "name":  "campaign-base2",
+                                        "name":  "same-map-death-1",
                                         "map":  "base2",
                                         "expect":  {
 
@@ -75,34 +38,72 @@
                                                       "policy_only":  true,
                                                       "recovery_frames":  20
                                                   },
-                       "id":  "base2"
+                       "id":  "base2-generation-1"
                    },
                    {
                        "scenario":  {
                                         "steps":  [
                                                       {
-                                                          "frames":  800,
+                                                          "frames":  110,
                                                           "id":  "stay-hidden",
                                                           "action":  "wait"
                                                       }
                                                   ],
-                                        "game_frames":  1000,
+                                        "game_frames":  800,
                                         "version":  1,
                                         "actor_origin":  [
-                                                             -284,
-                                                             -1244,
-                                                             -279.875
+                                                             300,
+                                                             -800,
+                                                             24
                                                          ],
-                                        "map_entry":  "base2a",
-                                        "name":  "campaign-base3",
-                                        "map":  "base3",
+                                        "map_entry":  "base1",
+                                        "name":  "same-map-death-2",
+                                        "map":  "base2",
                                         "expect":  {
 
                                                    },
                                         "bot_origin":  [
-                                                           -148.375,
-                                                           -802.875,
-                                                           -231.875
+                                                           -198,
+                                                           1856,
+                                                           -167.875
+                                                       ],
+                                        "start_frame":  40
+                                    },
+                       "observer_respawn_cycle":  {
+                                                      "recovery_expectation":  "return_active",
+                                                      "timeout_frames":  40,
+                                                      "after_frames":  40,
+                                                      "policy_only":  true,
+                                                      "recovery_frames":  20
+                                                  },
+                       "id":  "base2-generation-2"
+                   },
+                   {
+                       "scenario":  {
+                                        "steps":  [
+                                                      {
+                                                          "frames":  450,
+                                                          "id":  "stay-hidden",
+                                                          "action":  "wait"
+                                                      }
+                                                  ],
+                                        "game_frames":  800,
+                                        "version":  1,
+                                        "actor_origin":  [
+                                                             300,
+                                                             -800,
+                                                             24
+                                                         ],
+                                        "map_entry":  "base1",
+                                        "name":  "same-map-death-3",
+                                        "map":  "base2",
+                                        "expect":  {
+
+                                                   },
+                                        "bot_origin":  [
+                                                           -198,
+                                                           1930,
+                                                           -167.875
                                                        ],
                                         "start_frame":  40
                                     },
@@ -111,11 +112,11 @@
                                                       "timeout_frames":  40,
                                                       "after_frames":  40,
                                                       "policy_only":  true,
-                                                      "recovery_frames":  600
+                                                      "recovery_frames":  300
                                                   },
-                       "id":  "base3"
+                       "id":  "base2-generation-3"
                    }
                ],
-    "name":  "campaign-death-return-transition",
+    "name":  "same-map-death-return-reload",
     "version":  1
 }

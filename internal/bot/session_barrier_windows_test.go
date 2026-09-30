@@ -40,3 +40,36 @@ func TestBarrierRetriesWindowsSharingViolation(t *testing.T) {
 		t.Fatal("locked peer signal must remain pending", err)
 	}
 }
+
+func TestCompletionRetriesWindowsSharingViolation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "completion.json")
+	if err := os.WriteFile(path, []byte(`{"map":"base2","generation":7,"end_frame":40,"state":"completed"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ptr, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handle, err := syscall.CreateFile(ptr, syscall.GENERIC_READ, 0, nil, syscall.OPEN_EXISTING, syscall.FILE_ATTRIBUTE_NORMAL, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked := true
+	defer func() {
+		if locked {
+			syscall.CloseHandle(handle)
+		}
+	}()
+	c := Client{scenarioResultPath: path, spawncount: 7, lastMoveFrame: 45, latestFrame: 46, scenarioTailFrames: 5, planner: &Planner{}}
+	c.planner.World.Map = "base2"
+	if stop, err := c.scenarioShouldStop(); stop || err != nil || c.scenarioCompletion != nil {
+		t.Fatal("locked completion must remain pending", stop, err)
+	}
+	if err := syscall.CloseHandle(handle); err != nil {
+		t.Fatal(err)
+	}
+	locked = false
+	if stop, err := c.scenarioShouldStop(); !stop || err != nil {
+		t.Fatal("completion was not acknowledged after unlock", stop, err)
+	}
+}

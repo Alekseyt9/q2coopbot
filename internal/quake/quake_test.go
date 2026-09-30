@@ -90,6 +90,26 @@ func TestSnapshotExposesGroundAndMover(t *testing.T) {
 	}
 }
 
+func TestPlacementHistoryResetStillObservesRealTeammate(t *testing.T) {
+	d := NewDecoder()
+	d.Map, d.PlayerNumber = "base2", 1
+	f := Frame{Number: 10, Entities: map[int]Entity{2: {Number: 2, Model: 255, Origin: Vec3{876, 2232, -214}}}}
+	if d.Snapshot(f).Teammate == nil {
+		t.Fatal("missing placement observation")
+	}
+	d.ResetTeammateHistory()
+	hidden := d.Snapshot(Frame{Number: 11})
+	if hidden.LastTeammate != nil || hidden.TeammateAgeFrames != nil || hidden.LastTeammateEntity != 0 {
+		t.Fatal("placement history leaked into gameplay")
+	}
+	f.Number = 12
+	f.Entities[2] = Entity{Number: 2, Model: 255, Origin: Vec3{194, 1940, -168}}
+	visible := d.Snapshot(f)
+	if visible.Teammate == nil || visible.LastTeammate == nil || *visible.LastTeammate != f.Entities[2].Origin {
+		t.Fatal("real teammate ignored after reset")
+	}
+}
+
 func TestSnapshotSeparatesVisibleAndLastSeenTeammate(t *testing.T) {
 	d := NewDecoder()
 	d.Map, d.PlayerNumber = "base1", 1

@@ -197,6 +197,9 @@ func (c *Client) reconnect() error {
 	c.lastHandshake = ""
 	c.handshakeAt = time.Now()
 	c.planner.setMap("", c.root)
+	// Re-read the persisted rendezvous after clearing the planner. The same
+	// map generation may still be active; matching guards reject stale files.
+	c.memoryLoaded = false
 	log.Printf("full reconnect started")
 	return c.oob("getchallenge\n")
 }
@@ -292,6 +295,9 @@ func (c *Client) handle(packet []byte) {
 					c.planner.testSetupHold = true
 				}
 				s = c.maskTestHealth(s)
+				if c.travelMemorySetupPending(s.Frame) {
+					c.decoder.ResetTeammateHistory()
+				}
 				c.prepareTravelMemory(s)
 				returning := c.planner.respawnRegroup != nil
 				c.planner.update(s, c.root)

@@ -1,0 +1,15 @@
+{
+  "id": "base2-reconnect-death-return",
+  "title": "Потеря цели возврата к месту смерти после переподключения",
+  "map": "base2",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "verification_session": "scripts/scenarios/reconnect-death-return-session.json",
+  "evidence": "workspace/artifacts/scenario-suite-20260930-130337-766/run-001/observer.jsonl",
+  "observed_failure": "Переподключение в том же поколении base2 прерывает активный возврат. После подключения бот остаётся в wait_for_teammate у [828,2232,-231.875], хотя должен вернуться к [194,1940,-167.875]. Общий анализатор фаз принимал сессию, специализированный checker отклонил отсутствие возврата.",
+  "expected_result": "Восстановить сохранённую цель только для того же сервера, карты и поколения; дойти без новой смерти, завершить возврат и сохранить completed=true. При встрече с игроком присоединиться к нему.",
+  "diagnosis": "reconnect очищал planner, сохраняя memoryLoaded=true. Флаг теперь сбрасывается. Дополнительно харнес исключает память и историю наблюдения игрока во время расстановки клиентов до readiness barrier: краткое появление на стандартном спавне не является игровым контактом.",
+  "full_route_verification": "workspace/artifacts/reconnect-return-restored-r3/report.json",
+  "verification_command": "pwsh -NoProfile -File scripts/run_campaign_return_trial.ps1 -ReconnectReturn",
+  "missing_setup": ["Живая сессия с человеком на 1x", "Неуправляемый сетевой обрыв вместо штатного reconnect"]
+}

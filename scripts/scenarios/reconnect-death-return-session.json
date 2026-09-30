@@ -1,0 +1,78 @@
+{
+    "transition_timeout_ms":  10000,
+    "readiness_barrier":  true,
+    "phases":  [
+                   {
+                       "scenario":  {
+                                        "steps":  [
+                                                      {
+                                                          "frames":  110,
+                                                          "id":  "stay-hidden",
+                                                          "action":  "wait"
+                                                      }
+                                                  ],
+                                        "game_frames":  800,
+                                        "version":  1,
+                                        "actor_origin":  [
+                                                             300,
+                                                             -800,
+                                                             24
+                                                         ],
+                                        "map_entry":  "base1",
+                                        "name":  "reconnect-death-before",
+                                        "map":  "base2",
+                                        "expect":  {
+
+                                                   },
+                                        "bot_origin":  [
+                                                           194,
+                                                           1940,
+                                                           -167.875
+                                                       ],
+                                        "start_frame":  40
+                                    },
+                       "observer_respawn_cycle":  {
+                                                      "recovery_expectation":  "return_active",
+                                                      "timeout_frames":  40,
+                                                      "after_frames":  40,
+                                                      "policy_only":  true,
+                                                      "recovery_frames":  20
+                                                  },
+                       "id":  "base2-generation-1"
+                   },
+                   {
+                       "scenario":  {
+                                        "steps":  [
+                                                      {
+                                                          "frames":  450,
+                                                          "id":  "stay-hidden",
+                                                          "action":  "wait"
+                                                      }
+                                                  ],
+                                        "game_frames":  800,
+                                        "version":  1,
+                                        "actor_origin":  [
+                                                             300,
+                                                             -800,
+                                                             24
+                                                         ],
+                                        "map_entry":  "base1",
+                                        "name":  "reconnect-death-after",
+                                        "map":  "base2",
+                                        "expect":  {
+
+                                                   },
+                                        "bot_origin":  [
+                                                           828,
+                                                           2232,
+                                                           -231.875
+                                                       ],
+                                        "start_frame":  40
+                                    },
+                       "id":  "base2-reconnected",
+                       "entry":  "reconnect"
+                   }
+               ],
+    "name":  "reconnect-death-return",
+    "version":  1
+}

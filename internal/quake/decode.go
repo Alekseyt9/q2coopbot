@@ -722,6 +722,14 @@ type Snapshot struct {
 	Sounds             []SoundEvent      `json:"sounds,omitempty"`
 }
 
+// ResetTeammateHistory discards observations made during harness placement.
+// Current visible entities will be observed normally on the next snapshot.
+func (d *Decoder) ResetTeammateHistory() {
+	d.lastTeammate = nil
+	d.lastTeammateAt = 0
+	d.lastTeammateEntity = 0
+}
+
 func (d *Decoder) Snapshot(f Frame) Snapshot {
 	s := Snapshot{Map: d.Map, Frame: f.Number, DeltaFrame: f.DeltaFrame, Self: f.Origin, SelfVelocity: f.Velocity, Ducked: f.PMFlags&1 != 0, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles, RemovedEntities: append([]int(nil), f.RemovedEntities...), Suppressed: f.Suppressed}
 	s.InventoryKnown, s.InventoryOpen = d.InventoryKnown, f.Stats[13]&2 != 0
