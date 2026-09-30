@@ -1,13 +1,19 @@
 {
-  "id": "base1-far-return-second-rise-entry",
-  "title": "Возврат base1: остановка перед вторым подъёмом после исправления инерции",
-  "map": "base1",
-  "status": "open",
-  "reproduction": "observation_only",
-  "verification_session": "scripts/scenarios/base1-far-death-return-session.json",
-  "evidence": "workspace/artifacts/base1-far-return-steer-r3/run-000/second.jsonl",
-  "observed_failure": "Два независимых полных возврата при 2x прошли первый подъём, затем остановились с static_hull_blocked у [815.5,-324.875,-29] и [815.75,-325.125,-29.25]. Точка смерти не достигнута. Попытка расширить радиус существующего короткого шага с 24 до 40 не помогла и отменена.",
-  "expected_result": "Пройти подход к областям 2452/2453 и продолжить возврат к месту смерти без потери опоры.",
-  "diagnosis": "Ранее проверенный SecondRiseProbe начинается дальше, у [833.5,-318.75,-25.875], и не покрывает новый вход в подъём. Необходимо проверить короткий подход от текущей точки, сохраняя проверки полного корпуса и опоры.",
-  "missing_setup": ["Короткая нативная сцена от [815.5,-324.875,-29]", "Исправление подхода", "Полный дальний возврат 2/2 при 2x", "Проверка с человеком на 1x"]
+    "id":  "base1-far-return-second-rise-entry",
+    "title":  "Возврат base1: остановка перед вторым подъёмом после исправления инерции",
+    "map":  "base1",
+    "status":  "verified_short_parallel_2x",
+    "reproduction":  "observation_only",
+    "verification_session":  "scripts/scenarios/base1-second-rise-entry.json",
+    "evidence":  "workspace/artifacts/base1-far-return-steer-r3/run-000/second.jsonl",
+    "observed_failure":  "Два независимых полных возврата при 2x прошли первый подъём, затем остановились с static_hull_blocked у [815.5,-324.875,-29] и [815.75,-325.125,-29.25]. Точка смерти не достигнута. Попытка расширить радиус существующего короткого шага с 24 до 40 не помогла и отменена.",
+    "expected_result":  "Пройти подход к областям 2452/2453 и продолжить возврат к месту смерти без потери опоры.",
+    "diagnosis":  "Прямой шаг по диагонали блокируется корпусом. Обход на 8 единиц сначала прошёл, но повторные проверки выявили уход в соседнюю область AAS и откат вниз; вариант отменён. Для измеренных восходящих переходов base1/2452 и 2453 разрешена та же короткая проверенная дуга, что ранее применялась только к 2470: полный корпус, поддержка AAS/пола, допустимая высота, дальнейший маршрут, компенсация инерции. Две последовательные нативные серии прошли 4/4 при 2x за 12 кадров без промахов и потерь опоры. Оба полных возврата с окончательным вариантом проходят подъёмы, но останавливаются дальше на границе спуска области 1898.",
+    "missing_setup":  [
+                          "Живая проверка с человеком на 1x"
+                      ],
+    "short_probe":  "pwsh -NoProfile -File scripts/run_memory_restart_suite.ps1 -Map base1 -SecondRiseEntryProbe",
+    "short_probe_verification":  "workspace/artifacts/base1-second-entry-jump-r2/report.json",
+    "follow_up_episode":  "base1-far-return-drop-edge-stop",
+    "full_route_verification":  "workspace/artifacts/base1-far-return-drop-margin-r1/report.json"
 }

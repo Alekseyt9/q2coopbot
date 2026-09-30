@@ -1,0 +1,12 @@
+{
+  "test": {
+    "teleport_map": "base1",
+    "teleport": "660,-460,-105.875",
+    "setup_hold_frames": 6,
+    "walk_run_in": true,
+    "walk_after_frames": 6,
+    "walk_frames": 1,
+    "walk_target": "760,-430,-95.875",
+    "run_in_speed": 100
+  }
+}

@@ -33,6 +33,8 @@ type Trace struct {
 	Frame             int             `json:"frame"`
 	Teammate          *quake.Vec3     `json:"teammate"`
 	Goal              string          `json:"goal"`
+	GoalPoint         *quake.Vec3     `json:"goal_point,omitempty"`
+	LastTeammate      *quake.Vec3     `json:"last_teammate,omitempty"`
 	Command           quake.UserCmd   `json:"sent_command"`
 	Scenario          *Status         `json:"scenario"`
 }

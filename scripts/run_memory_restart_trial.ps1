@@ -1,9 +1,14 @@
 [CmdletBinding()]
-param([int]$Port=30520,[string]$OutputRoot='',[ValidateSet('base1','base2','base3')][string]$Map='base2',[string]$SessionPath='',[switch]$PreparedRuntime,[switch]$RampProbe,[switch]$FirstLipProbe,[switch]$CornerProbe,[switch]$RiseProbe,[switch]$SecondRiseProbe,[switch]$MomentumProbe)
+param([int]$Port=30520,[string]$OutputRoot='',[ValidateSet('base1','base2','base3')][string]$Map='base2',[string]$SessionPath='',[switch]$PreparedRuntime,[switch]$RampProbe,[switch]$FirstLipProbe,[switch]$CornerProbe,[switch]$RiseProbe,[switch]$SecondRiseProbe,[switch]$MomentumProbe,[switch]$SecondRiseEntryProbe,[switch]$DropEdgeProbe,[switch]$EarlyRampProbe,[switch]$StairMomentumProbe,[switch]$SlopeProbe)
 $ErrorActionPreference='Stop'
+if($EarlyRampProbe){$MomentumProbe=$true}
 if($MomentumProbe){$RiseProbe=$true}
+if($SecondRiseEntryProbe){$SecondRiseProbe=$true}
 if(($RampProbe -or $FirstLipProbe) -and $Map -ne 'base3' -or ($RampProbe -and $FirstLipProbe)){throw 'Select one base3 probe'}
 if(($CornerProbe -or $RiseProbe -or $SecondRiseProbe) -and ($Map -ne 'base1' -or $RampProbe -or $FirstLipProbe -or ($CornerProbe -and ($RiseProbe -or $SecondRiseProbe)) -or ($RiseProbe -and $SecondRiseProbe))){throw 'Select one base1 probe'}
+if($DropEdgeProbe -and ($Map -ne 'base1' -or $RampProbe -or $FirstLipProbe -or $CornerProbe -or $RiseProbe -or $SecondRiseProbe)){throw 'Select one base1 drop probe'}
+if($StairMomentumProbe -and ($Map -ne 'base3' -or $RampProbe -or $FirstLipProbe -or $CornerProbe -or $RiseProbe -or $SecondRiseProbe -or $DropEdgeProbe)){throw 'Select one base3 stair probe'}
+if($SlopeProbe -and ($Map -ne 'base2' -or $RampProbe -or $FirstLipProbe -or $CornerProbe -or $RiseProbe -or $SecondRiseProbe -or $DropEdgeProbe -or $StairMomentumProbe)){throw 'Select one base2 slope probe'}
 $repo=Split-Path $PSScriptRoot -Parent
 if(!$OutputRoot){$OutputRoot=Join-Path $repo ('workspace/artifacts/memory-restart-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))}
 if(Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue){throw "UDP port occupied: $Port"}
@@ -25,7 +30,7 @@ foreach($asset in Get-ChildItem (Join-Path $source 'baseq2') -Recurse -File|Wher
 $client=Join-Path $out 'q2coopbot.exe'
 Push-Location $repo
 try{go build -o $client ./cmd/q2coopbot;if($LASTEXITCODE){throw 'Client build failed'}}finally{Pop-Location}
-$session=if($SessionPath){(Resolve-Path -LiteralPath $SessionPath).Path}else{Join-Path $repo ('scripts/scenarios/'+$(if($Map -eq 'base3'){'base3-full-death-return-session.json'}elseif($CornerProbe -or $RiseProbe -or $SecondRiseProbe){'base1-far-death-return-session.json'}elseif($Map -eq 'base1'){'base1-full-death-return-session.json'}else{'death-point-memory-restart-session.json'}))}
+$session=if($SessionPath){(Resolve-Path -LiteralPath $SessionPath).Path}else{Join-Path $repo ('scripts/scenarios/'+$(if($Map -eq 'base3'){'base3-full-death-return-session.json'}elseif($CornerProbe -or $RiseProbe -or $SecondRiseProbe -or $DropEdgeProbe){'base1-far-death-return-session.json'}elseif($Map -eq 'base1'){'base1-full-death-return-session.json'}else{'death-point-memory-restart-session.json'}))}
 $memory=Join-Path $out 'travel-memory.json'
 $stop=Join-Path $out 'first.stop'
 $token=[guid]::NewGuid().ToString('N')
@@ -38,6 +43,11 @@ if($CornerProbe){$secondCfg.test=@{teleport_map='base1';teleport='-48.875,-593.2
 if($RiseProbe){$secondCfg.test=@{teleport_map='base1';teleport='747.5,-408.25,-71.875';setup_hold_frames=2}}
 if($MomentumProbe){$secondCfg.test=(Get-Content -Raw -Encoding UTF8 (Join-Path $repo 'scripts/scenarios/base1-first-rise-momentum.json')|ConvertFrom-Json -AsHashtable).test}
 if($SecondRiseProbe){$secondCfg.test=@{teleport_map='base1';teleport='833.5,-318.75,-25.875';setup_hold_frames=2}}
+if($SecondRiseEntryProbe){$secondCfg.test=(Get-Content -Raw -Encoding UTF8 (Join-Path $repo 'scripts/scenarios/base1-second-rise-entry.json')|ConvertFrom-Json -AsHashtable).test}
+if($DropEdgeProbe){$secondCfg.test=(Get-Content -Raw -Encoding UTF8 (Join-Path $repo 'scripts/scenarios/base1-far-return-drop-edge.json')|ConvertFrom-Json -AsHashtable).test}
+if($EarlyRampProbe){$secondCfg.test=(Get-Content -Raw -Encoding UTF8 (Join-Path $repo 'scripts/scenarios/base1-early-ramp-momentum.json')|ConvertFrom-Json -AsHashtable).test}
+if($StairMomentumProbe){$secondCfg.test=(Get-Content -Raw -Encoding UTF8 (Join-Path $repo 'scripts/scenarios/base3-stair-opposite-momentum.json')|ConvertFrom-Json -AsHashtable).test}
+if($SlopeProbe){$secondCfg.test=(Get-Content -Raw -Encoding UTF8 (Join-Path $repo 'scripts/scenarios/base2-return-slope-stop.json')|ConvertFrom-Json -AsHashtable).test}
 foreach($pair in @(@('actor',$actorCfg),@('first',$firstCfg),@('second',$secondCfg))){$pair[1]|ConvertTo-Json -Depth 8|Set-Content (Join-Path $out ($pair[0]+'-config.json'))}
 function Read-Trace([string]$Path){
     if(!(Test-Path $Path)){return @()}
@@ -79,23 +89,29 @@ try{
     $saved=Get-Content $memory -Raw|ConvertFrom-Json
     if(!$saved.death -or $saved.player -or $saved.completed -or $saved.map -ne $Map -or $saved.server -ne "127.0.0.1:$Port|$token") {throw 'Death-only memory was not saved for this server session'}
     $second=Start-Process -FilePath $client -ArgumentList "--config `"$(Join-Path $out 'second-config.json')`"" -RedirectStandardOutput (Join-Path $out 'second.log') -RedirectStandardError (Join-Path $out 'second.err') -WindowStyle Hidden -PassThru
-    $deadline=(Get-Date).AddSeconds($(if($RampProbe -or $FirstLipProbe -or $CornerProbe -or $RiseProbe -or $SecondRiseProbe){25}else{65}))
+    $deadline=(Get-Date).AddSeconds($(if($RampProbe -or $FirstLipProbe -or $CornerProbe -or $RiseProbe -or $SecondRiseProbe -or $DropEdgeProbe -or $StairMomentumProbe){25}else{65}))
     $arrived=$null
     while((Get-Date) -lt $deadline){
         if($second.HasExited -or $server.HasExited -or $actor.HasExited){throw 'Second client or server exited early'}
         $rows=@(Read-Trace (Join-Path $out 'second.jsonl'))
-        if($RampProbe){
+        if($StairMomentumProbe){
+            $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.health -gt 0 -and $_.self[0] -ge 55 -and $_.self[0] -le 105 -and $_.self[1] -lt 540 -and $_.self[2] -gt -690}|Select-Object -First 1)
+        }elseif($RampProbe){
             $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.self[0] -ge 55 -and $_.self[0] -le 110 -and $_.self[1] -ge 615 -and $_.self[1] -le 655 -and $_.self[2] -gt -735 -and $_.self[2] -lt -715}|Select-Object -First 1)
         }elseif($FirstLipProbe){
             $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.self[0] -lt 1440 -and $_.self[1] -gt 1320 -and $_.self[1] -lt 1460 -and $_.self[2] -lt -825}|Select-Object -First 1)
         }elseif($CornerProbe){
             $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.self[0] -gt 75 -and $_.self[1] -gt -620 -and $_.self[1] -lt -480 -and $_.self[2] -gt -100}|Select-Object -First 1)
+        }elseif($EarlyRampProbe){
+            $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.self[0] -gt 710 -and $_.self[1] -gt -421 -and $_.self[2] -gt -76}|Select-Object -First 1)
         }elseif($MomentumProbe){
             $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.self[0] -gt 750 -and $_.self[1] -gt -335 -and $_.self[2] -gt -43}|Select-Object -First 1)
         }elseif($RiseProbe){
             $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.self[0] -gt 750 -and $_.self[1] -gt -385 -and $_.self[2] -gt -60 -and $_.arbitration.limit_reason -eq 'jump_landed'}|Select-Object -First 1)
         }elseif($SecondRiseProbe){
             $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.self[0] -gt 825 -and $_.self[0] -lt 870 -and $_.self[1] -gt -280 -and $_.self[2] -gt -30}|Select-Object -First 1)
+        }elseif($DropEdgeProbe){
+            $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.health -gt 0 -and $_.self[0] -gt 900 -and $_.self[0] -lt 980 -and $_.self[1] -gt 200 -and $_.self[2] -lt -155}|Select-Object -First 1)
         }else{
             $arrived=@($rows|Where-Object {$_.goal -eq 'wait_for_teammate' -and !$_.teammate -and $_.health -gt 0 -and [math]::Sqrt([math]::Pow($_.self[0]-$saved.death[0],2)+[math]::Pow($_.self[1]-$saved.death[1],2)) -le 64}|Select-Object -First 1)
         }
@@ -109,18 +125,39 @@ try{
     if($return[0].spawncount -ne $saved.generation -or $return[0].frame -le $saved.frame){throw 'Memory restored across wrong generation/frame'}
     foreach($axis in 0..2){if([math]::Abs($return[0].goal_point[$axis]-$saved.death[$axis]) -gt .125){throw 'Restored wrong target'}}
     $distance=[math]::Sqrt([math]::Pow($return[0].self[0]-$saved.death[0],2)+[math]::Pow($return[0].self[1]-$saved.death[1],2))
-    $maxFrames=if($RampProbe){45}elseif($FirstLipProbe){50}elseif($CornerProbe){35}elseif($MomentumProbe){60}elseif($RiseProbe){40}elseif($SecondRiseProbe){60}elseif($Map -eq 'base3'){800}else{400}
+    $maxFrames=if($StairMomentumProbe){60}elseif($RampProbe){45}elseif($FirstLipProbe){50}elseif($CornerProbe){35}elseif($MomentumProbe){60}elseif($RiseProbe){40}elseif($SecondRiseProbe){60}elseif($DropEdgeProbe){60}elseif($Map -eq 'base3'){800}else{400}
     $minimumDistance=if($Map -eq 'base1'){400}else{640}
-    if((!$RampProbe -and $distance -le $minimumDistance) -or $arrived[0].frame-$return[0].frame -gt $maxFrames -or $firstRows[-1].frame -ge $rows[0].frame){throw 'Restart identity/distance/deadline failed'}
+    if((!$RampProbe -and !$DropEdgeProbe -and !$StairMomentumProbe -and !$SlopeProbe -and $distance -le $minimumDistance) -or $arrived[0].frame-$return[0].frame -gt $maxFrames -or $firstRows[-1].frame -ge $rows[0].frame){throw 'Restart identity/distance/deadline failed'}
     $routeMetrics=& "$PSScriptRoot/measure_return_trace.ps1" -TracePath (Join-Path $out 'second.jsonl') -StartFrame $return[0].frame -EndFrame $arrived[0].frame
+    if($SlopeProbe){
+        $placed=@($rows|Where-Object {$_.on_ground -and [math]::Abs($_.self[0]-85.625) -lt .5 -and [math]::Abs($_.self[1]-2225.125) -lt .5 -and [math]::Abs($_.self[2]+169.75) -lt .5})
+        if(!$placed.Count -or $routeMetrics.longest_stall_frames -gt 10){throw 'Slope placement or timely recovery not verified'}
+    }
+    if($StairMomentumProbe){
+        $prelude=@($rows|Where-Object {$_.arbitration.move_source -eq 'test_movement_run_in'}|Select-Object -First 1)
+        $nativeRunInWitness=@($rows|Where-Object {$prelude.Count -and $_.frame -eq $prelude[0].frame+1 -and $_.on_ground -and $_.self_velocity[1] -gt 60 -and [math]::Abs($_.self[2]+695.875) -lt .5}|Select-Object -First 1)
+        $probeRows=@($rows|Where-Object {$_.frame -le $arrived[0].frame})
+        if(!$nativeRunInWitness.Count -or
+           !@($probeRows|Where-Object {$_.arbitration.limit_reason -eq 'jump_takeoff' -and $_.jump_plan.steer_velocity}).Count -or
+           !@($probeRows|Where-Object {$_.on_ground -and $_.arbitration.limit_reason -eq 'jump_landed'}).Count -or
+           $routeMetrics.jump_missed -ne 0 -or $routeMetrics.runup_lost_ground -ne 0){throw 'Stair opposite run-in or clean landing not verified'}
+    }
+    if($DropEdgeProbe){
+        $probeRows=@($rows|Where-Object {$_.frame -le $arrived[0].frame})
+        if(!@($probeRows|Where-Object {$_.on_ground -and [math]::Abs($_.self[0]-963.5) -le .5 -and [math]::Abs($_.self[1]-55.25) -le .5 -and [math]::Abs($_.self[2]+31.875) -le .5}).Count -or
+           !@($probeRows|Where-Object {!$_.on_ground -and $_.jump_plan.drop -and $_.jump_plan.airborne}).Count -or
+           !@($probeRows|Where-Object {$_.on_ground -and $_.arbitration.limit_reason -eq 'drop_landed'}).Count -or
+           @($probeRows|Where-Object {$_.arbitration.limit_reason -in @('drop_aborted','drop_missed','jump_missed','runup_lost_ground')}).Count){throw 'Drop placement, airborne descent or safe landing not verified'}
+    }
+    if($SecondRiseEntryProbe -and !@($rows|Where-Object {$_.on_ground -and [math]::Abs($_.self[0]-815.5) -le .5 -and [math]::Abs($_.self[1]+324.875) -le .5 -and [math]::Abs($_.self[2]+29) -le .5 -and $_.arbitration.limit_reason -eq 'jump_takeoff' -and $_.jump_plan.steer_velocity}).Count){throw 'Second rise entry placement or verified jump not observed'}
     if($MomentumProbe){
         $prelude=@($rows|Where-Object {$_.arbitration.move_source -eq 'test_movement_run_in'}|Select-Object -First 1)
-        $nativeRunInWitness=@($rows|Where-Object {$prelude.Count -and $_.frame -eq $prelude[0].frame+1 -and $_.on_ground -and $_.self_velocity[0] -lt -25 -and $_.arbitration.limit_reason -in @('jump_takeoff','jump_align_ground')}|Select-Object -First 1)
+        $nativeRunInWitness=@($rows|Where-Object {$prelude.Count -and $_.frame -eq $prelude[0].frame+1 -and $_.on_ground -and $(if($EarlyRampProbe){$_.self_velocity[0] -gt 80 -and $_.self_velocity[1] -gt 15}else{$_.self_velocity[0] -lt -25}) -and ($_.arbitration.limit_reason -in @('jump_takeoff','jump_align_ground') -or ($EarlyRampProbe -and $_.arbitration.limit_reason -eq 'jump_prepare'))}|Select-Object -First 1)
         if(!$nativeRunInWitness.Count){throw 'Native lateral run-in was not observed before takeoff'}
     }
     if($RiseProbe -and ($routeMetrics.jump_missed -ne 0 -or $routeMetrics.runup_lost_ground -ne 0)){throw 'Base1 rise probe did not land cleanly'}
     if(($RampProbe -or $FirstLipProbe) -and ($routeMetrics.jump_missed -ne 0 -or $routeMetrics.runup_lost_ground -ne 0 -or !@($rows|Where-Object {$_.frame -ge $return[0].frame -and $_.frame -le $arrived[0].frame -and $_.jump_plan.phase -eq 2}).Count)){throw 'Base3 probe jump was not cleanly executed'}
-    @{accepted=$true;native_run_in_velocity=$(if($MomentumProbe){$nativeRunInWitness[0].self_velocity}else{$null});ramp_probe=[bool]$RampProbe;first_lip_probe=[bool]$FirstLipProbe;corner_probe=[bool]$CornerProbe;rise_probe=[bool]$RiseProbe;second_rise_probe=[bool]$SecondRiseProbe;momentum_probe=[bool]$MomentumProbe;server_pid=$server.Id;first_pid=$first.Id;second_pid=$second.Id;server_session=$saved.server;generation=$saved.generation;death=$saved.death;saved_frame=$saved.frame;restart_frame=$rows[0].frame;return_frame=$return[0].frame;arrival_frame=$arrived[0].frame;initial_distance=$distance;route_metrics=$routeMetrics;first_trace='first.jsonl';second_trace='second.jsonl'}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'report.json')
+    @{accepted=$true;slope_probe=[bool]$SlopeProbe;stair_momentum_probe=[bool]$StairMomentumProbe;native_run_in_velocity=$(if($MomentumProbe -or $StairMomentumProbe){$nativeRunInWitness[0].self_velocity}else{$null});ramp_probe=[bool]$RampProbe;first_lip_probe=[bool]$FirstLipProbe;corner_probe=[bool]$CornerProbe;rise_probe=[bool]$RiseProbe;second_rise_probe=[bool]$SecondRiseProbe;momentum_probe=[bool]$MomentumProbe;second_rise_entry_probe=[bool]$SecondRiseEntryProbe;drop_edge_probe=[bool]$DropEdgeProbe;early_ramp_probe=[bool]$EarlyRampProbe;server_pid=$server.Id;first_pid=$first.Id;second_pid=$second.Id;server_session=$saved.server;generation=$saved.generation;death=$saved.death;saved_frame=$saved.frame;restart_frame=$rows[0].frame;return_frame=$return[0].frame;arrival_frame=$arrived[0].frame;initial_distance=$distance;route_metrics=$routeMetrics;first_trace='first.jsonl';second_trace='second.jsonl'}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'report.json')
     Write-Output "PASS: $out"
 }finally{
     $env:Q2COOPBOT_TEST_RCON=$oldRcon

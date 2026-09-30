@@ -1,0 +1,17 @@
+{
+  "id": "base3-stair-opposite-momentum",
+  "title": "Возврат base3: прыжок вверх при инерции вниз по лестнице",
+  "map": "base3",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "evidence": "workspace/artifacts/return-regression-r2/base3/run-001/second.jsonl",
+  "observed_failure": "На frame234 у [83,585.75,-695.875] скорость [-11.125,73.625,0] направлена обратно от площадки [79,498,-663.875]. Прыжок с постоянным вводом 168 не разворачивает инерцию: frame241 приземление [74.125,592.125,-711.875], jump_missed.",
+  "expected_result": "Перед прыжком развернуть движение проверенным шагом на земле, повторно проверить дугу и приземлиться выше по лестнице без промаха.",
+  "diagnosis": "Лимит модуля скорости 80 допускает направленную против прыжка инерцию. Даже воздушного ввода 400 не хватает для исправления после отрыва. На измеренных начальных walking-переходах base3/3007 и 3017 короткий прыжок вверх получает grounded alignment и компенсацию фактической скорости. Проверки корпуса, опоры, дверей, дуги и дальнейшего пути сохранены.",
+  "short_probe": "pwsh -NoProfile -File scripts/run_memory_restart_suite.ps1 -Map base3 -StairMomentumProbe",
+  "short_probe_scenario": "scripts/scenarios/base3-stair-opposite-momentum.json",
+  "baseline_evidence": "workspace/artifacts/base3-stair-momentum-baseline-r1/run-000/second.jsonl",
+  "short_probe_verification": "workspace/artifacts/base3-stair-momentum-aligned-r2/report.json",
+  "full_route_verification": "workspace/artifacts/return-regression-stair-alignment-r1/base3/report.json",
+  "missing_setup": ["Проверка с человеком на 1x"]
+}

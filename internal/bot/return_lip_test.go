@@ -232,6 +232,105 @@ func TestBase1FarReturnFirstRise(t *testing.T) {
 	}
 }
 
+func TestBase1SecondRiseEntryHasVerifiedShortJump(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("assets")
+	}
+	g, err := quake.LoadMap(root, "base1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base1.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	goal := quake.Vec3{960, 408, -167.875}
+	for _, self := range []quake.Vec3{{815.5, -324.875, -29}, {815.75, -325.125, -29.25}} {
+		s := quake.Snapshot{Map: "base1", Frame: 100, Health: 100, OnGround: true, Self: self}
+		p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "regroup_after_respawn", Snapshot: s}, goalPoint: goal}
+		p.World.Route, _ = n.Route(self, goal)
+		target := p.World.Route[0].Position
+		if g.GroundMoveHazardStep(n, self, target[0]-self[0], target[1]-self[1], 8) == "" {
+			t.Fatal("fixture no longer reproduces blocked direct approach")
+		}
+		if !p.planRampJump() || p.jump.phase != 2 || !p.jump.steerVelocity || quake.Horizontal(self, p.jump.landing) >= 48 {
+			t.Fatalf("missing verified short jump from %v: %+v", self, p.jump)
+		}
+		if !g.PlayerMoveClear(p.jump.landing, p.jump.landing) || !n.GroundedNear(p.jump.landing) {
+			t.Fatal("short jump has no clear grounded landing")
+		}
+		if _, ok := n.Route(p.jump.landing, goal); !ok {
+			t.Fatal("short jump has no route beyond landing")
+		}
+	}
+}
+
+func TestBase1ReturnDropTargetClearsUpperPlatformEdge(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("assets")
+	}
+	g, err := quake.LoadMap(root, "base1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base1.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	self, goal := quake.Vec3{963.5, 55.25, -31.875}, quake.Vec3{960, 408, -167.875}
+	s := quake.Snapshot{Map: "base1", Frame: 100, Health: 100, OnGround: true, Self: self}
+	p := &Planner{Nav: n, World: World{Geometry: &g, Snapshot: s, Goal: "regroup_after_respawn"}, goalPoint: goal}
+	p.World.Route, _ = n.Route(self, goal)
+	if !p.planWalkOff() || !p.jump.drop || p.jump.landing[1] <= 113.5 {
+		t.Fatalf("drop still aims at the upper platform boundary: %+v", p.jump)
+	}
+	landing := p.jump.landing
+	above := landing
+	above[2] = self[2]
+	if !g.PlayerMoveClear(self, above) || !g.PlayerMoveClear(above, landing) {
+		t.Fatal("edge margin enters static geometry")
+	}
+	if _, ok := n.Route(landing, goal); !ok {
+		t.Fatal("edge margin has no onward route")
+	}
+}
+
+func TestBase1EarlyRampAlignsWithoutRetreat(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("assets")
+	}
+	g, err := quake.LoadMap(root, "base1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base1.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	self, goal := quake.Vec3{669.625, -457.125, -95.875}, quake.Vec3{960, 408, -167.875}
+	s := quake.Snapshot{Map: "base1", Frame: 100, Health: 100, OnGround: true, Self: self, SelfVelocity: quake.Vec3{92.75, 27.375, 0}}
+	p := &Planner{Nav: n, World: World{Geometry: &g, Snapshot: s, Goal: "regroup_after_respawn"}, goalPoint: goal}
+	p.World.Route, _ = n.Route(self, goal)
+	if !p.planRampJump() || p.jump.phase != 4 || !p.jump.steerVelocity || p.jump.runup[0] <= self[0] || quake.Horizontal(self, p.jump.landing) > 80 {
+		t.Fatalf("early rise still retreats to an unsafe run-up: %+v", p.jump)
+	}
+	if g.GroundMoveHazardStep(n, self, p.jump.runup[0]-self[0], p.jump.runup[1]-self[1], 6) != "" {
+		t.Fatal("alignment is not grounded")
+	}
+	// Revalidate the native end of alignment before launching, without
+	// returning to the old launch point or forgetting measured velocity.
+	p.World.Snapshot.Frame++
+	p.World.Snapshot.Self = quake.Vec3{675.5, -455.875, -95.875}
+	p.World.Snapshot.SelfVelocity = quake.Vec3{60, 11.375, 0}
+	cmd, active := p.jumpCommand(quake.UserCmd{})
+	if !active || cmd.Up == 0 || p.jump == nil || p.jump.phase != 2 || !p.jump.steerVelocity {
+		t.Fatalf("alignment did not produce a revalidated takeoff: %+v %+v", cmd, p.jump)
+	}
+}
+
 func TestBase3ReturnCornerStep(t *testing.T) {
 	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
 	if root == "" {

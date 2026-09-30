@@ -1,0 +1,17 @@
+{
+  "id": "base1-early-ramp-runup-loss",
+  "title": "Дальний возврат base1: потеря опоры при разбеге к раннему подъёму",
+  "map": "base1",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "verification_session": "scripts/scenarios/base1-far-death-return-session.json",
+  "evidence": "workspace/artifacts/base1-far-return-drop-margin-r1/run-000/second.jsonl",
+  "observed_failure": "Перед подъёмом 2574 бот дважды отступал на 48 единиц для разбега и терял опору около [648.875,-500.75,-95.875] и [660.5,-501.625,-95.875]. После восстановления прыжок из [677.375,-462.125,-95.875] заканчивался коротким приземлением у [689.75,-432.375,-81]. Полный маршрут завершался, но с двумя runup_lost_ground и одним jump_missed на прогон.",
+  "expected_result": "Пройти ранний подъём без опасного отступления, потери опоры и короткого приземления, затем завершить возврат к месту смерти.",
+  "diagnosis": "Непригодный длинный разбег выбирался вместо близкой AAS-площадки на рампе: её поддержка не проходила точечные BSP-проверки, а стартовая скорость около 100 превышала лимит стоячей дуги 80. На измеренном переходе base1/2574 применены те же проверки короткой рампы и компенсация инерции, что на следующих подъёмах. Скорость до 160 разрешает только подготовку с проверенным шагом выравнивания; перед отрывом дуга заново проверяется от фактической позиции. Быстрый прямой отрыв без доступного выравнивания запрещён. В короткой сцене один обычный usercmd воспроизводит реальную скорость [95.75,28.625,0], без подмены наблюдений.",
+  "short_probe": "pwsh -NoProfile -File scripts/run_memory_restart_suite.ps1 -Map base1 -EarlyRampProbe",
+  "short_probe_scenario": "scripts/scenarios/base1-early-ramp-momentum.json",
+  "short_probe_verification": "workspace/artifacts/base1-early-ramp-aligned-r1/report.json",
+  "full_route_verification": "workspace/artifacts/base1-far-return-early-aligned-r1/report.json",
+  "missing_setup": ["Проверка с человеком на 1x"]
+}

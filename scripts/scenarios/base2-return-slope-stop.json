@@ -1,0 +1,7 @@
+{
+  "test": {
+    "teleport_map": "base2",
+    "teleport": "85.625,2225.125,-179.75",
+    "setup_hold_frames": 6
+  }
+}

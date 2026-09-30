@@ -1,0 +1,19 @@
+{
+    "id":  "base1-far-return-drop-edge-stop",
+    "title":  "Возврат base1: остановка на границе спуска перед местом смерти",
+    "map":  "base1",
+    "status":  "verified_full_parallel_2x",
+    "reproduction":  "observation_only",
+    "verification_session":  "scripts/scenarios/base1-far-death-return-session.json",
+    "evidence":  "workspace/artifacts/base1-far-return-short-entry-r1/run-001/second.jsonl",
+    "observed_failure":  "После прохождения обоих подъёмов бот выбирает спуск Kind 7 в область 1898, от [963.5,55.25,-31.875] к [943,112,-167.875]. Останавливается на земле у [943,111.875,-31.875], остаётся в drop_flight без airborne, затем drop_aborted на кадре 430 и no_movement_goal до конца. Второй независимый прогон дошёл до места смерти за 297 кадров; полный пакет 1/2. С окончательным исправлением подъёма оба клиента повторили ту же остановку: workspace/artifacts/base1-far-return-entry-jump-r1/run-000 и run-001/second.jsonl. Полный возврат 0/2.",
+    "expected_result":  "Пересечь край проверенного спуска, спуститься на нижний этаж и дойти до точки смерти, либо ограниченно перепланировать после невозможности спуска.",
+    "diagnosis":  "Подтверждено коротким нативным прогоном: бот останавливался у [943,111.875,-31.875], не начав падение, поскольку XY цели был ровно на границе верхней площадки. Только для спуска base1/1898 цель сдвинута на 2 единицы в сторону следующего AAS-перехода. Все проверки полного корпуса, пола, вертикального спуска, дверей и дальнейшего маршрута выполняются уже для новой точки. Короткая сцена прошла 2/2 при 2x за 23 кадра с подтверждённым airborne, drop_landed и продолжением пути. Полный дальний возврат также прошёл 2/2 за 302 кадра. На более ранних участках полного маршрута ещё бывают восстановленные промахи прыжка; спуск прошёл без отмены или промаха.",
+    "missing_setup":  [
+                          "Живая проверка с человеком на 1x"
+                      ],
+    "short_probe":  "pwsh -NoProfile -File scripts/run_memory_restart_suite.ps1 -Map base1 -DropEdgeProbe",
+    "short_probe_scenario":  "scripts/scenarios/base1-far-return-drop-edge.json",
+    "short_probe_verification":  "workspace/artifacts/base1-drop-edge-margin-r1/report.json",
+    "full_route_verification":  "workspace/artifacts/base1-far-return-drop-margin-r1/report.json"
+}

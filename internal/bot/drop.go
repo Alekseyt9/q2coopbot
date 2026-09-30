@@ -102,6 +102,17 @@ func (p *Planner) planWalkOff() bool {
 		landing[0] += offset[0]
 		landing[1] += offset[1]
 		landing[2] += 0.125
+		if s.Map == "base1" && r[1].ToArea == 1898 && len(r) > 2 {
+			// This reach ends exactly on the upper platform's XY boundary.
+			// Native pmove can stop 1/8 unit short as input rounds down. Put
+			// the target slightly beyond the edge toward the onward route;
+			// all hull, support, descent and route checks below use this point.
+			dx, dy := r[2].Position[0]-end[0], r[2].Position[1]-end[1]
+			if d := math.Hypot(dx, dy); d > 2 {
+				landing[0] += 2 * dx / d
+				landing[1] += 2 * dy / d
+			}
+		}
 		if quake.Horizontal(s.Self, landing) > 96 || !g.PlayerMoveClear(landing, landing) {
 			continue
 		}

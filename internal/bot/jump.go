@@ -100,10 +100,11 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 		landing := wp.Position
 		landing[2] += 0.125
 		g := p.World.Geometry
-		// This base1 AAS reach samples a steep BSP ramp slightly inside the
-		// standing hull. Keep the tolerance confined to the measured reach;
+		// These measured base1 AAS reaches sample steep BSP ramps inside or above the
+		// standing hull. Keep the tolerance confined to these measured reaches;
 		// applying it to other ramps changes their selected jump landing.
-		base1Rise := maxRise > 16 && s.Map == "base1" && wp.Kind == 2 && wp.ToArea == 2470 && p.blockedRiseApproach()
+		base1Rise := maxRise > 16 && s.Map == "base1" && wp.Kind == 2 &&
+			(wp.ToArea == 2574 || wp.ToArea == 2470 || wp.ToArea == 2452 || wp.ToArea == 2453) && p.blockedRiseApproach()
 		if maxRise > 16 {
 			// AAS ramp samples can sit above the actual supporting BSP floor.
 			// Probe the floor before applying the full-hull landing checks.
@@ -201,7 +202,11 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 			continue
 		}
 		if maxRise > 16 && d <= 120 && speed <= 180 {
-			if math.Hypot(s.SelfVelocity[0], s.SelfVelocity[1]) > 80 {
+			approachLimit := 80.0
+			if base1Rise {
+				approachLimit = 160 // grounded alignment revalidates the arc before takeoff
+			}
+			if math.Hypot(s.SelfVelocity[0], s.SelfVelocity[1]) > approachLimit {
 				// A standing arc is only valid after the approach momentum has
 				// bled off; otherwise native air control carries us past it.
 				continue
@@ -216,8 +221,13 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 				// the bot short under native PM_AirMove.
 				launchSpeed = 400
 			}
-			p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: launchSpeed, phase: 2, steerVelocity: base1Rise}
-			if base1Rise && d > 32 {
+			// On the measured base3 stair reaches a turn can leave modest
+			// momentum facing downhill. Its magnitude passes the standing
+			// limit, but constant low input cannot reverse it before landing.
+			base3StairRise := s.Map == "base3" && len(route) > 0 && route[0].Kind == 2 &&
+				(route[0].ToArea == 3007 || route[0].ToArea == 3017) && landing[2]-s.Self[2] > 8
+			p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: launchSpeed, phase: 2, steerVelocity: base1Rise || base3StairRise}
+			if (base1Rise || base3StairRise) && d > 32 {
 				// Prefer cancellation along the axis carrying the larger drift.
 				directions := []quake.Vec3{{landing[0] - s.Self[0], 0, 0}, {0, landing[1] - s.Self[1], 0}}
 				if math.Abs(s.SelfVelocity[1]) > math.Abs(s.SelfVelocity[0]) {
@@ -231,6 +241,10 @@ func (p *Planner) planVerifiedJump(maxRise float64) bool {
 						break
 					}
 				}
+			}
+			if base1Rise && math.Hypot(s.SelfVelocity[0], s.SelfVelocity[1]) > 80 && p.jump.phase != 4 {
+				p.jump = nil
+				continue
 			}
 			return true
 		}
@@ -346,7 +360,9 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 				p.World.Command = CommandDecision{MoveSource: "none", Skill: skill, LimitReason: "jump_alignment_failed"}
 				return cmd, true
 			}
-			p.jump.phase = 2
+			if p.jump.phase == 4 {
+				p.jump.phase = 2
+			}
 			return p.jumpCommand(cmd)
 		}
 		cmd = worldMove(cmd, s, j.runup[0]-s.Self[0], j.runup[1]-s.Self[1], 60, false)
@@ -476,7 +492,7 @@ func (p *Planner) blockedRiseApproach() bool {
 		}
 		rise := r[i+1].Position[2] - p.World.Snapshot.Self[2]
 		minimumRise := 16.0
-		if p.World.Snapshot.Map == "base1" && r[i].ToArea == 2470 {
+		if p.World.Snapshot.Map == "base1" && (r[i].ToArea == 2470 || r[i].ToArea == 2452 || r[i].ToArea == 2453) {
 			minimumRise = 4
 		}
 		if rise >= minimumRise && rise <= 40 && quake.Horizontal(p.World.Snapshot.Self, r[i].Position) <= 128 {

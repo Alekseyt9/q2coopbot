@@ -95,6 +95,10 @@
     "base1-far-return-solid-aas-rise.json",
     "base1-far-return-second-ramp-runup.json",
     "base1-far-return-first-rise-approach-momentum.json",
-    "base1-far-return-second-rise-entry.json"
+    "base1-far-return-second-rise-entry.json",
+    "base1-far-return-drop-edge-stop.json",
+    "base1-early-ramp-runup-loss.json",
+    "base2-return-slope-stop.json",
+    "base3-stair-opposite-momentum.json"
   ]
 }

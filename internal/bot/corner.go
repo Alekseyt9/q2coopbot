@@ -10,7 +10,18 @@ import (
 // walking corner. The next snapshot replans from the observed new position.
 func (p *Planner) regroupCornerStep(s quake.Snapshot, target quake.Vec3) (float64, float64, bool) {
 	if p.World.Goal != "regroup_after_respawn" || !s.OnGround || p.Nav == nil || p.World.Geometry == nil || !p.World.Geometry.HasCollision() ||
-		len(p.World.Route) == 0 || p.World.Route[0].Kind != 2 || quake.Horizontal(s.Self, target) > 64 {
+		len(p.World.Route) == 0 || p.World.Route[0].Kind != 2 {
+		return 0, 0, false
+	}
+	// The base2 slope can leave the player hull supported beside the wall,
+	// 79 units from its next walking reach. A northward step is clear but
+	// the usual rotated directions clip the wall or lack floor support.
+	base2Slope := s.Map == "base2" && p.World.Route[0].ToArea == 405
+	maxDistance := 64.0
+	if base2Slope {
+		maxDistance = 96
+	}
+	if quake.Horizontal(s.Self, target) > maxDistance {
 		return 0, 0, false
 	}
 	if p.blockedRiseApproach() && p.World.Route[0].Position[2]-s.Self[2] < 8 {
@@ -24,8 +35,16 @@ func (p *Planner) regroupCornerStep(s quake.Snapshot, target quake.Vec3) (float6
 	}
 	ux, uy := dx/length, dy/length
 	g := p.World.Geometry
+	directions := []quake.Vec3{}
 	for _, turn := range []float64{math.Pi / 3, -math.Pi / 3, math.Pi / 2, -math.Pi / 2} {
 		x, y := 16*(ux*math.Cos(turn)-uy*math.Sin(turn)), 16*(ux*math.Sin(turn)+uy*math.Cos(turn))
+		directions = append(directions, quake.Vec3{x, y, 0})
+	}
+	if base2Slope {
+		directions = append(directions, quake.Vec3{0, 16, 0}, quake.Vec3{16, 0, 0}, quake.Vec3{0, -16, 0}, quake.Vec3{-16, 0, 0})
+	}
+	for _, dir := range directions {
+		x, y := dir[0], dir[1]
 		end := s.Self
 		end[0] += x
 		end[1] += y

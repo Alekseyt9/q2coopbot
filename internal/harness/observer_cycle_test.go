@@ -79,3 +79,60 @@ func TestPolicyRespawnRejectsScriptedCommands(t *testing.T) {
 		t.Fatal("unidentified command accepted")
 	}
 }
+
+func TestHiddenPolicyRecoveryRequiresCorrectDeathTargetAndBoundary(t *testing.T) {
+	f := ObserverRespawn{AfterFrames: 1, TimeoutFrames: 6, RecoveryFrames: 3, PolicyOnly: true, RecoveryExpectation: "return_active"}
+	fixture := func() []Trace {
+		rows := cycleFixture()
+		for i := range rows {
+			rows[i].Self = &quake.Vec3{100, 200, 24}
+			if rows[i].ObserverRespawn {
+				rows[i].ObserverRespawn = false
+				rows[i].Arbitration.LimitReason = "respawn_request"
+			}
+			if rows[i].Frame >= 55 {
+				rows[i].Self = &quake.Vec3{800, 200, 24}
+				rows[i].Goal = "regroup_after_respawn"
+				rows[i].GoalPoint = &quake.Vec3{100, 200, 24}
+			}
+		}
+		return rows
+	}
+	if r := checkObserverCycle(f, 50, fixture()); !r.Passed {
+		t.Fatal(r)
+	}
+	for _, mutate := range []func([]Trace){
+		func(r []Trace) { r[6].GoalPoint = &quake.Vec3{101, 200, 24} },
+		func(r []Trace) { r[6].LastTeammate = &quake.Vec3{} },
+		func(r []Trace) { r[6].Teammate = &quake.Vec3{} },
+		func(r []Trace) { r[6].GoalPoint = nil },
+		func(r []Trace) { r[2].Self = nil },
+		func(r []Trace) { r[8].Goal = "wait_for_teammate" },
+	} {
+		rows := fixture()
+		mutate(rows)
+		if r := checkObserverCycle(f, 50, rows); r.Passed {
+			t.Fatal("invalid hidden return accepted")
+		}
+	}
+	f.RecoveryExpectation = "death_point_arrival"
+	if r := checkObserverCycle(f, 50, fixture()); r.Passed {
+		t.Fatal("active return accepted as arrival")
+	}
+	rows := fixture()
+	rows[8].Goal = "wait_for_teammate"
+	rows[8].Self = &quake.Vec3{110, 210, 24}
+	// Keep three return frames inside the recovery window, then arrive.
+	f.RecoveryFrames = 4
+	last := rows[8]
+	last.Frame++
+	rows = append(rows, last)
+	rows[8].Goal = "regroup_after_respawn"
+	if r := checkObserverCycle(f, 50, rows); !r.Passed {
+		t.Fatal(r)
+	}
+	rows[9].Self = &quake.Vec3{800, 200, 24}
+	if r := checkObserverCycle(f, 50, rows); r.Passed {
+		t.Fatal("distant wait accepted as arrival")
+	}
+}

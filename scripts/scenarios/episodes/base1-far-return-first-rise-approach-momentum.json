@@ -10,10 +10,10 @@
     "expected_result":  "Подходить к проверенной площадке с подходящей скоростью и направлением, не уходить в повторный цикл или опасный разбег.",
     "diagnosis":  "Реальная боковая скорость воспроизведена одним штатным usercmd после шести кадров стабилизации: [-55.125,-23.5,0]. Воздушная коррекция без подготовки не успевает достичь рампы. На измеренном переходе base1/2470 добавлен один проверенный шаг по земле для выравнивания, повторная проверка дуги и управление ускорением по ошибке фактической скорости. После раннего приземления на склоне допускается короткое продолжение по проверенной дуге. Подъём полностью пройден 2/2 при 2x без jump_missed и runup_lost_ground. Полный маршрут останавливается дальше, перед вторым подъёмом.",
     "missing_setup":  [
-                          "Полный дальний возврат 2x после исправления второго подъёма",
-                          "Проверка с человеком на 1x"
+                          "Живая проверка с человеком на 1x"
                       ],
     "short_probe":  "pwsh -NoProfile -File scripts/run_memory_restart_suite.ps1 -Map base1 -MomentumProbe",
     "short_probe_verification":  "workspace/artifacts/base1-momentum-complete-r3/report.json",
-    "follow_up_episode":  "base1-far-return-second-rise-entry"
+    "follow_up_episode":  "base1-far-return-second-rise-entry",
+    "full_route_verification":  "workspace/artifacts/base1-far-return-drop-margin-r1/report.json"
 }

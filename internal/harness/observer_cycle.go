@@ -1,5 +1,10 @@
 package harness
 
+import (
+	"math"
+	"q2coopbot/internal/quake"
+)
+
 type ObserverCycleReport struct {
 	Passed         bool   `json:"passed"`
 	Reason         string `json:"reason,omitempty"`
@@ -90,9 +95,52 @@ func checkObserverCycle(f ObserverRespawn, start int, rows []Trace) ObserverCycl
 	if r.RecoveryFrames < f.RecoveryFrames {
 		return r
 	}
-	if f.PolicyOnly && (policyRequests == 0 || !recoveredContact) {
+	if f.PolicyOnly && (policyRequests == 0 || (f.RecoveryExpectation == "" || f.RecoveryExpectation == "contact") && !recoveredContact) {
 		r.Reason = "policy_respawn_contact_not_verified"
 		return r
+	}
+	if f.RecoveryExpectation == "return_active" || f.RecoveryExpectation == "death_point_arrival" {
+		var death *quake.Vec3
+		var last *Trace
+		returnFrames := 0
+		for i := range rows {
+			row := &rows[i]
+			if row.Frame == r.DeathFrame {
+				death = row.Self
+			}
+			if row.Frame <= r.RespawnFrame || row.Frame > r.RespawnFrame+f.RecoveryFrames {
+				continue
+			}
+			last = row
+			if row.Goal != "regroup_after_respawn" {
+				continue
+			}
+			if death == nil || row.GoalPoint == nil || row.Teammate != nil || row.LastTeammate != nil {
+				r.Reason = "death_only_return_not_verified"
+				return r
+			}
+			for axis := range *death {
+				if math.Abs((*death)[axis]-(*row.GoalPoint)[axis]) > .125 {
+					r.Reason = "wrong_death_return_target"
+					return r
+				}
+			}
+			returnFrames++
+		}
+		if returnFrames < 3 || last == nil || death == nil {
+			r.Reason = "death_only_return_not_verified"
+			return r
+		}
+		if f.RecoveryExpectation == "return_active" {
+			if last.Goal != "regroup_after_respawn" {
+				r.Reason = "return_not_active_at_boundary"
+				return r
+			}
+		} else if last.Goal != "wait_for_teammate" || last.Self == nil || last.Teammate != nil || last.LastTeammate != nil ||
+			quake.Horizontal(*last.Self, *death) > 64 || math.Abs((*last.Self)[2]-(*death)[2]) > 40 {
+			r.Reason = "death_point_arrival_not_verified"
+			return r
+		}
 	}
 	r.Passed = true
 	r.Reason = ""

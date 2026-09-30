@@ -52,11 +52,14 @@ try {
 $completion=Join-Path $out 'completion.json'
 if((Test-Path $completion) -or (Test-Path (Join-Path $out 'actor-config.json'))) {throw 'Session requires a fresh run output'}
 $wall=120
+$memorySession=[guid]::NewGuid().ToString('N')
 foreach($role in @('actor','observer')) {
     $name=if($role -eq 'actor') {'TestHuman'} else {'GoCoopMate'}
     $test=@{session=$snapshot;session_role=$role;scenario_result=$completion;idle=($role -eq 'actor')}
     if($role -eq 'observer') {$test.scenario_tail_frames=$tail}
-    @{server=@{host='127.0.0.1';port=$cfg.port};client=@{name=$name;game_dir=(Join-Path $runtime 'baseq2')};run=@{duration="${wall}s";frame_paced=$true};output=@{trace_jsonl=(Join-Path $out "$role.jsonl")};test=$test} | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $out "$role-config.json") -Encoding utf8
+    $clientConfig=@{name=$name;game_dir=(Join-Path $runtime 'baseq2')}
+    if($role -eq 'observer'){$clientConfig.memory_file=Join-Path $out 'travel-memory.json';$clientConfig.memory_session=$memorySession}
+    @{server=@{host='127.0.0.1';port=$cfg.port};client=$clientConfig;run=@{duration="${wall}s";frame_paced=$true};output=@{trace_jsonl=(Join-Path $out "$role.jsonl")};test=$test} | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $out "$role-config.json") -Encoding utf8
 }
 $server=$null; $actor=$null; $observer=$null
 $oldRcon=$env:Q2COOPBOT_TEST_RCON
