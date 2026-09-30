@@ -1,0 +1,84 @@
+{
+    "version":  1,
+    "name":  "active-return-process-restart",
+    "transition_timeout_ms":  10000,
+    "phases":  [
+                   {
+                       "id":  "base1",
+                       "scenario":  {
+                                        "version":  1,
+                                        "name":  "death-point-base1",
+                                        "map":  "base2",
+                                        "start_frame":  40,
+                                        "game_frames":  1100,
+                                        "actor_origin":  [
+                                                             300,
+                                                             -800,
+                                                             24
+                                                         ],
+                                        "bot_origin":  [
+                                                           194,
+                                                           1940,
+                                                           -167.875
+                                                       ],
+                                        "expect":  {
+
+                                                   },
+                                        "steps":  [
+                                                      {
+                                                          "frames":  900,
+                                                          "id":  "remain-hidden-through-restart",
+                                                          "action":  "wait"
+                                                      }
+                                                  ],
+                                        "map_entry":  "base1"
+                                    },
+                       "observer_respawn_cycle":  {
+                                                      "recovery_frames":  100,
+                                                      "after_frames":  40,
+                                                      "timeout_frames":  40,
+                                                      "policy_only":  true,
+                                                      "recovery_expectation":  "return_active"
+                                                  }
+                   },
+                   {
+                       "id":  "base2",
+                       "scenario":  {
+                                        "version":  1,
+                                        "name":  "death-point-base2",
+                                        "map":  "base2",
+                                        "start_frame":  40,
+                                        "game_frames":  1100,
+                                        "actor_origin":  [
+                                                             300,
+                                                             -800,
+                                                             24
+                                                         ],
+                                        "bot_origin":  [
+                                                           194,
+                                                           1940,
+                                                           -167.875
+                                                       ],
+                                        "expect":  {
+
+                                                   },
+                                        "steps":  [
+                                                      {
+                                                          "frames":  900,
+                                                          "id":  "remain-hidden-through-restart",
+                                                          "action":  "wait"
+                                                      }
+                                                  ],
+                                        "map_entry":  "base1"
+                                    },
+                       "observer_respawn_cycle":  {
+                                                      "recovery_frames":  100,
+                                                      "policy_only":  true,
+                                                      "after_frames":  40,
+                                                      "timeout_frames":  40,
+                                                      "recovery_expectation":  "return_active"
+                                                  }
+                   }
+               ],
+    "readiness_barrier":  true
+}

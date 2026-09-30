@@ -2,7 +2,7 @@ function Get-MeetingXYDistance($a,$b) {
     [math]::Sqrt([math]::Pow($a[0]-$b[0],2)+[math]::Pow($a[1]-$b[1],2))
 }
 
-function Test-ReconnectMeeting($Rows,$DeathPoint) {
+function Test-ReconnectMeeting($Rows,$DeathPoint,[switch]$VisibleAtStart) {
     # Placement snapshots can contain the actor at a default spawn. Only the
     # released gameplay stream proves a meeting during the restored return.
     $Rows=@($Rows | Where-Object {$_.arbitration.limit_reason -ne 'session_barrier'})
@@ -10,7 +10,9 @@ function Test-ReconnectMeeting($Rows,$DeathPoint) {
     if($visible.Count -lt 3){throw 'No sustained player contact after reconnect'}
     $first=$visible[0]
     $before=@($Rows | Where-Object {$_.frame -lt $first.frame -and $_.goal -eq 'regroup_after_respawn'})
-    if($before.Count -lt 3){throw 'Player appeared before return resumed'}
+    if($VisibleAtStart){
+        if(!$Rows[0].teammate -or $first.frame -ne $Rows[0].frame -or @($Rows|Where-Object goal -eq 'regroup_after_respawn').Count){throw 'Visible player did not take priority on first snapshot'}
+    }elseif($before.Count -lt 3){throw 'Player appeared before return resumed'}
     if((Get-MeetingXYDistance $first.self $DeathPoint) -le 128){throw 'Meeting happened after death point arrival'}
     $after=@($Rows | Where-Object {$_.frame -ge $first.frame})
     if(@($after | Where-Object {$_.goal -eq 'regroup_after_respawn' -or $_.health -le 0}).Count){throw 'Death return continued after meeting'}

@@ -1,6 +1,9 @@
 [CmdletBinding()]
-param([int]$Port=30520,[string]$OutputRoot='',[ValidateSet('base1','base2','base3')][string]$Map='base2',[string]$SessionPath='',[switch]$PreparedRuntime,[switch]$RampProbe,[switch]$FirstLipProbe,[switch]$CornerProbe,[switch]$RiseProbe,[switch]$SecondRiseProbe,[switch]$MomentumProbe,[switch]$SecondRiseEntryProbe,[switch]$DropEdgeProbe,[switch]$EarlyRampProbe,[switch]$StairMomentumProbe,[switch]$SlopeProbe)
+param([int]$Port=30520,[string]$OutputRoot='',[ValidateSet('base1','base2','base3')][string]$Map='base2',[string]$SessionPath='',[switch]$PreparedRuntime,[switch]$RampProbe,[switch]$FirstLipProbe,[switch]$CornerProbe,[switch]$RiseProbe,[switch]$SecondRiseProbe,[switch]$MomentumProbe,[switch]$SecondRiseEntryProbe,[switch]$DropEdgeProbe,[switch]$EarlyRampProbe,[switch]$StairMomentumProbe,[switch]$SlopeProbe,[switch]$ActiveReturnRestart,[switch]$CompletedReturnRestart,[switch]$MeetPlayerAfterRestart,[switch]$VisiblePlayerAtRestart)
 $ErrorActionPreference='Stop'
+if($VisiblePlayerAtRestart){$MeetPlayerAfterRestart=$true}
+if($CompletedReturnRestart -and $MeetPlayerAfterRestart){throw 'Select one restart outcome'}
+if($CompletedReturnRestart -or $MeetPlayerAfterRestart){$ActiveReturnRestart=$true}
 if($EarlyRampProbe){$MomentumProbe=$true}
 if($MomentumProbe){$RiseProbe=$true}
 if($SecondRiseEntryProbe){$SecondRiseProbe=$true}
@@ -10,6 +13,10 @@ if($DropEdgeProbe -and ($Map -ne 'base1' -or $RampProbe -or $FirstLipProbe -or $
 if($StairMomentumProbe -and ($Map -ne 'base3' -or $RampProbe -or $FirstLipProbe -or $CornerProbe -or $RiseProbe -or $SecondRiseProbe -or $DropEdgeProbe)){throw 'Select one base3 stair probe'}
 if($SlopeProbe -and ($Map -ne 'base2' -or $RampProbe -or $FirstLipProbe -or $CornerProbe -or $RiseProbe -or $SecondRiseProbe -or $DropEdgeProbe -or $StairMomentumProbe)){throw 'Select one base2 slope probe'}
 $repo=Split-Path $PSScriptRoot -Parent
+. "$PSScriptRoot/harness_manifest.ps1"
+. "$PSScriptRoot/check_completed_restart.ps1"
+. "$PSScriptRoot/check_reconnect_meeting.ps1"
+if($ActiveReturnRestart -and ($Map -ne 'base2' -or $SessionPath -or $RampProbe -or $FirstLipProbe -or $CornerProbe -or $RiseProbe -or $SecondRiseProbe -or $DropEdgeProbe -or $StairMomentumProbe -or $SlopeProbe)){throw 'ActiveReturnRestart requires the plain base2 trial'}
 if(!$OutputRoot){$OutputRoot=Join-Path $repo ('workspace/artifacts/memory-restart-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))}
 if(Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue){throw "UDP port occupied: $Port"}
 $source=Join-Path $repo ('workspace/runtime/q2go-elevator-cycle'+$(if($Map -eq 'base3'){''}else{'-'+$Map}))
@@ -31,6 +38,11 @@ $client=Join-Path $out 'q2coopbot.exe'
 Push-Location $repo
 try{go build -o $client ./cmd/q2coopbot;if($LASTEXITCODE){throw 'Client build failed'}}finally{Pop-Location}
 $session=if($SessionPath){(Resolve-Path -LiteralPath $SessionPath).Path}else{Join-Path $repo ('scripts/scenarios/'+$(if($Map -eq 'base3'){'base3-full-death-return-session.json'}elseif($CornerProbe -or $RiseProbe -or $SecondRiseProbe -or $DropEdgeProbe){'base1-far-death-return-session.json'}elseif($Map -eq 'base1'){'base1-full-death-return-session.json'}else{'death-point-memory-restart-session.json'}))}
+if($ActiveReturnRestart){$session=Join-Path $repo 'scripts/scenarios/active-return-process-restart-session.json'}
+if($MeetPlayerAfterRestart){$session=Join-Path $repo 'scripts/scenarios/process-restart-meet-player-session.json'}
+if($VisiblePlayerAtRestart){$session=Join-Path $repo 'scripts/scenarios/process-restart-visible-player-session.json'}
+Copy-Item -LiteralPath $session -Destination (Join-Path $out 'session.json')
+$session=Join-Path $out 'session.json'
 $memory=Join-Path $out 'travel-memory.json'
 $stop=Join-Path $out 'first.stop'
 $token=[guid]::NewGuid().ToString('N')
@@ -38,6 +50,7 @@ $common=@{server=@{host='127.0.0.1';port=$Port};run=@{duration='120s';frame_pace
 $actorCfg=@{server=$common.server;client=@{name='TestHuman';game_dir=(Join-Path $runtime 'baseq2')};run=$common.run;output=@{trace_jsonl=(Join-Path $out 'actor.jsonl')};test=@{session=$session;session_role='actor';scenario_result=(Join-Path $out 'completion.json');idle=$true}}
 $firstCfg=@{server=$common.server;client=@{name='GoCoopMate';game_dir=(Join-Path $runtime 'baseq2');memory_file=$memory;memory_session=$token};run=$common.run;output=@{trace_jsonl=(Join-Path $out 'first.jsonl');stop_file=$stop};test=@{session=$session;session_role='observer';scenario_result=(Join-Path $out 'completion.json');scenario_tail_frames=5}}
 $secondCfg=@{server=$common.server;client=@{name='GoCoopMate';game_dir=(Join-Path $runtime 'baseq2');memory_file=$memory;memory_session=$token};run=$common.run;output=@{trace_jsonl=(Join-Path $out 'second.jsonl')}}
+if($CompletedReturnRestart -or $MeetPlayerAfterRestart){$secondCfg.output.stop_file=Join-Path $out 'second.stop'}
 if($RampProbe){$secondCfg.test=@{teleport_map='base3';teleport='158.75,666.125,-743.875';setup_hold_frames=2}}
 if($CornerProbe){$secondCfg.test=@{teleport_map='base1';teleport='-48.875,-593.25,-79.875';setup_hold_frames=2}}
 if($RiseProbe){$secondCfg.test=@{teleport_map='base1';teleport='747.5,-408.25,-71.875';setup_hold_frames=2}}
@@ -49,11 +62,15 @@ if($EarlyRampProbe){$secondCfg.test=(Get-Content -Raw -Encoding UTF8 (Join-Path 
 if($StairMomentumProbe){$secondCfg.test=(Get-Content -Raw -Encoding UTF8 (Join-Path $repo 'scripts/scenarios/base3-stair-opposite-momentum.json')|ConvertFrom-Json -AsHashtable).test}
 if($SlopeProbe){$secondCfg.test=(Get-Content -Raw -Encoding UTF8 (Join-Path $repo 'scripts/scenarios/base2-return-slope-stop.json')|ConvertFrom-Json -AsHashtable).test}
 foreach($pair in @(@('actor',$actorCfg),@('first',$firstCfg),@('second',$secondCfg))){$pair[1]|ConvertTo-Json -Depth 8|Set-Content (Join-Path $out ($pair[0]+'-config.json'))}
+$fixturePaths=@($client,$session)+@(Get-ChildItem -LiteralPath $runtime -Recurse -File | Where-Object Extension -in @('.exe','.dll','.pak','.bsp','.aas','.ent') | ForEach-Object FullName)
+$fixtureRecords=@(Get-HarnessFileRecords -Root $out -Paths $fixturePaths)
+$fixtureFingerprint=Get-HarnessFingerprint -Records $fixtureRecords
+@{fixture_fingerprint=$fixtureFingerprint;files=$fixtureRecords}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $out 'manifest.json')
 function Read-Trace([string]$Path){
     if(!(Test-Path $Path)){return @()}
     @(Get-Content -LiteralPath $Path|ForEach-Object {try{$_|ConvertFrom-Json -ErrorAction Stop}catch{}})
 }
-$server=$null;$actor=$null;$first=$null;$second=$null
+$server=$null;$actor=$null;$first=$null;$second=$null;$third=$null;$completedProof=$null
 $oldRcon=$env:Q2COOPBOT_TEST_RCON
 try{
     $env:Q2COOPBOT_TEST_RCON=[guid]::NewGuid().ToString('N')
@@ -79,21 +96,57 @@ try{
     while((Get-Date) -lt $deadline){
         if($first.HasExited -or $server.HasExited -or $actor.HasExited){throw 'First client or server exited early'}
         $witness=@(Read-Trace (Join-Path $out 'first.jsonl')|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.health -gt 0 -and !$_.last_teammate}|Select-Object -First 1)
-        if($witness.Count){break}
+        if($witness.Count){
+            if(!$ActiveReturnRestart){break}
+            $active=@(Read-Trace (Join-Path $out 'first.jsonl')|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.health -gt 0 -and !$_.teammate -and !$_.last_teammate})
+            if($active.Count -ge 20 -and $active[-1].frame-$active[0].frame -ge 19 -and [math]::Sqrt([math]::Pow($active[-1].self[0]-$active[0].self[0],2)+[math]::Pow($active[-1].self[1]-$active[0].self[1],2)) -ge 128){break}
+        }
         Start-Sleep -Milliseconds 100
     }
     if(!$witness.Count){throw 'No death-only return before restart'}
     Set-Content -LiteralPath $stop -Value 'stop'
     $first.WaitForExit(5000)|Out-Null
     if(!$first.HasExited){throw 'First bot ignored stop file'}
+    if($first.ExitCode -ne 0){throw 'First bot did not stop cleanly'}
     $saved=Get-Content $memory -Raw|ConvertFrom-Json
+    Copy-Item -LiteralPath $memory -Destination (Join-Path $out 'memory-before-restart.json')
     if(!$saved.death -or $saved.player -or $saved.completed -or $saved.map -ne $Map -or $saved.server -ne "127.0.0.1:$Port|$token") {throw 'Death-only memory was not saved for this server session'}
+    if($VisiblePlayerAtRestart){
+        $signal=Join-Path ($actorCfg.test.scenario_result+'.barrier') ("0-$($saved.generation)-release-player-signal.json")
+        @{map=$Map;generation=$saved.generation;phase=0;frame=$saved.frame;role='observer'}|ConvertTo-Json|Set-Content ($signal+'.tmp') -Encoding utf8
+        Move-Item -LiteralPath ($signal+'.tmp') -Destination $signal
+        $readyDeadline=(Get-Date).AddSeconds(15)
+        $readyActor=@()
+        while((Get-Date) -lt $readyDeadline){
+            if($actor.HasExited -or $server.HasExited){throw 'Actor exited before visible-player restart'}
+            $readyActor=@(Read-Trace (Join-Path $out 'actor.jsonl')|Where-Object {$_.frame -gt $saved.frame -and $_.on_ground -and $_.health -gt 0 -and [math]::Abs($_.self[0]-600) -lt .5 -and [math]::Abs($_.self[1]-2520) -lt .5})
+            if($readyActor.Count -ge 3){break}
+            Start-Sleep -Milliseconds 100
+        }
+        if($readyActor.Count -lt 3){throw 'Player not placed before restart'}
+        $readyActor[-1]|Select-Object frame,self,spawncount,map|ConvertTo-Json|Set-Content (Join-Path $out 'player-before-restart.json')
+    }
     $second=Start-Process -FilePath $client -ArgumentList "--config `"$(Join-Path $out 'second-config.json')`"" -RedirectStandardOutput (Join-Path $out 'second.log') -RedirectStandardError (Join-Path $out 'second.err') -WindowStyle Hidden -PassThru
     $deadline=(Get-Date).AddSeconds($(if($RampProbe -or $FirstLipProbe -or $CornerProbe -or $RiseProbe -or $SecondRiseProbe -or $DropEdgeProbe -or $StairMomentumProbe){25}else{65}))
     $arrived=$null
+    $meetingReleased=$false
     while((Get-Date) -lt $deadline){
         if($second.HasExited -or $server.HasExited -or $actor.HasExited){throw 'Second client or server exited early'}
         $rows=@(Read-Trace (Join-Path $out 'second.jsonl'))
+        if($MeetPlayerAfterRestart){
+            $restored=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.health -gt 0 -and !$_.teammate -and !$_.last_teammate})
+            if(!$meetingReleased -and (($VisiblePlayerAtRestart -and $rows.Count -ge 12) -or (!$VisiblePlayerAtRestart -and $restored.Count -ge 12))){
+                $step=if($VisiblePlayerAtRestart){'lead-player'}else{'release-player'}
+                $signal=Join-Path ($actorCfg.test.scenario_result+'.barrier') ("0-$($saved.generation)-$step-signal.json")
+                @{map=$Map;generation=$saved.generation;phase=0;frame=$rows[-1].frame;role='observer'}|ConvertTo-Json|Set-Content ($signal+'.tmp') -Encoding utf8
+                Move-Item -LiteralPath ($signal+'.tmp') -Destination $signal
+                $meetingReleased=$true
+            }
+            $tail=@($rows|Select-Object -Last 40)
+            if($meetingReleased -and $tail.Count -eq 40 -and !@($tail|Where-Object {!$_.teammate -or [math]::Abs($_.teammate[0]-464.125) -ge 1 -or $_.goal -notin @('follow_teammate','cover_teammate')}).Count -and [math]::Abs($tail[-1].teammate[0]-464.125) -lt 1 -and (Get-MeetingXYDistance $tail[-1].self $tail[-1].teammate) -le 128){break}
+            Start-Sleep -Milliseconds 100
+            continue
+        }
         if($StairMomentumProbe){
             $arrived=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.on_ground -and $_.health -gt 0 -and $_.self[0] -ge 55 -and $_.self[0] -le 105 -and $_.self[1] -lt 540 -and $_.self[2] -gt -690}|Select-Object -First 1)
         }elseif($RampProbe){
@@ -118,12 +171,53 @@ try{
         if($arrived.Count){break}
         Start-Sleep -Milliseconds 100
     }
+    if($MeetPlayerAfterRestart){
+        Set-Content -LiteralPath $secondCfg.output.stop_file -Value 'stop'
+        if(!$second.WaitForExit(5000) -or $second.ExitCode -ne 0){throw 'Meeting bot did not stop cleanly'}
+        $rows=@(Read-Trace (Join-Path $out 'second.jsonl'))
+        $meeting=Test-ReconnectMeeting -Rows $rows -DeathPoint $saved.death -VisibleAtStart:$VisiblePlayerAtRestart
+        $beforeContact=@($rows|Where-Object {$_.frame -lt $meeting.contact_frame})
+        if($rows[0].frame -le $saved.frame -or @($rows|Where-Object {$_.spawncount -ne $saved.generation -or $_.map -ne $Map -or $_.health -le 0 -or $_.test_observer_kill}).Count){throw 'Meeting changed restart generation or death'}
+        foreach($row in $beforeContact|Where-Object goal -eq 'regroup_after_respawn'){
+            foreach($axis in 0..2){if(!$row.goal_point -or [math]::Abs($row.goal_point[$axis]-$saved.death[$axis]) -gt .125){throw 'Meeting began from wrong restored goal'}}
+        }
+        $finalMemory=Get-Content $memory -Raw|ConvertFrom-Json
+        if($finalMemory.completed -or !$finalMemory.player -or $finalMemory.server -ne $saved.server -or $finalMemory.generation -ne $saved.generation -or $finalMemory.map -ne $Map){throw 'Player priority not saved after meeting'}
+        foreach($axis in 0..2){if(!$finalMemory.death -or [math]::Abs($finalMemory.death[$axis]-$saved.death[$axis]) -gt .125 -or [math]::Abs($finalMemory.player[$axis]-$meeting.last_player[$axis]) -gt .125){throw 'Wrong rendezvous saved after meeting'}}
+        $firstRows=@(Read-Trace (Join-Path $out 'first.jsonl'))
+        $active=@($firstRows|Where-Object goal -eq 'regroup_after_respawn')
+        $movement=Get-MeetingXYDistance $active[0].self $active[-1].self
+        if($active.Count -lt 20 -or $movement -lt 128 -or $firstRows[-1].goal -ne 'regroup_after_respawn'){throw 'Meeting did not interrupt sustained return'}
+        $metrics=& "$PSScriptRoot/measure_return_trace.ps1" -TracePath (Join-Path $out 'second.jsonl') -StartFrame $rows[0].frame -EndFrame $rows[-1].frame
+        Copy-Item $memory (Join-Path $out 'memory-after-meeting.json')
+        if((Get-HarnessFingerprint -Records @(Get-HarnessFileRecords -Root $out -Paths $fixturePaths)) -ne $fixtureFingerprint){throw 'Meeting fixture changed'}
+        @{accepted=$true;active_frames=$active.Count;movement_before_restart=$movement;completed=$false}|ConvertTo-Json|Set-Content (Join-Path $out 'active-restart.json')
+        @{accepted=$true;meeting=$meeting;server_pid=$server.Id;first_pid=$first.Id;second_pid=$second.Id;server_session=$saved.server;generation=$saved.generation;route_metrics=$metrics}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $out 'report.json')
+        Write-Output "PASS: $out"
+        return
+    }
     $firstRows=@(Read-Trace (Join-Path $out 'first.jsonl'))
     $rows=@(Read-Trace (Join-Path $out 'second.jsonl'))
+    if($ActiveReturnRestart){
+        $active=@($firstRows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and $_.health -gt 0 -and !$_.teammate -and !$_.last_teammate})
+        if($active.Count -lt 20 -or $firstRows[-1].goal -ne 'regroup_after_respawn' -or [math]::Sqrt([math]::Pow($active[-1].self[0]-$active[0].self[0],2)+[math]::Pow($active[-1].self[1]-$active[0].self[1],2)) -lt 128){throw 'Restart did not interrupt sustained movement'}
+        if(@($rows|Where-Object {$_.health -le 0 -or $_.test_observer_kill -or $_.teammate -or $_.last_teammate -or $_.spawncount -ne $saved.generation}).Count){throw 'Restart created a new death/contact/generation'}
+        $finalMemory=Get-Content $memory -Raw|ConvertFrom-Json
+        if(!$finalMemory.completed -or $finalMemory.player -or $finalMemory.generation -ne $saved.generation -or $finalMemory.server -ne $saved.server -or $finalMemory.map -ne $saved.map){throw 'Restored return did not finish in persisted memory'}
+        foreach($axis in 0..2){if(!$finalMemory.death -or [math]::Abs($finalMemory.death[$axis]-$saved.death[$axis]) -gt .125 -or [math]::Abs($arrived[0].self[2]-$saved.death[2]) -gt 40){throw 'Restart arrival or persisted death changed'}}
+        Copy-Item -LiteralPath $memory -Destination (Join-Path $out 'memory-after-return.json')
+        @{accepted=$true;active_frames=$active.Count;movement_before_restart=[math]::Sqrt([math]::Pow($active[-1].self[0]-$active[0].self[0],2)+[math]::Pow($active[-1].self[1]-$active[0].self[1],2));boundary_frame=$firstRows[-1].frame;completed=$finalMemory.completed}|ConvertTo-Json|Set-Content (Join-Path $out 'active-restart.json')
+    }
     $return=@($rows|Where-Object {$_.goal -eq 'regroup_after_respawn' -and !$_.teammate -and !$_.last_teammate -and $_.health -gt 0})
     if(!$return.Count -or !$arrived.Count){throw $(if($RampProbe){'Restarted bot did not land beyond base3 ramp'}elseif($FirstLipProbe){'Restarted bot did not cross base3 first lip'}elseif($CornerProbe){'Restarted bot did not escape base1 corner'}elseif($RiseProbe){'Restarted bot did not cross base1 rise'}elseif($SecondRiseProbe){'Restarted bot did not cross base1 second rise'}else{'Restarted bot did not return to death point'})}
     if($return[0].spawncount -ne $saved.generation -or $return[0].frame -le $saved.frame){throw 'Memory restored across wrong generation/frame'}
     foreach($axis in 0..2){if([math]::Abs($return[0].goal_point[$axis]-$saved.death[$axis]) -gt .125){throw 'Restored wrong target'}}
+    if($ActiveReturnRestart){
+        foreach($row in $return){
+            if(!$row.goal_point){throw 'Restored return lost its goal'}
+            foreach($axis in 0..2){if([math]::Abs($row.goal_point[$axis]-$saved.death[$axis]) -gt .125){throw 'Restored target changed during route'}}
+        }
+    }
     $distance=[math]::Sqrt([math]::Pow($return[0].self[0]-$saved.death[0],2)+[math]::Pow($return[0].self[1]-$saved.death[1],2))
     $maxFrames=if($StairMomentumProbe){60}elseif($RampProbe){45}elseif($FirstLipProbe){50}elseif($CornerProbe){35}elseif($MomentumProbe){60}elseif($RiseProbe){40}elseif($SecondRiseProbe){60}elseif($DropEdgeProbe){60}elseif($Map -eq 'base3'){800}else{400}
     $minimumDistance=if($Map -eq 'base1'){400}else{640}
@@ -157,9 +251,28 @@ try{
     }
     if($RiseProbe -and ($routeMetrics.jump_missed -ne 0 -or $routeMetrics.runup_lost_ground -ne 0)){throw 'Base1 rise probe did not land cleanly'}
     if(($RampProbe -or $FirstLipProbe) -and ($routeMetrics.jump_missed -ne 0 -or $routeMetrics.runup_lost_ground -ne 0 -or !@($rows|Where-Object {$_.frame -ge $return[0].frame -and $_.frame -le $arrived[0].frame -and $_.jump_plan.phase -eq 2}).Count)){throw 'Base3 probe jump was not cleanly executed'}
-    @{accepted=$true;slope_probe=[bool]$SlopeProbe;stair_momentum_probe=[bool]$StairMomentumProbe;native_run_in_velocity=$(if($MomentumProbe -or $StairMomentumProbe){$nativeRunInWitness[0].self_velocity}else{$null});ramp_probe=[bool]$RampProbe;first_lip_probe=[bool]$FirstLipProbe;corner_probe=[bool]$CornerProbe;rise_probe=[bool]$RiseProbe;second_rise_probe=[bool]$SecondRiseProbe;momentum_probe=[bool]$MomentumProbe;second_rise_entry_probe=[bool]$SecondRiseEntryProbe;drop_edge_probe=[bool]$DropEdgeProbe;early_ramp_probe=[bool]$EarlyRampProbe;server_pid=$server.Id;first_pid=$first.Id;second_pid=$second.Id;server_session=$saved.server;generation=$saved.generation;death=$saved.death;saved_frame=$saved.frame;restart_frame=$rows[0].frame;return_frame=$return[0].frame;arrival_frame=$arrived[0].frame;initial_distance=$distance;route_metrics=$routeMetrics;first_trace='first.jsonl';second_trace='second.jsonl'}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'report.json')
+    if($CompletedReturnRestart){
+        Set-Content -LiteralPath (Join-Path $out 'second.stop') -Value 'stop'
+        $second.WaitForExit(5000)|Out-Null
+        if(!$second.HasExited -or $second.ExitCode -ne 0){throw 'Second process did not stop cleanly'}
+        $secondEnd=@(Read-Trace (Join-Path $out 'second.jsonl'))[-1].frame
+        $completedBefore=Get-Content $memory -Raw|ConvertFrom-Json
+        Copy-Item -LiteralPath $memory -Destination (Join-Path $out 'memory-before-completed-restart.json')
+        $thirdCfg=@{server=$common.server;client=$secondCfg.client;run=@{duration='20s';frame_paced=$true;game_frames=80};output=@{trace_jsonl=(Join-Path $out 'third.jsonl')}}
+        $thirdCfg|ConvertTo-Json -Depth 8|Set-Content (Join-Path $out 'third-config.json')
+        $third=Start-Process -FilePath $client -ArgumentList "--config `"$(Join-Path $out 'third-config.json')`"" -RedirectStandardOutput (Join-Path $out 'third.log') -RedirectStandardError (Join-Path $out 'third.err') -WindowStyle Hidden -PassThru
+        if(!$third.WaitForExit(25000) -or $third.ExitCode -ne 0 -or $server.HasExited -or $actor.HasExited){throw 'Completed restart failed or timed out'}
+        if($third.Id -in @($first.Id,$second.Id)){throw 'Completed restart reused process identity'}
+        $thirdRows=@(Read-Trace (Join-Path $out 'third.jsonl'))
+        $completedAfter=Get-Content $memory -Raw|ConvertFrom-Json
+        $completedProof=Test-CompletedReturnRestart -Rows $thirdRows -Before $completedBefore -After $completedAfter -PreviousFrame $secondEnd
+        Copy-Item -LiteralPath $memory -Destination (Join-Path $out 'memory-after-completed-restart.json')
+        $completedProof|ConvertTo-Json|Set-Content (Join-Path $out 'completed-restart.json')
+    }
+    if((Get-HarnessFingerprint -Records @(Get-HarnessFileRecords -Root $out -Paths $fixturePaths)) -ne $fixtureFingerprint){throw 'Restart fixture changed during run'}
+    @{accepted=$true;third_pid=$(if($third){$third.Id}else{$null});completed_restart=$completedProof;slope_probe=[bool]$SlopeProbe;stair_momentum_probe=[bool]$StairMomentumProbe;native_run_in_velocity=$(if($MomentumProbe -or $StairMomentumProbe){$nativeRunInWitness[0].self_velocity}else{$null});ramp_probe=[bool]$RampProbe;first_lip_probe=[bool]$FirstLipProbe;corner_probe=[bool]$CornerProbe;rise_probe=[bool]$RiseProbe;second_rise_probe=[bool]$SecondRiseProbe;momentum_probe=[bool]$MomentumProbe;second_rise_entry_probe=[bool]$SecondRiseEntryProbe;drop_edge_probe=[bool]$DropEdgeProbe;early_ramp_probe=[bool]$EarlyRampProbe;server_pid=$server.Id;first_pid=$first.Id;second_pid=$second.Id;server_session=$saved.server;generation=$saved.generation;death=$saved.death;saved_frame=$saved.frame;restart_frame=$rows[0].frame;return_frame=$return[0].frame;arrival_frame=$arrived[0].frame;initial_distance=$distance;route_metrics=$routeMetrics;first_trace='first.jsonl';second_trace='second.jsonl'}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'report.json')
     Write-Output "PASS: $out"
 }finally{
     $env:Q2COOPBOT_TEST_RCON=$oldRcon
-    foreach($process in @($second,$first,$actor,$server)){if($process -and !$process.HasExited){Stop-Process -Id $process.Id -ErrorAction SilentlyContinue}}
+    foreach($process in @($third,$second,$first,$actor,$server)){if($process -and !$process.HasExited){Stop-Process -Id $process.Id -ErrorAction SilentlyContinue}}
 }

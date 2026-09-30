@@ -1,0 +1,114 @@
+{
+    "version":  1,
+    "name":  "process-restart-meet-player",
+    "transition_timeout_ms":  10000,
+    "phases":  [
+                   {
+                       "id":  "base1",
+                       "scenario":  {
+                                        "version":  1,
+                                        "name":  "death-point-base1",
+                                        "map":  "base2",
+                                        "start_frame":  40,
+                                        "game_frames":  1400,
+                                        "actor_origin":  [
+                                                             300,
+                                                             -800,
+                                                             24
+                                                         ],
+                                        "bot_origin":  [
+                                                           194,
+                                                           1940,
+                                                           -167.875
+                                                       ],
+                                        "expect":  {
+
+                                                   },
+                                        "steps":  [
+                                                      {
+                                                          "timeout_frames":  700,
+                                                          "id":  "release-player",
+                                                          "action":  "wait_signal"
+                                                      },
+                                                      {
+                                                          "target":  [
+                                                                         600,
+                                                                         2520,
+                                                                         -231.875
+                                                                     ],
+                                                          "timeout_frames":  40,
+                                                          "id":  "meet-bot",
+                                                          "action":  "place"
+                                                      },
+                                                      {
+                                                          "frames":  20,
+                                                          "id":  "allow-contact",
+                                                          "action":  "wait"
+                                                      },
+                                                      {
+                                                          "target":  [
+                                                                         480,
+                                                                         2520,
+                                                                         -231.875
+                                                                     ],
+                                                          "timeout_frames":  100,
+                                                          "id":  "lead-bot",
+                                                          "action":  "walk"
+                                                      },
+                                                      {
+                                                          "frames":  160,
+                                                          "id":  "follow-window",
+                                                          "action":  "wait"
+                                                      }
+                                                  ],
+                                        "map_entry":  "base1"
+                                    },
+                       "observer_respawn_cycle":  {
+                                                      "recovery_frames":  100,
+                                                      "after_frames":  40,
+                                                      "timeout_frames":  40,
+                                                      "policy_only":  true,
+                                                      "recovery_expectation":  "return_active"
+                                                  }
+                   },
+                   {
+                       "id":  "base2",
+                       "scenario":  {
+                                        "version":  1,
+                                        "name":  "death-point-base2",
+                                        "map":  "base2",
+                                        "start_frame":  40,
+                                        "game_frames":  1100,
+                                        "actor_origin":  [
+                                                             300,
+                                                             -800,
+                                                             24
+                                                         ],
+                                        "bot_origin":  [
+                                                           194,
+                                                           1940,
+                                                           -167.875
+                                                       ],
+                                        "expect":  {
+
+                                                   },
+                                        "steps":  [
+                                                      {
+                                                          "frames":  900,
+                                                          "id":  "remain-hidden-through-restart",
+                                                          "action":  "wait"
+                                                      }
+                                                  ],
+                                        "map_entry":  "base1"
+                                    },
+                       "observer_respawn_cycle":  {
+                                                      "recovery_frames":  100,
+                                                      "policy_only":  true,
+                                                      "after_frames":  40,
+                                                      "timeout_frames":  40,
+                                                      "recovery_expectation":  "return_active"
+                                                  }
+                   }
+               ],
+    "readiness_barrier":  true
+}

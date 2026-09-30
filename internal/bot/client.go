@@ -722,6 +722,11 @@ func (c *Client) run(ctx context.Context) error {
 				var d harness.Decision
 				var status *harness.Status
 				if c.session != nil {
+					signal, err := c.sessionStepSignal()
+					if err != nil {
+						return err
+					}
+					in.StepSignal = signal
 					decision := c.session.Tick(in, now.Sub(c.start))
 					d, c.sessionPendingMap = decision.Decision, decision.ChangeMap
 					status = &c.session.Status.Phase

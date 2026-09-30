@@ -81,6 +81,32 @@ func (c *Client) sessionBarrier(now time.Time) error {
 
 func readSessionReady(path string) (sessionReady, error) { return coord.Read(path) }
 
+func (c *Client) sessionStepSignal() (string, error) {
+	if c.session == nil || c.session.Status.Phase.State != "running" {
+		return "", nil
+	}
+	status := c.session.Status.Phase
+	step := c.sessionDefinition.Phases[c.sessionPhase].Scenario.Steps[status.StepIndex]
+	if step.Action != "wait_signal" {
+		return "", nil
+	}
+	path := filepath.Join(c.scenarioResultPath+".barrier", fmt.Sprintf("%d-%d-%s-signal.json", c.sessionPhase, c.spawncount, step.ID))
+	r, err := coord.Read(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if r.Map != c.sessionMap || r.Generation != c.spawncount || r.Phase != c.sessionPhase || r.Role != "observer" || r.Frame < 1 || r.Frame > 100000 || r.Frame < c.sessionStartFrame {
+		return "", fmt.Errorf("invalid session step release identity")
+	}
+	if r.Frame > c.latestFrame {
+		return "", nil
+	}
+	return step.ID, nil
+}
+
 func sessionBarrierStart(a, b sessionReady, mapName string, generation, phase int) (int, error) {
 	return coord.Start(a, b, mapName, generation, phase)
 }

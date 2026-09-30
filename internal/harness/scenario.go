@@ -147,6 +147,11 @@ func (s Scenario) Validate() error {
 		}
 		ids[step.ID] = true
 		switch step.Action {
+		case "wait_signal":
+			if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(step.ID) || step.Timeout < 1 || step.Timeout > 1000 || step.Frames != 0 || step.Target != nil || step.Route {
+				return fmt.Errorf("invalid wait_signal step %s", step.ID)
+			}
+			budget += step.Timeout + 1
 		case "shoot_teammate":
 			if step.Frames < 1 || step.Frames > 40 || step.Timeout != 0 || step.Target != nil || step.Route {
 				return fmt.Errorf("invalid shoot_teammate step %s", step.ID)
@@ -233,6 +238,7 @@ func (r *Runner) RejectRoute(reason string) {
 }
 
 type Input struct {
+	StepSignal        string
 	Connection        int
 	PhaseStart        int
 	Frame, Generation int
@@ -315,6 +321,9 @@ func (r *Runner) Tick(in Input) Decision {
 	}
 	elapsed := in.Frame - r.Status.StepStart
 	done := (step.Action == "wait" || step.Action == "push" || step.Action == "shoot_teammate") && elapsed >= step.Frames
+	if step.Action == "wait_signal" {
+		done = in.StepSignal == step.ID
+	}
 	if step.Action == "respawn_cycle" {
 		if in.Health <= 0 {
 			if r.Status.DeathFrame == 0 {
