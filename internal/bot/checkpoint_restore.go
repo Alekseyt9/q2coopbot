@@ -10,6 +10,8 @@ import (
 )
 
 type checkpointRestoreReceipt struct {
+	Version       int               `json:"version"`
+	SourceID      string            `json:"source_id"`
 	Mode          string            `json:"mode"`
 	Participant   string            `json:"participant"`
 	SourceFrame   int               `json:"source_frame"`
@@ -43,7 +45,7 @@ func (c *Client) restoreCheckpointSnapshot(s quake.Snapshot) error {
 	}
 	next := *c.planner
 	var runner *harness.Runner
-	receipt := checkpointRestoreReceipt{Mode: c.checkpointMode, Participant: c.name, SourceFrame: source.Frame, Frame: s.Frame, Generation: c.spawncount, SelfEntity: c.decoder.PlayerNumber}
+	receipt := checkpointRestoreReceipt{Version: 1, SourceID: source.ID, Mode: c.checkpointMode, Participant: c.name, SourceFrame: source.Frame, Frame: s.Frame, Generation: c.spawncount, SelfEntity: c.decoder.PlayerNumber}
 	if c.checkpointMode == "resume" {
 		if (len(source.Runner) > 0) != (c.scenario != nil) {
 			return fmt.Errorf("runner checkpoint/config mismatch")

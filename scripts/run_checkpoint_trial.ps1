@@ -4,7 +4,8 @@ $ErrorActionPreference='Stop'
 $configPath=(Resolve-Path $Config).Path
 $base=Split-Path $configPath -Parent
 $cfg=Get-Content $configPath -Raw|ConvertFrom-Json
-foreach($key in $cfg.PSObject.Properties.Name){if($key -notin @('runtime_root','client_exe','checkpoint_exe','output_root','port','timescale','barrier','restore_slots','resume','bot_mode','source_checkpoint')){throw "Unknown checkpoint trial field: $key"}}
+foreach($key in $cfg.PSObject.Properties.Name){if($key -notin @('runtime_root','client_exe','checkpoint_exe','output_root','port','timescale','barrier','restore_slots','resume','bot_mode','source_checkpoint','load_barrier')){throw "Unknown checkpoint trial field: $key"}}
+if($cfg.load_barrier -and !$cfg.resume){throw 'Load barrier requires client restore'}
 if($cfg.timescale -ne 2 -or $cfg.port -lt 1024 -or $cfg.port -gt 65534){throw 'Checkpoint trial requires 2x and a valid port'}
 if(Get-NetUDPEndpoint -LocalPort $cfg.port -ErrorAction SilentlyContinue){throw 'Checkpoint port occupied'}
 function Trial-Path([string]$Path){if([IO.Path]::IsPathRooted($Path)){return $Path};Join-Path $base $Path}
@@ -60,6 +61,8 @@ function Checkpoint-Operation([string]$Action){
     $path=Join-Path $out "$Action-config.json"
     $operation=@{version=1;action=$Action;server="127.0.0.1:$($cfg.port)";instance=$instance;runtime_root=$runtime;checkpoint_dir=$checkpointDir;timeout_ms=10000}
     if($cfg.restore_slots -and $Action -eq 'load'){$operation.bind_participants=$true}
+    if($cfg.load_barrier -and $Action -eq 'load'){$operation.hold_after_load=$true}
+    if($Action -eq 'release'){$operation.release=@{id=$load.load_anchor.id;map=$load.load_anchor.map;frame=$load.load_anchor.frame;generation=$load.load_anchor.generation;controls=@((Join-Path $out 'restored-bot-control.json'),(Join-Path $out 'restored-actor-control.json'))}}
     if($cfg.barrier -and $Action -eq 'save'){$anchor=Last-Row;$operation.barrier=@{id=$instance;map='base2';generation=$anchor.spawncount;frame=([int]$anchor.frame+60);controls=@((Join-Path $out 'bot-control.json'),(Join-Path $out 'actor-control.json'))}}
     $operation|ConvertTo-Json -Depth 8|Set-Content $path -Encoding utf8
     $result=& $tool --config $path 2> (Join-Path $out "$Action.err")
@@ -129,7 +132,8 @@ try{
             do{Start-Sleep -Milliseconds 100;if($server.HasExited -or (Get-Date) -gt $deadline){throw 'Restored server startup failed'}}while(!(Get-NetUDPEndpoint -OwningProcess $server.Id -LocalPort $cfg.port -ErrorAction SilentlyContinue))
             }else{$originalPids=@();$report.source_checkpoint=$sharedCheckpoint}
             $load=Checkpoint-Operation 'load'
-            if($load.state -ne 'load_acknowledged'){throw 'Restored server load unconfirmed'}
+            $expectedLoad=if($cfg.load_barrier){'load_held'}else{'load_acknowledged'}
+            if($load.state -ne $expectedLoad){throw 'Restored server load unconfirmed'}
             $trace=Join-Path $out 'restored-bot.jsonl'
             $botConfig.output.trace_jsonl=$trace;$botConfig.test=@{hold_position=$true}
             if($cfg.resume){$botConfig.test.checkpoint_restore=Join-Path $out 'checkpoint';$botConfig.test.checkpoint_mode=$cfg.bot_mode;$botConfig.test.checkpoint_control=Join-Path $out 'restored-bot-control.json'}
@@ -143,12 +147,23 @@ try{
             # Capture connected Actor first; restore connects Bot first deliberately.
             $branchClock=[Diagnostics.Stopwatch]::StartNew()
             $bot=Start-Process $client -ArgumentList "--config `"$(Join-Path $out 'restored-bot-config.json')`"" -RedirectStandardOutput (Join-Path $out 'restored-bot.log') -RedirectStandardError (Join-Path $out 'restored-bot.err') -WindowStyle Hidden -PassThru
-            $restoredBot=Wait-Row {param($r) $r.map -eq 'base2' -and $r.health -eq 38 -and $r.self_entity -eq $botCapture.self_entity -and $r.inventory_known -and ($r.inventory|Where-Object {$_.name -eq 'Super Shotgun' -and $_.count -eq 1})}
+            if($cfg.load_barrier){
+                $restoredBot=Wait-Row {param($r) $r.frame -eq $load.load_anchor.frame -and $r.health -eq 38 -and $r.self_entity -eq $botCapture.self_entity -and (Test-Path (Join-Path $out 'restored-bot-control.json.restored.json'))}
+                $rejected=$false
+                try{$null=Checkpoint-Operation 'release'}catch{$rejected=$true}
+                if(!$rejected){throw 'Incomplete restore barrier released'}
+                Start-Sleep -Seconds 2
+                $held=Last-Row
+                if($held.frame -ne $load.load_anchor.frame -or $held.spawncount -ne $load.load_anchor.generation){throw 'World advanced while actor missing'}
+                $report.missing_participant_rejected=$true
+            }else{
+                $restoredBot=Wait-Row {param($r) $r.map -eq 'base2' -and $r.health -eq 38 -and $r.self_entity -eq $botCapture.self_entity -and $r.inventory_known -and ($r.inventory|Where-Object {$_.name -eq 'Super Shotgun' -and $_.count -eq 1})}
+            }
             $actor=Start-Process $client -ArgumentList "--config `"$(Join-Path $out 'restored-actor-config.json')`"" -RedirectStandardOutput (Join-Path $out 'restored-actor.log') -RedirectStandardError (Join-Path $out 'restored-actor.err') -WindowStyle Hidden -PassThru
             $deadline=(Get-Date).AddSeconds(20);$restoredActor=$null
             do{
                 if(Test-Path (Join-Path $out 'restored-actor.jsonl')){foreach($line in Get-Content (Join-Path $out 'restored-actor.jsonl') -Tail 5){try{$restoredActor=$line|ConvertFrom-Json}catch{}}}
-                if($restoredActor.health -eq 100 -and $restoredActor.self_entity -eq $actorCapture[0].self_entity -and $restoredActor.on_ground){break}
+                if($restoredActor.health -eq 100 -and $restoredActor.self_entity -eq $actorCapture[0].self_entity -and $restoredActor.on_ground -and (!$cfg.load_barrier -or (Test-Path (Join-Path $out 'restored-actor-control.json.restored.json')))){break}
                 Start-Sleep -Milliseconds 100
             }while((Get-Date) -lt $deadline)
             if($restoredActor.health -ne 100 -or $restoredActor.self_entity -ne $actorCapture[0].self_entity){throw 'Restored actor identity mismatch'}
@@ -160,6 +175,12 @@ try{
                 $actorReceipt=Get-Content (Join-Path $out 'restored-actor-control.json.restored.json') -Raw|ConvertFrom-Json
                 if($botReceipt.mode -ne $cfg.bot_mode -or $actorReceipt.mode -ne 'resume' -or $actorReceipt.runner_elapsed -ne $actorCapture[0].runner.elapsed_frames){throw 'Resume receipt mismatch'}
                 if($cfg.bot_mode -eq 'resume' -and $botReceipt.planner.goal -ne $botCapture.planner.goal){throw 'Saved planner goal not restored'}
+                if($cfg.load_barrier){
+                    $release=Checkpoint-Operation 'release'
+                    if($release.state -ne 'release_verified' -or !$release.barrier_verified -or $release.gameplay_verified){throw 'Restore release unverified'}
+                    $freshInventory=Wait-Row {param($r) $r.frame -gt $load.load_anchor.frame -and $r.inventory_known -and $r.health -eq 38 -and ($r.inventory|Where-Object {$_.name -eq 'Super Shotgun' -and $_.count -eq 1}) -and ($r.inventory|Where-Object {$_.name -eq 'Shells' -and $_.count -eq 10})}
+                    $report.load_barrier_verified=$true;$report.load_anchor=$load.load_anchor;$report.released_inventory=$freshInventory
+                }
                 $deadline=(Get-Date).AddSeconds(28)
                 do{
                     foreach($line in Get-Content (Join-Path $out 'restored-actor.jsonl') -Tail 5){try{$completedActor=$line|ConvertFrom-Json}catch{}}

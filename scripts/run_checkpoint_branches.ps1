@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([int]$Port=31160)
+param([int]$Port=31160,[switch]$LoadBarrier)
 $ErrorActionPreference='Stop'
 if($Port -lt 1024 -or $Port -gt 65532){throw 'Shared checkpoint suite requires three valid ports'}
 $repo=Split-Path $PSScriptRoot -Parent
@@ -24,11 +24,11 @@ $records=Get-CheckpointPackageRecords $shared
 $packageJSON=$records|ConvertTo-Json -Compress -Depth 4
 $packageFingerprint=Get-HarnessFingerprint $records
 $configs=@()
-foreach($i in 0..1){$path=Join-Path $out "branch-$i.json";@{runtime_root=(Join-Path $out 'seed/runtime');client_exe=$client;checkpoint_exe=$tool;output_root=(Join-Path $out "branch-$i");port=($Port+$i+1);timescale=2;barrier=$true;restore_slots=$true;resume=$true;bot_mode=$(if($i -eq 0){'resume'}else{'fresh'});source_checkpoint=$shared}|ConvertTo-Json|Set-Content $path -Encoding utf8;$configs+=$path}
+foreach($i in 0..1){$path=Join-Path $out "branch-$i.json";@{runtime_root=(Join-Path $out 'seed/runtime');client_exe=$client;checkpoint_exe=$tool;output_root=(Join-Path $out "branch-$i");port=($Port+$i+1);timescale=2;barrier=$true;restore_slots=$true;resume=$true;bot_mode=$(if($i -eq 0){'resume'}else{'fresh'});source_checkpoint=$shared;load_barrier=[bool]$LoadBarrier}|ConvertTo-Json|Set-Content $path -Encoding utf8;$configs+=$path}
 $results=@($configs|ForEach-Object -Parallel {
     $err='';try{& $using:trialHost -NoProfile -File $using:trialScript -Config $_|Out-Host;if($LASTEXITCODE){$err='Branch process failed'}}catch{$err=$_.Exception.Message}
     $cfg=Get-Content $_ -Raw|ConvertFrom-Json;$path=Join-Path $cfg.output_root 'report.json'
-    if(Test-Path $path){$r=Get-Content $path -Raw|ConvertFrom-Json;if($err -or $r.reason -ne 'accepted' -or $r.proof -ne 'new_process_resume_and_fresh'){$r.accepted=$false};$r}else{[pscustomobject]@{accepted=$false;reason=$err;port=$cfg.port}}
+    if(Test-Path $path){$r=Get-Content $path -Raw|ConvertFrom-Json;if($err -or $r.reason -ne 'accepted' -or $r.proof -ne 'new_process_resume_and_fresh' -or ($cfg.load_barrier -and (!$r.load_barrier_verified -or !$r.missing_participant_rejected))){$r.accepted=$false};$r}else{[pscustomobject]@{accepted=$false;reason=$err;port=$cfg.port}}
 } -ThrottleLimit 2)
 $accepted=$results.Count -eq 2 -and @($results|Where-Object {!$_.accepted}).Count -eq 0
 $copiesMatch=$true;$metrics=@()

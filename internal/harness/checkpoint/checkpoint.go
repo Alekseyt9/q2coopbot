@@ -19,6 +19,8 @@ import (
 )
 
 type Config struct {
+	HoldAfterLoad    bool     `json:"hold_after_load,omitempty"`
+	Release          *Barrier `json:"release,omitempty"`
 	BindParticipants bool     `json:"bind_participants,omitempty"`
 	Barrier          *Barrier `json:"barrier,omitempty"`
 	Version          int      `json:"version"`
@@ -43,12 +45,13 @@ type Manifest struct {
 	Files      []File        `json:"files"`
 }
 type Result struct {
-	BarrierVerified bool   `json:"barrier_verified"`
-	Action          string `json:"action"`
-	State           string `json:"state"`
-	Map             string `json:"map"`
-	Slot            string `json:"slot"`
-	CheckpointDir   string `json:"checkpoint_dir"`
+	LoadAnchor      *Barrier `json:"load_anchor,omitempty"`
+	BarrierVerified bool     `json:"barrier_verified"`
+	Action          string   `json:"action"`
+	State           string   `json:"state"`
+	Map             string   `json:"map"`
+	Slot            string   `json:"slot"`
+	CheckpointDir   string   `json:"checkpoint_dir"`
 	// The command acknowledgement is not proof of restored client behavior.
 	GameplayVerified bool `json:"gameplay_verified"`
 }
@@ -57,6 +60,17 @@ var identifier = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 var mapLine = regexp.MustCompile(`(?m)^map\s+: ([a-zA-Z0-9_]+)\s*$`)
 
 func (c Config) Validate() error {
+	if c.HoldAfterLoad && (c.Action != "load" || !c.BindParticipants) {
+		return fmt.Errorf("load hold requires bound participants")
+	}
+	if (c.Action == "release") != (c.Release != nil) {
+		return fmt.Errorf("release requires a restore barrier")
+	}
+	if c.Release != nil {
+		if err := c.Release.validate(); err != nil {
+			return err
+		}
+	}
 	if c.BindParticipants && c.Action != "load" {
 		return fmt.Errorf("participant binding requires load")
 	}
@@ -72,7 +86,7 @@ func (c Config) Validate() error {
 	if err != nil || !a.Addr().Is4() || !a.Addr().IsLoopback() || a.Port() < 1024 {
 		return fmt.Errorf("checkpoint requires explicit IPv4 loopback server")
 	}
-	if c.Version != 1 || c.Action != "save" && c.Action != "load" || !identifier.MatchString(c.Instance) || c.RuntimeRoot == "" || c.CheckpointDir == "" || c.TimeoutMS < 100 || c.TimeoutMS > 30000 {
+	if c.Version != 1 || c.Action != "save" && c.Action != "load" && c.Action != "release" || !identifier.MatchString(c.Instance) || c.RuntimeRoot == "" || c.CheckpointDir == "" || c.TimeoutMS < 100 || c.TimeoutMS > 30000 {
 		return fmt.Errorf("invalid checkpoint configuration")
 	}
 	return nil
@@ -96,10 +110,12 @@ func LoadConfig(path string) (Config, error) {
 		}
 		*target = abs
 	}
-	if c.Barrier != nil {
-		for i, control := range c.Barrier.Controls {
-			if !filepath.IsAbs(control) {
-				c.Barrier.Controls[i] = filepath.Join(filepath.Dir(path), control)
+	for _, b := range []*Barrier{c.Barrier, c.Release} {
+		if b != nil {
+			for i, control := range b.Controls {
+				if !filepath.IsAbs(control) {
+					b.Controls[i] = filepath.Join(filepath.Dir(path), control)
+				}
 			}
 		}
 	}
@@ -365,7 +381,7 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 		return result, err
 	}
 	var manifest Manifest
-	if c.Action == "load" {
+	if c.Action != "save" {
 		if err = readJSON(filepath.Join(c.CheckpointDir, "manifest.json"), &manifest); err != nil {
 			return result, err
 		}
@@ -415,6 +431,23 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 	}
 	if !portablePaths(reply, c.RuntimeRoot) {
 		return result, fmt.Errorf("server paths do not match the isolated portable runtime")
+	}
+	if c.Action == "release" {
+		if err = verifyRestoreReceipts(c.CheckpointDir, manifest, c.Release); err != nil {
+			return result, err
+		}
+		check := c
+		check.Barrier = c.Release
+		if err = verifyBarrier(ctx, check, password); err != nil {
+			return result, err
+		}
+		if _, err = request(ctx, c.Server, password, "set sv_test_checkpoint_frame 0", timeout); err != nil {
+			return result, err
+		}
+		result.Map = manifest.Map
+		result.State = "release_verified"
+		result.BarrierVerified = true
+		return result, nil
 	}
 	var nonce [12]byte
 	if _, err = rand.Read(nonce[:]); err != nil {
@@ -533,6 +566,20 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 	if err = copyFiles(filepath.Join(c.CheckpointDir, "native"), filepath.Join(parent, slot), manifest.Files); err != nil {
 		return result, err
 	}
+	holdConfirmed := false
+	if c.HoldAfterLoad {
+		defer func() {
+			if !holdConfirmed {
+				request(context.Background(), c.Server, password, "set sv_test_checkpoint_frame 0", 2*time.Second)
+			}
+		}()
+		if _, err = request(ctx, c.Server, password, "set sv_test_checkpoint_ack empty", timeout); err != nil {
+			return result, err
+		}
+		if _, err = request(ctx, c.Server, password, "set sv_test_checkpoint_frame 1", timeout); err != nil {
+			return result, err
+		}
+	}
 	reply, err = request(ctx, c.Server, password, "load "+slot, timeout)
 	if err != nil {
 		return result, err
@@ -550,5 +597,27 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 	}
 	result.Map = manifest.Map
 	result.State = "load_acknowledged"
+	if c.HoldAfterLoad {
+		deadline := time.Now().Add(timeout)
+		for {
+			reply, err = request(ctx, c.Server, password, "sv_test_checkpoint_ack", timeout)
+			if err != nil {
+				return result, err
+			}
+			var gen, frame int
+			var mapName string
+			_, scanErr := fmt.Sscanf(strings.TrimSpace(reply), `"sv_test_checkpoint_ack" is "%d:%d:%s`, &gen, &frame, &mapName)
+			mapName = strings.TrimSuffix(mapName, `"`)
+			if scanErr == nil && gen != manifest.Barrier.Generation && gen > 0 && frame == 1 && mapName == manifest.Map {
+				result.LoadAnchor = &Barrier{ID: manifest.Barrier.ID, Map: mapName, Frame: frame, Generation: gen}
+				result.State = "load_held"
+				holdConfirmed = true
+				break
+			}
+			if time.Now().After(deadline) {
+				return result, fmt.Errorf("native load hold not confirmed")
+			}
+		}
+	}
 	return result, nil
 }
