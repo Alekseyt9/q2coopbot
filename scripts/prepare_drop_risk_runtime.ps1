@@ -1,8 +1,8 @@
 [CmdletBinding()]
-param()
+param([string]$RuntimeRoot='')
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
-$runtime=Join-Path $repo 'workspace/runtime/q2go-drop-risk'
+$runtime=if($RuntimeRoot){[IO.Path]::GetFullPath($RuntimeRoot)}else{Join-Path $repo 'workspace/runtime/q2go-drop-risk'}
 & "$PSScriptRoot/prepare_runtime.ps1" -RuntimeRoot $runtime | Out-Null
 $maps=@('base1','base3')
 $stream=[IO.File]::OpenRead((Join-Path $runtime 'baseq2/pak0.pak'))

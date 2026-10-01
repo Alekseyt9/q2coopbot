@@ -1,12 +1,21 @@
 [CmdletBinding()]
-param([int]$Port=30600,[ValidateRange(1,8)][int]$Parallelism=2,[ValidateRange(1,100)][int]$Repetitions=2)
+param([int]$Port=30600,[ValidateRange(1,8)][int]$Parallelism=2,[ValidateRange(1,100)][int]$Repetitions=2,[switch]$Contact)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/check_armed_grenade.ps1"
 $out=Join-Path $repo ('workspace/artifacts/armed-grenade-suite-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))
 New-Item -ItemType Directory $out|Out-Null
-$runtime=& "$PSScriptRoot/prepare_drop_risk_runtime.ps1"
-$scenes=@([IO.Path]::GetRelativePath($out,(Join-Path $repo 'scripts/scenarios/base1-armed-grenade-release.json')))
+$calibrator=Join-Path $out 'q2grenade-report.exe'
+Push-Location $repo
+try {
+    $env:GOFLAGS='-buildvcs=false'
+    $env:GOCACHE=Join-Path $repo 'workspace/build/go-cache'
+    go build -o $calibrator ./cmd/q2grenade-report
+    if($LASTEXITCODE){throw 'Grenade calibrator build failed'}
+} finally {Pop-Location}
+$runtime=if($Contact){& "$PSScriptRoot/prepare_grenade_contact_runtime.ps1"}else{& "$PSScriptRoot/prepare_drop_risk_runtime.ps1"}
+$scene=if($Contact){'scripts/scenarios/base1-grenade-damageable-contact.json'}else{'scripts/scenarios/base1-armed-grenade-release.json'}
+$scenes=@([IO.Path]::GetRelativePath($out,(Join-Path $repo $scene)))
 $config=Join-Path $out 'suite.json'
 @{version=1;scenarios=$scenes;timescales=@(2);repetitions=$Repetitions;parallelism=$Parallelism;base_port=$Port;runtime_root=[IO.Path]::GetRelativePath($out,[string]$runtime);tail_frames=5}|ConvertTo-Json -Depth 6|Set-Content $config -Encoding utf8
 $lines=[collections.generic.list[string]]::new();$failure=''
@@ -26,7 +35,13 @@ foreach($run in $suite.results){
         $actor=Get-ChildItem $run.directory -Filter '*human-trace.jsonl'|Select-Object -First 1
         if(!$actor){throw 'Teammate trace missing'}
         $actorRows=@(Get-Content $actor.FullName|ConvertFrom-Json)
-        $item.metrics=Assert-ArmedGrenade $rows $actorRows
+        $item.metrics=Assert-ArmedGrenade $rows $actorRows -Contact:$Contact
+        $calibration=Join-Path $run.directory 'grenade-calibration.json'
+        $calibratorArgs=@('-trace',$file.FullName,'-root',(Join-Path $runtime 'baseq2'),'-map','base1','-out',$calibration)
+        if($Contact){$calibratorArgs+='-contact'}
+        & $calibrator @calibratorArgs
+        if($LASTEXITCODE){throw 'Observed native grenade path disagrees with prediction'}
+        $item.calibration=Get-Content $calibration -Raw|ConvertFrom-Json
         $item.accepted=$true;$item.reason='accepted'
     }catch{$item.reason=$_.Exception.Message}
     $results+=[pscustomobject]$item

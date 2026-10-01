@@ -68,6 +68,7 @@ type Client struct {
 	handshakeAt                             time.Time
 	decoder                                 *quake.Decoder
 	pendingSounds                           []quake.SoundEvent
+	pendingExplosions                       []quake.ExplosionEvent
 	planner                                 *Planner
 	root                                    string
 	previous                                quake.UserCmd
@@ -196,6 +197,7 @@ func (c *Client) reconnect() error {
 	c.previous = quake.UserCmd{}
 	c.decoder = quake.NewDecoder()
 	c.pendingSounds = nil
+	c.pendingExplosions = nil
 	c.seenCommands = map[string]bool{}
 	c.lastHandshake = ""
 	c.handshakeAt = time.Now()
@@ -217,6 +219,7 @@ func (c *Client) resumeMapSignon() error {
 	c.previous = quake.UserCmd{}
 	c.decoder = quake.NewDecoder()
 	c.pendingSounds = nil
+	c.pendingExplosions = nil
 	c.seenCommands = map[string]bool{}
 	c.planner.setMap("", c.root)
 	c.memoryLoaded = false
@@ -270,6 +273,7 @@ func (c *Client) handle(packet []byte) {
 	}
 	if c.decoder.ServerdataSeen {
 		c.pendingSounds = nil
+		c.pendingExplosions = nil
 		c.spawncount = c.decoder.Spawncount
 		c.begun = false
 		c.frameReady = false
@@ -286,6 +290,7 @@ func (c *Client) handle(packet []byte) {
 		_ = c.command(command)
 	}
 	c.pendingSounds = append(c.pendingSounds, c.decoder.Sounds...)
+	c.pendingExplosions = append(c.pendingExplosions, c.decoder.Explosions...)
 	for _, f := range frames {
 		c.frames++
 		c.suppressedFrames += int(f.Suppressed)
@@ -295,9 +300,12 @@ func (c *Client) handle(packet []byte) {
 			c.frameReady = true
 		}
 		s := c.decoder.Snapshot(f)
+		s.Explosions = c.pendingExplosions
+		c.pendingExplosions = nil
 		if len(c.pendingSounds) > 0 {
 			s.Sounds = c.pendingSounds
 			c.pendingSounds = nil
+			c.pendingExplosions = nil
 		}
 		if c.testButtonAutoGoal && c.testTeleportSent && s.Map == "base2" {
 			goal := quake.Vec3{194, 2080, -168}
@@ -936,6 +944,8 @@ func (c *Client) run(ctx context.Context) error {
 					Gravity            int16                   `json:"gravity"`
 					GunFrame           int                     `json:"gun_frame"`
 					GrenadePrediction  *GrenadePrediction      `json:"grenade_prediction,omitempty"`
+					Explosions         []quake.ExplosionEvent  `json:"explosions,omitempty"`
+					Projectiles        []quake.Object          `json:"projectiles,omitempty"`
 					ViewAngles         [3]int16                `json:"view_angles"`
 					GroundPrediction   *GroundPrediction       `json:"ground_prediction,omitempty"`
 					GroundSurface      string                  `json:"ground_surface"`
@@ -1023,6 +1033,8 @@ func (c *Client) run(ctx context.Context) error {
 					Enemies:           c.planner.World.Snapshot.Enemies,
 					Arbitration:       c.planner.World.Command,
 					GrenadePrediction: c.planner.World.GrenadePrediction,
+					Projectiles:       c.planner.World.Snapshot.Projectiles,
+					Explosions:        c.planner.World.Snapshot.Explosions,
 					Command:           cmd,
 				}
 				if c.planner.hasGoal {

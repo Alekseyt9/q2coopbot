@@ -16,8 +16,8 @@
     "workspace/artifacts/live-grenade-not-thrown-20260930-194230/server-tail.log"
   ],
   "missing_setup": [
-    "Native калибровка диагностической траектории, fuse/скорости release, отскоков и раннего взрыва на мобах; полный выбор безопасного броска для себя и напарника",
-    "Native потеря видимой цели после подготовки и движение напарника; воспроизведение исходного base3"
+    "Движущиеся цели/напарник, диапазон ранних точек взрыва, общий безопасный выбор траектории и разрешение подготовки",
+    "Native потеря ранее видимой цели после подготовки; точное воспроизведение исходного base3"
   ],
   "acceptance": {
     "no_grenade_teammate_kill": true,
@@ -35,11 +35,21 @@
     "workspace/artifacts/armed-grenade-suite-20261001-141815-287/report.json",
     "workspace/artifacts/armed-grenade-suite-20261001-141815-287/negative-controls.json",
     "workspace/artifacts/armed-grenade-suite-20261001-143357-422/report.json",
-    "workspace/artifacts/armed-grenade-suite-20261001-143357-422/negative-controls.json"
+    "workspace/artifacts/armed-grenade-suite-20261001-143357-422/negative-controls.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-145538-017/report.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-145538-017/negative-controls.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-150454-806/report.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-150454-806/negative-controls.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-153506-724/report.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-153506-724/negative-controls.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-153553-148/report.json"
   ],
   "verification_scope": "Два native прогона2x параллельно на base1: явная тестовая подготовка13 кадров, включая два кадра11 с активированным fuse, затем production release на кадре153. Native кадр12, расход Grenades5->4, завершение цикла и Blaster после fuse, HP бота и напарника100. Provenance true. Семь отрицательных контролей отвергнуты. Начальный бросок направлен тестовой постановкой по+X, враги удалены, напарник неподвижен. Не доказаны общий выбор безопасной траектории, потеря ранее видимой цели, движущийся напарник или исходный эпизод base3; карточка остаётся observation_only.",
   "partial_scenarios": [
-    "scripts/scenarios/base1-armed-grenade-release.json"
+    "scripts/scenarios/base1-armed-grenade-release.json",
+    "scripts/scenarios/base1-grenade-damageable-contact.json"
   ],
-  "trajectory_status": "diagnostic_only_not_authorized: static native tick/bounce kernel, nine jitter samples, approximate body contacts and risk; actual projectile path not calibrated, moving bodies and exact armed fuse not modeled"
+  "trajectory_status": "partial_native_static_path_calibrated: first five visible positions infer initial velocity once;24 held-out points including15 after bounces, max_error0.85/0.93 in2x parallel repeats. Launch impulse/fuse before release, actual explosion/contact and moving bodies remain unverified; not authorized to arm.",
+  "launch_fuse_status": "isolated_native_verified_parallel_2x: center-hand muzzle, timer2.9/speed413, arm152 launch155 explosion184 with real TE event. Forward error0.1875; early damageable contact and moving players unverified; arming not authorized.",
+  "contact_status": "stationary_native_damageable_contact_verified_parallel_2x: two neutral hanging misc_insane, contact160 vs fuse184, visual_error0.04/0.09. Exact fixture bounds; generic packed bounds and moving targets not certified; arming not authorized."
 }

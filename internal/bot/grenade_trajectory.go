@@ -24,6 +24,10 @@ type grenadeBody struct{ origin, mins, maxs quake.Vec3 }
 // Baseq2 SV_Physics_Toss: think before motion, gravity before sweep, one
 // collision per 100ms tick (unused tick time is discarded), overbounce1.5.
 func grenadeFlight(start, velocity quake.Vec3, fuse, gravity float64, trace func(quake.Vec3, quake.Vec3) quake.PointTrace, bodies []grenadeBody) GrenadeFlight {
+	return simulateGrenade(start, velocity, fuse, gravity, trace, bodies, nil)
+}
+
+func simulateGrenade(start, velocity quake.Vec3, fuse, gravity float64, trace func(quake.Vec3, quake.Vec3) quake.PointTrace, bodies []grenadeBody, observe func(quake.Vec3, int)) GrenadeFlight {
 	r := GrenadeFlight{End: start, Event: "invalid_input"}
 	for _, v := range []float64{fuse, gravity, start[0], start[1], start[2], velocity[0], velocity[1], velocity[2]} {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
@@ -41,6 +45,9 @@ func grenadeFlight(start, velocity quake.Vec3, fuse, gravity float64, trace func
 			return r
 		}
 		if settled {
+			if observe != nil {
+				observe(r.End, r.Bounces)
+			}
 			continue
 		}
 		velocity[2] -= gravity * 0.1
@@ -71,6 +78,9 @@ func grenadeFlight(start, velocity quake.Vec3, fuse, gravity float64, trace func
 		}
 		r.End = tr.End
 		if tr.Fraction == 1 {
+			if observe != nil {
+				observe(r.End, r.Bounces)
+			}
 			continue
 		}
 		if tr.Sky {
@@ -91,6 +101,9 @@ func grenadeFlight(start, velocity quake.Vec3, fuse, gravity float64, trace func
 		if tr.Normal[2] > 0.7 && velocity[2] < 60 {
 			settled = true
 			velocity = quake.Vec3{}
+		}
+		if observe != nil {
+			observe(r.End, r.Bounces)
 		}
 	}
 	r.Event = "unknown_fuse"
@@ -122,7 +135,7 @@ func grenadeBodyHit(from, to quake.Vec3, b grenadeBody) (float64, bool) {
 }
 
 func (p *Planner) predictGrenadeCandidate(s quake.Snapshot) *GrenadePrediction {
-	r := &GrenadePrediction{Scope: "nominal_right_hand_timer3_diagnostic", Reason: "not_authorized"}
+	r := &GrenadePrediction{Scope: "nominal_center_hand_timer3_diagnostic", Reason: "not_authorized"}
 	g := p.World.Geometry
 	if !g.HasCollision() || s.Gravity <= 0 {
 		r.Reason = "unknown_geometry_or_gravity"
@@ -176,7 +189,7 @@ func (p *Planner) predictGrenadeCandidate(s quake.Snapshot) *GrenadePrediction {
 		viewheight = -2
 	}
 	for i := range start {
-		start[i] += 8*fwd[i] + 8*right[i]
+		start[i] += 8 * fwd[i] // ConnectRequest uses hand=2 (CENTER_HANDED).
 	}
 	start[2] += viewheight - 8
 	for _, uj := range []float64{-10, 0, 10} {

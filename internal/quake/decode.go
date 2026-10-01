@@ -95,6 +95,10 @@ type SoundEvent struct {
 	Attenuation float64 `json:"attenuation"`
 	Position    *Vec3   `json:"position,omitempty"`
 }
+type ExplosionEvent struct {
+	Kind     byte `json:"kind"`
+	Position Vec3 `json:"position"`
+}
 
 const playerSkinsConfigBase = 32 + 5*256 // CS_PLAYERSKINS in protocol 34.
 type Decoder struct {
@@ -107,6 +111,7 @@ type Decoder struct {
 	Frames             map[int]Frame
 	Commands           []string
 	Sounds             []SoundEvent
+	Explosions         []ExplosionEvent
 	Map                string
 	PlayerNumber       int
 	lastTeammate       *Vec3
@@ -468,6 +473,7 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 	r := reader{data: data}
 	d.Commands = nil
 	d.Sounds = nil
+	d.Explosions = nil
 	d.ServerdataSeen = false
 	var frames []Frame
 	for r.pos < len(data) {
@@ -481,6 +487,7 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 			d.Inventory, d.InventoryKnown, d.InventoryFrame, d.latestFrame = [256]int16{}, false, 0, 0
 			d.ServerdataSeen = true
 			d.Sounds = nil
+			d.Explosions = nil
 			d.Config = map[int]string{}
 			d.Baselines = map[int]Entity{}
 			d.Frames = map[int]Frame{}
@@ -601,9 +608,15 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 				}
 			} else if effect == 5 || effect == 6 || effect == 7 || effect == 8 || effect == 17 || effect == 18 {
 				// Explosion temporary entities carry one packed position.
-				if e = r.skip(6); e != nil {
-					return frames, e
+				var position Vec3
+				for i := range position {
+					coord, err := r.short()
+					if err != nil {
+						return frames, err
+					}
+					position[i] = float64(coord) / 8
 				}
+				d.Explosions = append(d.Explosions, ExplosionEvent{effect, position})
 			} else if effect == 16 || effect == 19 {
 				// Parasite/medic beam: entity short and two packed positions.
 				if e = r.skip(14); e != nil {
@@ -741,6 +754,7 @@ type Snapshot struct {
 	ViewAngles         [3]int16          `json:"view_angles"`
 	DeltaAngles        [3]int16          `json:"delta_angles"`
 	Enemies            []Object          `json:"enemies"`
+	Projectiles        []Object          `json:"projectiles,omitempty"`
 	Obstacles          []Object          `json:"obstacles,omitempty"`
 	Defeated           []Object          `json:"defeated,omitempty"`
 	Pickups            []Object          `json:"pickups"`
@@ -749,6 +763,7 @@ type Snapshot struct {
 	RemovedEntities    []int             `json:"removed_entities,omitempty"`
 	Suppressed         byte              `json:"suppressed,omitempty"`
 	Sounds             []SoundEvent      `json:"sounds,omitempty"`
+	Explosions         []ExplosionEvent  `json:"explosions,omitempty"`
 }
 
 // ResetTeammateHistory discards observations made during harness placement.
@@ -814,6 +829,9 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 	}
 	for _, entity := range f.Entities {
 		path := strings.ToLower(d.Config[32+entity.Model])
+		if path == "models/objects/grenade2/tris.md2" {
+			s.Projectiles = append(s.Projectiles, Object{ID: entity.Number, Class: "hand_grenade", Origin: entity.Origin})
+		}
 		if strings.HasPrefix(path, "*") {
 			if model, err := strconv.Atoi(strings.TrimPrefix(path, "*")); err == nil {
 				s.Movers = append(s.Movers, Mover{ID: entity.Number, Model: model, Origin: entity.Origin})
