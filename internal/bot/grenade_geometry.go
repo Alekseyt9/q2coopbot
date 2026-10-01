@@ -3,13 +3,15 @@ package bot
 import "q2coopbot/internal/quake"
 
 type GrenadeGeometryEnvelope struct {
-	BounceEnvelope      *GrenadeBounceEnvelope `json:"bounce_envelope,omitempty"`
-	Scope               string                 `json:"scope"`
-	ClearSeconds        float64                `json:"static_clear_seconds"`
-	StopSeconds         float64                `json:"stop_seconds,omitempty"`
-	Reason              string                 `json:"reason"`
-	Authorized          bool                   `json:"authorized"`
-	PostBounceCertified bool                   `json:"post_bounce_certified"`
+	SurfaceContact        *quake.ProjectileSurfaceContact `json:"static_surface_contact,omitempty"`
+	SurfaceBounceEnvelope *GrenadeBounceEnvelope          `json:"static_surface_bounce_envelope,omitempty"`
+	BounceEnvelope        *GrenadeBounceEnvelope          `json:"bounce_envelope,omitempty"`
+	Scope                 string                          `json:"scope"`
+	ClearSeconds          float64                         `json:"static_clear_seconds"`
+	StopSeconds           float64                         `json:"stop_seconds,omitempty"`
+	Reason                string                          `json:"reason"`
+	Authorized            bool                            `json:"authorized"`
+	PostBounceCertified   bool                            `json:"post_bounce_certified"`
 }
 
 // A certificate only for a static, unobstructed prefix of nominal free flight.
@@ -28,6 +30,14 @@ func grenadeGeometryEnvelope(s quake.Snapshot, start, fwd, right, up quake.Vec3,
 		}
 		if !clear {
 			r.BounceEnvelope = grenadeBounceReach(segment, tick, 5, float64(s.Gravity))
+			// Retain the broad fallback. This additional range describes only
+			// the static family; dynamic bodies may preempt the wall contact.
+			previous := grenadeBallisticBox(start, fwd, right, up, float64(s.Gravity), tick-1)
+			current := grenadeBallisticBox(start, fwd, right, up, float64(s.Gravity), tick)
+			r.SurfaceContact = g.ProjectileCommonSurface(previous.lo, previous.hi, current.lo, current.hi)
+			if r.SurfaceContact != nil {
+				r.SurfaceBounceEnvelope = grenadeBounceReach(grenadeBox{r.SurfaceContact.Min, r.SurfaceContact.Max}, tick, 5, float64(s.Gravity))
+			}
 			r.StopSeconds = float64(tick) * .1
 			r.Reason = "possible_static_bounce"
 			return r

@@ -697,7 +697,9 @@ func (c *Client) run(ctx context.Context) error {
 			observeInventory := !c.idle || c.scenario != nil && c.scenario.Scenario.ActorInventory
 			if !safetyStop && observeInventory && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
 				if !c.idle && !pairSetup && !c.testProjectileComparison && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
-					weaponRequest = c.weaponSwitch.command(c.planner.World.Snapshot)
+					if !c.planner.grenadeThrowPending(c.planner.World.Snapshot) {
+						weaponRequest = c.weaponSwitch.command(c.planner.World.Snapshot)
+					}
 				}
 				if request := c.inventoryWatch.command(c.planner.World.Snapshot); request != "" {
 					if err := c.command(request); err != nil {

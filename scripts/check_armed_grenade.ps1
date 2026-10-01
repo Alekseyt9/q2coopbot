@@ -90,7 +90,7 @@ function Assert-GrenadeEarlyEnvelope([object[]]$Rows,[ValidateSet('teammate','ta
     return [pscustomobject]@{hazard_frames=$hazards.Count;kind=$Kind;horizon_seconds=0.5;assumed_axis_speed=400;geometry_certified=$false;authorized=$false}
 }
 
-function Assert-GrenadeGeometry([object[]]$Rows,[object[]]$ActorRows,[switch]$Blocked) {
+function Assert-GrenadeGeometry([object[]]$Rows,[object[]]$ActorRows,[switch]$Blocked,[switch]$SurfaceContact) {
     $eligible=@($Rows|Where-Object {$_.frame -lt 350 -and $_.weapon -match '/v_handgr/'})
     $proof=@($eligible|Where-Object {
         $envelope=$_.grenade_prediction.early_envelope;$geometry=$envelope.geometry
@@ -98,7 +98,17 @@ function Assert-GrenadeGeometry([object[]]$Rows,[object[]]$ActorRows,[switch]$Bl
             $bounce=$geometry.bounce_envelope;$first=$bounce.ranges|Select-Object -First 1;$last=$bounce.ranges|Select-Object -Last 1
             $bounds=$first.min.Count -eq 3 -and $first.max.Count -eq 3 -and $last.min.Count -eq 3 -and $last.max.Count -eq 3
             if($bounds){for($axis=0;$axis -lt 3;$axis++){if($first.min[$axis] -gt $first.max[$axis] -or $last.min[$axis] -gt $first.min[$axis]-416 -or $last.max[$axis] -lt $first.max[$axis]+416){$bounds=$false}}}
-            $geometry.reason -eq 'possible_static_bounce' -and [math]::Abs($geometry.static_clear_seconds-0.2) -lt 1e-8 -and [math]::Abs($geometry.stop_seconds-0.3) -lt 1e-8 -and [math]::Abs($_.self[0]-128) -lt 1 -and
+            $surfaceValid=$true
+            if($SurfaceContact){
+                $surface=$geometry.static_surface_contact;$narrow=$geometry.static_surface_bounce_envelope;$seed=$narrow.ranges|Select-Object -First 1
+                $surfaceValid=$surface.min.Count -eq 3 -and $surface.max.Count -eq 3 -and $surface.normal.Count -eq 3 -and $seed.min.Count -eq 3 -and $seed.max.Count -eq 3 -and $narrow.ranges.Count -eq 3 -and $narrow.authorized -eq $false -and $narrow.geometry_certified -eq $false -and $narrow.scope -eq 'coarse_post_collision_model_bound' -and $narrow.model_speed_norm_cap -eq 2000 -and $narrow.gravity -eq $_.gravity -and $seed.tick -eq 3
+                if($surfaceValid){
+                    $surfaceValid=$surface.normal[0] -eq -1 -and $surface.normal[1] -eq 0 -and $surface.normal[2] -eq 0 -and $surface.distance -eq -256 -and [math]::Abs($surface.min[0]-255.96875) -lt 0.001 -and [math]::Abs($surface.max[0]-255.96875) -lt 0.001
+                    for($axis=0;$axis -lt 3;$axis++){if($surface.min[$axis] -gt $surface.max[$axis] -or $seed.min[$axis] -ne $surface.min[$axis] -or $seed.max[$axis] -ne $surface.max[$axis]){$surfaceValid=$false}}
+                }
+            }elseif($geometry.static_surface_contact -or $geometry.static_surface_bounce_envelope){$surfaceValid=$false}
+            $expectedX=if($SurfaceContact){132}else{128}
+            $geometry.reason -eq 'possible_static_bounce' -and [math]::Abs($geometry.static_clear_seconds-0.2) -lt 1e-8 -and [math]::Abs($geometry.stop_seconds-0.3) -lt 1e-8 -and [math]::Abs($_.self[0]-$expectedX) -lt 1 -and $surfaceValid -and
             $bounce.scope -eq 'coarse_post_collision_model_bound' -and $bounce.model_speed_norm_cap -eq 2000 -and $bounce.gravity -eq $_.gravity -and $bounce.authorized -eq $false -and $bounce.geometry_certified -eq $false -and $bounce.ranges.Count -eq 3 -and $first.tick -eq 3 -and $last.tick -eq 5 -and $bounds
         }else{$geometry.reason -eq 'free_prefix_only' -and $geometry.static_clear_seconds -eq 0.5 -and !$geometry.stop_seconds}
         $geometry.scope -eq 'static_free_flight_prefix_only' -and $geometry.authorized -eq $false -and $geometry.post_bounce_certified -eq $false -and $envelope.frame -eq $_.frame -and $envelope.geometry_certified -eq $false -and $state

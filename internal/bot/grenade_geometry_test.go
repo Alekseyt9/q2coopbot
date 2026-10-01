@@ -35,6 +35,16 @@ func TestGrenadeGeometryPrefixOnBase1(t *testing.T) {
 	if r.Reason != "possible_static_bounce" || r.ClearSeconds != .2 || r.StopSeconds < .299 || r.StopSeconds > .301 {
 		t.Fatal(r)
 	}
+	if r.SurfaceContact != nil {
+		t.Fatal("grazing family incorrectly certified")
+	}
+	r = grenadeGeometryEnvelope(s, quake.Vec3{140, -224, 38.125}, quake.Vec3{1, 0, 0}, quake.Vec3{0, -1, 0}, quake.Vec3{0, 0, 1}, &g)
+	if r.SurfaceContact == nil || r.SurfaceBounceEnvelope == nil {
+		t.Fatalf("common wall missing: %+v", r)
+	}
+	if r.SurfaceContact.Max[0]-r.SurfaceContact.Min[0] > 0.001 || r.SurfaceBounceEnvelope.Authorized || r.SurfaceBounceEnvelope.GeometryCertified {
+		t.Fatal(r.SurfaceContact)
+	}
 	model, ok := g.Model(1)
 	if !ok {
 		t.Fatal("Native inline model missing")

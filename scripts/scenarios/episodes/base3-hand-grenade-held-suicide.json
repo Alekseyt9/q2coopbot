@@ -62,7 +62,12 @@
     "workspace/artifacts/armed-grenade-suite-20261001-172255-589/geometry-negative-controls.json",
     "workspace/artifacts/armed-grenade-suite-20261001-174944-407/report.json",
     "workspace/artifacts/armed-grenade-suite-20261001-174944-407/geometry-negative-controls.json",
-    "workspace/artifacts/armed-grenade-suite-20261001-175112-181/report.json"
+    "workspace/artifacts/armed-grenade-suite-20261001-175112-181/report.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-183631-380/report.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-183631-380/geometry-negative-controls.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-183733-057/report.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-183733-057/geometry-negative-controls.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-183837-765/report.json"
   ],
   "verification_scope": "Два native прогона2x параллельно на base1: явная тестовая подготовка13 кадров, включая два кадра11 с активированным fuse, затем production release на кадре153. Native кадр12, расход Grenades5->4, завершение цикла и Blaster после fuse, HP бота и напарника100. Provenance true. Семь отрицательных контролей отвергнуты. Начальный бросок направлен тестовой постановкой по+X, враги удалены, напарник неподвижен. Не доказаны общий выбор безопасной траектории, потеря ранее видимой цели, движущийся напарник или исходный эпизод base3; карточка остаётся observation_only.",
   "partial_scenarios": [
@@ -71,7 +76,8 @@
     "scripts/scenarios/base1-grenade-moving-teammate.json",
     "scripts/scenarios/base1-grenade-moving-target.json",
     "scripts/scenarios/base1-grenade-moving-contact.json",
-    "scripts/scenarios/base1-grenade-geometry-blocked.json"
+    "scripts/scenarios/base1-grenade-geometry-blocked.json",
+    "scripts/scenarios/base1-grenade-common-surface.json"
   ],
   "trajectory_status": "partial_native_static_path_calibrated: first five visible positions infer initial velocity once;24 held-out points including15 after bounces, max_error0.85/0.93 in2x parallel repeats. Launch impulse/fuse before release, actual explosion/contact and moving bodies remain unverified; not authorized to arm.",
   "launch_fuse_status": "isolated_native_verified_parallel_2x: center-hand muzzle, timer2.9/speed413, arm152 launch155 explosion184 with real TE event. Forward error0.1875; early damageable contact and moving players unverified; arming not authorized.",
@@ -81,5 +87,6 @@
   "moving_contact_status": "isolated_native_throw_verified_parallel_2x: walking misc_insane with actual animation pauses, one ground bounce, damageable contact161 versus fuse184. Five free-flight warmup sightings, one held-out bounce point and actual TE contact; max_error0.288/0.241, HP100 both, Grenades5->4. Target positions selected by native edict order, no refit from explosion. Seven damaged traces rejected; ordinary native regression2/2. Not a pre-throw motion/safety guarantee; generic arming remains prohibited.",
   "early_envelope_status": "diagnostic_rejection_only: continuous up/right jitter bounds over nominal free flight500ms, assumed body axis speed400, approximate packed bounds inflated8. Contact ranges and self/teammate blast reach exposed in trace. Geometry/bounces/later flight not certified; absence of hazard remains unproven, authorized always false. Native observer teammate2/2 and target2/2 at2x parallelism2; six damaged envelope controls rejected per fixture. Generic arming remains prohibited.",
   "geometry_prefix_status": "static_free_flight_prefix_only: whole segment AABB separation from every MASK_SHOT world brush, epsilon0.03125, continuous nominal jitter. Stop on possible static bounce/observed mover overlap/unknown bounds; post-bounce and generic arming not certified. Native blocked observer2/2 at2x parallelism2: clear0.2, possible collision0.3; free observer2/2: clear0.5. Six damaged certificates rejected per fixture. Full flight, dynamic future and direction policy remain open.",
-  "post_bounce_reach_status": "coarse_model_bound_only: include every collision normal/fraction and no-bounce/settled branch using speed norm cap2000 before gravity. Expand each axis208 units per100ms at gravity800; conditional model assumption, not geometry/dynamic safety certificate. Native wall observer2/2 at2x parallelism2; ten damaged certificates rejected. Real static throw2/2:15 held-out post-bounce positions contained per repeat, path error0.854/0.932, HP100 both. Tighter surface-aware envelope and direction policy remain open; generic arming forbidden."
+  "post_bounce_reach_status": "coarse_model_bound_only: include every collision normal/fraction and no-bounce/settled branch using speed norm cap2000 before gravity. Expand each axis208 units per100ms at gravity800; conditional model assumption, not geometry/dynamic safety certificate. Native wall observer2/2 at2x parallelism2; ten damaged certificates rejected. Real static throw2/2:15 held-out post-bounce positions contained per repeat, path error0.854/0.932, HP100 both. Tighter surface-aware envelope and direction policy remain open; generic arming forbidden.",
+  "static_surface_status": "partial_static_first_contact_only: continuous endpoint boxes cross one axis BSP face; every other face encloses the entire segment, other brushes separated. Surface x256, contact x255.96875 at tick3 for native observer bot x132; two repetitions at2x parallelism2, 15 damaged certificates rejected. Boundary bot x128 correctly has no common-surface certificate (2/2, ten controls). Coarse fallback retained; later ticks still expand208 units/axis, dynamic preemption not certified, generic arming forbidden."
 }
