@@ -13,6 +13,7 @@ import (
 )
 
 type World struct {
+	Campaign          *CampaignDecision  `json:"campaign,omitempty"`
 	GrenadePrediction *GrenadePrediction `json:"grenade_prediction,omitempty"`
 	ResourceYield     *ResourceYield     `json:"resource_yield,omitempty"`
 	Pickup            *PickupAttempt     `json:"pickup,omitempty"`
@@ -41,6 +42,10 @@ type World struct {
 	Updated           time.Time          `json:"updated"`
 }
 type Planner struct {
+	campaignMap               string
+	campaignDestination       string
+	Campaign                  bool
+	CampaignNextMap           string
 	grenadeThrow              *grenadeThrow
 	grenadeRequestFrame       int
 	grenadeRequestMap         string
@@ -381,8 +386,19 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	searching := false
 	regrouping := false
 	standalonePickup := false
+	campaign := p.Campaign && s.Teammate == nil
+	p.World.Campaign = nil
 	goal := quake.Vec3{}
-	if s.Teammate == nil {
+	if campaign {
+		var ok bool
+		goal, ok = p.campaignGoal(s)
+		if !ok {
+			p.World.Goal = "wait_for_campaign_goal"
+			p.routeKnown = false
+			return
+		}
+		p.World.Goal = "reach_level_exit"
+	} else if s.Teammate == nil {
 		searchGoal, ok := p.respawnRegroupGoal(s)
 		searchKind := "regroup_after_respawn"
 		regrouping = ok
@@ -436,13 +452,13 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		}
 	}
 	if searching { /* the last known point is a search target, not a visible teammate */
-	} else if p.World.Goal == "recover_health" || standalonePickup { /* keep resource objective */
+	} else if p.World.Goal == "recover_health" || standalonePickup || campaign { /* keep resource/campaign objective */
 	} else if quake.Horizontal(s.Self, goal) < followStandOff && math.Abs(s.Self[2]-goal[2]) < 40 && !p.bridgeNeedsApproach(goal) && !p.bridgeLinkNeedsExit() {
 		p.World.Goal = "cover_teammate"
 	} else {
 		p.World.Goal = "follow_teammate"
 	}
-	if !searching && !standalonePickup && p.World.Strategy != nil {
+	if !searching && !standalonePickup && !campaign && p.World.Strategy != nil {
 		switch p.World.Strategy.Choice {
 		case "recover":
 			if health, ok := p.healthGoal(s); ok {
@@ -773,7 +789,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		flight, _ := p.jumpCommand(quake.UserCmd{Yaw: cmd.Yaw})
 		return flight
 	}
-	if p.World.Goal != "follow_teammate" && p.World.Goal != "collect_item" && p.World.Goal != "recover_health" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" && p.World.Goal != "regroup_after_respawn" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
+	if p.World.Goal != "reach_level_exit" && p.World.Goal != "follow_teammate" && p.World.Goal != "collect_item" && p.World.Goal != "recover_health" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" && p.World.Goal != "regroup_after_respawn" || p.World.Navigation != "ready" && p.World.Navigation != "direct_clear" || !p.hasGoal {
 		if p.World.Command.LimitReason == "" {
 			p.World.Command.LimitReason = "no_movement_goal"
 		}

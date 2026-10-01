@@ -46,7 +46,7 @@ func (p *Planner) planRampJump() bool {
 
 func (p *Planner) planVerifiedJump(maxRise float64) bool {
 	s := p.World.Snapshot
-	if (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn") || !s.OnGround || s.Health <= 0 || p.button != nil || p.elevator != nil {
+	if (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn" && p.World.Goal != "reach_level_exit") || !s.OnGround || s.Health <= 0 || p.button != nil || p.elevator != nil {
 		return false
 	}
 	// Prefer the nearest supported point along the remaining route, rather

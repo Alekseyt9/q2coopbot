@@ -10,7 +10,7 @@ import (
 // clears both static geometry and the currently observed moving brushes.
 func (p *Planner) doorRouteBypass(s quake.Snapshot) (quake.Vec3, bool) {
 	g := p.World.Geometry
-	if !s.OnGround || !g.HasCollision() || (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn") {
+	if !s.OnGround || !g.HasCollision() || (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn" && p.World.Goal != "reach_level_exit") {
 		return quake.Vec3{}, false
 	}
 	for i, wp := range p.World.Route {

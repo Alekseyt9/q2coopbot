@@ -155,6 +155,13 @@ func collectBarrier(ctx context.Context, c Config, password string) ([]Capture, 
 	return captures, nil
 }
 func verifyBarrier(ctx context.Context, c Config, password string) error {
+	armed, err := request(ctx, c.Server, password, "sv_test_checkpoint_frame", time.Duration(c.TimeoutMS)*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(armed, fmt.Sprintf(`"sv_test_checkpoint_frame" is "%d"`, c.Barrier.Frame)) {
+		return fmt.Errorf("native checkpoint barrier is not armed")
+	}
 	reply, err := request(ctx, c.Server, password, "sv_test_checkpoint_ack", time.Duration(c.TimeoutMS)*time.Millisecond)
 	if err != nil {
 		return err

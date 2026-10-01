@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "name": "base1-campaign-exit",
+  "map": "base1",
+  "next_map": "base2",
+  "origin": "-1632,1600,-17.875",
+  "scope": "Approach original exit trigger without companion; confirm server map change. Monsters removed on base1; initial placement is a fixture, not full level completion."
+}

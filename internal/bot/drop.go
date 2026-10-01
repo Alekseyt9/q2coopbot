@@ -11,7 +11,7 @@ import (
 // It requires a nearby static floor with full hull support and a route onward.
 func (p *Planner) planShortWalkDown() bool {
 	s, g := p.World.Snapshot, p.World.Geometry
-	if (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn") || !s.OnGround || s.Health <= 0 || p.Nav == nil || g == nil || !g.HasCollision() || p.elevator != nil || p.button != nil || len(p.World.Route) == 0 || p.World.Route[0].Kind != 2 {
+	if (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn" && p.World.Goal != "reach_level_exit") || !s.OnGround || s.Health <= 0 || p.Nav == nil || g == nil || !g.HasCollision() || p.elevator != nil || p.button != nil || len(p.World.Route) == 0 || p.World.Route[0].Kind != 2 {
 		return false
 	}
 	target := p.World.Route[0].Position
@@ -91,7 +91,7 @@ func (p *Planner) planWalkOff() bool {
 
 func (p *Planner) planWalkOffRoute(r []quake.Waypoint) bool {
 	s, g := p.World.Snapshot, p.World.Geometry
-	if (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn") || !s.OnGround || s.Health <= 0 || p.Nav == nil || !g.HasCollision() || p.elevator != nil || p.button != nil {
+	if (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn" && p.World.Goal != "reach_level_exit") || !s.OnGround || s.Health <= 0 || p.Nav == nil || !g.HasCollision() || p.elevator != nil || p.button != nil {
 		return false
 	}
 	for len(r) > 2 && r[0].Kind == 2 && quake.Horizontal(s.Self, r[0].Position) <= 64 {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 )
 
@@ -24,6 +25,8 @@ type ConfigFile struct {
 		AASDir        string `json:"aas_dir"`
 	} `json:"client"`
 	Run struct {
+		Mode       string `json:"mode"`
+		NextMap    string `json:"next_map"`
 		Duration   string `json:"duration"`
 		FramePaced bool   `json:"frame_paced"`
 		GameFrames int    `json:"game_frames"`
@@ -149,6 +152,14 @@ func LoadConfig(path string) (Config, error) {
 	cfg.CheckpointControl = resolve(file.Test.CheckpointControl)
 	cfg.CheckpointRestore, cfg.CheckpointMode = resolve(file.Test.CheckpointRestore), file.Test.CheckpointMode
 	cfg.FramePaced, cfg.GameFrames = file.Run.FramePaced, file.Run.GameFrames
+	if file.Run.Mode != "" && file.Run.Mode != "companion" && file.Run.Mode != "campaign" {
+		return cfg, fmt.Errorf("run.mode must be companion or campaign")
+	}
+	cfg.Campaign = file.Run.Mode == "campaign"
+	cfg.CampaignNextMap = file.Run.NextMap
+	if cfg.CampaignNextMap != "" && (!cfg.Campaign || !regexp.MustCompile(`^[a-zA-Z0-9_]+$`).MatchString(cfg.CampaignNextMap)) {
+		return cfg, fmt.Errorf("run.next_map requires campaign and a map name")
+	}
 	cfg.TestScenarioResult = resolve(file.Test.ScenarioResult)
 	cfg.TestScenarioTailFrames = file.Test.ScenarioTailFrames
 	if file.Run.Duration != "" {

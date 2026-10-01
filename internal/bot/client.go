@@ -991,6 +991,7 @@ func (c *Client) run(ctx context.Context) error {
 					Ducked             bool                    `json:"ducked"`
 					DeltaAngles        [3]int16                `json:"delta_angles"`
 					Goal               string                  `json:"goal"`
+					Campaign           *CampaignDecision       `json:"campaign,omitempty"`
 					GoalPoint          *quake.Vec3             `json:"goal_point,omitempty"`
 					Route              []quake.Waypoint        `json:"route,omitempty"`
 					Jump               *JumpTrace              `json:"jump_plan,omitempty"`
@@ -1046,7 +1047,8 @@ func (c *Client) run(ctx context.Context) error {
 					WeaponReason: c.weaponSwitch.reason,
 					Inventory:    c.planner.World.Snapshot.Inventory, InventoryKnown: c.planner.World.Snapshot.InventoryKnown, InventoryAgeFrames: c.planner.World.Snapshot.InventoryAgeFrames,
 					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
-					Route: c.planner.World.Route, Jump: c.planner.World.Jump, Gravity: c.planner.World.Snapshot.Gravity, GunFrame: c.planner.World.Snapshot.GunFrame, ViewAngles: c.planner.World.Snapshot.ViewAngles, Pickups: c.planner.World.Snapshot.Pickups,
+					Campaign: c.planner.World.Campaign,
+					Route:    c.planner.World.Route, Jump: c.planner.World.Jump, Gravity: c.planner.World.Snapshot.Gravity, GunFrame: c.planner.World.Snapshot.GunFrame, ViewAngles: c.planner.World.Snapshot.ViewAngles, Pickups: c.planner.World.Snapshot.Pickups,
 					Beams:            c.planner.World.Snapshot.Beams,
 					RemovedEntities:  c.planner.World.Snapshot.RemovedEntities,
 					DeltaFrame:       c.planner.World.Snapshot.DeltaFrame,

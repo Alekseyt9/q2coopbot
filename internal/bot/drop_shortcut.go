@@ -28,7 +28,7 @@ func preferDrop(dropSeconds, bypassSeconds float64, damage int) bool {
 // validation as a normal walk-off still authorizes every candidate.
 func (p *Planner) planNearbyWalkOff() bool {
 	s := p.World.Snapshot
-	if !s.OnGround || s.Health <= 0 || p.Nav == nil || p.World.Geometry == nil || len(p.World.Route) == 0 || s.Self[2]-p.goalPoint[2] < 64 || p.elevator != nil || p.button != nil || (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn") {
+	if !s.OnGround || s.Health <= 0 || p.Nav == nil || p.World.Geometry == nil || len(p.World.Route) == 0 || s.Self[2]-p.goalPoint[2] < 64 || p.elevator != nil || p.button != nil || (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn" && p.World.Goal != "reach_level_exit") {
 		return false
 	}
 	bypass := dropRouteSeconds(s.Self, p.World.Route, p.goalPoint)
