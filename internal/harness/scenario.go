@@ -20,6 +20,7 @@ type Step struct {
 	Route   bool        `json:"route,omitempty"`
 }
 type Scenario struct {
+	BotGrenadeObserve   bool         `json:"bot_grenade_observe,omitempty"`
 	BotGrenadeArm       bool         `json:"bot_grenade_arm,omitempty"`
 	BotDoorPassSpeed    int          `json:"bot_door_pass_speed,omitempty"`
 	BotDoorPassProbe    bool         `json:"bot_door_pass_probe,omitempty"`
@@ -78,6 +79,9 @@ func Load(path string) (Scenario, error) {
 }
 
 func (s Scenario) Validate() error {
+	if s.BotGrenadeObserve && (s.BotGrenadeArm || s.Map != "base1" || s.BotInvulnerable) {
+		return fmt.Errorf("grenade observer requires vulnerable base1, without arming")
+	}
 	if s.BotGrenadeArm && (s.Map != "base1" || s.BotReleaseFrame == 0 || s.BotReleaseOrigin != nil || s.BotInvulnerable) {
 		return fmt.Errorf("bot_grenade_arm requires base1, delayed release without relocation or invulnerability")
 	}

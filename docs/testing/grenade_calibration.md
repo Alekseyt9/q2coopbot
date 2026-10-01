@@ -39,3 +39,13 @@ go run ./cmd/q2grenade-report -trace <bot-trace.jsonl> -root <runtime/baseq2> -m
 Отдельная base1 постановка содержит две неподвижные hanging misc_insane с нативным здоровьем, без атак. Checker использует их точные fixture bounds из SP_misc_insane; packed solid не передаёт точную асимметричную форму. Требуются пять свободных наблюдений гранаты, неизменные цели и реальный TE взрыва в прогнозируемом contact tick, минимум5 кадров до fuse. Визуальная точка сравнивается с origin-0.02*velocity, предел2 units.
 
 Принято armed-grenade-suite-20261001-153506-724,2/2 на2x: взрыв160 вместо184, ошибка0.04/0.09, оба клиента HP100.6 отрицательных контролей отвергнуты. Обычный fuse регрессии153553:2/2. Это проверка stationary damageable contact, не активного боя или движущегося напарника. Generic arming пока запрещён.
+
+## Движущийся напарник: диагностика без броска
+
+```powershell
+./scripts/run_armed_grenade_suite.ps1 -MovingFriend -Port 30730 -Parallelism 2 -Repetitions 2
+```
+
+Сценарий base1-grenade-moving-teammate.json выбирает bot_grenade_observe. Напарник пересекает гипотетическую линию броска на ровной native площадке; bot fixture только держит гранату и смотрит по+X, без ATTACK. Диагностика проверяет relative body sweep на500ms и выводит teammate_future_contact; constant velocity не является доказательством будущей безопасности. Неподтверждённые условия остаются unproven.
+
+Принято armed-grenade-suite-20261001-155201-913:2/2 на2x,13 hazard frames, actor displacement190, оба HP100, ноль подготовки/гранат.6 отрицательных контролей отвергнуты. Обычный release/fuse regression155302:2/2. Не проверялось попадание реальной гранаты в движущегося напарника; автоматическая подготовка по-прежнему запрещена.

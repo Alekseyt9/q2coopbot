@@ -1,6 +1,7 @@
 [CmdletBinding()]
-param([int]$Port=30600,[ValidateRange(1,8)][int]$Parallelism=2,[ValidateRange(1,100)][int]$Repetitions=2,[switch]$Contact)
+param([int]$Port=30600,[ValidateRange(1,8)][int]$Parallelism=2,[ValidateRange(1,100)][int]$Repetitions=2,[switch]$Contact,[switch]$MovingFriend)
 $ErrorActionPreference='Stop'
+if($Contact -and $MovingFriend){throw 'Select either contact or moving teammate fixture'}
 $repo=Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/check_armed_grenade.ps1"
 $out=Join-Path $repo ('workspace/artifacts/armed-grenade-suite-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))
@@ -14,7 +15,7 @@ try {
     if($LASTEXITCODE){throw 'Grenade calibrator build failed'}
 } finally {Pop-Location}
 $runtime=if($Contact){& "$PSScriptRoot/prepare_grenade_contact_runtime.ps1"}else{& "$PSScriptRoot/prepare_drop_risk_runtime.ps1"}
-$scene=if($Contact){'scripts/scenarios/base1-grenade-damageable-contact.json'}else{'scripts/scenarios/base1-armed-grenade-release.json'}
+$scene=if($Contact){'scripts/scenarios/base1-grenade-damageable-contact.json'}elseif($MovingFriend){'scripts/scenarios/base1-grenade-moving-teammate.json'}else{'scripts/scenarios/base1-armed-grenade-release.json'}
 $scenes=@([IO.Path]::GetRelativePath($out,(Join-Path $repo $scene)))
 $config=Join-Path $out 'suite.json'
 @{version=1;scenarios=$scenes;timescales=@(2);repetitions=$Repetitions;parallelism=$Parallelism;base_port=$Port;runtime_root=[IO.Path]::GetRelativePath($out,[string]$runtime);tail_frames=5}|ConvertTo-Json -Depth 6|Set-Content $config -Encoding utf8
@@ -35,6 +36,7 @@ foreach($run in $suite.results){
         $actor=Get-ChildItem $run.directory -Filter '*human-trace.jsonl'|Select-Object -First 1
         if(!$actor){throw 'Teammate trace missing'}
         $actorRows=@(Get-Content $actor.FullName|ConvertFrom-Json)
+        if($MovingFriend){$item.metrics=Assert-GrenadeMovingFriend $rows $actorRows}else{
         $item.metrics=Assert-ArmedGrenade $rows $actorRows -Contact:$Contact
         $calibration=Join-Path $run.directory 'grenade-calibration.json'
         $calibratorArgs=@('-trace',$file.FullName,'-root',(Join-Path $runtime 'baseq2'),'-map','base1','-out',$calibration)
@@ -42,6 +44,7 @@ foreach($run in $suite.results){
         & $calibrator @calibratorArgs
         if($LASTEXITCODE){throw 'Observed native grenade path disagrees with prediction'}
         $item.calibration=Get-Content $calibration -Raw|ConvertFrom-Json
+        }
         $item.accepted=$true;$item.reason='accepted'
     }catch{$item.reason=$_.Exception.Message}
     $results+=[pscustomobject]$item

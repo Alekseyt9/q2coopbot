@@ -8,16 +8,18 @@ import (
 // A diagnostic candidate, never authorization to arm. Random samples are not a
 // bound on all trajectories; server gravity, hand and fuse need confirmation.
 type GrenadePrediction struct {
-	Scope   string          `json:"scope"`
-	Reason  string          `json:"reason"`
-	Samples []GrenadeFlight `json:"samples,omitempty"`
+	FriendMotion *GrenadeFriendMotion `json:"friend_motion,omitempty"`
+	Scope        string               `json:"scope"`
+	Reason       string               `json:"reason"`
+	Samples      []GrenadeFlight      `json:"samples,omitempty"`
 }
 type GrenadeFlight struct {
-	End     quake.Vec3 `json:"end"`
-	Seconds float64    `json:"seconds"`
-	Bounces int        `json:"bounces"`
-	Event   string     `json:"event"`
-	Risk    string     `json:"risk"`
+	FriendContactSeconds float64    `json:"friend_contact_seconds,omitempty"`
+	End                  quake.Vec3 `json:"end"`
+	Seconds              float64    `json:"seconds"`
+	Bounces              int        `json:"bounces"`
+	Event                string     `json:"event"`
+	Risk                 string     `json:"risk"`
 }
 type grenadeBody struct{ origin, mins, maxs quake.Vec3 }
 
@@ -136,6 +138,9 @@ func grenadeBodyHit(from, to quake.Vec3, b grenadeBody) (float64, bool) {
 
 func (p *Planner) predictGrenadeCandidate(s quake.Snapshot) *GrenadePrediction {
 	r := &GrenadePrediction{Scope: "nominal_center_hand_timer3_diagnostic", Reason: "not_authorized"}
+	if m := p.shotTeammateMotion; s.Teammate != nil && m.known && m.frame == s.Frame && m.entity == s.TeammateEntity {
+		r.FriendMotion = &GrenadeFriendMotion{Frame: s.Frame, Entity: m.entity, Velocity: m.velocity}
+	}
 	g := p.World.Geometry
 	if !g.HasCollision() || s.Gravity <= 0 {
 		r.Reason = "unknown_geometry_or_gravity"
@@ -209,6 +214,12 @@ func (p *Planner) predictGrenadeCandidate(s quake.Snapshot) *GrenadePrediction {
 				}
 				if s.Teammate == nil && s.LastTeammate != nil {
 					flight.Risk = "unseen_teammate"
+				}
+			}
+			if r.FriendMotion != nil {
+				if t := grenadeFriendContact(start, v, float64(s.Gravity), trace, *s.Teammate, r.FriendMotion.Velocity); t > 0 {
+					flight.FriendContactSeconds = t
+					flight.Risk = "teammate_future_contact"
 				}
 			}
 			r.Samples = append(r.Samples, flight)

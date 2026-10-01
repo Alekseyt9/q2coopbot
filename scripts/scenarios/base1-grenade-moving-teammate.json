@@ -1,0 +1,13 @@
+{
+ "version":1,"name":"base1-grenade-moving-teammate","map":"base1",
+ "start_frame":40,"bot_release_frame":140,"game_frames":350,
+ "actor_origin":[128,-128,14],"bot_origin":[32,-224,14],
+ "bot_health":100,"bot_grenade_observe":true,"actor_inventory":true,"expect":{},
+ "steps":[
+  {"id":"prepare","action":"wait","frames":20},
+  {"id":"cross-toward-flight","action":"push","target":[128,-304,24],"frames":20},
+  {"id":"pause","action":"wait","frames":20},
+  {"id":"return-after-crossing","action":"push","target":[128,-128,24],"frames":20},
+  {"id":"observe-safe-fixture-release","action":"wait","frames":200}
+ ]
+}

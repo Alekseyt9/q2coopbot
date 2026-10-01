@@ -26,3 +26,24 @@ function Assert-ArmedGrenade([object[]]$Rows,[object[]]$ActorRows,[switch]$Conta
     if(!@($release|Where-Object {$_.grenade_prediction.reason -eq 'armed_fuse_unknown' -and !$_.grenade_prediction.samples.Count}).Count){throw 'Unknown armed fuse treated as known'}
     return [pscustomobject]@{priming_frames=$priming.Count;release_frame=$release[0].frame;grenades_remaining=4;bot_health=100;teammate_health=100;diagnostic_samples=$candidate[0].grenade_prediction.samples.Count}
 }
+
+function Assert-GrenadeMovingFriend([object[]]$Rows,[object[]]$ActorRows) {
+    $priming=@($Rows|Where-Object {$_.arbitration.limit_reason -eq 'test_grenade_arming'})
+    if($priming.Count){throw 'Observer fixture must not arm'}
+    $before=@($Rows|Where-Object {$_.frame -lt 350 -and $_.weapon -match '/v_handgr/'})
+    $risk=@($before|Where-Object {
+        $_.grenade_prediction.friend_motion.frame -eq $_.frame -and
+        $_.grenade_prediction.friend_motion.entity -eq $_.teammate_entity -and $_.teammate_entity -gt 0 -and
+        [math]::Abs($_.grenade_prediction.friend_motion.velocity[1]) -gt 10 -and
+        @($_.grenade_prediction.samples|Where-Object {$_.risk -eq 'teammate_future_contact' -and $_.friend_contact_seconds -gt 0 -and $_.friend_contact_seconds -le 0.5}).Count
+    })
+    if($risk.Count -lt 2){throw 'Moving teammate contact hazard not observed'}
+    if(@($before|Where-Object {$_.sent_command.Buttons -band 1}).Count){throw 'Grenade armed during teammate crossing'}
+    $actor=@($ActorRows|Where-Object {$_.frame -ge 60 -and $_.frame -lt 350})
+    if($actor.Count -lt 10){throw 'Actor movement observation missing'}
+    if(@($Rows|Where-Object {$_.health -ne 100 -or $_.test_health_masked -or $_.projectiles.Count}).Count){throw 'Observer damage or unexpected projectile'}
+    $ys=@($actor|ForEach-Object {$_.self[1]}|Measure-Object -Minimum -Maximum)
+    if($ys[0].Maximum-$ys[0].Minimum -lt 40){throw 'Teammate did not physically cross'}
+    if(@($actor|Where-Object {$_.health -ne 100 -or $_.test_health_masked}).Count){throw 'Teammate damaged or masked during crossing'}
+    return [pscustomobject]@{hazard_frames=$risk.Count;actor_displacement_y=$ys[0].Maximum-$ys[0].Minimum;arming_during_crossing=$false}
+}
