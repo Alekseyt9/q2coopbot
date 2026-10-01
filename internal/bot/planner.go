@@ -41,8 +41,10 @@ type World struct {
 	Updated           time.Time          `json:"updated"`
 }
 type Planner struct {
-	grenadeThrow *grenadeThrow
-	TestDisableHandGrenade bool
+	grenadeThrow              *grenadeThrow
+	grenadeRequestFrame       int
+	grenadeRequestMap         string
+	TestDisableHandGrenade    bool
 	testDoorPassSpeed         float64
 	doorPrevious              quake.Snapshot
 	TestDisableProjectileLead bool

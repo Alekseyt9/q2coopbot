@@ -151,7 +151,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.TestInvulnerable && (!cfg.FramePaced || cfg.TestTeleport == "") {
 		return fmt.Errorf("test invulnerability requires frame pacing and teleport")
 	}
-	if cfg.TestWeaponSwitchFixture != "" && (cfg.TestWeaponSwitchFixture != "blaster" && cfg.TestWeaponSwitchFixture != "stocked" && cfg.TestWeaponSwitchFixture != "economy_weak" && cfg.TestWeaponSwitchFixture != "economy_armed" && cfg.TestWeaponSwitchFixture != "economy_pair_weak" && cfg.TestWeaponSwitchFixture != "economy_pair_heavy" && cfg.TestWeaponSwitchFixture != "projectile_blaster" && cfg.TestWeaponSwitchFixture != "projectile_hyper" && cfg.TestWeaponSwitchFixture != "rail_precision" && cfg.TestWeaponSwitchFixture != "rail_friend_behind" && cfg.TestWeaponSwitchFixture != "hand_grenade_guard" && !handGrenadeArmFixture(cfg.TestWeaponSwitchFixture) && cfg.TestWeaponSwitchFixture != "hand_grenade_observe" || !cfg.FramePaced || cfg.TestTeleport == "") {
+	if cfg.TestWeaponSwitchFixture != "" && (cfg.TestWeaponSwitchFixture != "blaster" && cfg.TestWeaponSwitchFixture != "stocked" && cfg.TestWeaponSwitchFixture != "economy_weak" && cfg.TestWeaponSwitchFixture != "economy_armed" && cfg.TestWeaponSwitchFixture != "economy_pair_weak" && cfg.TestWeaponSwitchFixture != "economy_pair_heavy" && cfg.TestWeaponSwitchFixture != "projectile_blaster" && cfg.TestWeaponSwitchFixture != "projectile_hyper" && cfg.TestWeaponSwitchFixture != "rail_precision" && cfg.TestWeaponSwitchFixture != "rail_friend_behind" && cfg.TestWeaponSwitchFixture != "hand_grenade_guard" && !handGrenadeArmFixture(cfg.TestWeaponSwitchFixture) && cfg.TestWeaponSwitchFixture != "hand_grenade_observe" && cfg.TestWeaponSwitchFixture != "hand_grenade_auto" || !cfg.FramePaced || cfg.TestTeleport == "") {
 		return fmt.Errorf("weapon_switch_fixture requires a supported fixture, frame pacing and teleport")
 	}
 	if cfg.TestInitialHealth < 0 || cfg.TestInitialHealth > 100 || cfg.TestInitialHealth > 0 && (!cfg.FramePaced || cfg.TestTeleport == "") {
@@ -311,7 +311,7 @@ func Run(ctx context.Context, cfg Config) error {
 		testWalkRoute:  cfg.TestWalkRoute,
 		testWalkRunIn:  cfg.TestWalkRunIn,
 		conn:           conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
-		decoder: quake.NewDecoder(), planner: &Planner{AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53, TestDisableProjectileLead: cfg.TestDisableProjectileLead},
+		decoder: quake.NewDecoder(), planner: &Planner{AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53, TestDisableProjectileLead: cfg.TestDisableProjectileLead, TestDisableHandGrenade: cfg.Idle || cfg.TestWeaponSwitchFixture == "hand_grenade_observe" || cfg.TestWeaponSwitchFixture == "hand_grenade_guard" || handGrenadeArmFixture(cfg.TestWeaponSwitchFixture)},
 		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name,
 		memoryFile: cfg.MemoryFile, memorySession: cfg.MemorySession,
 		idle: cfg.Idle, duration: cfg.Duration, framePaced: cfg.FramePaced, gameFrames: cfg.GameFrames,

@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "name": "base1-grenade-auto-throw",
+  "map": "base1",
+  "start_frame": 40,
+  "bot_release_frame": 140,
+  "game_frames": 230,
+  "actor_origin": [
+    -945,
+    1292,
+    334.125
+  ],
+  "bot_origin": [
+    -937,
+    1149,
+    334.125
+  ],
+  "bot_health": 100,
+  "actor_inventory": true,
+  "expect": {},
+  "steps": [
+    {
+      "id": "wait-for-native-contact",
+      "action": "wait",
+      "frames": 180
+    }
+  ],
+  "bot_grenade_auto": true
+}

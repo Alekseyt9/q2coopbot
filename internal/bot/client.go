@@ -544,6 +544,8 @@ func (c *Client) run(ctx context.Context) error {
 					setup = []string{"use Blaster"}
 				} else if c.testWeaponSwitchFixture == "projectile_hyper" {
 					setup = []string{"give HyperBlaster", "give Cells 100", "use HyperBlaster"}
+				} else if c.testWeaponSwitchFixture == "hand_grenade_auto" {
+					setup = []string{"give Grenades 5", "use Blaster"}
 				} else if c.testWeaponSwitchFixture == "hand_grenade_guard" || handGrenadeArmFixture(c.testWeaponSwitchFixture) || c.testWeaponSwitchFixture == "hand_grenade_observe" {
 					setup = []string{"give Grenades 5", "use Grenades"}
 				} else if strings.HasPrefix(c.testWeaponSwitchFixture, "rail_") {
@@ -697,8 +699,11 @@ func (c *Client) run(ctx context.Context) error {
 			observeInventory := !c.idle || c.scenario != nil && c.scenario.Scenario.ActorInventory
 			if !safetyStop && observeInventory && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
 				if !c.idle && !pairSetup && !c.testProjectileComparison && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
-					if !c.planner.grenadeThrowPending(c.planner.World.Snapshot) {
-						weaponRequest = c.weaponSwitch.command(c.planner.World.Snapshot)
+					if !c.planner.grenadeThrowPending(c.planner.World.Snapshot) && !c.planner.grenadeSelectionPending(c.planner.World.Snapshot) {
+						weaponRequest = c.planner.grenadeWeaponRequest(c.planner.World.Snapshot, cmd)
+						if weaponRequest == "" {
+							weaponRequest = c.weaponSwitch.command(c.planner.World.Snapshot)
+						}
 					}
 				}
 				if request := c.inventoryWatch.command(c.planner.World.Snapshot); request != "" {

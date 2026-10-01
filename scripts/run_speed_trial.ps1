@@ -476,6 +476,7 @@ foreach ($scale in $Timescales) {
             if($actorScenarioDefinition.bot_grenade_arm){$botConfig.test.weapon_switch_fixture='hand_grenade_armed';$botConfig.test.hold_position=$true}
             if($actorScenarioDefinition.bot_grenade_yaw -eq 90){$botConfig.test.weapon_switch_fixture='hand_grenade_armed_y'}
             if($actorScenarioDefinition.bot_grenade_observe){$botConfig.test.weapon_switch_fixture='hand_grenade_observe';$botConfig.test.hold_position=$true}
+            if($actorScenarioDefinition.bot_grenade_auto){$botConfig.test.weapon_switch_fixture='hand_grenade_auto';$botConfig.test.hold_position=$true}
             $botConfig.test.scenario_frame_origin = $actorScenarioDefinition.start_frame
 			if ($actorScenarioDefinition.bot_hide_health_frames) {
 				$botConfig.test.hide_health_frames = @($actorScenarioDefinition.bot_hide_health_frames | ForEach-Object { [int]$_ - [int]$actorScenarioDefinition.start_frame })
