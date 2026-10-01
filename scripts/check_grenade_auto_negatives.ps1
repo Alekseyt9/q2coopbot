@@ -15,14 +15,14 @@ foreach($item in @($items|Group-Object scenario|ForEach-Object {$_.Group[0]})) {
         $rows=@($original|ConvertTo-Json -Depth 100|ConvertFrom-Json);$actors=@($actorRows|ConvertTo-Json -Depth 100|ConvertFrom-Json)
         foreach($row in $rows|Where-Object {$_.frame -ge 140}) {
             switch($case) {
-                'missing-inventory' {$row.inventory=@()}
-                'unsafe-selection' {$row.weapon_request='use Grenades'}
-                'unsafe-projectile' {$row.projectiles=@(@{id=90;class='hand_grenade';origin=@(0,0,0)})}
+                'missing-inventory' {$row|Add-Member -NotePropertyName inventory -NotePropertyValue @() -Force}
+                'unsafe-selection' {$row|Add-Member -NotePropertyName weapon_request -NotePropertyValue 'use Grenades' -Force}
+                'unsafe-projectile' {$row|Add-Member -NotePropertyName projectiles -NotePropertyValue @(@{id=90;class='hand_grenade';origin=@(0,0,0)}) -Force}
                 'missing-start' {if($row.arbitration.limit_reason -eq 'hand_grenade_auto_start'){$row.arbitration.limit_reason='none'}}
                 'held-attack' {if($row.gun_frame -eq 11){$row.sent_command.Buttons=1}}
                 'missing-release' {if($row.arbitration.limit_reason -eq 'hand_grenade_release'){$row.arbitration.limit_reason='none'}}
-                'missing-consumption' {$row.inventory=@()}
-                'forced-arming' {$row.arbitration.limit_reason='test_grenade_arming'}
+                'missing-consumption' {$row|Add-Member -NotePropertyName inventory -NotePropertyValue @() -Force}
+                'forced-arming' {$row.arbitration|Add-Member -NotePropertyName limit_reason -NotePropertyValue 'test_grenade_arming' -Force}
             }
         }
         if($case -eq 'damaged-teammate'){foreach($row in $actors){$row.health=1}}

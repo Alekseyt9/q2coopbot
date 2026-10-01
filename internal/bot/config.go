@@ -38,6 +38,7 @@ type ConfigFile struct {
 		StopFile   string `json:"stop_file"`
 	} `json:"output"`
 	Test struct {
+		CheckpointControl            string `json:"checkpoint_control"`
 		DisableProjectileLead        bool   `json:"disable_projectile_lead"`
 		ProjectileComparison         bool   `json:"projectile_comparison"`
 		CombatBarrier                bool   `json:"combat_barrier"`
@@ -143,6 +144,7 @@ func LoadConfig(path string) (Config, error) {
 		return cfg, fmt.Errorf("client.memory_file requires a server-lifetime memory_session")
 	}
 	cfg.WorldFile, cfg.TracePath, cfg.StopFile = resolve(file.Output.WorldJSON), resolve(file.Output.TraceJSONL), resolve(file.Output.StopFile)
+	cfg.CheckpointControl = resolve(file.Test.CheckpointControl)
 	cfg.FramePaced, cfg.GameFrames = file.Run.FramePaced, file.Run.GameFrames
 	cfg.TestScenarioResult = resolve(file.Test.ScenarioResult)
 	cfg.TestScenarioTailFrames = file.Test.ScenarioTailFrames

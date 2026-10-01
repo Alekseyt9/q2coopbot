@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "base2-checkpoint-barrier",
+  "map": "base2",
+  "start_frame": 100,
+  "game_frames": 900,
+  "actor_origin": [336, -1888, -81.875],
+  "bot_origin": [304, -1888, -81.875],
+  "actor_inventory": true,
+  "expect": {},
+  "steps": [{"id": "checkpoint-wait", "action": "wait", "frames": 700}]
+}

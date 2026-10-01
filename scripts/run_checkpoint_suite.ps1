@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([int]$Port=30300)
+param([int]$Port=30300,[switch]$Barrier)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/harness_manifest.ps1"
@@ -11,7 +11,7 @@ $client=Join-Path $out 'q2coopbot.exe';$tool=Join-Path $out 'q2checkpoint.exe'
 Push-Location $repo
 try{go build -o $client ./cmd/q2coopbot;if($LASTEXITCODE){throw 'Client build failed'};go build -o $tool ./cmd/q2checkpoint;if($LASTEXITCODE){throw 'Checkpoint build failed'}}finally{Pop-Location}
 $configs=@()
-foreach($i in 0..1){$path=Join-Path $out "trial-$i.json";@{runtime_root=$source;client_exe=$client;checkpoint_exe=$tool;output_root=(Join-Path $out "run-$i");port=($Port+$i);timescale=2}|ConvertTo-Json|Set-Content $path -Encoding utf8;$configs+=$path}
+foreach($i in 0..1){$path=Join-Path $out "trial-$i.json";@{runtime_root=$source;client_exe=$client;checkpoint_exe=$tool;output_root=(Join-Path $out "run-$i");port=($Port+$i);timescale=2;barrier=[bool]$Barrier}|ConvertTo-Json|Set-Content $path -Encoding utf8;$configs+=$path}
 $trialScript=Join-Path $PSScriptRoot 'run_checkpoint_trial.ps1'
 $results=@($configs|ForEach-Object -Parallel {
     $err='';try{& $using:trialScript -Config $_|Out-Host}catch{$err=$_.Exception.Message}

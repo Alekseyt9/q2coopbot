@@ -4,7 +4,7 @@ $ErrorActionPreference='Stop'
 $configPath=(Resolve-Path $Config).Path
 $base=Split-Path $configPath -Parent
 $cfg=Get-Content $configPath -Raw|ConvertFrom-Json
-foreach($key in $cfg.PSObject.Properties.Name){if($key -notin @('runtime_root','client_exe','checkpoint_exe','output_root','port','timescale')){throw "Unknown checkpoint trial field: $key"}}
+foreach($key in $cfg.PSObject.Properties.Name){if($key -notin @('runtime_root','client_exe','checkpoint_exe','output_root','port','timescale','barrier')){throw "Unknown checkpoint trial field: $key"}}
 if($cfg.timescale -ne 2 -or $cfg.port -lt 1024 -or $cfg.port -gt 65534){throw 'Checkpoint trial requires 2x and a valid port'}
 if(Get-NetUDPEndpoint -LocalPort $cfg.port -ErrorAction SilentlyContinue){throw 'Checkpoint port occupied'}
 function Trial-Path([string]$Path){if([IO.Path]::IsPathRooted($Path)){return $Path};Join-Path $base $Path}
@@ -25,7 +25,13 @@ foreach($asset in Get-ChildItem (Join-Path $source 'baseq2') -File -Recurse|Wher
 }
 $instance=[guid]::NewGuid().ToString('N')
 $trace=Join-Path $out 'bot.jsonl'
-@{server=@{host='127.0.0.1';port=$cfg.port};client=@{name='CheckpointBot';game_dir=(Join-Path $runtime 'baseq2')};run=@{duration='75s';frame_paced=$true};output=@{trace_jsonl=$trace};test=@{teleport_map='base2';teleport='304,-1888,-81.875';initial_health=38;hold_position=$true}}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'bot-config.json') -Encoding utf8
+$botConfig=@{server=@{host='127.0.0.1';port=$cfg.port};client=@{name='CheckpointBot';game_dir=(Join-Path $runtime 'baseq2')};run=@{duration='75s';frame_paced=$true};output=@{trace_jsonl=$trace};test=@{teleport_map='base2';teleport='304,-1888,-81.875';initial_health=38;hold_position=$true}}
+if($cfg.barrier){
+    $botConfig.test.checkpoint_control=Join-Path $out 'bot-control.json'
+    $scene=Join-Path $PSScriptRoot 'scenarios/base2-checkpoint-barrier.json'
+    @{server=$botConfig.server;client=@{name='CheckpointActor';game_dir=(Join-Path $runtime 'baseq2')};run=@{duration='75s';frame_paced=$true};output=@{trace_jsonl=(Join-Path $out 'actor.jsonl')};test=@{teleport_map='base2';teleport='336,-1888,-81.875';idle=$true;scenario=$scene;checkpoint_control=(Join-Path $out 'actor-control.json')}}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'actor-config.json') -Encoding utf8
+}
+$botConfig|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'bot-config.json') -Encoding utf8
 function Last-Row {
     if(Test-Path $trace){
         $last=$null
@@ -41,13 +47,15 @@ function Wait-Row([scriptblock]$Condition){
 }
 function Checkpoint-Operation([string]$Action){
     $path=Join-Path $out "$Action-config.json"
-    @{version=1;action=$Action;server="127.0.0.1:$($cfg.port)";instance=$instance;runtime_root=$runtime;checkpoint_dir=(Join-Path $out 'checkpoint');timeout_ms=10000}|ConvertTo-Json|Set-Content $path -Encoding utf8
+    $operation=@{version=1;action=$Action;server="127.0.0.1:$($cfg.port)";instance=$instance;runtime_root=$runtime;checkpoint_dir=(Join-Path $out 'checkpoint');timeout_ms=10000}
+    if($cfg.barrier -and $Action -eq 'save'){$anchor=Last-Row;$operation.barrier=@{id=$instance;map='base2';generation=$anchor.spawncount;frame=([int]$anchor.frame+60);controls=@((Join-Path $out 'bot-control.json'),(Join-Path $out 'actor-control.json'))}}
+    $operation|ConvertTo-Json -Depth 8|Set-Content $path -Encoding utf8
     $result=& $tool --config $path 2> (Join-Path $out "$Action.err")
     if($LASTEXITCODE){throw "Checkpoint $Action failed; inspect $Action.err"}
     $result|Set-Content (Join-Path $out "$Action-result.json") -Encoding utf8
     return $result|ConvertFrom-Json
 }
-$server=$null;$bot=$null;$oldRcon=$env:Q2COOPBOT_TEST_RCON
+$server=$null;$bot=$null;$actor=$null;$oldRcon=$env:Q2COOPBOT_TEST_RCON
 $report=[ordered]@{accepted=$false;reason='not_run';timescale=2;port=$cfg.port}
 try{
     $env:Q2COOPBOT_TEST_RCON=[guid]::NewGuid().ToString('N')
@@ -57,9 +65,33 @@ try{
     do{Start-Sleep -Milliseconds 100;$eps=@(Get-NetUDPEndpoint -OwningProcess $server.Id -ErrorAction SilentlyContinue);if($server.HasExited -or (Get-Date) -gt $deadline){throw 'Server startup failed'}}while(!($eps|Where-Object {$_.LocalAddress -eq '127.0.0.1' -and $_.LocalPort -eq $cfg.port}))
     if($eps|Where-Object LocalAddress -NotIn '127.0.0.1','::1'){throw 'Server not loopback-only'}
     $bot=Start-Process $client -ArgumentList "--config `"$(Join-Path $out 'bot-config.json')`"" -RedirectStandardOutput (Join-Path $out 'bot.log') -RedirectStandardError (Join-Path $out 'bot.err') -WindowStyle Hidden -PassThru
+    if($cfg.barrier){
+        $actor=Start-Process $client -ArgumentList "--config `"$(Join-Path $out 'actor-config.json')`"" -RedirectStandardOutput (Join-Path $out 'actor.log') -RedirectStandardError (Join-Path $out 'actor.err') -WindowStyle Hidden -PassThru
+        $deadline=(Get-Date).AddSeconds(15)
+        do{
+            if($actor.HasExited){throw 'Checkpoint actor exited'}
+            $actorRow=$null; if(Test-Path (Join-Path $out 'actor.jsonl')){foreach($line in Get-Content (Join-Path $out 'actor.jsonl') -Tail 5){try{$actorRow=$line|ConvertFrom-Json}catch{}}}
+            if($actorRow.scenario.state -eq 'running' -and $actorRow.on_ground){break}
+            Start-Sleep -Milliseconds 100
+        }while((Get-Date) -lt $deadline)
+        if($actorRow.scenario.state -ne 'running'){throw 'Checkpoint actor not in reversible step'}
+    }
     $before=Wait-Row {param($r) $r.map -eq 'base2' -and $r.health -eq 38 -and $r.on_ground -and $r.inventory_known -and $r.inventory_age_frames -le 1 -and ($r.inventory|Where-Object {$_.name -eq 'Super Shotgun' -and $_.count -eq 1}) -and ($r.inventory|Where-Object {$_.name -eq 'Shells' -and $_.count -eq 10})}
     $save=Checkpoint-Operation 'save'
     if($save.state -ne 'saved' -or $save.gameplay_verified){throw 'Invalid native save result'}
+    if($cfg.barrier){
+        if(!$save.barrier_verified){throw 'Coordinated save barrier not verified'}
+        $manifest=Get-Content (Join-Path $out 'checkpoint/manifest.json') -Raw|ConvertFrom-Json
+        if($manifest.barrier.participants.Count -ne 2){throw 'Two checkpoint sidecars missing'}
+        $captures=@(Get-ChildItem (Join-Path $out 'checkpoint/sidecar') -Filter '*.json'|ForEach-Object {Get-Content $_.FullName -Raw|ConvertFrom-Json})
+        foreach($capture in $captures){if($capture.frame -ne $manifest.barrier.frame -or $capture.generation -ne $manifest.barrier.generation -or $capture.planner.captured_frame -ne $capture.frame -or $capture.health -le 0){throw 'Inconsistent captured frame/generation'}}
+        $actorCapture=@($captures|Where-Object participant -EQ 'CheckpointActor')
+        if($actorCapture.Count -ne 1 -or $actorCapture[0].runner.step_id -ne 'checkpoint-wait' -or $actorCapture[0].runner.captured_frame -ne $manifest.barrier.frame){throw 'Runner capture missing'}
+        $botCapture=@($captures|Where-Object participant -EQ 'CheckpointBot')[0]
+        $before=Wait-Row {param($r) $r.frame -gt $manifest.barrier.frame -and $r.health -eq 38}
+        for($axis=0;$axis -lt 3;$axis++){if([math]::Abs($before.self[$axis]-$botCapture.self[$axis]) -gt 0.125){throw 'World advanced inside save barrier'}}
+        $report.barrier=$manifest.barrier;$report.captured_participants=$captures
+    }
     # Deliberately replace the whole game, not just a teleport. No arbitrary
     # console action comes from the trial definition.
     $udp=[Net.Sockets.UdpClient]::new();try{
@@ -86,7 +118,7 @@ try{
     if(@([regex]::Matches($log,'client command: teleport ')).Count -ne 1 -or @([regex]::Matches($log,'client command: give health ')).Count -ne 1){throw 'Test placement/health reapplied after load'}
     $report.accepted=$true;$report.reason='accepted';$report.before=$before;$report.changed=$changed;$report.after=$after;$report.same_map_reload=$again;$report.fresh_inventory_rows=$stable.Count;$report.position_error=[math]::Sqrt($distance);$report.server_pid=$server.Id;$report.client_pid=$bot.Id
 }catch{$report.reason=$_.Exception.Message}finally{
-    foreach($p in @($bot,$server)){if($p -and !$p.HasExited){Stop-Process -Id $p.Id -ErrorAction SilentlyContinue;$p.WaitForExit()}}
+    foreach($p in @($actor,$bot,$server)){if($p -and !$p.HasExited){Stop-Process -Id $p.Id -ErrorAction SilentlyContinue;$p.WaitForExit()}}
     $env:Q2COOPBOT_TEST_RCON=$oldRcon
     $report|ConvertTo-Json -Depth 30|Set-Content (Join-Path $out 'report.json') -Encoding utf8
 }

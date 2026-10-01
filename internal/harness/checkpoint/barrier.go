@@ -1,0 +1,183 @@
+package checkpoint
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"q2coopbot/internal/quake"
+)
+
+type Barrier struct {
+	ID         string   `json:"id"`
+	Map        string   `json:"map"`
+	Frame      int      `json:"frame"`
+	Generation int      `json:"generation"`
+	Controls   []string `json:"controls"`
+}
+type CaptureRequest struct {
+	Version    int    `json:"version"`
+	ID         string `json:"id"`
+	Map        string `json:"map"`
+	Frame      int    `json:"frame"`
+	Generation int    `json:"generation"`
+}
+type Capture struct {
+	CaptureRequest
+	Participant string          `json:"participant"`
+	Error       string          `json:"error,omitempty"`
+	Planner     json.RawMessage `json:"planner,omitempty"`
+	Runner      json.RawMessage `json:"runner,omitempty"`
+	Self        quake.Vec3      `json:"self"`
+	Health      int16           `json:"health"`
+}
+type BarrierProof struct {
+	ID           string `json:"id"`
+	Frame        int    `json:"frame"`
+	Generation   int    `json:"generation"`
+	Participants []File `json:"participants"`
+}
+
+func WriteCapture(path string, value any) error {
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err = os.WriteFile(path+".tmp", data, 0600); err != nil {
+		return err
+	}
+	return os.Rename(path+".tmp", path)
+}
+
+func (b Barrier) validate() error {
+	if !identifier.MatchString(b.ID) || !identifier.MatchString(b.Map) || b.Frame < 1 || b.Frame > 1000000 || b.Generation < 1 || len(b.Controls) < 1 || len(b.Controls) > 8 {
+		return fmt.Errorf("invalid checkpoint barrier")
+	}
+	seen := map[string]bool{}
+	for _, path := range b.Controls {
+		path = filepath.Clean(path)
+		if path == "." || seen[strings.ToLower(path)] {
+			return fmt.Errorf("invalid/duplicate checkpoint control")
+		}
+		seen[strings.ToLower(path)] = true
+	}
+	return nil
+}
+
+func validateCapture(c Capture, r CaptureRequest) error {
+	if c.CaptureRequest != r || c.Error != "" || !identifier.MatchString(c.Participant) || c.Health <= 0 || !json.Valid(c.Planner) {
+		return fmt.Errorf("checkpoint participant identity/state rejected")
+	}
+	var anchor struct {
+		Version int    `json:"version"`
+		Map     string `json:"map"`
+		Frame   int    `json:"captured_frame"`
+	}
+	if json.Unmarshal(c.Planner, &anchor) != nil || anchor.Version != 1 || anchor.Map != r.Map || anchor.Frame != r.Frame {
+		return fmt.Errorf("planner capture frame mismatch")
+	}
+	if len(c.Runner) > 0 {
+		var runner struct {
+			Version int `json:"version"`
+			Frame   int `json:"captured_frame"`
+		}
+		if json.Unmarshal(c.Runner, &runner) != nil || runner.Version != 1 || runner.Frame != r.Frame {
+			return fmt.Errorf("runner capture frame mismatch")
+		}
+	}
+	return nil
+}
+
+func collectBarrier(ctx context.Context, c Config, password string) ([]Capture, error) {
+	b := c.Barrier
+	timeout := time.Duration(c.TimeoutMS) * time.Millisecond
+	r := CaptureRequest{Version: 1, ID: b.ID, Map: b.Map, Frame: b.Frame, Generation: b.Generation}
+	for _, path := range b.Controls {
+		if err := WriteCapture(path, r); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := request(ctx, c.Server, password, fmt.Sprintf("set sv_test_checkpoint_frame %d", b.Frame), timeout); err != nil {
+		return nil, err
+	}
+	deadline := time.Now().Add(timeout)
+	var captures []Capture
+	for {
+		captures = nil
+		names := map[string]bool{}
+		ready := true
+		for _, path := range b.Controls {
+			var capture Capture
+			err := readJSON(path+".state.json", &capture)
+			if os.IsNotExist(err) {
+				ready = false
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+			if capture.ID != r.ID {
+				ready = false
+				break
+			}
+			if err = validateCapture(capture, r); err != nil {
+				return nil, err
+			}
+			if names[strings.ToLower(capture.Participant)] {
+				return nil, fmt.Errorf("duplicate checkpoint participant")
+			}
+			names[strings.ToLower(capture.Participant)] = true
+			captures = append(captures, capture)
+		}
+		if ready {
+			break
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("checkpoint participant timeout")
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	if err := verifyBarrier(ctx, c, password); err != nil {
+		return nil, err
+	}
+	return captures, nil
+}
+func verifyBarrier(ctx context.Context, c Config, password string) error {
+	reply, err := request(ctx, c.Server, password, "sv_test_checkpoint_ack", time.Duration(c.TimeoutMS)*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	want := fmt.Sprintf(`"sv_test_checkpoint_ack" is "%d:%d:%s"`, c.Barrier.Generation, c.Barrier.Frame, c.Barrier.Map)
+	if !strings.Contains(reply, want) {
+		return fmt.Errorf("native checkpoint barrier anchor mismatch")
+	}
+	return nil
+}
+
+func saveCaptures(dir string, b *Barrier, captures []Capture) (*BarrierProof, error) {
+	root := filepath.Join(dir, "sidecar")
+	if err := os.Mkdir(root, 0755); err != nil {
+		return nil, err
+	}
+	proof := &BarrierProof{ID: b.ID, Frame: b.Frame, Generation: b.Generation}
+	for _, capture := range captures {
+		name := capture.Participant + ".json"
+		if err := WriteCapture(filepath.Join(root, name), capture); err != nil {
+			return nil, err
+		}
+		record, err := fileRecord(root, name)
+		if err != nil {
+			return nil, err
+		}
+		proof.Participants = append(proof.Participants, record)
+	}
+	return proof, nil
+}

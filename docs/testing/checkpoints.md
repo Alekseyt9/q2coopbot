@@ -39,3 +39,15 @@ Go-тесты проверяют полный пакет нескольких к
 4. Проверка восстановленных дверей/лифтов/моста, врагов и ключей, затем сравнение политик и resource economy на одном checkpoint. Полное прохождение кампании пока не проверено.
 
 Пакеты и native слоты находятся только в игнорируемом workspace; текущая человеческая игра не перезапускалась и её сохранения не изменялись.
+
+### 01.10.2026 — portable state API для памяти и исполнителя
+
+Начат следующий пункт после limited grenade MVP. PlannerCheckpoint сохраняет цель/точку цели, death/rendezvous и память аптечек/брони с относительным возрастом и признаком уже неудачной попытки. RestoreCheckpoint работает с новым Planner и первым свежим native snapshot после load, загружает геометрию карты, пересчитывает возраст под новый network frame; знания о текущей видимости, HP/инвентарь и motor actions не восстанавливаются. Даже ранее observed ресурс становится unknown; unavailable и attempted сохраняются. Захват на смерти, в воздухе, при прыжке/лифте, подготовке ручной гранаты или видимом projectile отвергается.
+
+RunnerCheckpoint поддерживает активные обратимые wait/walk шаги: SHA256 определения сценария, StepID/index и elapsed frames. При восстановлении в новой генерации остаток бюджета сохраняется, entry action не повторяется. Изменённый сценарий и некорректный прогресс отвергаются; kill/respawn/place/shoot steps пока не поддержаны. Две ветви получают независимые копии.
+
+Go-тесты проверяют JSON roundtrip памяти, age rebase даже при новом frame2, unavailable/attempted, отсутствие будущих наблюдений, независимость ветвей, wrong-map/negative-age rejection и запрет armed capture. Для runner проверены тот же остаток20-frame wait, отсутствие повторного NewStep/Kill/Place, новый generation и отказ при изменении сценария.
+
+Это API полезной нагрузки будущего sidecar, а не подключённая функция save/load JSON-сессий. Согласованный барьер bot+actor+native, упаковка с манифестом, выбор resume/fresh и native восстановление новых процессов ещё не реализованы. Они остаются следующим пунктом; не засчитывать существующий native-only checkpoint как приёмку этих API.
+
+Дополнительная приёмка: все9 отрицательных контролей автоматических гранат отвергнуты (missing start/release/consumption, held ATTACK, урон напарнику, forced arming; потерянный инвентарь/unsafe selection/projectile в отказном случае). Файл workspace/artifacts/grenade-auto-suite-20261001-191110-623/negative-controls.json. Native-only checkpoint regression: workspace/artifacts/checkpoint-suite-20261001-191226-512/report.json,2/2 на2x/parallelism2,provenance true. Эта регрессия проверяет сохранение native позиции/HP/инвентаря и новую генерацию, не совместное восстановление новых PlannerCheckpoint/RunnerCheckpoint.

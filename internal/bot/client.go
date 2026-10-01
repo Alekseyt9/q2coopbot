@@ -20,6 +20,8 @@ import (
 )
 
 type Client struct {
+	checkpointControl                       string
+	checkpointCapturedID                    string
 	memoryFile                              string
 	memorySession                           string
 	travelMemory                            *travelMemory
@@ -434,6 +436,9 @@ func (c *Client) run(ctx context.Context) error {
 			c.handle(buffer[:n])
 		} else if ne, ok := e.(net.Error); !ok || !ne.Timeout() {
 			return e
+		}
+		if err := c.captureCheckpointRequest(); err != nil {
+			return err
 		}
 		now := time.Now()
 		if c.begun && c.strategist != nil {

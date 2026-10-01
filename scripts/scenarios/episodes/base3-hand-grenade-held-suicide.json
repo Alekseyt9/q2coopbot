@@ -3,7 +3,7 @@
   "title": "Ручная граната взрывается в руке и убивает бота и игрока",
   "map": "base3",
   "kind": "combat_weapon",
-  "status": "mitigated_release_cycle_parallel_2x",
+  "status": "mitigated_sampled_auto_parallel_2x",
   "priority": "blocker",
   "reproduction": "observation_only",
   "scenario": null,
@@ -16,7 +16,7 @@
     "workspace/artifacts/live-grenade-not-thrown-20260930-194230/server-tail.log"
   ],
   "missing_setup": [
-    "Общая политика броска при движущихся целях/напарнике, диапазон ранних точек взрыва, безопасный выбор траектории и разрешение подготовки",
+    "Расширенная native политика для движущихся/атакующих групп и непредвиденного движения напарника; исходный base3 ещё не воспроизведён. Limited sampled auto4/4 принят, полный баг не закрыт.",
     "Native потеря ранее видимой цели после подготовки; точное воспроизведение исходного base3"
   ],
   "acceptance": {
@@ -29,7 +29,7 @@
     "predicted_self_and_teammate_safety": true
   },
   "engine_reference": "F:/src/quake2/yquake2/src/game/g_weapon.c:614 Grenade_Touch: столкновение с takedamage вызывает Grenade_Explode сразу; геометрия даёт отскок. Контакт с владельцем игнорируется.",
-  "resolution": "Общий ATTACK не начинает подготовку ручной гранаты. Если сервер уже сообщает gun_frame1..15, guard отпускает ATTACK, сохраняет серверный view_angles до завершения цикла и пересчитывает Forward/Side для сохранения проверенного направления движения. WeaponSwitch ждёт завершения цикла и затем выбирает Blaster. Это предотвращение удержания и корректное завершение уже начатого цикла; общий безопасный планировщик броска ещё не реализован.",
+  "resolution": "Общий ATTACK не начинает подготовку ручной гранаты. Если сервер уже сообщает gun_frame1..15, guard отпускает ATTACK, сохраняет серверный view_angles до завершения цикла и пересчитывает Forward/Side для сохранения проверенного направления движения. WeaponSwitch ждёт завершения цикла и затем выбирает Blaster. Это предотвращение удержания и корректное завершение уже начатого цикла; общий безопасный планировщик броска ещё не реализован. Ограниченный automatic MVP выбирает use Grenades из Blaster, проверяет45 sampled траекторий, начинает подготовку одним ATTACK и отпускает до fuse; собственное движение при подготовке остановлено, activation gun_frame0 ожидается. Точность попадания эвристическая, не continuous certificate.",
   "verification": [
     "workspace/artifacts/hand-grenade-guard-a/guard-report.json",
     "workspace/artifacts/armed-grenade-suite-20261001-141815-287/report.json",
@@ -67,7 +67,9 @@
     "workspace/artifacts/armed-grenade-suite-20261001-183631-380/geometry-negative-controls.json",
     "workspace/artifacts/armed-grenade-suite-20261001-183733-057/report.json",
     "workspace/artifacts/armed-grenade-suite-20261001-183733-057/geometry-negative-controls.json",
-    "workspace/artifacts/armed-grenade-suite-20261001-183837-765/report.json"
+    "workspace/artifacts/armed-grenade-suite-20261001-183837-765/report.json",
+    "workspace/artifacts/grenade-auto-suite-20261001-191110-623/report.json",
+    "workspace/artifacts/grenade-auto-suite-20261001-191110-623/negative-controls.json"
   ],
   "verification_scope": "Два native прогона2x параллельно на base1: явная тестовая подготовка13 кадров, включая два кадра11 с активированным fuse, затем production release на кадре153. Native кадр12, расход Grenades5->4, завершение цикла и Blaster после fuse, HP бота и напарника100. Provenance true. Семь отрицательных контролей отвергнуты. Начальный бросок направлен тестовой постановкой по+X, враги удалены, напарник неподвижен. Не доказаны общий выбор безопасной траектории, потеря ранее видимой цели, движущийся напарник или исходный эпизод base3; карточка остаётся observation_only.",
   "partial_scenarios": [
@@ -77,7 +79,9 @@
     "scripts/scenarios/base1-grenade-moving-target.json",
     "scripts/scenarios/base1-grenade-moving-contact.json",
     "scripts/scenarios/base1-grenade-geometry-blocked.json",
-    "scripts/scenarios/base1-grenade-common-surface.json"
+    "scripts/scenarios/base1-grenade-common-surface.json",
+    "scripts/scenarios/base1-grenade-auto-throw.json",
+    "scripts/scenarios/base1-grenade-auto-friend-reject.json"
   ],
   "trajectory_status": "partial_native_static_path_calibrated: first five visible positions infer initial velocity once;24 held-out points including15 after bounces, max_error0.85/0.93 in2x parallel repeats. Launch impulse/fuse before release, actual explosion/contact and moving bodies remain unverified; not authorized to arm.",
   "launch_fuse_status": "isolated_native_verified_parallel_2x: center-hand muzzle, timer2.9/speed413, arm152 launch155 explosion184 with real TE event. Forward error0.1875; early damageable contact and moving players unverified; arming not authorized.",
@@ -88,5 +92,6 @@
   "early_envelope_status": "diagnostic_rejection_only: continuous up/right jitter bounds over nominal free flight500ms, assumed body axis speed400, approximate packed bounds inflated8. Contact ranges and self/teammate blast reach exposed in trace. Geometry/bounces/later flight not certified; absence of hazard remains unproven, authorized always false. Native observer teammate2/2 and target2/2 at2x parallelism2; six damaged envelope controls rejected per fixture. Generic arming remains prohibited.",
   "geometry_prefix_status": "static_free_flight_prefix_only: whole segment AABB separation from every MASK_SHOT world brush, epsilon0.03125, continuous nominal jitter. Stop on possible static bounce/observed mover overlap/unknown bounds; post-bounce and generic arming not certified. Native blocked observer2/2 at2x parallelism2: clear0.2, possible collision0.3; free observer2/2: clear0.5. Six damaged certificates rejected per fixture. Full flight, dynamic future and direction policy remain open.",
   "post_bounce_reach_status": "coarse_model_bound_only: include every collision normal/fraction and no-bounce/settled branch using speed norm cap2000 before gravity. Expand each axis208 units per100ms at gravity800; conditional model assumption, not geometry/dynamic safety certificate. Native wall observer2/2 at2x parallelism2; ten damaged certificates rejected. Real static throw2/2:15 held-out post-bounce positions contained per repeat, path error0.854/0.932, HP100 both. Tighter surface-aware envelope and direction policy remain open; generic arming forbidden.",
-  "static_surface_status": "partial_static_first_contact_only: continuous endpoint boxes cross one axis BSP face; every other face encloses the entire segment, other brushes separated. Surface x256, contact x255.96875 at tick3 for native observer bot x132; two repetitions at2x parallelism2, 15 damaged certificates rejected. Boundary bot x128 correctly has no common-surface certificate (2/2, ten controls). Coarse fallback retained; later ticks still expand208 units/axis, dynamic preemption not certified, generic arming forbidden."
+  "static_surface_status": "partial_static_first_contact_only: continuous endpoint boxes cross one axis BSP face; every other face encloses the entire segment, other brushes separated. Surface x256, contact x255.96875 at tick3 for native observer bot x132; two repetitions at2x parallelism2, 15 damaged certificates rejected. Boundary bot x128 correctly has no common-surface certificate (2/2, ten controls). Coarse fallback retained; later ticks still expand208 units/axis, dynamic preemption not certified, generic arming forbidden.",
+  "automatic_policy_status": "limited_sampled_mvp_enabled: actual production selection/start/release accepted2/2 plus nearby friend rejection2/2,2x parallelism2. Residual miss/motion risk accepted by user; continuous geometry proof deferred."
 }

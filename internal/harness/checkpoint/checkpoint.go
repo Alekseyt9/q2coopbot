@@ -19,13 +19,14 @@ import (
 )
 
 type Config struct {
-	Version       int    `json:"version"`
-	Action        string `json:"action"`
-	Server        string `json:"server"`
-	Instance      string `json:"instance"`
-	RuntimeRoot   string `json:"runtime_root"`
-	CheckpointDir string `json:"checkpoint_dir"`
-	TimeoutMS     int    `json:"timeout_ms"`
+	Barrier       *Barrier `json:"barrier,omitempty"`
+	Version       int      `json:"version"`
+	Action        string   `json:"action"`
+	Server        string   `json:"server"`
+	Instance      string   `json:"instance"`
+	RuntimeRoot   string   `json:"runtime_root"`
+	CheckpointDir string   `json:"checkpoint_dir"`
+	TimeoutMS     int      `json:"timeout_ms"`
 }
 type File struct {
 	Name   string `json:"name"`
@@ -33,18 +34,20 @@ type File struct {
 	SHA256 string `json:"sha256"`
 }
 type Manifest struct {
-	Version    int       `json:"version"`
-	CreatedUTC time.Time `json:"created_utc"`
-	Map        string    `json:"map"`
-	Runtime    []File    `json:"runtime"`
-	Files      []File    `json:"files"`
+	Barrier    *BarrierProof `json:"barrier,omitempty"`
+	Version    int           `json:"version"`
+	CreatedUTC time.Time     `json:"created_utc"`
+	Map        string        `json:"map"`
+	Runtime    []File        `json:"runtime"`
+	Files      []File        `json:"files"`
 }
 type Result struct {
-	Action        string `json:"action"`
-	State         string `json:"state"`
-	Map           string `json:"map"`
-	Slot          string `json:"slot"`
-	CheckpointDir string `json:"checkpoint_dir"`
+	BarrierVerified bool   `json:"barrier_verified"`
+	Action          string `json:"action"`
+	State           string `json:"state"`
+	Map             string `json:"map"`
+	Slot            string `json:"slot"`
+	CheckpointDir   string `json:"checkpoint_dir"`
 	// The command acknowledgement is not proof of restored client behavior.
 	GameplayVerified bool `json:"gameplay_verified"`
 }
@@ -53,6 +56,14 @@ var identifier = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 var mapLine = regexp.MustCompile(`(?m)^map\s+: ([a-zA-Z0-9_]+)\s*$`)
 
 func (c Config) Validate() error {
+	if c.Barrier != nil {
+		if c.Action != "save" {
+			return fmt.Errorf("barrier is capture-only; restore coordination is not yet supported")
+		}
+		if err := c.Barrier.validate(); err != nil {
+			return err
+		}
+	}
 	a, err := netip.ParseAddrPort(c.Server)
 	if err != nil || !a.Addr().Is4() || !a.Addr().IsLoopback() || a.Port() < 1024 {
 		return fmt.Errorf("checkpoint requires explicit IPv4 loopback server")
@@ -80,6 +91,13 @@ func LoadConfig(path string) (Config, error) {
 			return c, err
 		}
 		*target = abs
+	}
+	if c.Barrier != nil {
+		for i, control := range c.Barrier.Controls {
+			if !filepath.IsAbs(control) {
+				c.Barrier.Controls[i] = filepath.Join(filepath.Dir(path), control)
+			}
+		}
 	}
 	return c, nil
 }
@@ -348,6 +366,17 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 		if manifest.Version != 1 || !equalFiles(runtime, manifest.Runtime) {
 			return result, fmt.Errorf("checkpoint runtime/assets mismatch")
 		}
+		if manifest.Barrier != nil {
+			for _, record := range manifest.Barrier.Participants {
+				if !identifier.MatchString(strings.TrimSuffix(record.Name, ".json")) || !strings.HasSuffix(record.Name, ".json") {
+					return result, fmt.Errorf("invalid sidecar file name")
+				}
+				actual, err := fileRecord(filepath.Join(c.CheckpointDir, "sidecar"), record.Name)
+				if err != nil || actual != record {
+					return result, fmt.Errorf("checkpoint sidecar integrity mismatch")
+				}
+			}
+		}
 		files, err := nativeFiles(filepath.Join(c.CheckpointDir, "native"))
 		if err != nil {
 			return result, err
@@ -394,6 +423,15 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 	slot := "harness_" + hex.EncodeToString(nonce[:])
 	result.Slot = slot
 	if c.Action == "save" {
+		var captures []Capture
+		if c.Barrier != nil {
+			// Always release, including a timeout with unknown arm outcome.
+			defer request(context.Background(), c.Server, password, "set sv_test_checkpoint_frame 0", 2*time.Second)
+			captures, err = collectBarrier(ctx, c, password)
+			if err != nil {
+				return result, err
+			}
+		}
 		reply, err = request(ctx, c.Server, password, "save "+slot, timeout)
 		if err != nil {
 			return result, err
@@ -405,6 +443,14 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 		manifest.Map, err = savedMap(root)
 		if err != nil {
 			return result, err
+		}
+		if c.Barrier != nil {
+			if manifest.Map != c.Barrier.Map {
+				return result, fmt.Errorf("saved map differs from barrier")
+			}
+			if err = verifyBarrier(ctx, c, password); err != nil {
+				return result, err
+			}
 		}
 		files, err := nativeFiles(root)
 		if err != nil {
@@ -426,6 +472,13 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 		manifest.CreatedUTC = time.Now().UTC()
 		manifest.Runtime = runtime
 		manifest.Files = files
+		if c.Barrier != nil {
+			manifest.Barrier, err = saveCaptures(c.CheckpointDir, c.Barrier, captures)
+			if err != nil {
+				return result, err
+			}
+			result.BarrierVerified = true
+		}
 		data, err := json.MarshalIndent(manifest, "", "  ")
 		if err != nil {
 			return result, err
@@ -435,6 +488,11 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 		}
 		result.Map = manifest.Map
 		result.State = "saved"
+		if c.Barrier != nil {
+			if _, err = request(ctx, c.Server, password, "set sv_test_checkpoint_frame 0", timeout); err != nil {
+				return result, fmt.Errorf("checkpoint saved but barrier release unconfirmed: %w", err)
+			}
+		}
 		return result, nil
 	}
 	parent := filepath.Join(c.RuntimeRoot, "baseq2", "save")
