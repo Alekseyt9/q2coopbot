@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet('base1','base2','base3')][string]$Map='base3',[switch]$SideWalls,[string]$RuntimeRoot='')
+param([ValidateSet('base1','base2','base3')][string]$Map='base3',[switch]$SideWalls,[switch]$KeepMonsters,[string]$RuntimeRoot='')
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 $runtime=Join-Path $repo ('workspace/runtime/q2go-elevator-cycle'+$(if($Map -eq 'base3'){''}else{'-'+$Map}))
@@ -8,6 +8,7 @@ if($SideWalls){
     $runtime+='-side-walls'
 }
 if($RuntimeRoot){$runtime=$RuntimeRoot}
+if($KeepMonsters -and !$RuntimeRoot){$runtime+='-combat'}
 & "$PSScriptRoot/prepare_runtime.ps1" -RuntimeRoot $runtime | Out-Null
 Copy-Item -LiteralPath (Join-Path $repo "workspace/runtime/q2go/baseq2/maps/$Map.aas") -Destination (Join-Path $runtime "baseq2/maps/$Map.aas") -Force
 # Extract only the entity lump. The BSP, collision and native mover physics stay unchanged.
@@ -29,7 +30,7 @@ $entities=[Text.Encoding]::ASCII.GetString($bsp,[BitConverter]::ToInt32($bsp,8),
 # Remove combat actors only; keep world geometry, triggers and platform physics.
 $monsters=@([regex]::Matches($entities,'(?s)\{[^{}]*\}')|Where-Object {$_.Value -match '"classname"\s+"monster_'})
 if(!$monsters.Count){throw 'No monsters found in fixture source'}
-foreach($monster in $monsters){$entities=$entities.Replace($monster.Value,'')}
+if(!$KeepMonsters){foreach($monster in $monsters){$entities=$entities.Replace($monster.Value,'')}}
 if($SideWalls){
     # Reuse solid BSP model1 as two visible walls. Translated bounds:
     # x[-64,64], y[1372,1380]/[1436,1444], z[0,56].
@@ -39,5 +40,5 @@ if($SideWalls){
     }
 }
 [IO.File]::WriteAllText((Join-Path $runtime "baseq2/maps/$Map.ent"),$entities,[Text.Encoding]::ASCII)
-@{map=$Map;removed_monsters=$monsters.Count;native_platform_physics=$true;side_walls=[bool]$SideWalls;scope='navigation_without_combat'}|ConvertTo-Json|Set-Content (Join-Path $runtime 'elevator-fixture.json')
+@{map=$Map;removed_monsters=$(if($KeepMonsters){0}else{$monsters.Count});source_monsters=$monsters.Count;native_platform_physics=$true;side_walls=[bool]$SideWalls;scope=$(if($KeepMonsters){'original_combat'}else{'navigation_without_combat'})}|ConvertTo-Json|Set-Content (Join-Path $runtime 'elevator-fixture.json')
 $runtime

@@ -7,9 +7,10 @@ import (
 )
 
 // regroupCornerStep makes one short, grounded sidestep around a blocked AAS
-// walking corner. The next snapshot replans from the observed new position.
+// walking corner for regrouping or a campaign exit. The next snapshot replans
+// from the observed new position; the objective does not relax collision checks.
 func (p *Planner) regroupCornerStep(s quake.Snapshot, target quake.Vec3) (float64, float64, bool) {
-	if p.World.Goal != "regroup_after_respawn" || !s.OnGround || p.Nav == nil || p.World.Geometry == nil || !p.World.Geometry.HasCollision() ||
+	if p.World.Goal != "regroup_after_respawn" && p.World.Goal != "reach_level_exit" || !s.OnGround || p.Nav == nil || p.World.Geometry == nil || !p.World.Geometry.HasCollision() ||
 		len(p.World.Route) == 0 || p.World.Route[0].Kind != 2 {
 		return 0, 0, false
 	}
@@ -74,7 +75,7 @@ func (p *Planner) regroupCornerStep(s quake.Snapshot, target quake.Vec3) (float6
 // for a later waypoint. The ordinary per-tick ground and door guards still
 // validate every movement command; the override expires even if blocked.
 func (p *Planner) regroupCornerEscape(s quake.Snapshot) (quake.Vec3, bool) {
-	if p.World.Goal != "regroup_after_respawn" || !s.OnGround || p.Nav == nil || p.World.Geometry == nil || len(p.World.Route) == 0 {
+	if p.World.Goal != "regroup_after_respawn" && p.World.Goal != "reach_level_exit" || !s.OnGround || p.Nav == nil || p.World.Geometry == nil || len(p.World.Route) == 0 {
 		p.cornerHistory = nil
 		p.cornerEscapeUntil = 0
 		return quake.Vec3{}, false

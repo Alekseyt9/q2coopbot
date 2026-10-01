@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "name": "base1-campaign-level",
+  "map": "base1",
+  "next_map": "base2",
+  "scope": "Entire base1 navigation from native player spawn to original exit; no teleport, forced map change or scripted movement. Monsters removed only for this navigation acceptance."
+}

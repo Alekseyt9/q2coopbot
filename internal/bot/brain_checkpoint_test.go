@@ -6,6 +6,28 @@ import (
 	"testing"
 )
 
+func TestCampaignCheckpointObjectiveAndConfig(t *testing.T) {
+	p := &Planner{Campaign: true, CampaignNextMap: "base2", campaignMap: "base1", campaignDestination: "base2", World: World{Snapshot: quake.Snapshot{Map: "base1", Frame: 30, Health: 100, OnGround: true}, Goal: "reach_level_exit"}}
+	state, err := p.CaptureCheckpoint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh := quake.Snapshot{Map: "base1", Frame: 1, Health: 100, OnGround: true}
+	q := &Planner{Campaign: true, CampaignNextMap: "base2"}
+	if err = q.RestoreCheckpoint(state, fresh, ""); err != nil || q.campaignMap != "base1" || q.campaignDestination != "base2" {
+		t.Fatal(err, q)
+	}
+	fresh.Map = "base2"
+	if _, ok := q.campaignGoal(fresh); ok || q.World.Campaign.State != "level_completed" {
+		t.Fatal("exit objective lost")
+	}
+	for _, q := range []*Planner{{}, {Campaign: true, CampaignNextMap: "base3"}} {
+		if q.RestoreCheckpoint(state, quake.Snapshot{Map: "base1", Frame: 1, Health: 100, OnGround: true}, "") == nil {
+			t.Fatal("mismatched mode/destination accepted")
+		}
+	}
+}
+
 func TestPlannerCheckpointBranchIsolationAndObservationAge(t *testing.T) {
 	death := quake.Vec3{100, 200, 30}
 	s := quake.Snapshot{Map: "base2", Frame: 1000, Health: 38, OnGround: true}

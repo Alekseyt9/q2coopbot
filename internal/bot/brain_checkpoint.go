@@ -11,6 +11,7 @@ import (
 // A future save barrier must bind it to the same native state before loading.
 // Motor actions, visible entities, health and inventory are never restored.
 type PlannerCheckpoint struct {
+	Campaign      *CampaignCheckpoint  `json:"campaign,omitempty"`
 	Version       int                  `json:"version"`
 	Map           string               `json:"map"`
 	CapturedFrame int                  `json:"captured_frame"`
@@ -19,6 +20,12 @@ type PlannerCheckpoint struct {
 	DeathPoint    *quake.Vec3          `json:"death_point,omitempty"`
 	Rendezvous    *quake.Vec3          `json:"rendezvous,omitempty"`
 	Resources     []CheckpointResource `json:"resources,omitempty"`
+}
+
+type CampaignCheckpoint struct {
+	Map         string `json:"map"`
+	Destination string `json:"destination"`
+	NextMap     string `json:"next_map"`
 }
 
 type CheckpointResource struct {
@@ -39,6 +46,9 @@ func cloneCheckpointPoint(point *quake.Vec3) *quake.Vec3 {
 func (p *Planner) CaptureCheckpoint() (PlannerCheckpoint, error) {
 	s := p.World.Snapshot
 	state := PlannerCheckpoint{Version: 1, Map: s.Map, CapturedFrame: s.Frame, Goal: p.World.Goal, DeathPoint: cloneCheckpointPoint(p.deathPoint)}
+	if p.Campaign {
+		state.Campaign = &CampaignCheckpoint{Map: p.campaignMap, Destination: p.campaignDestination, NextMap: p.CampaignNextMap}
+	}
 	if s.Frame <= 0 || s.Map == "" || s.Health <= 0 || !s.OnGround || len(s.Projectiles) > 0 || p.jump != nil || p.elevator != nil || p.grenadeThrowPending(s) || isHandGrenade(s.Weapon) && s.GunFrame >= 1 && s.GunFrame <= 15 {
 		return state, fmt.Errorf("planner checkpoint requires a living grounded idle motor state")
 	}
@@ -62,6 +72,21 @@ func (p *Planner) CaptureCheckpoint() (PlannerCheckpoint, error) {
 }
 
 func (state PlannerCheckpoint) validate(mapName string) error {
+	if state.Campaign != nil {
+		for _, name := range []string{state.Campaign.Map, state.Campaign.Destination, state.Campaign.NextMap} {
+			if len(name) > 64 {
+				return fmt.Errorf("invalid campaign checkpoint")
+			}
+			for _, ch := range name {
+				if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '_') {
+					return fmt.Errorf("invalid campaign map")
+				}
+			}
+		}
+		if (state.Campaign.Map == "") != (state.Campaign.Destination == "") {
+			return fmt.Errorf("incomplete campaign exit checkpoint")
+		}
+	}
 	if state.Version != 1 || state.Map == "" || state.Map != mapName || state.CapturedFrame <= 0 || len(state.Resources) > 4096 || len(state.Goal) > 128 {
 		return fmt.Errorf("planner checkpoint identity/schema mismatch")
 	}
@@ -95,6 +120,9 @@ func (p *Planner) RestoreCheckpoint(state PlannerCheckpoint, fresh quake.Snapsho
 	if err := state.validate(fresh.Map); err != nil {
 		return err
 	}
+	if (state.Campaign != nil) != p.Campaign || state.Campaign != nil && state.Campaign.NextMap != p.CampaignNextMap {
+		return fmt.Errorf("campaign checkpoint/config mismatch")
+	}
 	if fresh.Frame <= 0 || fresh.Health <= 0 || !fresh.OnGround || p.observed || p.jump != nil || p.elevator != nil || p.grenadeThrow != nil || len(p.resources) > 0 {
 		return fmt.Errorf("restore requires a fresh grounded planner")
 	}
@@ -110,6 +138,10 @@ func (p *Planner) RestoreCheckpoint(state PlannerCheckpoint, fresh quake.Snapsho
 		resources[item.ID] = &ResourceMemory{Item: item, LastSeen: fresh.Frame - memory.Age, State: status, Attempted: memory.Attempted}
 	}
 	p.setMap(fresh.Map, root)
+	if state.Campaign != nil {
+		p.campaignMap = state.Campaign.Map
+		p.campaignDestination = state.Campaign.Destination
+	}
 	p.World.Snapshot = fresh
 	p.World.Goal = state.Goal
 	p.deathPoint = cloneCheckpointPoint(state.DeathPoint)

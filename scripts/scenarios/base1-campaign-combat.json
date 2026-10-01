@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "name": "base1-campaign-combat",
+  "map": "base1",
+  "next_map": "base2",
+  "scope": "Solo base1 from native spawn with original monsters, resources and exit; no scripted movement, teleport, give/kill or forced map change."
+}

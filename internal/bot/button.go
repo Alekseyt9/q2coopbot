@@ -7,6 +7,7 @@ import (
 )
 
 type buttonTask struct {
+	campaign       bool
 	doorModel      int
 	buttonModel    int
 	initial        quake.Vec3
@@ -25,20 +26,21 @@ func (p *Planner) cancelButtonTask(frame int) {
 }
 
 func (p *Planner) validateButtonOwner(s quake.Snapshot) {
-	if p.button != nil && (s.Health <= 0 || s.Teammate == nil || s.TeammateEntity != p.button.teammateEntity) {
+	if p.button != nil && (s.Health <= 0 || (p.button.campaign && (!p.Campaign || s.Teammate != nil)) || (!p.button.campaign && (s.Teammate == nil || s.TeammateEntity != p.button.teammateEntity))) {
 		p.cancelButtonTask(s.Frame)
 	}
 }
 
 func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
-	if p.World.GeometryStatus != "ready" || p.World.Goal != "follow_teammate" || !s.OnGround ||
+	campaign := p.World.Goal == "reach_level_exit" && p.Campaign && s.Teammate == nil
+	if p.World.GeometryStatus != "ready" || (p.World.Goal != "follow_teammate" && !campaign) || !s.OnGround ||
 		s.Frame < p.buttonCooldown || quake.Horizontal(s.Self, p.goalPoint) > 256 {
 		return nil
 	}
 	if p.World.Navigation != "ready" && p.World.Navigation != "unreachable" {
 		return nil
 	}
-	if p.World.Navigation == "ready" {
+	if p.World.Navigation == "ready" && !(campaign && s.Self[2]-p.goalPoint[2] > 64) {
 		travel, at := 0.0, s.Self
 		for _, waypoint := range p.World.Route {
 			travel += quake.Horizontal(at, waypoint.Position)
@@ -51,6 +53,14 @@ func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
 	}
 	model, reason := p.World.Geometry.DoorMoveBlock(s.Movers, s.Self,
 		p.goalPoint[0]-s.Self[0], p.goalPoint[1]-s.Self[1])
+	if campaign && reason != "dynamic_door_blocked" {
+		for _, mover := range s.Movers {
+			if _, action, ok := p.World.Geometry.ButtonForDoor(mover.Model); ok && action == "touch" && !p.World.Geometry.MoverHullClear(mover, s.Self, p.goalPoint) {
+				model, reason = mover.Model, "dynamic_door_blocked"
+				break
+			}
+		}
+	}
 	if reason != "dynamic_door_blocked" {
 		return nil
 	}
@@ -91,6 +101,12 @@ func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
 		{{midX, bounds.Min[1] - 36, z}, {midX, bounds.Max[1] + 28, z}},
 		{{midX, bounds.Max[1] + 36, z}, {midX, bounds.Min[1] - 28, z}},
 	}
+	if campaign {
+		candidates[0][1] = quake.Vec3{bounds.Min[0] - 15.875, midY, z}
+		candidates[1][1] = quake.Vec3{bounds.Max[0] + 15.875, midY, z}
+		candidates[2][1] = quake.Vec3{midX, bounds.Min[1] - 15.875, z}
+		candidates[3][1] = quake.Vec3{midX, bounds.Max[1] + 15.875, z}
+	}
 	best := math.Inf(1)
 	var chosen [2]quake.Vec3
 	for _, candidate := range candidates {
@@ -100,15 +116,59 @@ func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
 			continue
 		}
 		if _, ok := p.World.Geometry.GroundDrop(stand, 24); !ok && !p.Nav.GroundedNear(stand) {
-			continue
+			live := quake.Mover{Model: model, Origin: doorOrigin}
+			if !campaign || !p.stationaryBridge(model, doorOrigin) || !p.bridgeLinkCorridor(s.Self, stand, live) {
+				continue
+			}
 		}
 		best, chosen = distance, candidate
 	}
 	if math.IsInf(best, 1) {
 		return nil
 	}
-	return &buttonTask{doorModel: model, buttonModel: button.Model, initial: doorOrigin,
+	return &buttonTask{campaign: campaign, doorModel: model, buttonModel: button.Model, initial: doorOrigin,
 		stand: chosen[0], touch: chosen[1], phase: "approach", started: s.Frame, teammateEntity: s.TeammateEntity}
+}
+
+// Native collision with the selected touch button is the intended action.
+// Only its collider is excluded, only up to the selected contact point; all
+// world/other mover hulls and stationary hatch support remain checked.
+func (p *Planner) campaignButtonCorridor(from, to quake.Vec3, live quake.Mover) bool {
+	if p.button == nil || !p.button.campaign {
+		return false
+	}
+	q := *p
+	if p.button.phase == "touch" {
+		if quake.Horizontal(from, to) > quake.Horizontal(from, p.button.touch)+0.01 {
+			return false
+		}
+		q.World.Snapshot.Movers = nil
+		for _, mover := range p.World.Snapshot.Movers {
+			if mover.Model != p.button.buttonModel {
+				q.World.Snapshot.Movers = append(q.World.Snapshot.Movers, mover)
+			}
+		}
+	}
+	return q.bridgeLinkCorridor(from, to, live)
+}
+
+func (p *Planner) campaignButtonStep(s quake.Snapshot, dx, dy, step float64) bool {
+	if p.button == nil || !p.button.campaign || step <= 0 {
+		return false
+	}
+	length := math.Hypot(dx, dy)
+	if length == 0 {
+		return false
+	}
+	to := s.Self
+	to[0] += dx / length * step
+	to[1] += dy / length * step
+	for _, live := range s.Movers {
+		if live.Model == p.button.doorModel && p.stationaryBridge(live.Model, live.Origin) && p.campaignButtonCorridor(s.Self, to, live) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Planner) applyButtonTask(s quake.Snapshot) {
@@ -119,7 +179,7 @@ func (p *Planner) applyButtonTask(s quake.Snapshot) {
 		return
 	}
 	task := p.button
-	if s.Frame-task.started > 80 || p.World.GeometryStatus != "ready" || s.Teammate == nil {
+	if s.Frame-task.started > 80 || p.World.GeometryStatus != "ready" || (!task.campaign && s.Teammate == nil) {
 		p.button = nil
 		p.buttonCooldown = s.Frame + 30
 		return

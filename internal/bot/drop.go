@@ -104,7 +104,7 @@ func (p *Planner) planWalkOffRoute(r []quake.Waypoint) bool {
 	if dz := s.Self[2] - end[2]; dz < 24 || dz > 320 {
 		return false
 	}
-	for _, offset := range []quake.Vec3{{}, {24, 0, 0}, {-24, 0, 0}, {0, 24, 0}, {0, -24, 0}} {
+	for _, offset := range []quake.Vec3{{}, {24, 0, 0}, {-24, 0, 0}, {0, 24, 0}, {0, -24, 0}, {24, 24, 0}, {24, -24, 0}, {-24, 24, 0}, {-24, -24, 0}} {
 		landing := end
 		landing[0] += offset[0]
 		landing[1] += offset[1]

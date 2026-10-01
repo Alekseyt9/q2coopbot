@@ -501,7 +501,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	p.goalPoint = goal
 	// A button is a subtask of following this player, not an override for a
 	// newly selected health objective or an already restored close contact.
-	if p.World.Goal != "follow_teammate" {
+	if p.World.Goal != "follow_teammate" && p.World.Goal != "reach_level_exit" {
 		p.cancelButtonTask(s.Frame)
 		if p.bridgeLink != nil {
 			p.bridgeLink = nil
@@ -575,6 +575,12 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	}
 	if p.routeOK {
 		for p.routeIndex < len(p.route) && p.route[p.routeIndex].Kind != 11 && quake.Horizontal(s.Self, p.route[p.routeIndex].Position) <= 10 {
+			// Keep the walk-off entry/landing pair until the descent happens.
+			// Consuming the entry by XY alone prevents the drop skill from
+			// validating its landing and leaves a lone lower waypoint.
+			if p.route[p.routeIndex].Kind == 7 && p.routeIndex+1 < len(p.route) && p.route[p.routeIndex+1].Kind == 7 && s.Self[2]-p.route[p.routeIndex+1].Position[2] > 24 {
+				break
+			}
 			// Walking reaches can climb successive 16-unit steps. Being
 			// horizontally close does not mean the bot has climbed one.
 			// On a descent the bot may already be supported above the AAS
@@ -814,13 +820,20 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		jump = false
 		p.World.Command.Skill = "route_corner_escape"
 	}
-	if quake.Horizontal(s.Self, target) < 10 && target[2]-s.Self[2] <= 2 {
+	contactButton := p.button != nil && p.button.campaign && p.button.phase == "touch"
+	if !contactButton && quake.Horizontal(s.Self, target) < 10 && target[2]-s.Self[2] <= 2 {
 		if p.World.Command.LimitReason == "" {
 			p.World.Command.LimitReason = "at_waypoint"
 		}
 		return cmd
 	}
 	moveSpeedLimit := 400.0
+	if p.button != nil && p.button.campaign {
+		moveSpeedLimit = 120
+		if contactButton {
+			moveSpeedLimit = 40
+		}
+	}
 	// Brake before turns leading into a walk-off reach. The movement guard
 	// checks the requested direction, but momentum survives a sharp turn.
 	for i, wp := range p.World.Route {
@@ -848,6 +861,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		probeDistance = math.Min(probeDistance, math.Hypot(dx, dy))
 	}
 	hazard := p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, probeDistance)
+	if hazard == "no_ground_support" && p.campaignButtonStep(s, dx, dy, probeDistance) {
+		hazard = ""
+	}
 	// At the measured base1 second rise, a full-speed tick skips beyond a
 	// nearby grounded AAS walking reach. Other ramps must keep their existing
 	// jump planning; taking short steps there can spoil a safe run-up.
@@ -919,10 +935,16 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		probeStep := probeDistance
 		if p.World.Goal == "touch_button" {
 			probeStep = 8
+			if contactButton {
+				probeStep = math.Min(probeStep, math.Hypot(dx, dy))
+			}
 		} else if p.World.Goal == "probe_last_seen" {
 			probeStep = 16
 		}
 		hazard := p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, probeStep)
+		if hazard == "no_ground_support" && p.campaignButtonStep(s, dx, dy, probeStep) {
+			hazard = ""
+		}
 		// A full tick may span two stair risers. Slow down only when a
 		// shorter, fully checked ground step is available.
 		if hazard == "static_hull_blocked" && probeStep > 16 && p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, 16) == "" {
