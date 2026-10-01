@@ -3,21 +3,21 @@
   "title": "Ручная граната взрывается в руке и убивает бота и игрока",
   "map": "base3",
   "kind": "combat_weapon",
-  "status": "mitigated_guard_parallel_2x",
+  "status": "mitigated_release_cycle_parallel_2x",
   "priority": "blocker",
   "reproduction": "observation_only",
   "scenario": null,
   "observed_failure": "По сообщению игрока бот зарядил ручную гранату, не бросил её и взрывом убил себя и игрока. В сохранённой UDP-трассе base3 кадры 1705–1749: v_handgr, ATTACK=1; кадр 1750: здоровье бота -8, ATTACK=0.",
   "expected_result": "Рассчитывать траекторию, время полёта, отскоки и время до взрыва ручной гранаты. Проверять безопасность бота и напарника в точке взрыва, в том числе при раннем столкновении с мобом. После начала подготовки обязательно вовремя отпускать ATTACK; потеря цели не должна приводить к удержанию до взрыва. Если безопасный бросок не найден — не начинать подготовку гранаты и выбрать другое оружие.",
-  "diagnosis": "Трасса подтверждает непрерывное удержание ATTACK с ручной гранатой перед смертью. Причину и точный цикл оружия нужно проверить по исходникам и воспроизводимому сценарию; смерть игрока зафиксирована по его сообщению.",
+  "diagnosis": "Исходная трасса подтверждает удержание ATTACK до смерти. В native Weapon_Grenade кадр11 запускает fuse3.2s и ждёт отпускания ATTACK; кадр12 бросает гранату, кадры12..15 завершают цикл. ChangeWeapon при активном grenade_time принудительно выпускает гранату с timer0, поэтому переключение до завершения цикла запрещено.",
   "evidence": "workspace/artifacts/live-grenade-not-thrown-20260930-194230/bot-full.jsonl",
   "additional_evidence": [
     "workspace/artifacts/live-grenade-not-thrown-20260930-194230/grenade-death-events.json",
     "workspace/artifacts/live-grenade-not-thrown-20260930-194230/server-tail.log"
   ],
   "missing_setup": [
-    "Расчёт траектории, отскоков и точек раннего взрыва на мобах; безопасность бота и напарника",
-    "Native тест уже заряженной гранаты, потери цели и движения напарника"
+    "Native калибровка диагностической траектории, fuse/скорости release, отскоков и раннего взрыва на мобах; полный выбор безопасного броска для себя и напарника",
+    "Native потеря видимой цели после подготовки и движение напарника; воспроизведение исходного base3"
   ],
   "acceptance": {
     "no_grenade_teammate_kill": true,
@@ -29,9 +29,17 @@
     "predicted_self_and_teammate_safety": true
   },
   "engine_reference": "F:/src/quake2/yquake2/src/game/g_weapon.c:614 Grenade_Touch: столкновение с takedamage вызывает Grenade_Explode сразу; геометрия даёт отскок. Контакт с владельцем игнорируется.",
-  "resolution": "Общая логика ATTACK больше не может начать или удерживать ручную гранату: общий guard отпускает ATTACK на всех путях команд живого бота, weaponSwitch запрашивает Blaster независимо от здоровья/известности инвентаря. Ограничение временное: безопасный бросок ещё не реализован.",
+  "resolution": "Общий ATTACK не начинает подготовку ручной гранаты. Если сервер уже сообщает gun_frame1..15, guard отпускает ATTACK, сохраняет серверный view_angles до завершения цикла и пересчитывает Forward/Side для сохранения проверенного направления движения. WeaponSwitch ждёт завершения цикла и затем выбирает Blaster. Это предотвращение удержания и корректное завершение уже начатого цикла; общий безопасный планировщик броска ещё не реализован.",
   "verification": [
-    "workspace/artifacts/hand-grenade-guard-a/guard-report.json"
+    "workspace/artifacts/hand-grenade-guard-a/guard-report.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-141815-287/report.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-141815-287/negative-controls.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-143357-422/report.json",
+    "workspace/artifacts/armed-grenade-suite-20261001-143357-422/negative-controls.json"
   ],
-  "verification_scope": "Два native прогона2x параллельно: выбран v_handgr, ноль ATTACK с ним, переключение на Blaster, Grenades5 сохраняются,57 кадров дальнейшего боя, финальное здоровье100. Воспроизводится предотвращение подготовки, а не безопасный бросок уже заряженной гранаты."
+  "verification_scope": "Два native прогона2x параллельно на base1: явная тестовая подготовка13 кадров, включая два кадра11 с активированным fuse, затем production release на кадре153. Native кадр12, расход Grenades5->4, завершение цикла и Blaster после fuse, HP бота и напарника100. Provenance true. Семь отрицательных контролей отвергнуты. Начальный бросок направлен тестовой постановкой по+X, враги удалены, напарник неподвижен. Не доказаны общий выбор безопасной траектории, потеря ранее видимой цели, движущийся напарник или исходный эпизод base3; карточка остаётся observation_only.",
+  "partial_scenarios": [
+    "scripts/scenarios/base1-armed-grenade-release.json"
+  ],
+  "trajectory_status": "diagnostic_only_not_authorized: static native tick/bounce kernel, nine jitter samples, approximate body contacts and risk; actual projectile path not calibrated, moving bodies and exact armed fuse not modeled"
 }

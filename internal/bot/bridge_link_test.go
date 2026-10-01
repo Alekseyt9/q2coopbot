@@ -19,12 +19,6 @@ func TestBunk1DeployedBridgeLink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, e := range g.Entities {
-		if e.Model == 128 || e.Model == 129 {
-			b, _ := g.Model(e.Model)
-			t.Log("door", e, b)
-		}
-	}
 	from := quake.Vec3{-962.25, -64, 30.125}
 	goal := quake.Vec3{-471.75, 486.375, 24.125}
 	movers := []quake.Mover{{Model: 99, Origin: quake.Vec3{0, -250, 0}}, {Model: 100, Origin: quake.Vec3{0, 0, -202}}, {Model: 128, Origin: quake.Vec3{58, 0, 0}}, {Model: 129, Origin: quake.Vec3{-58, 0, 0}}}
@@ -56,10 +50,6 @@ func TestBunk1DeployedBridgeLink(t *testing.T) {
 		t.Fatal("no bridge link")
 	}
 	t.Log("bridge link", task, "cost", routeLength(from, r, goal))
-	for _, v := range []quake.Vec3{{-878, -64, 24.125}, {-800, -64, 24.125}, {-524.875, 166, 24.125}} {
-		drop, ok := g.GroundDrop(v, 4)
-		t.Log("setup", v, g.PlayerMoveClear(v, v), drop, ok)
-	}
 	for _, wp := range r {
 		if wp.Kind == 11 {
 			t.Fatal("shortcut still uses elevator")
@@ -69,7 +59,7 @@ func TestBunk1DeployedBridgeLink(t *testing.T) {
 	if !ok || routeLength(from, r, goal) >= routeLength(from, original, goal) {
 		t.Fatal("shortcut does not improve static route")
 	}
-	for _, mode := range []string{"closed", "hidden", "moving", "unknown_motion", "dead", "airborne"} {
+	for _, mode := range []string{"closed", "hidden", "moving", "unknown_motion", "dead", "airborne", "other_goal"} {
 		t.Run(mode, func(t *testing.T) {
 			q := *p
 			q.World = p.World
@@ -90,6 +80,8 @@ func TestBunk1DeployedBridgeLink(t *testing.T) {
 				q.World.Snapshot.Health = 0
 			case "airborne":
 				q.World.Snapshot.OnGround = false
+			case "other_goal":
+				q.World.Goal = "collect_item"
 			}
 			if _, _, ok := q.deployedBridgeRoute(); ok {
 				t.Fatal("unsafe bridge accepted")
@@ -110,5 +102,30 @@ func TestBunk1DeployedBridgeLink(t *testing.T) {
 	cmd, active := p.bridgeLinkCommand(quake.UserCmd{})
 	if !active || cmd.Forward == 0 && cmd.Side == 0 || cmd.Up != 0 {
 		t.Fatalf("cannot cross and step onto bank: %v %+v", active, cmd)
+	}
+	// Finishing on the static bank must survive yielding past the exit point.
+	p.World.Snapshot.Self = quake.Vec3{-512, 338, 16.125}
+	if !p.bridgeLinkNeedsExit() {
+		t.Fatal("crossing completed over the gap")
+	}
+	p.World.Snapshot.Self = quake.Vec3{-562.625, 534.875, 24.125}
+	if p.bridgeLinkNeedsExit() || p.bridgeLink != nil {
+		t.Fatal("safe bank beyond the exit retains bridge task")
+	}
+	// The 8-unit rise on the approach must not be discarded merely because
+	// its waypoint is within the ordinary horizontal arrival radius.
+	p.World.Snapshot.Self = quake.Vec3{-724.5, -17.75, 24.125}
+	p.World.Snapshot.Frame = snap.Frame + 1
+	p.route = []quake.Waypoint{{Position: quake.Vec3{-724, -10, 32}, Kind: 2}, {Position: quake.Vec3{-556, 4, 24}, Kind: 2}}
+	p.routeIndex = 0
+	p.routeKnown = true
+	p.lastSelf = p.World.Snapshot.Self
+	p.update(p.World.Snapshot, "")
+	if p.routeIndex != 0 {
+		t.Fatal("unclimbed nearby rise skipped")
+	}
+	cmd = p.command(quake.UserCmd{})
+	if cmd.Forward == 0 && cmd.Side == 0 || cmd.Up != 0 {
+		t.Fatalf("nearby rise is not approached with a checked ground step: %+v %+v", cmd, p.World.Command)
 	}
 }

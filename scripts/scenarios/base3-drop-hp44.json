@@ -1,0 +1,34 @@
+{
+  "bot_release_origin": [
+    831,
+    -574,
+    -241.875
+  ],
+  "bot_origin": [
+    1060,
+    -556,
+    -497.875
+  ],
+  "expect": {},
+  "actor_origin": [
+    980,
+    -574,
+    -497.875
+  ],
+  "map": "base3",
+  "game_frames": 400,
+  "start_frame": 40,
+  "name": "base3-drop-hp44",
+  "version": 1,
+  "bot_health": 44,
+  "bot_release_frame": 140,
+  "steps": [
+    {
+      "frames": 300,
+      "action": "wait",
+      "id": "follow-down-ledge"
+    }
+  ],
+  "map_entry": "base2b"
+}
+

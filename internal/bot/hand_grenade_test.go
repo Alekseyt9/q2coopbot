@@ -49,3 +49,32 @@ func TestHandGrenadeSwitchEvenWithLowHealthOrUnknownInventory(t *testing.T) {
 		t.Fatal("retry missing")
 	}
 }
+
+func TestArmedGrenadeReleasesWithoutTargetAndKeepsServerPose(t *testing.T) {
+	for frame := 1; frame <= 15; frame++ {
+		p := &Planner{}
+		s := quake.Snapshot{Health: 100, Weapon: "Grenades", GunFrame: frame, ViewAngles: [3]int16{12, -30, 7}, DeltaAngles: [3]int16{2, -10, 1}}
+		cmd := p.guardHandGrenade(s, quake.UserCmd{Buttons: 3, Forward: 80, Yaw: 300, Pitch: 40})
+		if cmd.Buttons != 2 || cmd.Pitch != 10 || cmd.Yaw != -20 || cmd.Roll != 6 || cmd.Forward != 80 {
+			t.Fatalf("gunframe%d: %+v", frame, cmd)
+		}
+		w := &weaponSwitch{}
+		s.Map = "base1"
+		s.Frame = 100
+		if w.command(s) != "" {
+			t.Fatal("weapon changed in native firing cycle")
+		}
+		if frame == 11 && p.World.Command.LimitReason != "hand_grenade_release" {
+			t.Fatal("release not recorded")
+		}
+	}
+}
+
+func TestGrenadePosePreservesCheckedMovementDirection(t *testing.T) {
+	p := &Planner{}
+	s := quake.Snapshot{Health: 100, Weapon: "Grenades", GunFrame: 11}
+	cmd := p.guardHandGrenade(s, quake.UserCmd{Yaw: 16384, Forward: 100, Buttons: 1})
+	if cmd.Yaw != 0 || cmd.Forward != 0 || cmd.Side != -100 || cmd.Buttons != 0 {
+		t.Fatalf("checked northward movement changed: %+v", cmd)
+	}
+}

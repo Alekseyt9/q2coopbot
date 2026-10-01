@@ -24,6 +24,10 @@ func (w *weaponSwitch) command(s quake.Snapshot) string {
 		return ""
 	}
 	if isHandGrenade(s.Weapon) {
+		if s.GunFrame >= 1 && s.GunFrame <= 15 {
+			w.reason = "hand_grenade_wait_release"
+			return ""
+		}
 		if w.requestAt != 0 && s.Frame-w.requestAt < 20 {
 			return ""
 		}

@@ -20,7 +20,7 @@ func TestBunk1WalkOff(t *testing.T) {
 		t.Fatal(err)
 	}
 	goal := quake.Vec3{519, -932.5, -103.875}
-	s := quake.Snapshot{Map: "bunk1", Frame: 100, Health: 98, OnGround: true, Self: quake.Vec3{463.25, -1109, 24.125}, Teammate: &goal}
+	s := quake.Snapshot{Map: "bunk1", Frame: 100, Health: 98, Gravity: 800, OnGround: true, Self: quake.Vec3{463.25, -1109, 24.125}, Teammate: &goal}
 	p := &Planner{Nav: nav, GameClock: true, World: World{Map: "bunk1", Geometry: &g}}
 	p.update(s, "")
 	if !p.planWalkOff() {

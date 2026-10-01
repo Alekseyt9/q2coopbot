@@ -5,8 +5,8 @@ $repo=Split-Path $PSScriptRoot -Parent
 $runtime=Join-Path $repo 'workspace/runtime/q2go-bunk1-bridge'
 & "$PSScriptRoot/prepare_runtime.ps1" -RuntimeRoot $runtime | Out-Null
 Copy-Item -LiteralPath (Join-Path $repo 'workspace/runtime/q2go/baseq2/maps/bunk1.aas') -Destination (Join-Path $runtime 'baseq2/maps/bunk1.aas') -Force
-# Keep native brushes, door speed, wait and linked targets. Only remove enemies
-# and add a one-shot activation volume around the synchronized actor placement.
+# Replay the captured deployed bridge and bottom lift using native use targets.
+# Bank doors are held open; their closing behavior is outside this fixture.
 $stream=[IO.File]::OpenRead((Join-Path $runtime 'baseq2/pak0.pak'))
 $reader=[IO.BinaryReader]::new($stream)
 try {
@@ -27,13 +27,13 @@ foreach($model in @(99)) {
     $door=@($blocks | Where-Object {$_ -match ('"model"\s+"\*'+$model+'"')})
     if($door.Count -ne 1 -or $door[0] -notmatch '"classname"\s+"func_door"' -or $door[0] -notmatch '"targetname"\s+"t97"') {throw "Unexpected bunk1 door$model"}
 }
-$filtered=@($blocks | Where-Object {$_ -notmatch '"classname"\s+"(monster_|item_|weapon_|ammo_)'})
+$filtered=@($blocks | Where-Object {$_ -notmatch '"classname"\s+"(monster_|item_|weapon_|ammo_)' -and $_ -notmatch '"model"\s+"\*12"'})
 # The captured player stands between already-open bank doors. Hold this
 # observed state; their brushes, movement speed and native use remain intact.
 $filtered=@($filtered | ForEach-Object {if($_ -match '"model"\s+"\*(128|129)"') {$_.Replace('}', '"wait" "-1"'+"`n}")} else {$_}})
-$filtered+="`n{`n`"classname`" `"trigger_once`"`n`"model`" `"*99`"`n`"origin`" `"0 -250 24`"`n`"target`" `"t97`"`n}`n"
-$filtered+="`n{`n`"classname`" `"trigger_once`"`n`"model`" `"*99`"`n`"origin`" `"0 -250 24`"`n`"target`" `"t95`"`n}`n"
-$filtered+="`n{`n`"classname`" `"trigger_once`"`n`"model`" `"*99`"`n`"origin`" `"0 -250 24`"`n`"target`" `"t188`"`n}`n"
+foreach($target in @('t97','t95','t188')) {
+    $filtered+="`n{`n`"classname`" `"trigger_always`"`n`"target`" `"$target`"`n}`n"
+}
 [IO.File]::WriteAllText((Join-Path $runtime 'baseq2/maps/bunk1.ent'),($filtered -join "`n"),[Text.Encoding]::ASCII)
 $runtime
 

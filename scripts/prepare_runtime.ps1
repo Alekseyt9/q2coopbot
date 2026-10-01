@@ -71,7 +71,14 @@ foreach ($name in @('pak0.pak', 'pak1.pak', 'pak2.pak')) {
     $target = Join-Path $baseq2 $name
     if (Test-Path -LiteralPath $target) { continue }
     if ([IO.Path]::GetPathRoot((Resolve-Path -LiteralPath $source).Path) -eq [IO.Path]::GetPathRoot((Resolve-Path -LiteralPath $RuntimeRoot).Path)) {
-        New-Item -ItemType HardLink -Path $target -Target $source | Out-Null
+        try {
+            New-Item -ItemType HardLink -Path $target -Target $source -ErrorAction Stop | Out-Null
+        } catch {
+            # Long-lived parallel suites can reach NTFS's per-file link limit.
+            # Keep the private runtime usable by copying the immutable asset.
+            if (Test-Path -LiteralPath $target) { throw }
+            Copy-Item -LiteralPath $source -Destination $target
+        }
     } else {
         Copy-Item -LiteralPath $source -Destination $target
     }

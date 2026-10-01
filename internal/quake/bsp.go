@@ -178,8 +178,10 @@ func (m *MapInfo) GroundMoveHazardStep(nav *Navigator, origin Vec3, dx, dy, step
 		if !m.PlayerMoveClear(origin, raised) || !m.PlayerMoveClear(raised, landing) {
 			return "static_hull_blocked"
 		}
-		drop, ok := m.GroundDrop(landing, 18)
-		if !ok || drop >= 18 {
+		// GroundDrop samples at quarter-unit intervals. Include the
+		// standing origin clearance so a supported lip is not rejected.
+		drop, ok := m.GroundDrop(landing, 18.5)
+		if !ok || drop > 18.5 {
 			return "static_hull_blocked"
 		}
 		return ""

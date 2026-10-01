@@ -1,0 +1,17 @@
+{
+ "version":1,
+ "name":"jail3-short-stair-descent",
+ "map":"jail3",
+ "map_entry":"jail2b",
+ "start_frame":40,
+ "bot_release_frame":140,
+ "game_frames":800,
+ "actor_origin":[-336.125,-680.125,766.125],
+ "bot_origin":[-440,-664,750.125],
+ "bot_release_origin":[-753.5,-648.75,830.125],
+ "bot_health":7,
+ "expect":{},
+ "steps":[{"id":"follow-down-stairs","action":"wait","frames":700}]
+}
+
+

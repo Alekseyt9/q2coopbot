@@ -5,8 +5,12 @@ $repo=Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/check_player_personal_space.ps1"
 . "$PSScriptRoot/check_low_health_pickup.ps1"
 . "$PSScriptRoot/check_jail2_door.ps1"
+. "$PSScriptRoot/check_jail3_descent.ps1"
+. "$PSScriptRoot/check_bunk1_bridge.ps1"
 . "$PSScriptRoot/check_coop_map_inventory.ps1"
 $allowed=@{
+    'jail3-live-stuck-20260930-204726'=@('jail3_descent','jail3_descent','scenario')
+    'bunk1-dynamic-bridge-wrong-elevator'=@('bunk1_bridge','bunk1_bridge','scenario')
     'base2-tight-passage-player-block'=@('pickup','personal_space','scenario')
     'base2-live-missed-supershotgun-low-health'=@('pickup','low_health_pickup','scenario')
     'jail2-live-door-blocked-20260930'=@('jail2','jail2_door','scenario')
@@ -24,7 +28,7 @@ foreach($group in $Episodes | Group-Object {$_.acceptance.fixture}) {
     $failure='';$suite=$null
     try {
         Write-Host "Registered fixture: $($group.Name), parallelism=$Parallelism, repetitions=$Repetitions"
-        $runtime=if($group.Name -eq 'jail2') {& "$PSScriptRoot/prepare_jail2_door_runtime.ps1"} else {& "$PSScriptRoot/prepare_registered_pickup_runtime.ps1" -Profile $group.Name}
+        $runtime=if($group.Name -eq 'jail2') {& "$PSScriptRoot/prepare_jail2_door_runtime.ps1"} elseif($group.Name -eq 'jail3_descent') {& "$PSScriptRoot/prepare_jail3_descent_runtime.ps1"} elseif($group.Name -eq 'bunk1_bridge') {& "$PSScriptRoot/prepare_bunk1_bridge_runtime.ps1"} else {& "$PSScriptRoot/prepare_registered_pickup_runtime.ps1" -Profile $group.Name}
         $scenes=@();$sessions=@();$byName=@{}
         foreach($episode in $group.Group) {
             $path=Join-Path $repo $episode.scenario
@@ -63,6 +67,8 @@ foreach($group in $Episodes | Group-Object {$_.acceptance.fixture}) {
                         'personal_space' {Assert-PlayerPersonalSpace $rows}
                         'low_health_pickup' {Assert-LowHealthPickup $rows}
                         'jail2_door' {Assert-Jail2DoorFollow $rows}
+                        'jail3_descent' {Assert-Jail3Descent $rows}
+                        'bunk1_bridge' {Assert-Bunk1BridgeFollow $rows}
                         default {throw 'Unknown registered checker'}
                     }
                 }

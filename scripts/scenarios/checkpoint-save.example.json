@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "action": "save",
+  "server": "127.0.0.1:30300",
+  "instance": "managed-checkpoint-example",
+  "runtime_root": "../../workspace/runtime/managed-checkpoint-example",
+  "checkpoint_dir": "../../workspace/artifacts/checkpoints/example-001",
+  "timeout_ms": 10000
+}

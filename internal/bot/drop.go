@@ -30,7 +30,8 @@ func (p *Planner) planShortWalkDown() bool {
 		}
 		landing := probe
 		landing[2] -= drop - 0.25
-		if !g.PlayerMoveClear(landing, landing) {
+		area := p.Nav.AreaFor(landing)
+		if area <= 0 || p.Nav.Areas[area].Contents&6 != 0 || !g.PlayerMoveClear(landing, landing) {
 			continue
 		}
 		valid := true
@@ -38,7 +39,10 @@ func (p *Planner) planShortWalkDown() bool {
 			at := landing
 			at[0] += offset[0]
 			at[1] += offset[1]
-			if floor, supported := g.GroundDrop(at, 4); !supported || floor > 4 {
+			// A descending stair can support the front of the hull on the
+			// next tread. Require a floor within one native step, rather than
+			// requiring all four corners to share a perfectly flat landing.
+			if floor, supported := g.GroundDrop(at, 18.5); !supported || floor > 18.5 {
 				valid = false
 				break
 			}
@@ -82,11 +86,14 @@ func (p *Planner) planShortWalkDown() bool {
 // planWalkOff accepts only a short AAS walk-off reach with a BSP-verified
 // floor throughout the descent corridor. It cannot authorize arbitrary cliffs.
 func (p *Planner) planWalkOff() bool {
+	return p.planWalkOffRoute(p.World.Route)
+}
+
+func (p *Planner) planWalkOffRoute(r []quake.Waypoint) bool {
 	s, g := p.World.Snapshot, p.World.Geometry
 	if (p.World.Goal != "follow_teammate" && p.World.Goal != "regroup_after_respawn") || !s.OnGround || s.Health <= 0 || p.Nav == nil || !g.HasCollision() || p.elevator != nil || p.button != nil {
 		return false
 	}
-	r := p.World.Route
 	for len(r) > 2 && r[0].Kind == 2 && quake.Horizontal(s.Self, r[0].Position) <= 64 {
 		r = r[1:]
 	}
@@ -94,7 +101,7 @@ func (p *Planner) planWalkOff() bool {
 		return false
 	}
 	end := r[1].Position
-	if dz := s.Self[2] - end[2]; dz < 24 || dz > 240 || dz > 160 && s.Health < 40 {
+	if dz := s.Self[2] - end[2]; dz < 24 || dz > 320 {
 		return false
 	}
 	for _, offset := range []quake.Vec3{{}, {24, 0, 0}, {-24, 0, 0}, {0, 24, 0}, {0, -24, 0}} {
@@ -102,6 +109,10 @@ func (p *Planner) planWalkOff() bool {
 		landing[0] += offset[0]
 		landing[1] += offset[1]
 		landing[2] += 0.125
+		damage := estimatedDropDamage(s.Self[2]-landing[2], s.SelfVelocity[2], s.Gravity)
+		if !affordableDrop(s.Health, damage) {
+			continue
+		}
 		if s.Map == "base1" && r[1].ToArea == 1898 && len(r) > 2 {
 			// This reach ends exactly on the upper platform's XY boundary.
 			// Native pmove can stop 1/8 unit short as input rounds down. Put
@@ -131,11 +142,20 @@ func (p *Planner) planWalkOff() bool {
 		if !safe || !g.PlayerMoveClear(s.Self, above) || !g.PlayerMoveClear(above, landing) || g.DoorShotBlocked(s.Movers, s.Self, above) || g.DoorShotBlocked(s.Movers, above, landing) {
 			continue
 		}
+		for _, mover := range s.Movers {
+			if !g.MoverHullClear(mover, s.Self, above) || !g.MoverHullClear(mover, above, landing) {
+				safe = false
+				break
+			}
+		}
+		if !safe || g.LaserMoveHazard(s.Self, above) || g.LaserMoveHazard(above, landing) {
+			continue
+		}
 		for i := 0; i <= 12; i++ {
 			at := s.Self
 			at[0] += (landing[0] - s.Self[0]) * float64(i) / 12
 			at[1] += (landing[1] - s.Self[1]) * float64(i) / 12
-			drop, ok := g.GroundDrop(at, 240)
+			drop, ok := g.GroundDrop(at, 320)
 			// Keep the probe just above the BSP/AAS floor rounding boundary.
 			at[2] -= drop - 0.5
 			area := p.Nav.AreaFor(at)
@@ -156,7 +176,7 @@ func (p *Planner) planWalkOff() bool {
 		if s.Self[2]-landing[2] > 160 {
 			speed = 40
 		}
-		p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: speed, phase: 2, drop: true}
+		p.jump = &jumpFlight{from: s.Self, landing: landing, frame: s.Frame, speed: speed, phase: 2, drop: true, expectedDamage: damage}
 		return true
 	}
 	return false

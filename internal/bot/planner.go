@@ -13,31 +13,32 @@ import (
 )
 
 type World struct {
-	ResourceYield    *ResourceYield    `json:"resource_yield,omitempty"`
-	Pickup           *PickupAttempt    `json:"pickup,omitempty"`
-	SearchRoute      *SearchRouteCheck `json:"search_route,omitempty"`
-	Map              string            `json:"map"`
-	Geometry         *quake.MapInfo    `json:"geometry,omitempty"`
-	AASLoaded        bool              `json:"aas_loaded"`
-	Areas            int               `json:"areas"`
-	Reachabilities   int               `json:"reachabilities"`
-	Navigation       string            `json:"navigation"`
-	GeometryStatus   string            `json:"geometry_status"`
-	Goal             string            `json:"goal"`
-	SearchTarget     *quake.Vec3       `json:"search_target,omitempty"`
-	SearchAttempt    *SearchAttempt    `json:"search_attempt,omitempty"`
-	TeammateSound    *TeammateSoundCue `json:"teammate_sound,omitempty"`
-	TeammateMotion   *TeammateMotion   `json:"teammate_motion,omitempty"`
-	TeammateEvidence *TeammateEvidence `json:"teammate_evidence,omitempty"`
-	Strategy         *StrategyDecision `json:"strategy,omitempty"`
-	Tactic           *TacticalDecision `json:"tactic,omitempty"`
-	Route            []quake.Waypoint  `json:"route,omitempty"`
-	Jump             *JumpTrace        `json:"jump_plan,omitempty"`
-	Elevator         string            `json:"elevator,omitempty"`
-	Command          CommandDecision   `json:"command"`
-	LaserEvidence    []LaserEvidence   `json:"laser_evidence,omitempty"`
-	Snapshot         quake.Snapshot    `json:"snapshot"`
-	Updated          time.Time         `json:"updated"`
+	GrenadePrediction *GrenadePrediction `json:"grenade_prediction,omitempty"`
+	ResourceYield     *ResourceYield     `json:"resource_yield,omitempty"`
+	Pickup            *PickupAttempt     `json:"pickup,omitempty"`
+	SearchRoute       *SearchRouteCheck  `json:"search_route,omitempty"`
+	Map               string             `json:"map"`
+	Geometry          *quake.MapInfo     `json:"geometry,omitempty"`
+	AASLoaded         bool               `json:"aas_loaded"`
+	Areas             int                `json:"areas"`
+	Reachabilities    int                `json:"reachabilities"`
+	Navigation        string             `json:"navigation"`
+	GeometryStatus    string             `json:"geometry_status"`
+	Goal              string             `json:"goal"`
+	SearchTarget      *quake.Vec3        `json:"search_target,omitempty"`
+	SearchAttempt     *SearchAttempt     `json:"search_attempt,omitempty"`
+	TeammateSound     *TeammateSoundCue  `json:"teammate_sound,omitempty"`
+	TeammateMotion    *TeammateMotion    `json:"teammate_motion,omitempty"`
+	TeammateEvidence  *TeammateEvidence  `json:"teammate_evidence,omitempty"`
+	Strategy          *StrategyDecision  `json:"strategy,omitempty"`
+	Tactic            *TacticalDecision  `json:"tactic,omitempty"`
+	Route             []quake.Waypoint   `json:"route,omitempty"`
+	Jump              *JumpTrace         `json:"jump_plan,omitempty"`
+	Elevator          string             `json:"elevator,omitempty"`
+	Command           CommandDecision    `json:"command"`
+	LaserEvidence     []LaserEvidence    `json:"laser_evidence,omitempty"`
+	Snapshot          quake.Snapshot     `json:"snapshot"`
+	Updated           time.Time          `json:"updated"`
 }
 type Planner struct {
 	testDoorPassSpeed         float64
@@ -333,6 +334,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	}
 	if previous.Frame > 0 && previous.Health <= 0 && s.Health > 0 {
 		p.deathFrame = 0
+		p.bridgeLink = nil
 		p.routeKnown = false
 		p.jump = nil
 		p.elevator = nil
@@ -481,6 +483,10 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	// newly selected health objective or an already restored close contact.
 	if p.World.Goal != "follow_teammate" {
 		p.cancelButtonTask(s.Frame)
+		if p.bridgeLink != nil {
+			p.bridgeLink = nil
+			p.routeKnown = false
+		}
 	}
 	if p.Nav == nil {
 		if p.World.Geometry.HasCollision() && quake.Horizontal(s.Self, goal) < 256 && math.Abs(s.Self[2]-goal[2]) < 40 {
@@ -553,7 +559,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			// horizontally close does not mean the bot has climbed one.
 			// On a descent the bot may already be supported above the AAS
 			// sample by a lift, so retain the wider downward tolerance.
-			if p.route[p.routeIndex].Kind == 2 && p.route[p.routeIndex].Position[2]-s.Self[2] > 8 ||
+			if p.route[p.routeIndex].Kind == 2 && p.route[p.routeIndex].Position[2]-s.Self[2] > 2 ||
 				math.Abs(s.Self[2]-p.route[p.routeIndex].Position[2]) > 64 {
 				break
 			}
@@ -759,7 +765,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	if bridge, active := p.bridgeLinkCommand(cmd); active {
 		return bridge
 	}
-	if p.planWalkOff() {
+	if p.planWalkOff() || p.planNearbyWalkOff() {
 		flight, _ := p.jumpCommand(quake.UserCmd{Yaw: cmd.Yaw})
 		return flight
 	}
@@ -777,7 +783,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	target := p.goalPoint
 	jump := false
 	for _, wp := range p.World.Route {
-		if quake.Horizontal(s.Self, wp.Position) > 10 || math.Abs(s.Self[2]-wp.Position[2]) > 64 {
+		if quake.Horizontal(s.Self, wp.Position) > 10 || wp.Kind == 2 && wp.Position[2]-s.Self[2] > 2 || math.Abs(s.Self[2]-wp.Position[2]) > 64 {
 			target = wp.Position
 			jump = wp.Jump
 			break
@@ -788,7 +794,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		jump = false
 		p.World.Command.Skill = "route_corner_escape"
 	}
-	if quake.Horizontal(s.Self, target) < 10 {
+	if quake.Horizontal(s.Self, target) < 10 && target[2]-s.Self[2] <= 2 {
 		if p.World.Command.LimitReason == "" {
 			p.World.Command.LimitReason = "at_waypoint"
 		}
@@ -809,6 +815,14 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		}
 	}
 	dx, dy := target[0]-s.Self[0], target[1]-s.Self[1]
+	// Preserve a nearby rise until the native standing hull has climbed it.
+	// A short checked step avoids skipping an 8-unit stair before a turn.
+	if s.OnGround && len(p.World.Route) > 0 && p.World.Route[0].Kind == 2 &&
+		target[2]-s.Self[2] > 2 && target[2]-s.Self[2] <= 18 &&
+		quake.Horizontal(s.Self, target) <= 10 &&
+		p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, target[0]-s.Self[0], target[1]-s.Self[1], 8) == "" {
+		moveSpeedLimit = 80
+	}
 	probeDistance := moveSpeedLimit / 10
 	if moveSpeedLimit < 400 {
 		probeDistance = math.Min(probeDistance, math.Hypot(dx, dy))

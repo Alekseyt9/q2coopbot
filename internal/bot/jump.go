@@ -9,29 +9,31 @@ import (
 // A short jump owns movement until landing; airborne AAS areas need not have
 // outgoing walking reaches. All timings use server frames (10 Hz).
 type jumpFlight struct {
-	from, landing quake.Vec3
-	frame         int
-	airborne      bool
-	speed         float64
-	runup         quake.Vec3
-	phase         int  // 0: retreat; 1: accelerate; 2: flight; 3: brake; 4: grounded alignment
-	drop          bool // verified walk-off reach; never apply a jump impulse
-	steerVelocity bool // measured short ramp needs correction of approach inertia
+	from, landing  quake.Vec3
+	frame          int
+	airborne       bool
+	speed          float64
+	runup          quake.Vec3
+	phase          int  // 0: retreat; 1: accelerate; 2: flight; 3: brake; 4: grounded alignment
+	drop           bool // verified walk-off reach; never apply a jump impulse
+	steerVelocity  bool // measured short ramp needs correction of approach inertia
+	expectedDamage int  // conservative dry falling-damage estimate for walk-off
 }
 
 type JumpTrace struct {
-	From          quake.Vec3 `json:"from"`
-	Landing       quake.Vec3 `json:"landing"`
-	Runup         quake.Vec3 `json:"runup"`
-	Speed         float64    `json:"speed"`
-	Phase         int        `json:"phase"`
-	Airborne      bool       `json:"airborne"`
-	Drop          bool       `json:"drop"`
-	SteerVelocity bool       `json:"steer_velocity,omitempty"`
+	From           quake.Vec3 `json:"from"`
+	Landing        quake.Vec3 `json:"landing"`
+	Runup          quake.Vec3 `json:"runup"`
+	Speed          float64    `json:"speed"`
+	Phase          int        `json:"phase"`
+	Airborne       bool       `json:"airborne"`
+	Drop           bool       `json:"drop"`
+	SteerVelocity  bool       `json:"steer_velocity,omitempty"`
+	ExpectedDamage int        `json:"expected_damage"`
 }
 
 func (j *jumpFlight) trace() *JumpTrace {
-	return &JumpTrace{From: j.from, Landing: j.landing, Runup: j.runup, Speed: j.speed, Phase: j.phase, Airborne: j.airborne, Drop: j.drop, SteerVelocity: j.steerVelocity}
+	return &JumpTrace{From: j.from, Landing: j.landing, Runup: j.runup, Speed: j.speed, Phase: j.phase, Airborne: j.airborne, Drop: j.drop, SteerVelocity: j.steerVelocity, ExpectedDamage: j.expectedDamage}
 }
 
 func (p *Planner) planGapJump() bool {
@@ -331,7 +333,13 @@ func (p *Planner) jumpCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 	if j.drop {
 		skill, prefix = "walk_off", "drop"
 	}
-	if s.Health <= 0 || s.Frame < j.frame || s.Frame-j.frame > 35 || quake.Distance(s.Self, j.from) > 256 {
+	travelLimit := 256.0
+	if j.drop {
+		// A verified descent can be deeper than the ordinary jump radius.
+		// Retain a bounded margin for horizontal drift around its landing.
+		travelLimit = math.Max(travelLimit, quake.Distance(j.from, j.landing)+64)
+	}
+	if s.Health <= 0 || s.Frame < j.frame || s.Frame-j.frame > 35 || quake.Distance(s.Self, j.from) > travelLimit {
 		p.jump = nil
 		p.routeKnown = false
 		p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", Skill: skill, LimitReason: prefix + "_aborted"}

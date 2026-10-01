@@ -172,7 +172,7 @@ func TestBase3ReturnRampJump(t *testing.T) {
 	if !ok {
 		t.Fatal("missing AAS route")
 	}
-	p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "regroup_after_respawn", Snapshot: quake.Snapshot{Map: "base3", Frame: 100, Health: 100, OnGround: true, Self: self}, Route: route}, goalPoint: goal}
+	p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "regroup_after_respawn", Snapshot: quake.Snapshot{Map: "base3", Frame: 100, Health: 100, Gravity: 800, OnGround: true, Self: self}, Route: route}, goalPoint: goal}
 	if !p.blockedRiseApproach() {
 		t.Fatalf("not an upward walking reach: %+v", route[:2])
 	}
@@ -247,7 +247,7 @@ func TestBase1SecondRiseEntryHasVerifiedShortJump(t *testing.T) {
 	}
 	goal := quake.Vec3{960, 408, -167.875}
 	for _, self := range []quake.Vec3{{815.5, -324.875, -29}, {815.75, -325.125, -29.25}} {
-		s := quake.Snapshot{Map: "base1", Frame: 100, Health: 100, OnGround: true, Self: self}
+		s := quake.Snapshot{Map: "base1", Frame: 100, Health: 100, Gravity: 800, OnGround: true, Self: self}
 		p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "regroup_after_respawn", Snapshot: s}, goalPoint: goal}
 		p.World.Route, _ = n.Route(self, goal)
 		target := p.World.Route[0].Position
@@ -280,7 +280,7 @@ func TestBase1ReturnDropTargetClearsUpperPlatformEdge(t *testing.T) {
 		t.Fatal(err)
 	}
 	self, goal := quake.Vec3{963.5, 55.25, -31.875}, quake.Vec3{960, 408, -167.875}
-	s := quake.Snapshot{Map: "base1", Frame: 100, Health: 100, OnGround: true, Self: self}
+	s := quake.Snapshot{Map: "base1", Frame: 100, Health: 100, Gravity: 800, OnGround: true, Self: self}
 	p := &Planner{Nav: n, World: World{Geometry: &g, Snapshot: s, Goal: "regroup_after_respawn"}, goalPoint: goal}
 	p.World.Route, _ = n.Route(self, goal)
 	if !p.planWalkOff() || !p.jump.drop || p.jump.landing[1] <= 113.5 {
@@ -311,7 +311,7 @@ func TestBase1EarlyRampAlignsWithoutRetreat(t *testing.T) {
 		t.Fatal(err)
 	}
 	self, goal := quake.Vec3{669.625, -457.125, -95.875}, quake.Vec3{960, 408, -167.875}
-	s := quake.Snapshot{Map: "base1", Frame: 100, Health: 100, OnGround: true, Self: self, SelfVelocity: quake.Vec3{92.75, 27.375, 0}}
+	s := quake.Snapshot{Map: "base1", Frame: 100, Health: 100, Gravity: 800, OnGround: true, Self: self, SelfVelocity: quake.Vec3{92.75, 27.375, 0}}
 	p := &Planner{Nav: n, World: World{Geometry: &g, Snapshot: s, Goal: "regroup_after_respawn"}, goalPoint: goal}
 	p.World.Route, _ = n.Route(self, goal)
 	if !p.planRampJump() || p.jump.phase != 4 || !p.jump.steerVelocity || p.jump.runup[0] <= self[0] || quake.Horizontal(self, p.jump.landing) > 80 {
@@ -350,7 +350,7 @@ func TestBase3ReturnCornerStep(t *testing.T) {
 	if !ok || len(route) < 2 {
 		t.Fatal("missing AAS route")
 	}
-	s := quake.Snapshot{Map: "base3", Frame: 100, Health: 100, OnGround: true, Self: self}
+	s := quake.Snapshot{Map: "base3", Frame: 100, Health: 100, Gravity: 800, OnGround: true, Self: self}
 	p := &Planner{Nav: n, World: World{Geometry: &g, Snapshot: s, Goal: "regroup_after_respawn", Route: route}, goalPoint: goal}
 	dx, dy, ok := p.regroupCornerStep(s, route[1].Position)
 	if !ok || dx <= 0 || dy <= 0 || g.GroundMoveHazardStep(n, self, dx, dy, 16) != "" {
@@ -381,7 +381,7 @@ func TestBase3ReturnSecondRampPlan(t *testing.T) {
 	if !ok {
 		t.Fatal("missing route")
 	}
-	p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "regroup_after_respawn", Snapshot: quake.Snapshot{Map: "base3", Frame: 100, Health: 100, OnGround: true, Self: self, SelfVelocity: quake.Vec3{-188, -242, 0}}, Route: route}, goalPoint: goal}
+	p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "regroup_after_respawn", Snapshot: quake.Snapshot{Map: "base3", Frame: 100, Health: 100, Gravity: 800, OnGround: true, Self: self, SelfVelocity: quake.Vec3{-188, -242, 0}}, Route: route}, goalPoint: goal}
 	if !p.planGapJump() {
 		t.Fatal("missing verified jump")
 	}
@@ -416,7 +416,7 @@ func TestBase3ReturnThirdRampPlan(t *testing.T) {
 	if !ok {
 		t.Fatal("missing route")
 	}
-	p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "regroup_after_respawn", Snapshot: quake.Snapshot{Map: "base3", Frame: 100, Health: 100, OnGround: true, Self: self}, Route: route}, goalPoint: goal}
+	p := &Planner{Nav: n, World: World{Geometry: &g, Goal: "regroup_after_respawn", Snapshot: quake.Snapshot{Map: "base3", Frame: 100, Health: 100, Gravity: 800, OnGround: true, Self: self}, Route: route}, goalPoint: goal}
 	for len(p.World.Route) > 0 && quake.Horizontal(self, p.World.Route[0].Position) <= 10 && math.Abs(self[2]-p.World.Route[0].Position[2]) <= 8 {
 		p.World.Route = p.World.Route[1:]
 	}

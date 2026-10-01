@@ -1,19 +1,32 @@
 {
   "id": "jail3-live-stuck-20260930-204726",
-  "title": "Повторное живое застревание jail3",
+  "title": "Jail3: безопасный спуск по лестнице отвергнут как отсутствие площадки",
   "map": "jail3",
   "kind": "navigation",
-  "status": "open",
-  "reproduction": "observation_only",
-  "scenario": null,
+  "status": "verified_fixture_parallel_2x",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/jail3-short-stair-descent.json",
   "observed_failure": "Игрок сообщил о новом застревании. Кадр2054, self=-753,5,-648,75,840,125, teammate=-336,125,-680,125,776,125, goal=follow_teammate, navigation=ready, reason=no_verified_landing",
   "expected_result": "Безопасно восстановить сопровождение игрока; не оставаться неподвижным бесконечно.",
   "evidence": "workspace/artifacts/live-stuck-20260930-204726/bot-tail.jsonl",
   "additional_evidence": [
     "workspace/artifacts/live-stuck-20260930-204726/last-world.json"
   ],
-  "missing_setup": [
-    "Определить причину по геометрии, состояниям movers и маршруту",
-    "Подготовить native воспроизведение"
-  ]
+  "missing_setup": [],
+  "acceptance": {
+    "checker": "jail3_descent",
+    "definition": "scenario",
+    "runner": "registered_suite",
+    "fixture": "jail3_descent"
+  },
+  "diagnosis": "AAS содержит пригодный пеший маршрут. Проверка planShortWalkDown требовала одинакового уровня опоры под всеми углами; передние углы над следующей ступенью на16 единиц ниже отвергались. Допущена опора в пределах18.5 при неизменных full hull, corridor, movers/doors и route checks; landing AAS должен быть сухим.",
+  "verification_report": "workspace/artifacts/episode-regressions-20261001-132118-102/report.json",
+  "runtime_preparation": "scripts/prepare_jail3_descent_runtime.ps1",
+  "verification_checker": "scripts/check_jail3_descent.ps1",
+  "resolution": "2/2 native при2x, parallelism2: исходные координаты, HP7 сохранены, drop_landed, нижняя площадка и cover_teammate на дистанции104.79. Fixture без врагов/ресурсов, оригинальные BSP/AAS и механизмы. Живой бот не обновлялся.",
+  "remaining_validation": [
+    "Живая сессия с человеком и боем",
+    "Native быстрый физический обход, дополнительные высоты/жидкости и обрывы без AAS-перехода"
+  ],
+  "latest_regression": "workspace/artifacts/episode-regressions-20261001-135255-939/report.json"
 }

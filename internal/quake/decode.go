@@ -79,8 +79,11 @@ type Frame struct {
 	Origin          Vec3
 	Velocity        Vec3
 	PMFlags         byte
+	Gravity         int16
 	Stats           [32]int16
 	Gun             int
+	GunFrame        int
+	ViewAngles      [3]int16
 	DeltaAngles     [3]int16
 	Entities        map[int]Entity
 }
@@ -307,7 +310,8 @@ func (d *Decoder) playerstate(r *reader, old Frame) (Frame, error) {
 		}
 	}
 	if flags&32 != 0 {
-		if e = skip(2); e != nil {
+		f.Gravity, e = r.short()
+		if e != nil {
 			return f, e
 		}
 	}
@@ -321,6 +325,15 @@ func (d *Decoder) playerstate(r *reader, old Frame) (Frame, error) {
 	}
 	for _, p := range [][2]int{{128, 3}, {256, 6}, {512, 3}} {
 		if flags&uint16(p[0]) != 0 {
+			if p[0] == 256 {
+				for axis := range f.ViewAngles {
+					f.ViewAngles[axis], e = r.short()
+					if e != nil {
+						return f, e
+					}
+				}
+				continue
+			}
 			if e = skip(p[1]); e != nil {
 				return f, e
 			}
@@ -334,7 +347,18 @@ func (d *Decoder) playerstate(r *reader, old Frame) (Frame, error) {
 		}
 		f.Gun = int(v)
 	}
-	for _, p := range [][2]int{{8192, 7}, {1024, 4}, {2048, 1}, {16384, 1}} {
+	if flags&8192 != 0 {
+		var frame byte
+		frame, e = r.byte()
+		if e != nil {
+			return f, e
+		}
+		f.GunFrame = int(frame)
+		if e = skip(6); e != nil {
+			return f, e
+		}
+	}
+	for _, p := range [][2]int{{1024, 4}, {2048, 1}, {16384, 1}} {
 		if flags&uint16(p[0]) != 0 {
 			if e = skip(p[1]); e != nil {
 				return f, e
@@ -702,6 +726,7 @@ type Snapshot struct {
 	DeltaFrame         int               `json:"delta_frame,omitempty"`
 	Self               Vec3              `json:"self"`
 	SelfVelocity       Vec3              `json:"self_velocity"`
+	Gravity            int16             `json:"gravity"`
 	OnGround           bool              `json:"on_ground"`
 	Teammate           *Vec3             `json:"teammate,omitempty"`
 	TeammateEntity     int               `json:"teammate_entity,omitempty"`
@@ -712,6 +737,8 @@ type Snapshot struct {
 	Armor              int16             `json:"armor"`
 	Ammo               int16             `json:"ammo"`
 	Weapon             string            `json:"weapon"`
+	GunFrame           int               `json:"gun_frame"`
+	ViewAngles         [3]int16          `json:"view_angles"`
 	DeltaAngles        [3]int16          `json:"delta_angles"`
 	Enemies            []Object          `json:"enemies"`
 	Obstacles          []Object          `json:"obstacles,omitempty"`
@@ -733,7 +760,8 @@ func (d *Decoder) ResetTeammateHistory() {
 }
 
 func (d *Decoder) Snapshot(f Frame) Snapshot {
-	s := Snapshot{Map: d.Map, Frame: f.Number, DeltaFrame: f.DeltaFrame, Self: f.Origin, SelfVelocity: f.Velocity, Ducked: f.PMFlags&1 != 0, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles, RemovedEntities: append([]int(nil), f.RemovedEntities...), Suppressed: f.Suppressed}
+	s := Snapshot{Map: d.Map, Frame: f.Number, DeltaFrame: f.DeltaFrame, Self: f.Origin, SelfVelocity: f.Velocity, Gravity: f.Gravity, Ducked: f.PMFlags&1 != 0, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles, RemovedEntities: append([]int(nil), f.RemovedEntities...), Suppressed: f.Suppressed}
+	s.GunFrame, s.ViewAngles = f.GunFrame, f.ViewAngles
 	s.InventoryKnown, s.InventoryOpen = d.InventoryKnown, f.Stats[13]&2 != 0
 	if d.InventoryKnown {
 		s.InventoryAgeFrames = max(0, f.Number-d.InventoryFrame)

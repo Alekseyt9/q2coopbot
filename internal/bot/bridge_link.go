@@ -173,7 +173,23 @@ func (p *Planner) mayLeaveElevatorForBridge() bool {
 	return false
 }
 func (p *Planner) bridgeLinkNeedsExit() bool {
-	return p.bridgeLink != nil && p.bridgeLink.crossing && quake.Horizontal(p.World.Snapshot.Self, p.bridgeLink.exit) > 10
+	task := p.bridgeLink
+	if task == nil || !task.crossing {
+		return false
+	}
+	s := p.World.Snapshot
+	dx, dy := task.exit[0]-task.entry[0], task.exit[1]-task.entry[1]
+	beyond := (s.Self[0]-task.exit[0])*dx+(s.Self[1]-task.exit[1])*dy >= 0
+	if s.OnGround && (beyond || quake.Horizontal(s.Self, task.exit) <= 10) {
+		if _, ok := p.World.Geometry.GroundDrop(s.Self, 4); ok && p.World.Geometry.PlayerMoveClear(s.Self, s.Self) {
+			// Yielding to the player can carry us past the exact exit waypoint.
+			// Complete on the verified static bank before selecting cover/yield.
+			p.bridgeLink = nil
+			p.routeKnown = false
+			return false
+		}
+	}
+	return true
 }
 func (p *Planner) bridgeLinkCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 	task := p.bridgeLink

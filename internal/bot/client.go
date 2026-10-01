@@ -32,6 +32,9 @@ type Client struct {
 	testCombatGoFrame                       int
 	inventoryWatch                          inventoryWatch
 	testWeaponSwitchFixture                 string
+	testHandGrenadeArmStart                 int
+	testHandGrenadeArm11                    int
+	testHandGrenadeArmDone                  bool
 	testPairReady, testPairBlasterRequested bool
 	sessionConnection                       int
 	connection                              int
@@ -533,7 +536,7 @@ func (c *Client) run(ctx context.Context) error {
 					setup = []string{"use Blaster"}
 				} else if c.testWeaponSwitchFixture == "projectile_hyper" {
 					setup = []string{"give HyperBlaster", "give Cells 100", "use HyperBlaster"}
-				} else if c.testWeaponSwitchFixture == "hand_grenade_guard" {
+				} else if c.testWeaponSwitchFixture == "hand_grenade_guard" || c.testWeaponSwitchFixture == "hand_grenade_armed" {
 					setup = []string{"give Grenades 5", "use Grenades"}
 				} else if strings.HasPrefix(c.testWeaponSwitchFixture, "rail_") {
 					setup = []string{"give Railgun", "give Slugs 10", "use Railgun"}
@@ -685,7 +688,7 @@ func (c *Client) run(ctx context.Context) error {
 			weaponRequest := ""
 			observeInventory := !c.idle || c.scenario != nil && c.scenario.Scenario.ActorInventory
 			if !safetyStop && observeInventory && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
-				if !c.idle && !pairSetup && !c.testProjectileComparison {
+				if !c.idle && !pairSetup && !c.testProjectileComparison && !(c.testWeaponSwitchFixture == "hand_grenade_armed" && !c.testHandGrenadeArmDone) {
 					weaponRequest = c.weaponSwitch.command(c.planner.World.Snapshot)
 				}
 				if request := c.inventoryWatch.command(c.planner.World.Snapshot); request != "" {
@@ -730,6 +733,9 @@ func (c *Client) run(ctx context.Context) error {
 			if c.testCombatBarrier && c.testCombatGo && c.latestFrame-c.testCombatGoFrame < 10 {
 				cmd.Buttons &^= 1
 				c.planner.World.Command.LimitReason = "test_combat_observe"
+			}
+			if c.testWeaponSwitchFixture == "hand_grenade_armed" && !safetyStop && !c.planner.testSetupHold && !c.idle {
+				cmd = c.testArmHandGrenade(cmd)
 			}
 			var observerKill, observerRespawn bool
 			if !safetyStop && c.sessionDefinition != nil && c.session == nil {
@@ -927,6 +933,10 @@ func (c *Client) run(ctx context.Context) error {
 					InventoryAgeFrames int                     `json:"inventory_age_frames"`
 					OnGround           bool                    `json:"on_ground"`
 					SelfVelocity       quake.Vec3              `json:"self_velocity"`
+					Gravity            int16                   `json:"gravity"`
+					GunFrame           int                     `json:"gun_frame"`
+					GrenadePrediction  *GrenadePrediction      `json:"grenade_prediction,omitempty"`
+					ViewAngles         [3]int16                `json:"view_angles"`
 					GroundPrediction   *GroundPrediction       `json:"ground_prediction,omitempty"`
 					GroundSurface      string                  `json:"ground_surface"`
 					GroundDynamicModel int                     `json:"ground_dynamic_model,omitempty"`
@@ -988,7 +998,7 @@ func (c *Client) run(ctx context.Context) error {
 					WeaponReason: c.weaponSwitch.reason,
 					Inventory:    c.planner.World.Snapshot.Inventory, InventoryKnown: c.planner.World.Snapshot.InventoryKnown, InventoryAgeFrames: c.planner.World.Snapshot.InventoryAgeFrames,
 					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
-					Route: c.planner.World.Route, Jump: c.planner.World.Jump, Pickups: c.planner.World.Snapshot.Pickups,
+					Route: c.planner.World.Route, Jump: c.planner.World.Jump, Gravity: c.planner.World.Snapshot.Gravity, GunFrame: c.planner.World.Snapshot.GunFrame, ViewAngles: c.planner.World.Snapshot.ViewAngles, Pickups: c.planner.World.Snapshot.Pickups,
 					Beams:            c.planner.World.Snapshot.Beams,
 					RemovedEntities:  c.planner.World.Snapshot.RemovedEntities,
 					DeltaFrame:       c.planner.World.Snapshot.DeltaFrame,
@@ -1009,10 +1019,11 @@ func (c *Client) run(ctx context.Context) error {
 					Navigation:       c.planner.World.Navigation,
 					GeometryStatus:   c.planner.World.GeometryStatus,
 					Elevator:         c.planner.World.Elevator, Movers: c.planner.World.Snapshot.Movers,
-					Sounds:      c.planner.World.Snapshot.Sounds,
-					Enemies:     c.planner.World.Snapshot.Enemies,
-					Arbitration: c.planner.World.Command,
-					Command:     cmd,
+					Sounds:            c.planner.World.Snapshot.Sounds,
+					Enemies:           c.planner.World.Snapshot.Enemies,
+					Arbitration:       c.planner.World.Command,
+					GrenadePrediction: c.planner.World.GrenadePrediction,
+					Command:           cmd,
 				}
 				if c.planner.hasGoal {
 					goal := c.planner.goalPoint

@@ -1,0 +1,32 @@
+{
+  "expect": {},
+  "bot_release_origin": [
+    -937,
+    1149,
+    334.125
+  ],
+  "bot_origin": [
+    -913,
+    1250,
+    126.125
+  ],
+  "game_frames": 400,
+  "bot_release_frame": 140,
+  "steps": [
+    {
+      "frames": 300,
+      "action": "wait",
+      "id": "follow-down-ledge"
+    }
+  ],
+  "actor_origin": [
+    -850,
+    1292,
+    126.125
+  ],
+  "start_frame": 40,
+  "bot_health": 100,
+  "map": "base1",
+  "version": 1,
+  "name": "base1-drop-hp100"
+}
