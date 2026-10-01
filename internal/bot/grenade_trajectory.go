@@ -8,18 +8,22 @@ import (
 // A diagnostic candidate, never authorization to arm. Random samples are not a
 // bound on all trajectories; server gravity, hand and fuse need confirmation.
 type GrenadePrediction struct {
-	FriendMotion *GrenadeFriendMotion `json:"friend_motion,omitempty"`
-	Scope        string               `json:"scope"`
-	Reason       string               `json:"reason"`
-	Samples      []GrenadeFlight      `json:"samples,omitempty"`
+	EarlyEnvelope *GrenadeEnvelope      `json:"early_envelope,omitempty"`
+	TargetMotion  []GrenadeTargetMotion `json:"target_motion,omitempty"`
+	FriendMotion  *GrenadeFriendMotion  `json:"friend_motion,omitempty"`
+	Scope         string                `json:"scope"`
+	Reason        string                `json:"reason"`
+	Samples       []GrenadeFlight       `json:"samples,omitempty"`
 }
 type GrenadeFlight struct {
-	FriendContactSeconds float64    `json:"friend_contact_seconds,omitempty"`
-	End                  quake.Vec3 `json:"end"`
-	Seconds              float64    `json:"seconds"`
-	Bounces              int        `json:"bounces"`
-	Event                string     `json:"event"`
-	Risk                 string     `json:"risk"`
+	impactVelocity       quake.Vec3
+	TargetContact        *GrenadeTargetContact `json:"target_contact,omitempty"`
+	FriendContactSeconds float64               `json:"friend_contact_seconds,omitempty"`
+	End                  quake.Vec3            `json:"end"`
+	Seconds              float64               `json:"seconds"`
+	Bounces              int                   `json:"bounces"`
+	Event                string                `json:"event"`
+	Risk                 string                `json:"risk"`
 }
 type grenadeBody struct{ origin, mins, maxs quake.Vec3 }
 
@@ -30,6 +34,12 @@ func grenadeFlight(start, velocity quake.Vec3, fuse, gravity float64, trace func
 }
 
 func simulateGrenade(start, velocity quake.Vec3, fuse, gravity float64, trace func(quake.Vec3, quake.Vec3) quake.PointTrace, bodies []grenadeBody, observe func(quake.Vec3, int)) GrenadeFlight {
+	return simulateGrenadeWithBodies(start, velocity, fuse, gravity, trace, func(int) []grenadeBody { return bodies }, observe)
+}
+
+// Native calibration may supply the observed body position for each physics
+// tick. This shares flight physics, but is not a pre-throw motion prediction.
+func simulateGrenadeWithBodies(start, velocity quake.Vec3, fuse, gravity float64, trace func(quake.Vec3, quake.Vec3) quake.PointTrace, bodies func(int) []grenadeBody, observe func(quake.Vec3, int)) GrenadeFlight {
 	r := GrenadeFlight{End: start, Event: "invalid_input"}
 	for _, v := range []float64{fuse, gravity, start[0], start[1], start[2], velocity[0], velocity[1], velocity[2]} {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
@@ -52,10 +62,16 @@ func simulateGrenade(start, velocity quake.Vec3, fuse, gravity float64, trace fu
 			}
 			continue
 		}
+		// SV_CheckVelocity limits the vector norm before SV_AddGravity.
+		speed := quake.Distance(velocity, quake.Vec3{})
+		if speed > grenadeVelocityNormCap {
+			for i := range velocity {
+				velocity[i] *= grenadeVelocityNormCap / speed
+			}
+		}
 		velocity[2] -= gravity * 0.1
 		to := r.End
 		for i := range to {
-			velocity[i] = math.Max(-2000, math.Min(2000, velocity[i]))
 			to[i] += velocity[i] * 0.1
 		}
 		tr := trace(r.End, to)
@@ -65,13 +81,14 @@ func simulateGrenade(start, velocity quake.Vec3, fuse, gravity float64, trace fu
 		}
 		first := tr.Fraction
 		contact := false
-		for _, b := range bodies {
+		for _, b := range bodies(tick) {
 			if f, ok := grenadeBodyHit(r.End, to, b); ok && f <= first {
 				first = f
 				contact = true
 			}
 		}
 		if contact {
+			r.impactVelocity = velocity
 			for i := range to {
 				r.End[i] += (to[i] - r.End[i]) * first
 			}
@@ -138,6 +155,7 @@ func grenadeBodyHit(from, to quake.Vec3, b grenadeBody) (float64, bool) {
 
 func (p *Planner) predictGrenadeCandidate(s quake.Snapshot) *GrenadePrediction {
 	r := &GrenadePrediction{Scope: "nominal_center_hand_timer3_diagnostic", Reason: "not_authorized"}
+	r.TargetMotion = p.grenadeTargetMotions(s)
 	if m := p.shotTeammateMotion; s.Teammate != nil && m.known && m.frame == s.Frame && m.entity == s.TeammateEntity {
 		r.FriendMotion = &GrenadeFriendMotion{Frame: s.Frame, Entity: m.entity, Velocity: m.velocity}
 	}
@@ -197,6 +215,8 @@ func (p *Planner) predictGrenadeCandidate(s quake.Snapshot) *GrenadePrediction {
 		start[i] += 8 * fwd[i] // ConnectRequest uses hand=2 (CENTER_HANDED).
 	}
 	start[2] += viewheight - 8
+	r.EarlyEnvelope = grenadeEarlyEnvelope(s, start, fwd, right, up)
+	r.EarlyEnvelope.Geometry = grenadeGeometryEnvelope(s, start, fwd, right, up, g)
 	for _, uj := range []float64{-10, 0, 10} {
 		for _, rj := range []float64{-10, 0, 10} {
 			v := quake.Vec3{}
@@ -214,6 +234,16 @@ func (p *Planner) predictGrenadeCandidate(s quake.Snapshot) *GrenadePrediction {
 				}
 				if s.Teammate == nil && s.LastTeammate != nil {
 					flight.Risk = "unseen_teammate"
+				}
+			}
+			flight.TargetContact = grenadeTargetContact(start, v, float64(s.Gravity), trace, s.Enemies, r.TargetMotion)
+			if hit := flight.TargetContact; hit != nil {
+				flight.Risk = "moving_target_contact_unproven"
+				if quake.Distance(hit.Point, s.Self) <= 197+quake.Distance(quake.Vec3{}, s.SelfVelocity)*hit.Seconds {
+					flight.Risk = "moving_target_self_blast"
+				}
+				if s.Teammate != nil && quake.Distance(hit.Point, *s.Teammate) <= 197+400*hit.Seconds {
+					flight.Risk = "moving_target_teammate_blast"
 				}
 			}
 			if r.FriendMotion != nil {

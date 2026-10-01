@@ -2,6 +2,50 @@ package quake
 
 import "math"
 
+// ProjectileBoxClear certifies separation from static MASK_SHOT brushes.
+// Failure to find a separating brush plane means possible collision, not an
+// exact hit/normal. Checking only corners would miss an obstacle inside a box.
+func (m *MapInfo) ProjectileBoxClear(min, max Vec3) (clear, valid bool) {
+	if !m.HasCollision() {
+		return false, false
+	}
+	return m.collision.projectileBoxClear(min, max)
+}
+
+func (c *CollisionMap) projectileBoxClear(min, max Vec3) (clear, valid bool) {
+	for i := range min {
+		if math.IsNaN(min[i]) || math.IsNaN(max[i]) || math.IsInf(min[i], 0) || math.IsInf(max[i], 0) || min[i] > max[i] {
+			return false, false
+		}
+	}
+	for _, index := range c.worldBrushes {
+		b := c.brushes[index]
+		if b.contents&(1|2|0x2000000|0x4000000) == 0 {
+			continue
+		}
+		separated := false
+		for side := b.first; side < b.first+b.count; side++ {
+			p := c.planes[c.sides[side]]
+			distance := -p.dist
+			for i := range min {
+				if p.normal[i] >= 0 {
+					distance += min[i] * p.normal[i]
+				} else {
+					distance += max[i] * p.normal[i]
+				}
+			}
+			if distance > .03125 {
+				separated = true
+				break
+			}
+		}
+		if !separated {
+			return false, true
+		}
+	}
+	return true, true
+}
+
 // PointTrace describes a zero-sized projectile against static MASK_SHOT brushes.
 // Dynamic entities must be handled separately by the caller.
 type PointTrace struct {

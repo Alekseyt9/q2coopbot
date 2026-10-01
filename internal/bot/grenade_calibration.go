@@ -13,13 +13,14 @@ type GrenadeComparison struct {
 	Bounces             int     `json:"bounces"`
 }
 type GrenadeCalibration struct {
-	Launch                 *GrenadeLaunchCheck `json:"launch,omitempty"`
-	Scope                  string              `json:"scope"`
-	Entity                 int                 `json:"entity"`
-	InitialFrame           int                 `json:"initial_frame"`
-	Velocity               quake.Vec3          `json:"inferred_velocity"`
-	Warmup                 int                 `json:"warmup_sightings"`
-	VelocityQuantization   float64             `json:"velocity_quantization_radius"`
+	BounceEnvelope         *GrenadeBounceEnvelope `json:"bounce_envelope,omitempty"`
+	Launch                 *GrenadeLaunchCheck    `json:"launch,omitempty"`
+	Scope                  string                 `json:"scope"`
+	Entity                 int                    `json:"entity"`
+	InitialFrame           int                    `json:"initial_frame"`
+	Velocity               quake.Vec3             `json:"inferred_velocity"`
+	Warmup                 int                    `json:"warmup_sightings"`
+	VelocityQuantization   float64                `json:"velocity_quantization_radius"`
 	Compared, BounceFrames int
 	MaxError               float64             `json:"max_error"`
 	Points                 []GrenadeComparison `json:"points"`
@@ -130,6 +131,9 @@ func CalibrateGrenade(rows []quake.Snapshot, g *quake.MapInfo) (GrenadeCalibrati
 	launch, err := checkGrenadeLaunch(rows, r)
 	r.Launch = &launch
 	if err != nil {
+		return r, err
+	}
+	if err := checkGrenadeBounceReach(&r, float64(b.gravity)); err != nil {
 		return r, err
 	}
 	return r, nil

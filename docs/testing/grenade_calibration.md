@@ -49,3 +49,89 @@ go run ./cmd/q2grenade-report -trace <bot-trace.jsonl> -root <runtime/baseq2> -m
 Сценарий base1-grenade-moving-teammate.json выбирает bot_grenade_observe. Напарник пересекает гипотетическую линию броска на ровной native площадке; bot fixture только держит гранату и смотрит по+X, без ATTACK. Диагностика проверяет relative body sweep на500ms и выводит teammate_future_contact; constant velocity не является доказательством будущей безопасности. Неподтверждённые условия остаются unproven.
 
 Принято armed-grenade-suite-20261001-155201-913:2/2 на2x,13 hazard frames, actor displacement190, оба HP100, ноль подготовки/гранат.6 отрицательных контролей отвергнуты. Обычный release/fuse regression155302:2/2. Не проверялось попадание реальной гранаты в движущегося напарника; автоматическая подготовка по-прежнему запрещена.
+
+## Движущаяся damageable цель: диагностика раннего взрыва
+
+```powershell
+./scripts/run_armed_grenade_suite.ps1 -MovingTarget -Port 30750 -Parallelism 2 -Repetitions 2
+./scripts/check_grenade_moving_target_negatives.ps1 -Report workspace/artifacts/armed-grenade-suite-20261001-160750-606/report.json
+```
+
+Отдельный runtime q2go-grenade-moving-target добавляет нейтрального misc_insane (spawnflags32, без crucified/standground) и две path_corner. Серверная AI ходит по циклу; клиент не подменяет координаты/скорость монстра. Бот в observe fixture смотрит по+X и держит гранату без подготовки. Напарник неподвижен вне линии полёта.
+
+В grenade_prediction.target_motion записываются entity/class/frame/velocity только из текущей стабильной истории последовательных серверных наблюдений. Общий relative sweep с движущимся напарником прогнозирует контакт на ближайшие500ms. Target_contact содержит entity, seconds и предполагаемую world point; соответствующие risk показывают возможный ранний взрыв рядом с собой/напарником. Packed bbox увеличен на8 units: это приближённая гипотеза опасности, не точная native collision shape. Проверка не учитывает все изменения курса и более поздние контакты, не доказывает безопасность при отсутствии совпадения, не подтверждает реальный ранний взрыв. Статический diagnostic End/Event остаётся отдельным прогнозом; target_contact не заменяет его подтверждённой траекторией.
+
+Принято armed-grenade-suite-20261001-160750-606/report.json:2/2 на2x, parallelism2, порты30750/30751, provenance true. Монстр308 прошёл130.75 units поY;88/91 кадров с гипотезой раннего контакта, без ATTACK/подготовки/гранат и health masking, HP обоих100.7 отрицательных контролей отвергнуты: нет контакта, stale frame, иной entity, неподвижная native цель, ATTACK, health mask, отсутствующая маркировка риска. Unit проверки: встречное/удаляющееся движение, неизвестная geometry, цель за стеной, устаревшая/неизвестная история. Go ./... с картами прошёл. Обычный бросок/импульс/fuse: armed-grenade-suite-20261001-160953-688/report.json,2/2 при2x, parallelism2.
+
+Следующее: независимая native проверка настоящего броска при движущейся цели, диапазон возможных ранних точек взрыва, поиск полезного безопасного направления. Общая подготовка гранаты пока запрещена; исходный base3 эпизод остаётся открытым.
+
+## Реальный бросок при native движении damageable цели
+
+```powershell
+./scripts/run_armed_grenade_suite.ps1 -MovingContact -Port 30800 -Parallelism 2 -Repetitions 2
+./scripts/check_grenade_moving_contact_negatives.ps1 -Report workspace/artifacts/armed-grenade-suite-20261001-163141-370/report.json
+```
+
+Сценарий base1-grenade-moving-contact.json: bot[32,-352,24.125], actor[128,-352,24.125], нейтральный misc_insane проходит path_corner поY между-96 и-64. Отдельный q2go-grenade-moving-contact runtime содержит оригинальный BSP/AAS и тестовые native entities. bot_grenade_yaw90 выбирает явную armed_y постановку: только base1, только bot_grenade_arm с задержкой handoff, без invulnerability. Общее поведение не начинает гранату; test hook создаёт её подготовку, после чего production guard выпускает её с сохранением серверной позы. Ammo, gunframes, движение цели и здоровье не подменяются.
+
+CheckGrenadeMovingContact оценивает скорость один раз из пяти первых свободных наблюдений. simulateGrenadeWithBodies использует ту же физику полёта, но принимает действительное положение native тела на каждом тикe как вход. G_RunFrame обрабатывает edicts поID: для target.ID>grenade.ID берётся предыдущий snapshot, иначе текущий. В принятой постановке target308 выполняется после grenade64; координаты цели на кадре взрыва уже включают последующее движение от knockback и не являются формой в момент контакта. Walking misc_insane без crucified имеет bbox(-16,-16,-24)..(16,16,32). Проверка требует последовательный target ID/class/solid/map/gravity, реальное перемещение во время полёта и минимум2 units недавнего перемещения в окне400ms до контакта. Нулевые шаги native анимации сохраняются как реальные входы, не превращаются в постоянную скорость.
+
+После warmup проверяются дальнейшие точки без подгонки, включая отскок; событие damageable_contact должно совпасть с единственным native TE взрывом раньше fuse минимум на5 кадров. Визуальная точка рассчитывается как origin-0.02*impactVelocity из kernel, включая скорость после отскока. Ошибка каждой контрольной точки и события<=2 units. Это проверка физики с наблюдёнными положениями цели, не прогноз её будущего движения до броска и не доказательство безопасности всех случайных импульсов.
+
+Принято armed-grenade-suite-20261001-163141-370/report.json:2/2 при2x, parallelism2, порты30800/30801, provenance true. В обоих contact161 вместо fuse184 (на2.3s раньше), один ground bounce,5 warmup sightings,1 held-out bounce point плюс contact TE, max_error0.288/0.241, Grenades5->4 и HP100 у обоих клиентов.7 отрицательных контролей отвергнуты: отсутствие взрыва, неверная позиция, взрыв по fuse, неподвижная цель, смена identity, потерянная held-out точка и изменённая gravity. Go ./... с картами прошёл; обычный native бросок/launch/fuse regression163516:2/2 на2x с двумя серверами.
+
+Отклонённые серии сохранены:162004 — постановка за стеной без корректных наблюдений;162533 — неверное предположение о порядке edicts;162840 — требование ненулевого шага ровно в contact tick, хотя walking animation содержит реальные паузы. Эти серии не засчитаны как приёмка. Следующий шаг — диапазон ранних точек взрыва с неопределённым движением и jitter, затем полезный безопасный выбор направления. Автоматическая подготовка остаётся запрещённой, исходный base3 эпизод открыт.
+
+## Диапазон раннего контакта: только диагностика отклонения
+
+В grenade_prediction.early_envelope добавлены frame, scope, status и диапазоны contact min/max по каждому из первых5 тиков. Для номинального timer3/speed400 и center hand аналитически ограничены все up190..210/right-10..10, включая промежуточные значения, а не только9 samples. На каждом100ms шаге используется gravity-before-motion; AABB объединяет границы обоих концов сегмента, включает его внутренние точки и запас0.125 на квантование. Пересечение с возможным положением target/teammate даёт область потенциального раннего взрыва. Packed bounds приблизительны и увеличены на8 units.
+
+Скорость тела400 units/s по каждой оси — явно записанное допущение assumed_axis_speed, не подтверждённый предел сервера и не обещание постоянного курса. Возможное положение расширяется на400*t в обе стороны по каждой оси без требования известной motion history. Self/teammate blast проверяется по расстоянию до contact AABB с запасом197 и достижимостью sqrt(3)*400*t. Это заведомо широкая оценка, допускающая ложные отклонения: стены не сертифицируют этот свободный путь, после отскока/500ms диапазон не доказан. geometry_certified=false и authorized=false всегда. Наличие риска помечается reject_early_blast, отсутствие — unproven; невидимый ранее известный напарник — reject_unseen_teammate. Политика arming по этой диагностике не включена, общий guard по-прежнему запрещает подготовку.
+
+Native observer проверки через MovingFriend/MovingTarget теперь требуют этот диапазон с актуальным frame/entity, упорядоченными границами и честными флагами отсутствия разрешения/collision certification. Приняты на2x,parallelism2: armed-grenade-suite-20261001-170337-539/report.json (напарник,2/2,287/291 hazard frames) и armed-grenade-suite-20261001-170534-812/report.json (цель,2/2). Оба без ATTACK/подготовки/гранат, HP100 обоих, provenance true. Это observer проверки данных и диагностики; они не доказывают, что envelope самостоятельно запрещает подготовку при включённой политике.
+
+```powershell
+./scripts/run_armed_grenade_suite.ps1 -MovingFriend -Port 30830 -Parallelism 2 -Repetitions 2
+./scripts/run_armed_grenade_suite.ps1 -MovingTarget -Port 30840 -Parallelism 2 -Repetitions 2
+./scripts/check_grenade_envelope_negatives.ps1 -Report workspace/artifacts/armed-grenade-suite-20261001-170337-539/report.json
+./scripts/check_grenade_envelope_negatives.ps1 -Report workspace/artifacts/armed-grenade-suite-20261001-170534-812/report.json -Kind target
+```
+
+По6 отрицательных контролей на каждый тип отвергнуты: нет envelope, stale frame, ложное authorized=true, ложное geometry_certified=true, нет contact ranges, обратные min/max. Unit тесты охватывают внутренние jitter значения в косом направлении, неизвестную историю движения, невидимого напарника, отсутствие контактов без разрешения и blast distance. Go ./... с реальными картами прошёл. Отклонённая серия170208 сохранена: native2/2, но анализатор индексировал отсутствующие contacts; исправлен разбор пустого диапазона, данные не были объявлены успешными до нового прогона.
+
+Следующий этап: учитывать геометрию и неопределённость отскоков, затем сравнивать направления по пользе/риску. Полный безопасный бросок и исходный base3 эпизод остаются открытыми.
+
+## Статическая геометрия: подтверждённый участок до возможного отскока
+
+early_envelope.geometry содержит static_clear_seconds, stop_seconds, reason и post_bounce_certified=false/authorized=false. Для каждого100ms шага построен весь AABB сегмента continuous nominal jitter. ProjectileBoxClear проверяет отделение этого объёма от каждого статического MASK_SHOT brush по его плоскостям, с запасом trace epsilon0.03125. Если хотя бы одна плоскость отделяет весь AABB от brush — пересечения нет. Если отделения не найдено — допускается возможный контакт; это консервативный тест, не точное пересечение и не нормаль отскока. Объёмная проверка не пропускает узкую преграду внутри диапазона при свободных углах. Water-only brushes не являются MASK_SHOT.
+
+Подтверждается только статически свободный участок текущего nominal timer3/speed400 кандидата. possible_static_bounce останавливает проверку до неподтверждённого участка. observed_mover_overlap/unknown_mover_bounds также останавливают её, но отсутствие пересечения с текущими mover bounds не подтверждает будущий путь движущегося объекта. Unknown BSP не даёт clear_seconds. Полный geometry_certified прежнего envelope остаётся false: будущая динамика, подготовка перед реальным броском, возможные нормали/разделение после отскока и полёт после500ms ещё не доказаны. Contact ranges после stop_seconds по-прежнему являются гипотезой свободного полёта, а не диапазоном настоящего post-bounce пути.
+
+```powershell
+./scripts/run_armed_grenade_suite.ps1 -GeometryBlocked -Port 30850 -Parallelism 2 -Repetitions 2
+./scripts/run_armed_grenade_suite.ps1 -MovingFriend -Port 30860 -Parallelism 2 -Repetitions 2
+./scripts/check_grenade_geometry_negatives.ps1 -Report workspace/artifacts/armed-grenade-suite-20261001-172056-805/report.json -Blocked
+./scripts/check_grenade_geometry_negatives.ps1 -Report workspace/artifacts/armed-grenade-suite-20261001-172255-589/report.json
+```
+
+Новый base1-grenade-geometry-blocked.json ставит observer bot[128,-224,24.125], actor[32,-128,24.125], направление+X без подготовки. BSP подтвердил первые0.2s всего диапазона, на0.3s возможен контакт со стеной. Armed-grenade-suite-20261001-172056-805/report.json принят2/2 на2x,parallelism2,provenance true. MovingFriend172255 принят2/2 на2x с clear0.5s и прежней диагностикой пересечения напарника. Все без ATTACK/подготовки/гранат, HP100 обоих. Native observer доказывает выдачу корректных данных при серверных позах; это не настоящий бросок в стену и не проверка включённой arming policy.
+
+По6 повреждённых сертификатов на каждую постановку отвергнуты: нет geometry, ложный post-bounce certificate, authorized=true, ложный clear prefix, ложный stop tick, stale frame. Unit тесты: преграда внутри AABB при свободных8 углах, отделение и epsilon, MASK_SHOT, invalid input/missing map, реальный base1 свободный/пересекающий пол диапазон, стена на0.3s, unknown mover и observed mover overlap. Go ./... с картами прошёл. Далее требуется диапазон настоящих post-bounce траекторий и оценка направлений; общая подготовка остаётся запрещённой, исходный base3 эпизод открыт.
+
+## После возможного отскока: широкий диапазон достижимости модели
+
+Добавлен bounce_envelope с диапазонами min/max и tick, model_speed_norm_cap2000, gravity и authorized=false/geometry_certified=false. При первом possible_static_bounce seed охватывает весь сегмент nominal jitter, включая возможные точки контакта и вариант без настоящего столкновения. На следующем шаге объём расширяется по каждой оси на(cap+gravity*0.1)*0.1:208 units при gravity800. Ограничение скорости на следующем тике не зависит от предыдущей нормали, поэтому диапазон включает разные нормали, доли движения до удара, дальнейшие отскоки, отсутствие отскока и остановку на земле. Это широкий верхний предел перемещения, не подбор одной траектории. Для candidate проверяются тики до0.5s; будущее движение mover и другие внешние перемещения не подтверждены.
+
+При сверке источника уточнён общий kernel: baseq2 SV_CheckVelocity в g_phys.c ограничивает длину вектора скорости перед SV_AddGravity, а не каждую компоненту после неё. Default sv_maxvelocity2000 находится в game/savegame/savegame.c. Теперь simulateGrenade использует этот порядок; для3000/4000/0 после первого движения при gravity800 ожидается120/160/-8. Предел2000 остаётся явно указанным условием модели, не автоматически прочитанной серверной настройкой; произвольные изменённые серверные caps не сертифицируются. Unit тесты покрывают нормали пола/стен/наклонной поверхности, повторные отскоки, остановку и ограничение высокой скорости.
+
+CalibrateGrenade дополнительно строит post-bounce диапазон от рассчитанного первого столкновения до ожидаемого fuse. Seed берётся из predicted сегмента, а не native observed endpoint, с прежней фиксированной calibration tolerance4 units. Скорость оценивается один раз из первых пяти свободных наблюдений; дальнейшие координаты не используются для подгонки. Все native точки после первого отскока должны попасть в bounds; минимум3 таких точки. Прежняя проверка точного пути<=4 units, начального импульса, timer и TE события остаётся обязательной. Наличие внутри широкого bounds само по себе не является доказательством безопасности или высокой точности.
+
+Принято armed-grenade-suite-20261001-174944-407/report.json:wall observer2/2 при2x,parallelism2,provenance true. Seed на0.3s, следующие границы растут на208 units/ось/тик;10 повреждённых сертификатов отвергнуты, включая отсутствующий/схлопнутый bounce bound, ложные разрешение и certification. Реальный native throw:175112/report.json,2/2 на2x,parallelism2,provenance true; по15 held-out post-bounce позиций внутри bounds, точная path error0.854/0.932, HP100 обоих, Grenades5->4, настоящий fuse TE подтверждён. Go ./... с реальными картами прошёл. Промежуточный174426 проверял прежний предел; после сверки norm/gravity выполнены свежие174944/175112 и именно они являются текущей приёмкой.
+
+```powershell
+./scripts/run_armed_grenade_suite.ps1 -GeometryBlocked -Port 30880 -Parallelism 2 -Repetitions 2
+./scripts/check_grenade_geometry_negatives.ps1 -Report workspace/artifacts/armed-grenade-suite-20261001-174944-407/report.json -Blocked
+./scripts/run_armed_grenade_suite.ps1 -Port 30890 -Parallelism 2 -Repetitions 2
+```
+
+Post_bounce_certified общей геометрии остаётся false: coarse bounds слишком широки для утверждения полезного безопасного броска. Далее сужать их по подтверждённым поверхностям и сравнивать направления по пользе/риску. Arming запрещён; исходный base3 эпизод остаётся открытым.

@@ -474,6 +474,7 @@ foreach ($scale in $Timescales) {
 			if ($actorScenarioDefinition.map_entry) { $botConfig.test.change_entry=$actorScenarioDefinition.map_entry }
             $botConfig.test.teleport = ($actorScenarioDefinition.bot_origin | ForEach-Object {([double]$_).ToString([cultureinfo]::InvariantCulture)}) -join ','
             if($actorScenarioDefinition.bot_grenade_arm){$botConfig.test.weapon_switch_fixture='hand_grenade_armed';$botConfig.test.hold_position=$true}
+            if($actorScenarioDefinition.bot_grenade_yaw -eq 90){$botConfig.test.weapon_switch_fixture='hand_grenade_armed_y'}
             if($actorScenarioDefinition.bot_grenade_observe){$botConfig.test.weapon_switch_fixture='hand_grenade_observe';$botConfig.test.hold_position=$true}
             $botConfig.test.scenario_frame_origin = $actorScenarioDefinition.start_frame
 			if ($actorScenarioDefinition.bot_hide_health_frames) {

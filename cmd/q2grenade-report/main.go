@@ -16,13 +16,18 @@ func main() {
 	name := flag.String("map", "base1", "map")
 	out := flag.String("out", "", "report JSON")
 	contact := flag.Bool("contact", false, "stationary native damageable contact fixture")
+	movingContact := flag.Bool("moving-contact", false, "walking native damageable contact fixture")
 	flag.Parse()
-	if err := run(*trace, *root, *name, *out, *contact); err != nil {
+	if *contact && *movingContact {
+		fmt.Fprintln(os.Stderr, "select one contact fixture")
+		os.Exit(1)
+	}
+	if err := run(*trace, *root, *name, *out, *contact, *movingContact); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
-func run(trace, root, name, out string, contact bool) error {
+func run(trace, root, name, out string, contact, movingContact bool) error {
 	f, err := os.Open(trace)
 	if err != nil {
 		return err
@@ -47,7 +52,9 @@ func run(trace, root, name, out string, contact bool) error {
 	}
 	var r bot.GrenadeCalibration
 	var validation error
-	if contact {
+	if movingContact {
+		r, validation = bot.CheckGrenadeMovingContact(rows, &g)
+	} else if contact {
 		r, validation = bot.CheckGrenadeContact(rows, &g)
 	} else {
 		r, validation = bot.CalibrateGrenade(rows, &g)

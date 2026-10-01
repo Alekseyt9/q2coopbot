@@ -1,0 +1,7 @@
+{
+ "version":1,"name":"base1-grenade-moving-contact","map":"base1",
+ "start_frame":40,"bot_release_frame":140,"game_frames":350,
+ "actor_origin":[128,-352,14],"bot_origin":[32,-352,14],
+ "bot_health":100,"bot_grenade_arm":true,"bot_grenade_yaw":90,"actor_inventory":true,
+ "expect":{},"steps":[{"id":"wait-for-native-moving-contact","action":"wait","frames":300}]
+}

@@ -1795,3 +1795,43 @@ scripts/scenarios/base1-grenade-moving-teammate.json использует ров
 Принято workspace/artifacts/armed-grenade-suite-20261001-155201-913/report.json:2/2 при2x, parallelism2, отдельные порты30730/30731, provenance true. Native actor displacement поY190,13 кадров moving contact hazard в каждом повторе, ноль arming/ATTACK и projectile, оба HP100 без маскирования. Checker требует совпадение entity/frame наблюдаемого движения и окно contact<=0.5s;6 отрицательных контролей отвергнуты: нет hazard, stale motion, другой entity, ATTACK при пересечении, неподвижный actor и health mask. Unit тесты различают приближение и удаление напарника, не дают contact из неизвестной geometry. Go ./... с реальными картами прошёл. Обычный native бросок/fuse: armed-grenade-suite-20261001-155302-334/report.json,2/2 при2x, parallelism2, provenance true.
 
 Эта серия подтверждает диагностику и отсутствие подготовки при native движении напарника. Она не является реальным броском в движущегося игрока и не доказывает, что новая проверка сама разрешает/запрещает arming: generic guard пока запрещает все такие броски. Следующее — движущаяся damageable цель, диапазон возможных точек раннего взрыва, проверка пользы/риска и поиск безопасного направления; разрешение подготовки только после этой приёмки. Живая сессия не изменялась, исходный base3 эпизод остаётся открытым.
+
+### 01.10.2026 — граната: движущаяся цель, observer этап
+
+Добавлены target_motion и target_contact для короткой гипотезы раннего взрыва при движении damageable цели. Проверяются актуальные entity/class/frame и стабильная история enemyMotion; общий relative sweep учитывает перемещение тела на500ms. Packed bounds с запасом8 units дают диагностику риска, не подтверждённую collision shape и не разрешение подготовки.
+
+scripts/scenarios/base1-grenade-moving-target.json: native нейтральный misc_insane движется по path_corner, бот только наблюдает гипотетический бросок. Два независимых сервера/пары клиентов на2x приняли2/2: armed-grenade-suite-20261001-160750-606/report.json, provenance true, native displacement130.75,88/91 hazard frames, HP100, без подготовки/гранат.7 отрицательных контролей отвергнуты; Go ./... и обычный native бросок/fuse160953 (2/2,2x,parallelism2) прошли. Подробности и команды в docs/testing/grenade_calibration.md; частичная проверка добавлена в карточку base3-hand-grenade-held-suicide.
+
+Далее по текущему пункту: реальный бросок при native движении цели; диапазон ранних точек взрыва с учётом jitter/неопределённого движения; поиск направления и оценка пользы/риска. Только после приёмки безопасной политики разрешать автоматическую подготовку. Исходный base3 эпизод и полный безопасный планировщик пока открыты. Затем продолжаются согласованные checkpoint/save-load, короткий solo base1 и переходы кампании на общих coop механиках.
+
+### 01.10.2026 — граната: native ранний контакт с движущейся целью
+
+Сделан следующий этап: настоящий explicit fixture бросок на base1 в walking misc_insane. Общий kernel использует покадровые native позиции цели с учётом порядка edicts, отскок от пола и impactVelocity для visual TE offset. Входы движения не подменяются и не подгоняются по взрыву; реальные паузы анимации допускаются при подтверждённом недавнем движении. Это проверка физики, не pre-throw прогноз безопасности.
+
+Принято armed-grenade-suite-20261001-163141-370/report.json:2/2 при2x,parallelism2,provenance true; contact161 вместо fuse184, один ground bounce, ошибка<=0.288, HP100 обоих, расход одной гранаты.7 повреждённых трасс отвергнуты. Обычный throw/fuse regression163516:2/2 на2x; Go ./... с картами прошёл. Сценарий scripts/scenarios/base1-grenade-moving-contact.json добавлен в частичные проверки base3-hand-grenade-held-suicide; команды и ограничения в docs/testing/grenade_calibration.md.
+
+Далее: диапазон возможных ранних точек взрыва при jitter и неопределённом движении; поиск направления, достаточная польза и ограничения риска для бота/напарника; только после приёмки политики — разрешение общей подготовки. Исходный base3 эпизод остаётся открытым, generic arming запрещён. После гранат продолжаем checkpoint/save-load, короткий solo base1 и переходы кампании на общих coop механиках.
+
+### 01.10.2026 — граната: диапазон ранних точек взрыва, reject-only этап
+
+Добавлена early_envelope: аналитический диапазон continuous jitter up190..210/right-10..10 для пяти первых free-flight тиков nominal timer3/speed400. Contact min/max учитывают неизвестный курс тела при явно предполагаемом axis speed400; оцениваются blast reach для бота/напарника. Геометрия/отскоки/поздний полёт пока не сертифицированы; authorized=false, отсутствие риска остаётся unproven. Это диагностика возможного отклонения, не разрешение подготовки.
+
+Native2x,parallelism2: MovingFriend170337 —2/2 (287/291 hazard frames), MovingTarget170534 —2/2, HP100, без подготовки/гранат, provenance true. По6 повреждённых envelope controls отвергнуты на каждый тип; Go ./... с картами прошёл. Доказательства добавлены в карточку base3-hand-grenade-held-suicide, которая остаётся открытой. Подробности/команды в docs/testing/grenade_calibration.md.
+
+Далее: геометрия и неопределённость отскоков для диапазона, затем сравнение направлений по пользе и риску. Только после отдельной приёмки всей политики разрешать generic arming. Потом прежние checkpoint/save-load, solo base1 и кампания на общих coop механиках.
+
+### 01.10.2026 — граната: BSP для всего диапазона и неподтверждённый отскок
+
+Добавлен static_free_flight_prefix_only: весь AABB каждого сегмента continuous jitter проверяется на отделение от статических MASK_SHOT brushes. Подтверждается только static_clear_seconds. Возможный контакт/observed mover overlap/unknown bounds останавливают диапазон; post_bounce_certified=false и arming запрещён. Это подтверждение свободного участка статической карты, не полного будущего полёта или безопасности динамики.
+
+Native2x,parallelism2: GeometryBlocked172056 —2/2, clear0.2s и possible bounce0.3s; MovingFriend172255 —2/2, clear0.5s. HP100, без подготовки/гранат, provenance true; по6 повреждённых сертификатов отвергнуты. Go ./... с картами прошёл. base1-grenade-geometry-blocked.json добавлен в partial scenarios исходного base3 эпизода, который остаётся открытым. Детали/команды в grenade_calibration.md.
+
+Далее — диапазон настоящих траекторий после отскока, включая возможные разные нормали и ранние контакты; затем сравнение направлений по пользе/риску и отдельная приёмка политики подготовки. Сохраняются последующие checkpoint/save-load, solo base1 и кампания.
+
+### 01.10.2026 — граната: грубый диапазон после отскока
+
+Добавлен coarse_post_collision_model_bound: seed целого возможного collision segment расширяется на208 units/ось/100ms приg800 и model norm cap2000. Покрываются разные нормали, доли отскока, отсутствие отскока и остановка, но geometry_certified/authorized=false. Общий kernel уточнён по SV_CheckVelocity: длина velocity ограничивается перед gravity. Ограничение2000 — явное условие модели, не универсальная настройка сервера.
+
+Native2x,parallelism2:174944 GeometryBlocked2/2 с10 отвергнутыми повреждёнными сертификатами;175112 real throw2/2, по15 held-out post-bounce точек внутри bounds, точный path error0.854/0.932, HP100, provenance true. Go ./... с картами прошёл. Calibrator не подгоняет seed по observed endpoint; прежние launch/fuse/path gates сохранены. Registry base3 эпизода обновлён, не закрыт.
+
+Далее: сужение диапазона по подтверждённым поверхностям, затем сравнение направлений по пользе/риску. Coarse bound слишком широк для разрешения броска; generic arming остаётся запрещённым. Затем прежние checkpoint/save-load, solo base1 и кампания.

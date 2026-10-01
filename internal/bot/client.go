@@ -544,7 +544,7 @@ func (c *Client) run(ctx context.Context) error {
 					setup = []string{"use Blaster"}
 				} else if c.testWeaponSwitchFixture == "projectile_hyper" {
 					setup = []string{"give HyperBlaster", "give Cells 100", "use HyperBlaster"}
-				} else if c.testWeaponSwitchFixture == "hand_grenade_guard" || c.testWeaponSwitchFixture == "hand_grenade_armed" || c.testWeaponSwitchFixture == "hand_grenade_observe" {
+				} else if c.testWeaponSwitchFixture == "hand_grenade_guard" || handGrenadeArmFixture(c.testWeaponSwitchFixture) || c.testWeaponSwitchFixture == "hand_grenade_observe" {
 					setup = []string{"give Grenades 5", "use Grenades"}
 				} else if strings.HasPrefix(c.testWeaponSwitchFixture, "rail_") {
 					setup = []string{"give Railgun", "give Slugs 10", "use Railgun"}
@@ -696,7 +696,7 @@ func (c *Client) run(ctx context.Context) error {
 			weaponRequest := ""
 			observeInventory := !c.idle || c.scenario != nil && c.scenario.Scenario.ActorInventory
 			if !safetyStop && observeInventory && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
-				if !c.idle && !pairSetup && !c.testProjectileComparison && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || c.testWeaponSwitchFixture == "hand_grenade_armed" && !c.testHandGrenadeArmDone) {
+				if !c.idle && !pairSetup && !c.testProjectileComparison && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
 					weaponRequest = c.weaponSwitch.command(c.planner.World.Snapshot)
 				}
 				if request := c.inventoryWatch.command(c.planner.World.Snapshot); request != "" {
@@ -742,7 +742,7 @@ func (c *Client) run(ctx context.Context) error {
 				cmd.Buttons &^= 1
 				c.planner.World.Command.LimitReason = "test_combat_observe"
 			}
-			if c.testWeaponSwitchFixture == "hand_grenade_armed" && !safetyStop && !c.planner.testSetupHold && !c.idle {
+			if handGrenadeArmFixture(c.testWeaponSwitchFixture) && !safetyStop && !c.planner.testSetupHold && !c.idle {
 				cmd = c.testArmHandGrenade(cmd)
 			}
 			if c.testWeaponSwitchFixture == "hand_grenade_observe" && !safetyStop && !c.idle {

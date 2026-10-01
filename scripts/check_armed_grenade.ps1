@@ -47,3 +47,64 @@ function Assert-GrenadeMovingFriend([object[]]$Rows,[object[]]$ActorRows) {
     if(@($actor|Where-Object {$_.health -ne 100 -or $_.test_health_masked}).Count){throw 'Teammate damaged or masked during crossing'}
     return [pscustomobject]@{hazard_frames=$risk.Count;actor_displacement_y=$ys[0].Maximum-$ys[0].Minimum;arming_during_crossing=$false}
 }
+
+function Assert-GrenadeMovingTarget([object[]]$Rows,[object[]]$ActorRows) {
+    if(@($Rows|Where-Object {$_.arbitration.limit_reason -eq 'test_grenade_arming'}).Count){throw 'Observer fixture must not arm'}
+    $before=@($Rows|Where-Object {$_.frame -lt 350 -and $_.weapon -match '/v_handgr/'})
+    $risk=@($before|Where-Object {
+        $row=$_
+        @($row.grenade_prediction.samples|Where-Object {
+            $hit=$_.target_contact
+            $motion=@($row.grenade_prediction.target_motion|Where-Object {$_.entity -eq $hit.entity -and $_.frame -eq $row.frame -and $_.class -eq 'monster_insane' -and [math]::Abs($_.velocity[1]) -gt 10})
+            $target=@($row.enemies|Where-Object {$_.id -eq $hit.entity -and $_.class -eq 'monster_insane'})
+            $hit.seconds -gt 0 -and $hit.seconds -le 0.5 -and $motion.Count -and $target.Count -and $_.risk -match '^moving_target_(contact_unproven|self_blast|teammate_blast)$'
+        }).Count -and $row.grenade_prediction.reason -eq 'not_authorized'
+    })
+    if($risk.Count -lt 2){throw 'Moving target early contact hazard not observed'}
+    if(@($before|Where-Object {$_.sent_command.Buttons -band 1}).Count){throw 'Grenade armed during target crossing'}
+    if(@($Rows|Where-Object {$_.health -ne 100 -or $_.test_health_masked -or $_.projectiles.Count}).Count){throw 'Observer damage, mask or unexpected projectile'}
+    if(@($ActorRows|Where-Object {$_.health -ne 100 -or $_.test_health_masked}).Count){throw 'Teammate damage or health mask'}
+    $id=$risk[0].grenade_prediction.samples.target_contact.entity|Where-Object {$_ -gt 0}|Select-Object -First 1
+    $positions=@($before.enemies|Where-Object {$_.id -eq $id -and $_.class -eq 'monster_insane'}|ForEach-Object {$_.origin[1]})
+    $ys=$positions|Measure-Object -Minimum -Maximum
+    if($positions.Count -lt 10 -or $ys.Maximum-$ys.Minimum -lt 40){throw 'Native target did not physically move'}
+    return [pscustomobject]@{hazard_frames=$risk.Count;target_entity=$id;target_displacement_y=$ys.Maximum-$ys.Minimum;actual_throw=$false;arming_authorized=$false}
+}
+
+function Assert-GrenadeEarlyEnvelope([object[]]$Rows,[ValidateSet('teammate','target')][string]$Kind='teammate') {
+    $hazards=@($Rows|Where-Object {
+        $row=$_;$envelope=$row.grenade_prediction.early_envelope
+        $contacts=@($envelope.contacts|Where-Object {
+            $contact=$_
+            $identity=if($Kind -eq 'teammate'){$contact.entity -eq $row.teammate_entity -and $row.teammate_entity -gt 0}else{@($row.enemies|Where-Object id -EQ $contact.entity).Count -gt 0}
+            $bounds=$contact.min.Count -eq 3 -and $contact.max.Count -eq 3
+            if($bounds){for($axis=0;$axis -lt 3;$axis++){if($contact.min[$axis] -gt $contact.max[$axis]){$bounds=$false}}}
+            $identity -and $bounds -and $contact.kind -eq $Kind -and $contact.seconds -gt 0 -and $contact.seconds -le 0.5 -and ($contact.self_blast -or $contact.teammate_blast)
+        })
+        $row.frame -lt 350 -and $row.weapon -match '/v_handgr/' -and
+        $envelope.frame -eq $row.frame -and $envelope.scope -eq 'free_flight_500ms_reject_only' -and
+        $envelope.status -eq 'reject_early_blast' -and $envelope.authorized -eq $false -and $envelope.geometry_certified -eq $false -and
+        $envelope.horizon_seconds -eq 0.5 -and $envelope.assumed_axis_speed -eq 400 -and $contacts.Count
+    })
+    if($hazards.Count -lt 2){throw 'Continuous jitter early-contact rejection envelope not observed'}
+    return [pscustomobject]@{hazard_frames=$hazards.Count;kind=$Kind;horizon_seconds=0.5;assumed_axis_speed=400;geometry_certified=$false;authorized=$false}
+}
+
+function Assert-GrenadeGeometry([object[]]$Rows,[object[]]$ActorRows,[switch]$Blocked) {
+    $eligible=@($Rows|Where-Object {$_.frame -lt 350 -and $_.weapon -match '/v_handgr/'})
+    $proof=@($eligible|Where-Object {
+        $envelope=$_.grenade_prediction.early_envelope;$geometry=$envelope.geometry
+        $state=if($Blocked){
+            $bounce=$geometry.bounce_envelope;$first=$bounce.ranges|Select-Object -First 1;$last=$bounce.ranges|Select-Object -Last 1
+            $bounds=$first.min.Count -eq 3 -and $first.max.Count -eq 3 -and $last.min.Count -eq 3 -and $last.max.Count -eq 3
+            if($bounds){for($axis=0;$axis -lt 3;$axis++){if($first.min[$axis] -gt $first.max[$axis] -or $last.min[$axis] -gt $first.min[$axis]-416 -or $last.max[$axis] -lt $first.max[$axis]+416){$bounds=$false}}}
+            $geometry.reason -eq 'possible_static_bounce' -and [math]::Abs($geometry.static_clear_seconds-0.2) -lt 1e-8 -and [math]::Abs($geometry.stop_seconds-0.3) -lt 1e-8 -and [math]::Abs($_.self[0]-128) -lt 1 -and
+            $bounce.scope -eq 'coarse_post_collision_model_bound' -and $bounce.model_speed_norm_cap -eq 2000 -and $bounce.gravity -eq $_.gravity -and $bounce.authorized -eq $false -and $bounce.geometry_certified -eq $false -and $bounce.ranges.Count -eq 3 -and $first.tick -eq 3 -and $last.tick -eq 5 -and $bounds
+        }else{$geometry.reason -eq 'free_prefix_only' -and $geometry.static_clear_seconds -eq 0.5 -and !$geometry.stop_seconds}
+        $geometry.scope -eq 'static_free_flight_prefix_only' -and $geometry.authorized -eq $false -and $geometry.post_bounce_certified -eq $false -and $envelope.frame -eq $_.frame -and $envelope.geometry_certified -eq $false -and $state
+    })
+    if($proof.Count -lt 2){throw 'Native static geometry prefix evidence missing'}
+    if(@($eligible|Where-Object {$_.sent_command.Buttons -band 1 -or $_.arbitration.limit_reason -eq 'test_grenade_arming'}).Count){throw 'Geometry observer armed grenade'}
+    if($Rows.Count -lt 10 -or $ActorRows.Count -lt 10 -or @($Rows+$ActorRows|Where-Object {$_.health -ne 100 -or $_.test_health_masked -or $_.projectiles.Count}).Count){throw 'Observer damage, masking or unexpected projectile'}
+    return [pscustomobject]@{frames=$proof.Count;blocked=[bool]$Blocked;static_clear_seconds=$proof[0].grenade_prediction.early_envelope.geometry.static_clear_seconds;post_bounce_certified=$false;authorized=$false}
+}

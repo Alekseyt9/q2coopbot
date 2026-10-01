@@ -1,0 +1,7 @@
+{
+ "version":1,"name":"base1-grenade-geometry-blocked","map":"base1",
+ "start_frame":40,"bot_release_frame":140,"game_frames":350,
+ "actor_origin":[32,-128,14],"bot_origin":[128,-224,14],
+ "bot_health":100,"bot_grenade_observe":true,"actor_inventory":true,"expect":{},
+ "steps":[{"id":"observe-possible-bounce-without-arming","action":"wait","frames":280}]
+}
