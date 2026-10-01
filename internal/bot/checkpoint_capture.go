@@ -37,7 +37,7 @@ func (c *Client) captureCheckpointRequest() error {
 		return nil
 	}
 	s := c.planner.World.Snapshot
-	capture := checkpoint.Capture{CaptureRequest: request, Participant: c.name, Self: s.Self, Health: s.Health}
+	capture := checkpoint.Capture{CaptureRequest: request, Participant: c.name, Self: s.Self, Health: s.Health, SelfEntity: c.decoder.PlayerNumber}
 	if s.Map != request.Map || c.spawncount != request.Generation || s.Frame != request.Frame {
 		capture.Error = "client barrier anchor mismatch"
 	} else {

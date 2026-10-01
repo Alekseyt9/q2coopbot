@@ -9,7 +9,27 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
+
+func TestRCONEmptyAcknowledgement(t *testing.T) {
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	go func() {
+		buf := make([]byte, 2048)
+		_, addr, err := conn.ReadFromUDP(buf)
+		if err == nil {
+			conn.WriteToUDP([]byte("\xff\xff\xff\xffprint\n\x00"), addr)
+		}
+	}()
+	reply, err := request(context.Background(), conn.LocalAddr().String(), "secret", "set sv_test_checkpoint_frame 0", time.Second)
+	if err != nil || reply != "" {
+		t.Fatalf("empty acknowledgement rejected: %q %v", reply, err)
+	}
+}
 
 func TestNativeCheckpointRoundTripAndRejections(t *testing.T) {
 	root := t.TempDir()
@@ -34,7 +54,7 @@ func TestNativeCheckpointRoundTripAndRejections(t *testing.T) {
 			if err != nil {
 				return
 			}
-			cmd := strings.TrimSpace(strings.TrimPrefix(string(buf[4:n]), "rcon secret "))
+			cmd := strings.TrimSpace(strings.TrimRight(strings.TrimPrefix(string(buf[4:n]), "rcon secret "), "\x00"))
 			mu.Lock()
 			commands = append(commands, cmd)
 			mu.Unlock()

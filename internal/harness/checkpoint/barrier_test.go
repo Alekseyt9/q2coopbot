@@ -32,6 +32,21 @@ func TestBarrierCaptureAnchorsAndImmutableFiles(t *testing.T) {
 	if len(proof.Participants) != 1 {
 		t.Fatal(proof)
 	}
+	if err = verifySavedCaptures(root, r.Map, proof); err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []func(*BarrierProof){
+		func(p *BarrierProof) { p.Frame++ },
+		func(p *BarrierProof) { p.Generation++ },
+		func(p *BarrierProof) { p.Participants = nil },
+		func(p *BarrierProof) { p.Participants = append(p.Participants, p.Participants[0]) },
+	} {
+		bad := *proof
+		change(&bad)
+		if verifySavedCaptures(root, r.Map, &bad) == nil {
+			t.Fatal("invalid saved proof accepted", bad)
+		}
+	}
 	file := filepath.Join(root, "sidecar", "Bot.json")
 	before := proof.Participants[0]
 	if err = os.WriteFile(file, []byte("corrupted"), 0600); err != nil {
@@ -40,6 +55,9 @@ func TestBarrierCaptureAnchorsAndImmutableFiles(t *testing.T) {
 	after, err := fileRecord(filepath.Dir(file), "Bot.json")
 	if err != nil || after == before {
 		t.Fatal("integrity change missed")
+	}
+	if verifySavedCaptures(root, r.Map, proof) == nil {
+		t.Fatal("corrupted sidecar accepted")
 	}
 	b.Controls = append(b.Controls, b.Controls[0])
 	if b.validate() == nil {

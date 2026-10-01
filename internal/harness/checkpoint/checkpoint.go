@@ -19,14 +19,15 @@ import (
 )
 
 type Config struct {
-	Barrier       *Barrier `json:"barrier,omitempty"`
-	Version       int      `json:"version"`
-	Action        string   `json:"action"`
-	Server        string   `json:"server"`
-	Instance      string   `json:"instance"`
-	RuntimeRoot   string   `json:"runtime_root"`
-	CheckpointDir string   `json:"checkpoint_dir"`
-	TimeoutMS     int      `json:"timeout_ms"`
+	BindParticipants bool     `json:"bind_participants,omitempty"`
+	Barrier          *Barrier `json:"barrier,omitempty"`
+	Version          int      `json:"version"`
+	Action           string   `json:"action"`
+	Server           string   `json:"server"`
+	Instance         string   `json:"instance"`
+	RuntimeRoot      string   `json:"runtime_root"`
+	CheckpointDir    string   `json:"checkpoint_dir"`
+	TimeoutMS        int      `json:"timeout_ms"`
 }
 type File struct {
 	Name   string `json:"name"`
@@ -56,6 +57,9 @@ var identifier = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 var mapLine = regexp.MustCompile(`(?m)^map\s+: ([a-zA-Z0-9_]+)\s*$`)
 
 func (c Config) Validate() error {
+	if c.BindParticipants && c.Action != "load" {
+		return fmt.Errorf("participant binding requires load")
+	}
 	if c.Barrier != nil {
 		if c.Action != "save" {
 			return fmt.Errorf("barrier is capture-only; restore coordination is not yet supported")
@@ -316,11 +320,12 @@ func request(ctx context.Context, server, password, command string, timeout time
 	}
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	defer stop()
-	packet := append([]byte{255, 255, 255, 255}, []byte("rcon "+password+" "+command+"\n")...)
+	packet := append([]byte{255, 255, 255, 255}, []byte("rcon "+password+" "+command+"\n\x00")...)
 	if _, err = conn.Write(packet); err != nil {
 		return "", fmt.Errorf("checkpoint request failed")
 	}
 	var reply strings.Builder
+	received := false
 	buf := make([]byte, 65536)
 	for {
 		n, err := conn.Read(buf)
@@ -328,7 +333,7 @@ func request(ctx context.Context, server, password, command string, timeout time
 			if ctx.Err() != nil {
 				return "", ctx.Err()
 			}
-			if reply.Len() > 0 {
+			if received {
 				return reply.String(), nil
 			}
 			return "", fmt.Errorf("checkpoint response unavailable; command outcome unknown")
@@ -336,6 +341,7 @@ func request(ctx context.Context, server, password, command string, timeout time
 		if n < 10 || string(buf[:4]) != "\xff\xff\xff\xff" || string(buf[4:10]) != "print\n" {
 			continue
 		}
+		received = true
 		reply.WriteString(strings.TrimRight(string(buf[10:n]), "\x00"))
 		if reply.Len() > 1<<20 {
 			return "", fmt.Errorf("checkpoint response too large")
@@ -367,14 +373,8 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 			return result, fmt.Errorf("checkpoint runtime/assets mismatch")
 		}
 		if manifest.Barrier != nil {
-			for _, record := range manifest.Barrier.Participants {
-				if !identifier.MatchString(strings.TrimSuffix(record.Name, ".json")) || !strings.HasSuffix(record.Name, ".json") {
-					return result, fmt.Errorf("invalid sidecar file name")
-				}
-				actual, err := fileRecord(filepath.Join(c.CheckpointDir, "sidecar"), record.Name)
-				if err != nil || actual != record {
-					return result, fmt.Errorf("checkpoint sidecar integrity mismatch")
-				}
+			if err = verifySavedCaptures(c.CheckpointDir, manifest.Map, manifest.Barrier); err != nil {
+				return result, err
 			}
 		}
 		files, err := nativeFiles(filepath.Join(c.CheckpointDir, "native"))
@@ -494,6 +494,37 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 			}
 		}
 		return result, nil
+	}
+	if c.BindParticipants {
+		bindings, err := participantBindings(c.CheckpointDir, manifest.Barrier)
+		if err != nil {
+			return result, err
+		}
+		reply, err = request(ctx, c.Server, password, "maxclients", timeout)
+		if err != nil {
+			return result, err
+		}
+		var maxClients int
+		if _, err = fmt.Sscanf(strings.TrimSpace(reply), `"maxclients" is "%d"`, &maxClients); err != nil || maxClients < 1 || maxClients > 256 {
+			return result, fmt.Errorf("native client capacity unavailable")
+		}
+		for slot := range bindings {
+			if slot > maxClients {
+				return result, fmt.Errorf("saved slot exceeds native client capacity")
+			}
+		}
+		for slot := 1; slot <= maxClients; slot++ {
+			name := bindings[slot]
+			if name == "" {
+				name = `""`
+			}
+			if _, err = request(ctx, c.Server, password, fmt.Sprintf("set sv_test_checkpoint_slot_%d %s", slot, name), timeout); err != nil {
+				return result, err
+			}
+		}
+		if _, err = request(ctx, c.Server, password, "set sv_test_checkpoint_slots 1", timeout); err != nil {
+			return result, err
+		}
 	}
 	parent := filepath.Join(c.RuntimeRoot, "baseq2", "save")
 	if err = os.MkdirAll(parent, 0755); err != nil {

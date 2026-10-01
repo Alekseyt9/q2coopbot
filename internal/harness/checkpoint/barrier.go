@@ -34,6 +34,7 @@ type Capture struct {
 	Runner      json.RawMessage `json:"runner,omitempty"`
 	Self        quake.Vec3      `json:"self"`
 	Health      int16           `json:"health"`
+	SelfEntity  int             `json:"self_entity,omitempty"`
 }
 type BarrierProof struct {
 	ID           string `json:"id"`
@@ -180,4 +181,55 @@ func saveCaptures(dir string, b *Barrier, captures []Capture) (*BarrierProof, er
 		proof.Participants = append(proof.Participants, record)
 	}
 	return proof, nil
+}
+
+func verifySavedCaptures(dir, mapName string, proof *BarrierProof) error {
+	request := CaptureRequest{Version: 1, ID: proof.ID, Map: mapName, Frame: proof.Frame, Generation: proof.Generation}
+	if !identifier.MatchString(proof.ID) || proof.Frame < 1 || proof.Generation < 1 || len(proof.Participants) < 1 || len(proof.Participants) > 8 {
+		return fmt.Errorf("invalid saved barrier")
+	}
+	seen := map[string]bool{}
+	root := filepath.Join(dir, "sidecar")
+	for _, record := range proof.Participants {
+		name := strings.TrimSuffix(record.Name, ".json")
+		if !identifier.MatchString(name) || !strings.HasSuffix(record.Name, ".json") || seen[strings.ToLower(name)] {
+			return fmt.Errorf("invalid/duplicate sidecar file name")
+		}
+		seen[strings.ToLower(name)] = true
+		actual, err := fileRecord(root, record.Name)
+		if err != nil || actual != record {
+			return fmt.Errorf("checkpoint sidecar integrity mismatch")
+		}
+		var capture Capture
+		if err = readJSON(filepath.Join(root, record.Name), &capture); err != nil {
+			return err
+		}
+		if capture.Participant != name {
+			return fmt.Errorf("sidecar participant differs from file name")
+		}
+		if err = validateCapture(capture, request); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func participantBindings(dir string, proof *BarrierProof) (map[int]string, error) {
+	if proof == nil || len(proof.Participants) == 0 {
+		return nil, fmt.Errorf("participant binding requires a coordinated checkpoint")
+	}
+	bindings := map[int]string{}
+	for _, record := range proof.Participants {
+		var capture Capture
+		if err := readJSON(filepath.Join(dir, "sidecar", record.Name), &capture); err != nil {
+			return nil, err
+		}
+		// svs.clients supports at most 256 player slots; names are stored in
+		// the native client as at most 31 bytes. No lossy identity is allowed.
+		if capture.SelfEntity < 1 || capture.SelfEntity > 256 || len(capture.Participant) > 31 || bindings[capture.SelfEntity] != "" {
+			return nil, fmt.Errorf("invalid/duplicate native participant slot")
+		}
+		bindings[capture.SelfEntity] = capture.Participant
+	}
+	return bindings, nil
 }
