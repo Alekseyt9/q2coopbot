@@ -4,7 +4,7 @@
   "map": "jail2",
   "kind": "dynamic_door",
   "status": "verified_fixture_parallel_2x",
-  "reproduction": "observation_only",
+  "reproduction": "ready",
   "scenario": "scripts/scenarios/jail2-open-door-follow.json",
   "observed_failure": "Игрок сообщил о новом застревании. Кадр1478: self[126.625,-300.5,8.125], teammate[-32,27.125,24.125], health68; follow_teammate, navigation=ready; move_source=none, limit_reason и move_limit_reason=dynamic_door_blocked.",
   "expected_result": "Корректно распознать состояние двери и способ открытия, дождаться безопасного прохода либо выбрать достижимый обход; возобновить сопровождение без бесконечного стояния.",
@@ -13,19 +13,19 @@
   "additional_evidence": [
     "workspace/artifacts/live-stuck-20260930-204022/last-world.json"
   ],
-  "missing_setup": [
-    "Подключить специализированный runtime и анализатор к общей команде run_episode_regressions.ps1"
-  ],
-  "acceptance": {
-    "no_unbounded_stall": true,
-    "safe_door_passage": true,
-    "follow_resumes": true
-  },
-  "verification_report": "workspace/artifacts/jail2-door-r6/report.json",
+  "missing_setup": [],
+  "verification_report": "workspace/artifacts/episode-regressions-20261001-113502-341/report.json",
   "runtime_preparation": "scripts/prepare_jail2_door_runtime.ps1",
   "verification_checker": "scripts/check_jail2_door.ps1",
   "remaining_validation": [
     "Человеческая сессия, другие неплоские/движущиеся дверные проходы"
   ],
-  "resolution": "2/2 native при2x параллельно:24 кадра проверенного обхода, итоговая дистанция121.15, cover_teammate, health68. Дополнительно4/4 регрессий уступания и подбора Super Shotgun/Shells. Изменения не загружены в живого бота."
+  "resolution": "2/2 native при2x параллельно:24 кадра проверенного обхода, итоговая дистанция121.15, cover_teammate, health68. Дополнительно4/4 регрессий уступания и подбора Super Shotgun/Shells. Изменения не загружены в живого бота.",
+  "acceptance": {
+    "definition": "scenario",
+    "runner": "registered_suite",
+    "checker": "jail2_door",
+    "fixture": "jail2"
+  },
+  "registry_verification": "8/8 через run_episode_regressions: четыре эпизода, два повтора при2x, parallelism2, строгие профильные проверки и provenance. Полная native матрица проверена 01.10.2026."
 }

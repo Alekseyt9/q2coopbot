@@ -3,7 +3,9 @@ param(
     [string[]]$Id = @(),
     [switch]$List,
     [int[]]$Timescales = @(1,2),
-    [int]$Port = 29200
+    [int]$Port = 29200,
+    [ValidateRange(1,8)][int]$Parallelism = 2,
+    [ValidateRange(1,100)][int]$Repetitions = 2
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'check_episode_setup.ps1')
@@ -33,12 +35,24 @@ $registry | ConvertTo-Json -Depth 40 | Set-Content (Join-Path $out 'registry.jso
 $exe = Join-Path $out 'q2coopbot.exe'
 Push-Location $repo
 try {
+    $results = @()
+    $registered = @($selected | Where-Object {$_.acceptance.runner -eq 'registered_suite'})
+    if ($registered.Count) {
+        & (Join-Path $PSScriptRoot 'run_registered_episode_suites.ps1') -Episodes $registered -Timescales $Timescales -Port $Port -Parallelism $Parallelism -Repetitions $Repetitions -OutputRoot $out | Out-Host
+        $results = @(Get-Content (Join-Path $out 'report.json') -Raw | ConvertFrom-Json)
+        $selected = @($selected | Where-Object {$_.acceptance.runner -ne 'registered_suite'})
+        if (!$selected.Count) {
+            $results | Format-Table id,timescale,repeat,accepted,reason
+            Write-Output "Saved $out/report.json"
+            if (@($results | Where-Object {!$_.accepted}).Count) {throw 'Episode regressions failed; inspect report.json'}
+            return
+        }
+    }
     & go build -o $exe ./cmd/q2coopbot
     if ($LASTEXITCODE) { throw 'Build failed' }
 	$reporter=Join-Path $out 'q2scenario-report.exe'
 	& go build -o $reporter ./cmd/q2scenario-report
 	if ($LASTEXITCODE) {throw 'Reporter build failed'}
-    $results = @()
     foreach ($episode in $selected) {
         foreach ($scale in $Timescales) {
             $trial = Join-Path $out ($episode.id + '-x' + $scale)

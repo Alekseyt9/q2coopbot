@@ -15,15 +15,16 @@
     "workspace/artifacts/live-player-passage-block-20260930-195731/last-world.json"
   ],
   "missing_setup": [],
-  "acceptance": {
-    "safe_supported_retreat": true,
-    "player_can_pass": true,
-    "follow_resumes": true,
-    "bounded_blocking_time": true
-  },
-  "verification_report": "workspace/artifacts/player-personal-space-r3/report.json",
+  "verification_report": "workspace/artifacts/episode-regressions-20261001-113502-341/report.json",
   "resolution": "Два native прогона при2x параллельно: исходная дистанция40, конечная104.09; игрок прошёл117.38 единиц через исходную позицию бота, health22 сохранено. Регрессия низкого здоровья: дробовик подтверждён, Shells20, конечная дистанция99.78. Живой бот пока не обновлён.",
   "remaining_validation": [
     "Повтор в человеческой сессии после запроса на обновление бота; другие узкие проходы и движущиеся платформы"
-  ]
+  ],
+  "acceptance": {
+    "definition": "scenario",
+    "runner": "registered_suite",
+    "checker": "personal_space",
+    "fixture": "pickup"
+  },
+  "registry_verification": "8/8 через run_episode_regressions: четыре эпизода, два повтора при2x, parallelism2, строгие профильные проверки и provenance. Полная native матрица проверена 01.10.2026."
 }

@@ -1,0 +1,17 @@
+{
+ "version":1,
+ "name":"bunk1-deployed-bridge-follow",
+ "map":"bunk1",
+ "map_entry":"start",
+ "start_frame":40,
+ "bot_release_frame":140,
+ "game_frames":800,
+ "actor_origin":[-471.75,486.375,14.125],
+ "bot_origin":[-878,-64,14.125],
+ "bot_release_origin":[-962.25,-64,20.125],
+ "bot_health":87,
+ "expect":{},
+ "steps":[{"id":"deploy-and-follow","action":"wait","frames":700}]
+}
+
+

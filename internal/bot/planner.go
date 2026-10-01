@@ -89,6 +89,7 @@ type Planner struct {
 	decision                  *StrategyDecision
 	tactic                    *TacticalDecision
 	elevator                  *elevatorRide
+	bridgeLink                *bridgeLink
 	probeTarget               *quake.Vec3
 	searchAttempt             *SearchAttempt
 	probeAttempted            bool
@@ -214,6 +215,7 @@ func (p *Planner) setMap(name, root string) {
 	p.routeIndex = 0
 	p.routeKnown = false
 	p.elevator = nil
+	p.bridgeLink = nil
 	p.respawnRegroup = nil
 	p.deathPoint = nil
 	p.probeTarget = nil
@@ -429,7 +431,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	}
 	if searching { /* the last known point is a search target, not a visible teammate */
 	} else if p.World.Goal == "recover_health" || standalonePickup { /* keep resource objective */
-	} else if quake.Horizontal(s.Self, goal) < followStandOff && math.Abs(s.Self[2]-goal[2]) < 40 && !p.bridgeNeedsApproach(goal) {
+	} else if quake.Horizontal(s.Self, goal) < followStandOff && math.Abs(s.Self[2]-goal[2]) < 40 && !p.bridgeNeedsApproach(goal) && !p.bridgeLinkNeedsExit() {
 		p.World.Goal = "cover_teammate"
 	} else {
 		p.World.Goal = "follow_teammate"
@@ -492,6 +494,10 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		return
 	}
 	teleported := p.observed && quake.Horizontal(s.Self, p.lastObserved) > 256
+	if teleported {
+		p.bridgeLink = nil
+		p.routeKnown = false
+	}
 	p.lastObserved = s.Self
 	p.observed = true
 	goalChanged := p.elevator == nil && (quake.Horizontal(goal, p.target) > 80 || math.Abs(goal[2]-p.target[2]) > 32)
@@ -499,7 +505,12 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		p.elevator = nil
 		p.routeKnown = false
 	}
-	if !p.routeKnown || goalChanged || p.elevator == nil && now.Sub(p.routeAt) > 4*time.Second || teleported {
+	if p.elevator != nil && s.Frame%10 == 0 && p.mayLeaveElevatorForBridge() {
+		if r, _, ok := p.deployedBridgeRoute(); ok && routeLength(s.Self, r, goal) < routeLength(s.Self, p.route[p.routeIndex:], goal) {
+			p.routeKnown = false
+		}
+	}
+	if !p.routeKnown || goalChanged && p.bridgeLink == nil || p.elevator == nil && p.bridgeLink == nil && now.Sub(p.routeAt) > 4*time.Second || teleported {
 		// A ride owns the board/exit pair of this route. A replacement route
 		// must not inherit its state or suppress subsequent route refreshes.
 		p.elevator = nil
@@ -531,6 +542,10 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			}
 		}
 		p.routeKnown = true
+		p.bridgeLink = nil
+		if r, task, ok := p.deployedBridgeRoute(); ok && (!p.routeOK || routeLength(s.Self, r, goal) < routeLength(s.Self, p.route, goal)) {
+			p.route, p.routeOK, p.bridgeLink = r, true, task
+		}
 	}
 	if p.routeOK {
 		for p.routeIndex < len(p.route) && p.route[p.routeIndex].Kind != 11 && quake.Horizontal(s.Self, p.route[p.routeIndex].Position) <= 10 {
@@ -739,6 +754,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		return exit
 	}
 	if bridge, active := p.bridgeCommand(cmd); active {
+		return bridge
+	}
+	if bridge, active := p.bridgeLinkCommand(cmd); active {
 		return bridge
 	}
 	if p.planWalkOff() {

@@ -21,10 +21,17 @@
     "F:/src/quake2/yquake2/src/game/player/client.c:1572"
   ],
   "resolution": "Разделены stufftext reconnect (новый signon на прежнем UDP-канале без disconnect) и svc_reconnect (полный reconnect при перезапуске сервера). Socket/qport/seq/connection сохраняются при обычном переходе, клиентские данные карты сбрасываются. Харнес поддерживает entry=gamemap для настоящего coop-перехода с сохранением pers.",
-  "verification_report": "workspace/artifacts/coop-map-inventory-r3/inventory-report.json",
+  "verification_report": "workspace/artifacts/episode-regressions-20261001-113502-341/report.json",
   "verification_scope": "2/2 native сессии2x параллельно: реальный подбор Super Shotgun и20 Shells на base2, gamemap base1, одно соединение, смерть, обычный policy-респавн,70/71 свежих наблюдений оружия до смерти и284/282 после респавна. Отдельная регрессия forced base1/base2/base3 —2/2. Текущая человеческая сессия не обновлялась.",
   "remaining_validation": [
     "Повтор в человеческой сессии после явного запроса на обновление бота",
     "Проверка естественных выходов карты и переходов внутри других игровых блоков"
-  ]
+  ],
+  "acceptance": {
+    "definition": "session",
+    "runner": "registered_suite",
+    "checker": "coop_inventory",
+    "fixture": "inventory"
+  },
+  "registry_verification": "8/8 через run_episode_regressions: четыре эпизода, два повтора при2x, parallelism2, строгие профильные проверки и provenance. Полная native матрица проверена 01.10.2026."
 }
