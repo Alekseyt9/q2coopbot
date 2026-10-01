@@ -15,12 +15,15 @@ import (
 	"time"
 
 	"q2coopbot/internal/harness"
+	"q2coopbot/internal/harness/checkpoint"
 	"q2coopbot/internal/quake"
 )
 
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
 	CheckpointControl                   string
+	CheckpointRestore                   string
+	CheckpointMode                      string
 	MemoryFile                          string
 	MemorySession                       string
 	TestWeaponSwitchFixture             string
@@ -103,6 +106,19 @@ func transitionMapArgument(destination, previous string) (string, error) {
 }
 
 func Run(ctx context.Context, cfg Config) error {
+	var restore *checkpoint.Capture
+	if cfg.CheckpointRestore != "" {
+		if !cfg.FramePaced || cfg.Host != "127.0.0.1" || cfg.CheckpointControl == "" || (cfg.CheckpointMode != "resume" && cfg.CheckpointMode != "fresh") || cfg.MemoryFile != "" || cfg.TestSession != "" || cfg.TestTeleport != "" || cfg.TestTeleportAfter != "" || cfg.TestSpawnSoldier != "" || cfg.TestInitialHealth != 0 || cfg.TestInvulnerable {
+			return fmt.Errorf("checkpoint restore requires explicit resume/fresh, loopback frame pacing and no placement/session/travel-memory overrides")
+		}
+		capture, err := checkpoint.ReadParticipant(cfg.CheckpointRestore, cfg.Name)
+		if err != nil {
+			return err
+		}
+		restore = &capture
+	} else if cfg.CheckpointMode != "" {
+		return fmt.Errorf("checkpoint_mode requires checkpoint_restore")
+	}
 	if cfg.CheckpointControl != "" && (!cfg.FramePaced || cfg.Host != "127.0.0.1") {
 		return fmt.Errorf("checkpoint control requires frame-paced IPv4 loopback harness")
 	}
@@ -130,14 +146,18 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	var scenario *harness.Runner
 	if cfg.TestScenario != "" {
-		if !cfg.FramePaced || !cfg.Idle || cfg.TestTeleport == "" || cfg.TestTeleportAfter != "" || cfg.TestWalkTarget != "" || cfg.TestLineCross || cfg.TestJumpAfterTeleportFrames != 0 || cfg.TestJumpAgainAfterTeleportFrames != 0 || cfg.TestHoldPosition || cfg.TestGapFrames != 0 || cfg.TestSpawnSoldier != "" {
+		if !cfg.FramePaced || !cfg.Idle || cfg.TestTeleport == "" && restore == nil || cfg.TestTeleportAfter != "" || cfg.TestWalkTarget != "" || cfg.TestLineCross || cfg.TestJumpAfterTeleportFrames != 0 || cfg.TestJumpAgainAfterTeleportFrames != 0 || cfg.TestHoldPosition || cfg.TestGapFrames != 0 || cfg.TestSpawnSoldier != "" {
 			return fmt.Errorf("test.scenario requires isolated frame-paced idle actor and initial placement")
 		}
 		definition, err := harness.Load(cfg.TestScenario)
 		if err != nil {
 			return fmt.Errorf("scenario: %w", err)
 		}
-		if definition.Map != cfg.TestTeleportMap {
+		mapName := cfg.TestTeleportMap
+		if restore != nil {
+			mapName = restore.Map
+		}
+		if definition.Map != mapName {
 			return fmt.Errorf("scenario map differs from actor placement")
 		}
 		scenario = harness.New(definition)
@@ -316,7 +336,7 @@ func Run(ctx context.Context, cfg Config) error {
 		testWalkRunIn:  cfg.TestWalkRunIn,
 		conn:           conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
 		decoder: quake.NewDecoder(), planner: &Planner{AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53, TestDisableProjectileLead: cfg.TestDisableProjectileLead, TestDisableHandGrenade: cfg.Idle || cfg.TestWeaponSwitchFixture == "hand_grenade_observe" || cfg.TestWeaponSwitchFixture == "hand_grenade_guard" || handGrenadeArmFixture(cfg.TestWeaponSwitchFixture)},
-		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name, checkpointControl: cfg.CheckpointControl,
+		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name, checkpointControl: cfg.CheckpointControl, checkpointRestore: restore, checkpointMode: cfg.CheckpointMode,
 		memoryFile: cfg.MemoryFile, memorySession: cfg.MemorySession,
 		idle: cfg.Idle, duration: cfg.Duration, framePaced: cfg.FramePaced, gameFrames: cfg.GameFrames,
 		exitOnReconnect: cfg.ExitOnReconnect, testChangeMap: cfg.TestChangeMap,

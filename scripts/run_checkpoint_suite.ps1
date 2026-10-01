@@ -1,7 +1,7 @@
 [CmdletBinding()]
-param([int]$Port=30300,[switch]$Barrier,[switch]$RestoreSlots)
+param([int]$Port=30300,[switch]$Barrier,[switch]$RestoreSlots,[switch]$Resume)
 $ErrorActionPreference='Stop'
-if($RestoreSlots){$Barrier=$true}
+if($Resume){$RestoreSlots=$true};if($RestoreSlots){$Barrier=$true}
 $repo=Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/harness_manifest.ps1"
 $fingerprint=Get-HarnessFingerprint (Get-HarnessSourceRecords $repo)
@@ -12,7 +12,7 @@ $client=Join-Path $out 'q2coopbot.exe';$tool=Join-Path $out 'q2checkpoint.exe'
 Push-Location $repo
 try{go build -o $client ./cmd/q2coopbot;if($LASTEXITCODE){throw 'Client build failed'};go build -o $tool ./cmd/q2checkpoint;if($LASTEXITCODE){throw 'Checkpoint build failed'}}finally{Pop-Location}
 $configs=@()
-foreach($i in 0..1){$path=Join-Path $out "trial-$i.json";@{runtime_root=$source;client_exe=$client;checkpoint_exe=$tool;output_root=(Join-Path $out "run-$i");port=($Port+$i);timescale=2;barrier=[bool]$Barrier;restore_slots=[bool]$RestoreSlots}|ConvertTo-Json|Set-Content $path -Encoding utf8;$configs+=$path}
+foreach($i in 0..1){$path=Join-Path $out "trial-$i.json";@{runtime_root=$source;client_exe=$client;checkpoint_exe=$tool;output_root=(Join-Path $out "run-$i");port=($Port+$i);timescale=2;barrier=[bool]$Barrier;restore_slots=[bool]$RestoreSlots;resume=[bool]$Resume;bot_mode=$(if($i -eq 0){'resume'}else{'fresh'})}|ConvertTo-Json|Set-Content $path -Encoding utf8;$configs+=$path}
 $trialScript=Join-Path $PSScriptRoot 'run_checkpoint_trial.ps1'
 $trialHost=(Get-Process -Id $PID).Path
 $results=@($configs|ForEach-Object -Parallel {
@@ -20,7 +20,7 @@ $results=@($configs|ForEach-Object -Parallel {
     # credential for its server, clients and checkpoint child process.
     $err='';try{& $using:trialHost -NoProfile -File $using:trialScript -Config $_|Out-Host;if($LASTEXITCODE){$err='Checkpoint trial process failed'}}catch{$err=$_.Exception.Message}
     $cfg=Get-Content $_ -Raw|ConvertFrom-Json;$report=Join-Path $cfg.output_root 'report.json'
-    if(Test-Path $report){Get-Content $report -Raw|ConvertFrom-Json}else{[pscustomobject]@{accepted=$false;reason=$err;port=$cfg.port}}
+    if(Test-Path $report){$r=Get-Content $report -Raw|ConvertFrom-Json;$expected=if($cfg.resume){'new_process_resume_and_fresh'}else{'new_process_native_slots_reverse_connect'};if($err -or $r.reason -ne 'accepted' -or ($cfg.restore_slots -and $r.proof -ne $expected)){$r.accepted=$false};$r}else{[pscustomobject]@{accepted=$false;reason=$err;port=$cfg.port}}
 } -ThrottleLimit 2)
 $valid=$fingerprint -eq (Get-HarnessFingerprint (Get-HarnessSourceRecords $repo))
 @{source_fingerprint=$fingerprint;provenance_valid=$valid;parallelism=2;timescale=2;results=$results}|ConvertTo-Json -Depth 35|Set-Content (Join-Path $out 'report.json') -Encoding utf8

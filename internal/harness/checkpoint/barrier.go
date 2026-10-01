@@ -3,10 +3,13 @@ package checkpoint
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"q2coopbot/internal/quake"
@@ -114,7 +117,7 @@ func collectBarrier(ctx context.Context, c Config, password string) ([]Capture, 
 		for _, path := range b.Controls {
 			var capture Capture
 			err := readJSON(path+".state.json", &capture)
-			if os.IsNotExist(err) {
+			if os.IsNotExist(err) || runtime.GOOS == "windows" && (errors.Is(err, syscall.Errno(32)) || errors.Is(err, syscall.Errno(33))) {
 				ready = false
 				break
 			}
@@ -232,4 +235,33 @@ func participantBindings(dir string, proof *BarrierProof) (map[int]string, error
 		bindings[capture.SelfEntity] = capture.Participant
 	}
 	return bindings, nil
+}
+
+// ReadParticipant verifies the complete sidecar set before exposing one payload.
+// Native loading and runtime identity are checked separately by the controller.
+func ReadParticipant(dir, name string) (Capture, error) {
+	var manifest Manifest
+	var capture Capture
+	if !identifier.MatchString(name) {
+		return capture, fmt.Errorf("invalid participant name")
+	}
+	if err := readJSON(filepath.Join(dir, "manifest.json"), &manifest); err != nil {
+		return capture, err
+	}
+	if manifest.Version != 1 || manifest.Barrier == nil {
+		return capture, fmt.Errorf("restore requires coordinated checkpoint")
+	}
+	if err := verifySavedCaptures(dir, manifest.Map, manifest.Barrier); err != nil {
+		return capture, err
+	}
+	if _, err := participantBindings(dir, manifest.Barrier); err != nil {
+		return capture, err
+	}
+	for _, record := range manifest.Barrier.Participants {
+		if record.Name == name+".json" {
+			err := readJSON(filepath.Join(dir, "sidecar", record.Name), &capture)
+			return capture, err
+		}
+	}
+	return capture, fmt.Errorf("checkpoint participant missing")
 }

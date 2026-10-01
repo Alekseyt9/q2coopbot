@@ -4,7 +4,7 @@ $ErrorActionPreference='Stop'
 $configPath=(Resolve-Path $Config).Path
 $base=Split-Path $configPath -Parent
 $cfg=Get-Content $configPath -Raw|ConvertFrom-Json
-foreach($key in $cfg.PSObject.Properties.Name){if($key -notin @('runtime_root','client_exe','checkpoint_exe','output_root','port','timescale','barrier','restore_slots')){throw "Unknown checkpoint trial field: $key"}}
+foreach($key in $cfg.PSObject.Properties.Name){if($key -notin @('runtime_root','client_exe','checkpoint_exe','output_root','port','timescale','barrier','restore_slots','resume','bot_mode','source_checkpoint')){throw "Unknown checkpoint trial field: $key"}}
 if($cfg.timescale -ne 2 -or $cfg.port -lt 1024 -or $cfg.port -gt 65534){throw 'Checkpoint trial requires 2x and a valid port'}
 if(Get-NetUDPEndpoint -LocalPort $cfg.port -ErrorAction SilentlyContinue){throw 'Checkpoint port occupied'}
 function Trial-Path([string]$Path){if([IO.Path]::IsPathRooted($Path)){return $Path};Join-Path $base $Path}
@@ -14,6 +14,17 @@ $tool=(Resolve-Path (Trial-Path $cfg.checkpoint_exe)).Path
 $out=Trial-Path $cfg.output_root
 if(Test-Path $out){throw 'Checkpoint trial requires fresh output'}
 $runtime=Join-Path $out 'runtime'
+$checkpointDir=Join-Path $out 'checkpoint'
+if($cfg.source_checkpoint){
+    if(!$cfg.barrier -or !$cfg.restore_slots -or !$cfg.resume){throw 'Shared checkpoint branch requires resume/slot binding'}
+    $sharedCheckpoint=(Resolve-Path (Trial-Path $cfg.source_checkpoint)).Path
+    # Package files must be private writable copies, never hard links.
+    foreach($entry in Get-ChildItem $sharedCheckpoint -Recurse){
+        if($entry.Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Checkpoint package cannot contain reparse points'}
+        $dest=Join-Path $checkpointDir ([IO.Path]::GetRelativePath($sharedCheckpoint,$entry.FullName))
+        if($entry.PSIsContainer){New-Item -ItemType Directory -Path $dest -Force|Out-Null}else{New-Item -ItemType Directory -Path (Split-Path $dest -Parent) -Force|Out-Null;Copy-Item -LiteralPath $entry.FullName -Destination $dest}
+    }
+}
 New-Item -ItemType Directory -Path (Join-Path $runtime 'baseq2/maps') -Force|Out-Null
 Get-ChildItem $source -File|Where-Object Extension -In '.exe','.dll'|Copy-Item -Destination $runtime
 Copy-Item (Join-Path $source 'baseq2/game.dll') (Join-Path $runtime 'baseq2/game.dll')
@@ -47,7 +58,7 @@ function Wait-Row([scriptblock]$Condition){
 }
 function Checkpoint-Operation([string]$Action){
     $path=Join-Path $out "$Action-config.json"
-    $operation=@{version=1;action=$Action;server="127.0.0.1:$($cfg.port)";instance=$instance;runtime_root=$runtime;checkpoint_dir=(Join-Path $out 'checkpoint');timeout_ms=10000}
+    $operation=@{version=1;action=$Action;server="127.0.0.1:$($cfg.port)";instance=$instance;runtime_root=$runtime;checkpoint_dir=$checkpointDir;timeout_ms=10000}
     if($cfg.restore_slots -and $Action -eq 'load'){$operation.bind_participants=$true}
     if($cfg.barrier -and $Action -eq 'save'){$anchor=Last-Row;$operation.barrier=@{id=$instance;map='base2';generation=$anchor.spawncount;frame=([int]$anchor.frame+60);controls=@((Join-Path $out 'bot-control.json'),(Join-Path $out 'actor-control.json'))}}
     $operation|ConvertTo-Json -Depth 8|Set-Content $path -Encoding utf8
@@ -61,11 +72,13 @@ $report=[ordered]@{accepted=$false;reason='not_run';timescale=2;port=$cfg.port}
 try{
     $env:Q2COOPBOT_TEST_RCON=[guid]::NewGuid().ToString('N')
     $args="-portable +set ip 127.0.0.1 +set noipx 1 +set dedicated 1 +set coop 1 +set deathmatch 0 +set cheats 1 +set maxclients 4 +set port $($cfg.port) +set timescale 2 +set rcon_password $env:Q2COOPBOT_TEST_RCON +set sv_harness_instance $instance +set sv_test_unlimited_loopback 1 +set sv_test_trace_client CheckpointBot +map base2`$base1"
+    if($cfg.source_checkpoint){$args=$args.Replace('+map base2$base1','+map base1')}
     $server=Start-Process (Join-Path $runtime 'q2ded.exe') -ArgumentList $args -WorkingDirectory $runtime -RedirectStandardOutput (Join-Path $out 'server.log') -RedirectStandardError (Join-Path $out 'server.err') -WindowStyle Hidden -PassThru
     $deadline=(Get-Date).AddSeconds(20)
     do{Start-Sleep -Milliseconds 100;$eps=@(Get-NetUDPEndpoint -OwningProcess $server.Id -ErrorAction SilentlyContinue);if($server.HasExited -or (Get-Date) -gt $deadline){throw 'Server startup failed'}}while(!($eps|Where-Object {$_.LocalAddress -eq '127.0.0.1' -and $_.LocalPort -eq $cfg.port}))
     if($eps|Where-Object LocalAddress -NotIn '127.0.0.1','::1'){throw 'Server not loopback-only'}
 
+    if(!$cfg.source_checkpoint){
     if($cfg.barrier){
         $actor=Start-Process $client -ArgumentList "--config `"$(Join-Path $out 'actor-config.json')`"" -RedirectStandardOutput (Join-Path $out 'actor.log') -RedirectStandardError (Join-Path $out 'actor.err') -WindowStyle Hidden -PassThru
         $spawnDeadline=(Get-Date).AddSeconds(8)
@@ -87,8 +100,9 @@ try{
     $before=Wait-Row {param($r) $r.map -eq 'base2' -and $r.health -eq 38 -and $r.on_ground -and $r.inventory_known -and $r.inventory_age_frames -le 1 -and ($r.inventory|Where-Object {$_.name -eq 'Super Shotgun' -and $_.count -eq 1}) -and ($r.inventory|Where-Object {$_.name -eq 'Shells' -and $_.count -eq 10})}
     $save=Checkpoint-Operation 'save'
     if($save.state -ne 'saved' -or $save.gameplay_verified){throw 'Invalid native save result'}
+    }
     if($cfg.barrier){
-        if(!$save.barrier_verified){throw 'Coordinated save barrier not verified'}
+        if(!$cfg.source_checkpoint -and !$save.barrier_verified){throw 'Coordinated save barrier not verified'}
         $manifest=Get-Content (Join-Path $out 'checkpoint/manifest.json') -Raw|ConvertFrom-Json
         if($manifest.barrier.participants.Count -ne 2){throw 'Two checkpoint sidecars missing'}
         $captures=@(Get-ChildItem (Join-Path $out 'checkpoint/sidecar') -Filter '*.json'|ForEach-Object {Get-Content $_.FullName -Raw|ConvertFrom-Json})
@@ -96,24 +110,38 @@ try{
         $actorCapture=@($captures|Where-Object participant -EQ 'CheckpointActor')
         if($actorCapture.Count -ne 1 -or $actorCapture[0].runner.step_id -ne 'checkpoint-wait' -or $actorCapture[0].runner.captured_frame -ne $manifest.barrier.frame){throw 'Runner capture missing'}
         $botCapture=@($captures|Where-Object participant -EQ 'CheckpointBot')[0]
-        $before=Wait-Row {param($r) $r.frame -gt $manifest.barrier.frame -and $r.health -eq 38}
-        for($axis=0;$axis -lt 3;$axis++){if([math]::Abs($before.self[$axis]-$botCapture.self[$axis]) -gt 0.125){throw 'World advanced inside save barrier'}}
+        if(!$cfg.source_checkpoint){
+            $before=Wait-Row {param($r) $r.frame -gt $manifest.barrier.frame -and $r.health -eq 38}
+            for($axis=0;$axis -lt 3;$axis++){if([math]::Abs($before.self[$axis]-$botCapture.self[$axis]) -gt 0.125){throw 'World advanced inside save barrier'}}
+        }
         $report.barrier=$manifest.barrier;$report.captured_participants=$captures
         $report.accepted=$true;$report.reason='accepted';$report.proof='coordinated_capture_save_and_release';$report.before=$before;$report.server_pid=$server.Id;$report.client_pid=$bot.Id
         if($cfg.restore_slots){
+            if(!$cfg.source_checkpoint){
             $originalPids=@($server.Id,$bot.Id,$actor.Id)
-            foreach($p in @($actor,$bot,$server)){Stop-Process -Id $p.Id;$p.WaitForExit()}
+            # Stop every writer before waiting: sibling processes can inherit
+            # redirected output handles and otherwise prevent EOF indefinitely.
+            foreach($p in @($actor,$bot,$server)){if(!$p.HasExited){Stop-Process -Id $p.Id}}
+            foreach($p in @($actor,$bot,$server)){if(!$p.WaitForExit(5000)){throw 'Original checkpoint process did not stop'}}
             $restartArgs=$args.Replace('+map base2$base1','+map base1')
             $server=Start-Process (Join-Path $runtime 'q2ded.exe') -ArgumentList $restartArgs -WorkingDirectory $runtime -RedirectStandardOutput (Join-Path $out 'restored-server.log') -RedirectStandardError (Join-Path $out 'restored-server.err') -WindowStyle Hidden -PassThru
             $deadline=(Get-Date).AddSeconds(20)
             do{Start-Sleep -Milliseconds 100;if($server.HasExited -or (Get-Date) -gt $deadline){throw 'Restored server startup failed'}}while(!(Get-NetUDPEndpoint -OwningProcess $server.Id -LocalPort $cfg.port -ErrorAction SilentlyContinue))
+            }else{$originalPids=@();$report.source_checkpoint=$sharedCheckpoint}
             $load=Checkpoint-Operation 'load'
             if($load.state -ne 'load_acknowledged'){throw 'Restored server load unconfirmed'}
             $trace=Join-Path $out 'restored-bot.jsonl'
             $botConfig.output.trace_jsonl=$trace;$botConfig.test=@{hold_position=$true}
+            if($cfg.resume){$botConfig.test.checkpoint_restore=Join-Path $out 'checkpoint';$botConfig.test.checkpoint_mode=$cfg.bot_mode;$botConfig.test.checkpoint_control=Join-Path $out 'restored-bot-control.json'}
             $botConfig|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'restored-bot-config.json') -Encoding utf8
             @{server=$botConfig.server;client=@{name='CheckpointActor';game_dir=(Join-Path $runtime 'baseq2')};run=@{duration='40s';frame_paced=$true};output=@{trace_jsonl=(Join-Path $out 'restored-actor.jsonl')};test=@{idle=$true}}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'restored-actor-config.json') -Encoding utf8
+            if($cfg.resume){
+                $actorConfig=Get-Content (Join-Path $out 'restored-actor-config.json') -Raw|ConvertFrom-Json -AsHashtable
+                $actorConfig.test=@{idle=$true;scenario=$scene;checkpoint_restore=(Join-Path $out 'checkpoint');checkpoint_mode='resume';checkpoint_control=(Join-Path $out 'restored-actor-control.json')}
+                $actorConfig|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'restored-actor-config.json') -Encoding utf8
+            }
             # Capture connected Actor first; restore connects Bot first deliberately.
+            $branchClock=[Diagnostics.Stopwatch]::StartNew()
             $bot=Start-Process $client -ArgumentList "--config `"$(Join-Path $out 'restored-bot-config.json')`"" -RedirectStandardOutput (Join-Path $out 'restored-bot.log') -RedirectStandardError (Join-Path $out 'restored-bot.err') -WindowStyle Hidden -PassThru
             $restoredBot=Wait-Row {param($r) $r.map -eq 'base2' -and $r.health -eq 38 -and $r.self_entity -eq $botCapture.self_entity -and $r.inventory_known -and ($r.inventory|Where-Object {$_.name -eq 'Super Shotgun' -and $_.count -eq 1})}
             $actor=Start-Process $client -ArgumentList "--config `"$(Join-Path $out 'restored-actor-config.json')`"" -RedirectStandardOutput (Join-Path $out 'restored-actor.log') -RedirectStandardError (Join-Path $out 'restored-actor.err') -WindowStyle Hidden -PassThru
@@ -127,6 +155,24 @@ try{
             foreach($pair in @(@($restoredBot,$botCapture),@($restoredActor,$actorCapture[0]))){for($axis=0;$axis -lt 3;$axis++){if([math]::Abs($pair[0].self[$axis]-$pair[1].self[$axis]) -gt 1){throw 'Participant received wrong native position'}}}
             foreach($path in @('restored-bot.err','restored-actor.err')){if((Get-Content (Join-Path $out $path) -Raw) -match 'client command: (teleport|give health)'){throw 'Native state replaced by test placement'}}
             $report.proof='new_process_native_slots_reverse_connect';$report.original_pids=$originalPids;$report.restored_pids=@($server.Id,$bot.Id,$actor.Id);$report.restored_bot=$restoredBot;$report.restored_actor=$restoredActor
+            if($cfg.resume){
+                $botReceipt=Get-Content (Join-Path $out 'restored-bot-control.json.restored.json') -Raw|ConvertFrom-Json
+                $actorReceipt=Get-Content (Join-Path $out 'restored-actor-control.json.restored.json') -Raw|ConvertFrom-Json
+                if($botReceipt.mode -ne $cfg.bot_mode -or $actorReceipt.mode -ne 'resume' -or $actorReceipt.runner_elapsed -ne $actorCapture[0].runner.elapsed_frames){throw 'Resume receipt mismatch'}
+                if($cfg.bot_mode -eq 'resume' -and $botReceipt.planner.goal -ne $botCapture.planner.goal){throw 'Saved planner goal not restored'}
+                $deadline=(Get-Date).AddSeconds(28)
+                do{
+                    foreach($line in Get-Content (Join-Path $out 'restored-actor.jsonl') -Tail 5){try{$completedActor=$line|ConvertFrom-Json}catch{}}
+                    if($completedActor.scenario.state -eq 'completed'){break}
+                    if($actor.HasExited){throw 'Resumed actor exited before completion'}
+                    Start-Sleep -Milliseconds 100
+                }while((Get-Date) -lt $deadline)
+                if($completedActor.scenario.state -ne 'completed'){throw 'Resumed scenario did not complete'}
+                $expectedEnd=[int]$actorReceipt.frame+500-[int]$actorReceipt.runner_elapsed
+                if($completedActor.scenario.end_frame -ne $expectedEnd){throw 'Remaining runner budget changed'}
+                foreach($path in @('restored-bot.err','restored-actor.err')){if((Get-Content (Join-Path $out $path) -Raw) -match 'client command: (teleport|give health)'){throw 'Resume replayed placement'}}
+                $report.proof='new_process_resume_and_fresh';$report.bot_mode=$cfg.bot_mode;$report.bot_receipt=$botReceipt;$report.actor_receipt=$actorReceipt;$report.completed_actor=$completedActor;$report.branch_wall_seconds=$branchClock.Elapsed.TotalSeconds
+            }
         }
     }
     if(!$cfg.barrier){
@@ -157,7 +203,8 @@ try{
     $report.accepted=$true;$report.reason='accepted';$report.before=$before;$report.changed=$changed;$report.after=$after;$report.same_map_reload=$again;$report.fresh_inventory_rows=$stable.Count;$report.position_error=[math]::Sqrt($distance);$report.server_pid=$server.Id;$report.client_pid=$bot.Id
     }
 }catch{$report.accepted=$false;$report.reason=$_.Exception.Message}finally{
-    foreach($p in @($actor,$bot,$server)){if($p -and !$p.HasExited){Stop-Process -Id $p.Id -ErrorAction SilentlyContinue;$p.WaitForExit()}}
+    foreach($p in @($actor,$bot,$server)){if($p -and !$p.HasExited){Stop-Process -Id $p.Id -ErrorAction SilentlyContinue}}
+    foreach($p in @($actor,$bot,$server)){if($p){$null=$p.WaitForExit(5000)}}
     $env:Q2COOPBOT_TEST_RCON=$oldRcon
     $report|ConvertTo-Json -Depth 30|Set-Content (Join-Path $out 'report.json') -Encoding utf8
 }

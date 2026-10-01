@@ -16,12 +16,17 @@ import (
 	"time"
 
 	"q2coopbot/internal/harness"
+	"q2coopbot/internal/harness/checkpoint"
 	"q2coopbot/internal/quake"
 )
 
 type Client struct {
 	checkpointControl                       string
 	checkpointCapturedID                    string
+	checkpointRestore                       *checkpoint.Capture
+	checkpointMode                          string
+	checkpointRestored                      bool
+	checkpointRestoreErr                    error
 	memoryFile                              string
 	memorySession                           string
 	travelMemory                            *travelMemory
@@ -333,6 +338,14 @@ func (c *Client) handle(packet []byte) {
 					c.planner.testSetupHold = true
 				}
 				s = c.maskTestHealth(s)
+				if c.checkpointRestore != nil && !c.checkpointRestored {
+					if c.checkpointRestoreErr = c.restoreCheckpointSnapshot(s); c.checkpointRestoreErr != nil {
+						return
+					}
+					if !c.checkpointRestored {
+						continue
+					}
+				}
 				if c.travelMemorySetupPending(s.Frame) {
 					c.decoder.ResetTeammateHistory()
 				}
@@ -440,6 +453,9 @@ func (c *Client) run(ctx context.Context) error {
 		if err := c.captureCheckpointRequest(); err != nil {
 			return err
 		}
+		if c.checkpointRestoreErr != nil {
+			return c.checkpointRestoreErr
+		}
 		now := time.Now()
 		if c.begun && c.strategist != nil {
 			if decision, ok := c.strategist.poll(c.planner.World); ok {
@@ -460,6 +476,10 @@ func (c *Client) run(ctx context.Context) error {
 			c.begun = true
 			_ = c.command(c.beginPending)
 			c.beginPending = ""
+		}
+		if c.begun && c.checkpointRestore != nil && !c.checkpointRestored {
+			_ = c.send(nil, false)
+			continue
 		}
 		if c.testChangeSent && c.mapChanges == 0 && now.Sub(c.testChangeAt) > 10*time.Second {
 			c.testChangeTimedOut = true

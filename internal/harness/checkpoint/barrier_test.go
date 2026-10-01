@@ -64,3 +64,49 @@ func TestBarrierCaptureAnchorsAndImmutableFiles(t *testing.T) {
 		t.Fatal("duplicate controls")
 	}
 }
+
+func TestParticipantBindingsRejectAmbiguousNativeState(t *testing.T) {
+	root := t.TempDir()
+	b := &Barrier{ID: "binding", Map: "base2", Frame: 100, Generation: 3}
+	c := Capture{CaptureRequest: CaptureRequest{Version: 1, ID: b.ID, Map: b.Map, Frame: b.Frame, Generation: b.Generation}, Participant: "Bot", SelfEntity: 2, Health: 38, Planner: json.RawMessage(`{"version":1,"map":"base2","captured_frame":100}`)}
+	proof, err := saveCaptures(root, b, []Capture{c})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings, err := participantBindings(root, proof)
+	if err != nil || bindings[2] != "Bot" {
+		t.Fatal(bindings, err)
+	}
+	if err := WriteCapture(filepath.Join(root, "manifest.json"), Manifest{Version: 1, Map: b.Map, Barrier: proof}); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := ReadParticipant(root, "Bot")
+	if err != nil || loaded.SelfEntity != 2 || loaded.Health != 38 || loaded.Participant != "Bot" {
+		t.Fatal("participant payload lost", loaded, err)
+	}
+	for _, slot := range []int{0, -1, 257} {
+		bad := c
+		bad.SelfEntity = slot
+		if err := WriteCapture(filepath.Join(root, "sidecar/Bot.json"), bad); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := participantBindings(root, proof); err == nil {
+			t.Fatal("invalid slot accepted", slot)
+		}
+	}
+	if _, err := participantBindings(root, nil); err == nil {
+		t.Fatal("native-only binding accepted")
+	}
+	if err := WriteCapture(filepath.Join(root, "sidecar/Bot.json"), c); err != nil {
+		t.Fatal(err)
+	}
+	duplicate := c
+	duplicate.Participant = "Actor"
+	if err := WriteCapture(filepath.Join(root, "sidecar/Actor.json"), duplicate); err != nil {
+		t.Fatal(err)
+	}
+	proof.Participants = append(proof.Participants, File{Name: "Actor.json"})
+	if _, err := participantBindings(root, proof); err == nil {
+		t.Fatal("two participants in one native slot accepted")
+	}
+}

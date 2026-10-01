@@ -39,6 +39,8 @@ type ConfigFile struct {
 	} `json:"output"`
 	Test struct {
 		CheckpointControl            string `json:"checkpoint_control"`
+		CheckpointRestore            string `json:"checkpoint_restore"`
+		CheckpointMode               string `json:"checkpoint_mode"`
 		DisableProjectileLead        bool   `json:"disable_projectile_lead"`
 		ProjectileComparison         bool   `json:"projectile_comparison"`
 		CombatBarrier                bool   `json:"combat_barrier"`
@@ -145,6 +147,7 @@ func LoadConfig(path string) (Config, error) {
 	}
 	cfg.WorldFile, cfg.TracePath, cfg.StopFile = resolve(file.Output.WorldJSON), resolve(file.Output.TraceJSONL), resolve(file.Output.StopFile)
 	cfg.CheckpointControl = resolve(file.Test.CheckpointControl)
+	cfg.CheckpointRestore, cfg.CheckpointMode = resolve(file.Test.CheckpointRestore), file.Test.CheckpointMode
 	cfg.FramePaced, cfg.GameFrames = file.Run.FramePaced, file.Run.GameFrames
 	cfg.TestScenarioResult = resolve(file.Test.ScenarioResult)
 	cfg.TestScenarioTailFrames = file.Test.ScenarioTailFrames
