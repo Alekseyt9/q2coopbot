@@ -11,6 +11,26 @@ type CampaignDecision struct {
 	Exit      *quake.MapExit `json:"exit,omitempty"`
 }
 
+// Before the exit, improve health using known useful kits. This is bounded
+// by the ordinary route/progress budget, not an obligation to reach full HP.
+func (p *Planner) preparingForExit(s quake.Snapshot) bool {
+	return p.Campaign && s.Teammate == nil && s.Health > 0 && s.Health < 75 &&
+		p.World.Campaign != nil && p.World.Campaign.Exit != nil &&
+		quake.Horizontal(s.Self, p.World.Campaign.Exit.Center) < 768
+}
+
+func (p *Planner) preparingSuppliesForExit(s quake.Snapshot) bool {
+	if !p.Campaign || s.Teammate != nil || s.Health < 45 || p.World.Campaign == nil || p.World.Campaign.Exit == nil || quake.Horizontal(s.Self, p.World.Campaign.Exit.Center) >= 768 {
+		return false
+	}
+	for _, enemy := range s.Enemies {
+		if enemy.ClearShot != nil && *enemy.ClearShot {
+			return false
+		}
+	}
+	return true
+}
+
 // Ambiguous destinations require next_map; do not guess a return transition.
 func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	d := &CampaignDecision{Objective: "complete_level", State: "exit_unknown"}

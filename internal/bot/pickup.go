@@ -161,11 +161,20 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 			continue
 		}
 		at := healthStand(item.Origin)
-		if s.Frame < p.pickupBanned[at] || quake.Distance(s.Self, at) > 256 {
+		memory := p.resources[item.ID]
+		fromMemory := memory != nil && memory.State == "unknown"
+		if fromMemory && !usefulRememberedPickup(s, item.Class) {
 			continue
 		}
-		cost, ok := p.resourceRoute(s.Self, at)
-		if !ok || (s.Health < 45 && cost > 256) || (returning && !returnPickupWithinBudget(s.Self, at, p.respawnRegroup.target, cost)) {
+		maxDistance, maxCost := 256.0, 512.0
+		if fromMemory && p.preparingSuppliesForExit(s) {
+			maxDistance, maxCost = 768, 1024
+		}
+		if s.Frame < p.pickupBanned[at] || quake.Distance(s.Self, at) > maxDistance {
+			continue
+		}
+		cost, ok := p.resourceWalkingRoute(s.Self, at)
+		if !ok || cost > maxCost || (s.Health < 45 && cost > 256) || (returning && !returnPickupWithinBudget(s.Self, at, p.respawnRegroup.target, cost)) {
 			continue
 		}
 		if p.yieldPickup(s, item.ID, item.Class, at) {

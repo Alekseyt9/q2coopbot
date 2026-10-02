@@ -21,6 +21,7 @@ import (
 )
 
 type Client struct {
+	planChat                                planChat
 	checkpointControl                       string
 	checkpointCapturedID                    string
 	checkpointRestore                       *checkpoint.Capture
@@ -699,6 +700,15 @@ func (c *Client) run(ctx context.Context) error {
 				c.planner.setTestButtonGoal()
 			}
 			cmd := c.planner.command(c.previous)
+			chatMessage := ""
+			if !c.idle && !safetyStop && !c.testHoldPosition && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
+				chatMessage = c.planChat.command(c.planner, now)
+				if chatMessage != "" {
+					if err := c.command(chatMessage); err != nil {
+						return err
+					}
+				}
+			}
 			if c.testCombatBarrier && !c.testCombatGo && c.testTeleportSent {
 				s := c.planner.World.Snapshot
 				weaponReady := !c.testProjectileComparison || projectileFixtureWeaponReady(c.testWeaponSwitchFixture, s.Weapon)
@@ -991,6 +1001,7 @@ func (c *Client) run(ctx context.Context) error {
 					Ducked             bool                    `json:"ducked"`
 					DeltaAngles        [3]int16                `json:"delta_angles"`
 					Goal               string                  `json:"goal"`
+					ChatMessage        string                  `json:"chat_message,omitempty"`
 					Campaign           *CampaignDecision       `json:"campaign,omitempty"`
 					GoalPoint          *quake.Vec3             `json:"goal_point,omitempty"`
 					Route              []quake.Waypoint        `json:"route,omitempty"`
@@ -1046,7 +1057,7 @@ func (c *Client) run(ctx context.Context) error {
 					Weapon: c.planner.World.Snapshot.Weapon, WeaponRequest: weaponRequest,
 					WeaponReason: c.weaponSwitch.reason,
 					Inventory:    c.planner.World.Snapshot.Inventory, InventoryKnown: c.planner.World.Snapshot.InventoryKnown, InventoryAgeFrames: c.planner.World.Snapshot.InventoryAgeFrames,
-					Goal: c.planner.World.Goal, SearchTarget: c.planner.World.SearchTarget,
+					Goal: c.planner.World.Goal, ChatMessage: chatMessage, SearchTarget: c.planner.World.SearchTarget,
 					Campaign: c.planner.World.Campaign,
 					Route:    c.planner.World.Route, Jump: c.planner.World.Jump, Gravity: c.planner.World.Snapshot.Gravity, GunFrame: c.planner.World.Snapshot.GunFrame, ViewAngles: c.planner.World.Snapshot.ViewAngles, Pickups: c.planner.World.Snapshot.Pickups,
 					Beams:            c.planner.World.Snapshot.Beams,

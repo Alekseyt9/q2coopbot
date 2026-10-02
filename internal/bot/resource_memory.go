@@ -18,7 +18,8 @@ type ResourceMemory struct {
 }
 
 func rememberedResource(item quake.Object) bool {
-	return item.Class == "item_health" || strings.HasPrefix(item.Class, "item_armor_")
+	_, pickup := pickupSpecs[item.Class]
+	return item.Class == "item_health" || pickup
 }
 
 func (p *Planner) observeResources(s quake.Snapshot) {
@@ -88,12 +89,17 @@ func (p *Planner) rememberedCandidates(s quake.Snapshot) []quake.Object {
 			continue
 		}
 		at := healthStand(r.Item.Origin)
-		campaignHealth := p.Campaign && s.Teammate == nil && r.Item.Class == "item_health" && s.Health < 45
+		campaignHealth := p.Campaign && s.Teammate == nil && r.Item.Class == "item_health" && (s.Health < 45 || p.preparingForExit(s))
+		campaignPickup := p.Campaign && s.Teammate == nil && r.Item.Class != "item_health" && usefulRememberedPickup(s, r.Item.Class)
+		preparePickup := campaignPickup && p.preparingSuppliesForExit(s)
 		maxDistance := 480.0
 		if campaignHealth {
 			maxDistance = 1536
 		}
-		if !s.OnGround || quake.Distance(s.Self, at) > maxDistance || !campaignHealth && (s.Teammate == nil || quake.Distance(*s.Teammate, at) > 384) {
+		if preparePickup {
+			maxDistance = 768
+		}
+		if !s.OnGround || quake.Distance(s.Self, at) > maxDistance || !campaignHealth && !campaignPickup && (s.Teammate == nil || quake.Distance(*s.Teammate, at) > 384) {
 			continue
 		}
 		cost, ok := p.resourceWalkingRoute(s.Self, at)
@@ -101,11 +107,27 @@ func (p *Planner) rememberedCandidates(s quake.Snapshot) []quake.Object {
 		if campaignHealth {
 			limit = 2048
 		}
+		if preparePickup {
+			limit = 1024
+		}
 		if ok && cost <= limit {
 			result = append(result, r.Item)
 		}
 	}
 	return result
+}
+
+// Remembered ammo is worth a return trip only below a modest reserve. Visible
+// pickups retain their existing policy; weapons require confirmed ownership.
+func usefulRememberedPickup(s quake.Snapshot, class string) bool {
+	if !usefulPickup(s, class) {
+		return false
+	}
+	if !strings.HasPrefix(class, "ammo_") {
+		return true
+	}
+	reserve := map[string]int{"ammo_shells": 10, "ammo_bullets": 40, "ammo_cells": 40, "ammo_rockets": 5, "ammo_slugs": 5, "ammo_grenades": 5}[class]
+	return reserve > 0 && pickupCount(s, pickupSpecs[class]) < reserve
 }
 
 func (p *Planner) markResourceVisit(at quake.Vec3) {

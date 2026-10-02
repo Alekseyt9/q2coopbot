@@ -445,7 +445,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		goal = *s.Teammate
 	}
 	p.hasGoal = true
-	if !searching && s.Health < 45 {
+	if !searching && (s.Health < 45 || p.preparingForExit(s)) {
 		if health, ok := p.healthGoal(s); ok {
 			goal = health
 			p.World.Goal = "recover_health"

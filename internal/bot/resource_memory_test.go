@@ -48,8 +48,68 @@ func TestResourceMemoryBoundAndEntityReuse(t *testing.T) {
 		t.Fatal("memory unbounded")
 	}
 	p.observeResources(quake.Snapshot{Frame: 11, Pickups: []quake.Object{{ID: 149, Class: "ammo_shells"}}})
-	if p.resources[149] != nil {
-		t.Fatal("reused entity retains old resource")
+	if p.resources[149] == nil || p.resources[149].Item.Class != "ammo_shells" || p.resources[149].LastSeen != 11 {
+		t.Fatal("reused entity retains old resource identity")
+	}
+}
+
+func TestRememberedWeaponAndAmmoReturn(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires base1 BSP/AAS")
+	}
+	g, err := quake.LoadMap(root, "base1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(filepath.Join(root, "maps/base1.aas"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, class := range []string{"weapon_shotgun", "ammo_shells"} {
+		s := quake.Snapshot{Map: "base1", Frame: 40, Health: 100, OnGround: true, InventoryKnown: true, Self: quake.Vec3{-300, -544, -79.875}}
+		if class == "ammo_shells" {
+			s.Inventory = []quake.InventoryItem{{Name: "Shotgun", Count: 1}, {Name: "Shells", Count: 2}}
+		}
+		p := &Planner{Campaign: true, Nav: n, World: World{Map: "base1", Geometry: &g, Goal: "reach_level_exit"}}
+		item := quake.Object{ID: 42, Class: class, Origin: quake.Vec3{-384, -544, -88.875}}
+		s.Pickups = []quake.Object{item}
+		p.observeResources(s)
+		s.Frame++
+		s.Pickups = nil
+		p.observeResources(s)
+		if _, ok := p.pickupGoal(s); !ok || !p.pickup.attempt.FromMemory {
+			t.Fatal("forgot useful supply", class, p.World.Pickup)
+		}
+		s.Frame++
+		s.Self = healthStand(item.Origin)
+		if class == "weapon_shotgun" {
+			s.Inventory = []quake.InventoryItem{{Name: "Shotgun", Count: 1}}
+		} else {
+			s.Inventory[1].Count = 12
+		}
+		if _, ok := p.pickupGoal(s); ok || p.World.Pickup.State != "confirmed" {
+			t.Fatal("inventory delta did not confirm memory pickup", p.World.Pickup)
+		}
+	}
+}
+
+func TestRememberedAmmoReserveAndOwnership(t *testing.T) {
+	s := quake.Snapshot{InventoryKnown: true, Inventory: []quake.InventoryItem{{Name: "Shells", Count: 2}}}
+	if usefulRememberedPickup(s, "ammo_shells") {
+		t.Fatal("ammo without its weapon")
+	}
+	s.Inventory = append(s.Inventory, quake.InventoryItem{Name: "Shotgun", Count: 1})
+	if !usefulRememberedPickup(s, "ammo_shells") {
+		t.Fatal("low reserve ignored")
+	}
+	s.Inventory[0].Count = 10
+	if usefulRememberedPickup(s, "ammo_shells") {
+		t.Fatal("unnecessary memory detour")
+	}
+	s.InventoryAgeFrames = 21
+	if usefulRememberedPickup(s, "weapon_machinegun") {
+		t.Fatal("stale ownership used")
 	}
 }
 

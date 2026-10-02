@@ -152,6 +152,7 @@ try{
     }
     $report.start=$levelRows[0]
     $report.metrics=@{initial_health=$levelRows[0].health;final_level_health=$levelRows[-1].health;minimum_health=($levelRows.health|Measure-Object -Minimum).Minimum;observed_health_loss=$loss;observed_health_gain=$gain;attack_frames=$attacks;unique_level_frames=$uniqueFrames;monsters_killed=0;kill_count_basis='monsters removed in navigation fixture';completion_frame=$last.frame}
+    $report.chat_commands=@($levelRows|Where-Object chat_message|Select-Object frame,goal,chat_message)
     if($Combat){
         if(!$attacks -or !@($levelRows|Where-Object enemies).Count){throw 'Combat proof absent'}
         $report.metrics.monsters_killed=$null;$report.metrics.kill_count_basis='not available from client observations'
@@ -169,6 +170,7 @@ try{
 }catch{$report.accepted=$false;$report.reason=$_.Exception.Message}finally{
     foreach($p in @($bot,$server)){if($p -and !$p.HasExited){Stop-Process -Id $p.Id -ErrorAction SilentlyContinue}}
     foreach($p in @($bot,$server)){if($p){$null=$p.WaitForExit(5000)}}
+    if($report.accepted){$report.server_chat=@(Get-Content (Join-Path $OutputRoot 'server.log')|Where-Object {$_ -like 'CampaignBot: *'})}
     if($Combat -and $report.accepted){
         try{
             . "$PSScriptRoot/read_damage_events.ps1"
