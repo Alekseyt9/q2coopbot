@@ -92,6 +92,12 @@ func (p *Planner) finishPickup(s quake.Snapshot, state string) {
 	p.pickupBanned[a.Target] = s.Frame + 150
 	p.pickup = nil
 	p.pickupNext = s.Frame + 10
+	if state == "unsafe_route" {
+		p.pickupBanned[a.Target] = s.Frame + 10
+		if r := p.resources[a.Entity]; r != nil && r.Item.Class == a.Class && healthStand(r.Item.Origin) == a.Target {
+			r.Attempted = false
+		}
+	}
 	p.routeKnown = false
 }
 func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
@@ -109,6 +115,10 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		}
 		if !allowed || (t.duringReturn && !returning) || !s.InventoryKnown || s.InventoryAgeFrames > 20 || s.Frame < t.attempt.Started {
 			p.finishPickup(s, "interrupted")
+			return quake.Vec3{}, false
+		}
+		if !p.resourceDetourAllowed(s, quake.Object{ID: t.attempt.Entity, Class: t.attempt.Class}, t.attempt.Target, t.attempt.FromMemory) {
+			p.finishPickup(s, "unsafe_route")
 			return quake.Vec3{}, false
 		}
 		visible := false
@@ -178,6 +188,9 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 			continue
 		}
 		if p.yieldPickup(s, item.ID, item.Class, at) {
+			continue
+		}
+		if !p.resourceDetourAllowed(s, item, at, fromMemory) {
 			continue
 		}
 		sp := pickupSpecs[item.Class]

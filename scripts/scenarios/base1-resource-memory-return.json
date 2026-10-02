@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "base1-resource-memory-return",
+  "map": "base1",
+  "next_map": "base2",
+  "origin": "236,1248,-231.875",
+  "item_origin": "220 1182 -240.875",
+  "walk_target": "401,1120,-231.875",
+  "walk_after_frames": 25,
+  "walk_frames": 80,
+  "cases": [
+    {"name": "weapon", "class": "weapon_shotgun", "inventory": "Shotgun", "initial_fixture": ""},
+    {"name": "ammo", "class": "ammo_shells", "inventory": "Shells", "initial_fixture": "blaster"}
+  ],
+  "scope": "Isolated native base1 fixture without monsters or other pickups. One initial placement, ordinary usercmd departure, then autonomous campaign planner. Ammo case starts with Shotgun and one shell. No fabricated visibility or resource memory. Require server PVS loss, memory return and inventory delta."
+}

@@ -131,6 +131,7 @@ type Client struct {
 	testWalkTarget                          quake.Vec3
 	testWalkRoute                           bool
 	testWalkRunIn                           bool
+	testWalkThenPlan                        bool
 	testWalkPath                            testWalkPath
 	testWalkAfterFrames                     int
 	testWalkFrames                          int
@@ -334,8 +335,8 @@ func (c *Client) handle(packet []byte) {
 			if c.firstMoveFrame < 0 || c.testGapFrames == 0 || relativeFrame < c.testGapStart || relativeFrame >= c.testGapStart+c.testGapFrames {
 				c.planner.testSetupHold = c.testSetupHoldFrames > 0 && s.Map == c.testTeleportMap &&
 					(!c.testTeleportSent || c.testScenarioAge(s.Frame) < c.testSetupHoldFrames)
-				if c.testWalkRunIn && !c.testCombatBarrier && s.Map == c.testTeleportMap &&
-					c.testScenarioAge(s.Frame) < c.testWalkAfterFrames+c.testWalkFrames {
+				if (c.testWalkRunIn || c.testWalkThenPlan) && !c.testCombatBarrier && s.Map == c.testTeleportMap &&
+					(!c.testTeleportSent || c.testScenarioAge(s.Frame) < c.testWalkAfterFrames+c.testWalkFrames) {
 					c.planner.testSetupHold = true
 				}
 				s = c.maskTestHealth(s)
@@ -732,8 +733,8 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			weaponRequest := ""
 			observeInventory := !c.idle || c.scenario != nil && c.scenario.Scenario.ActorInventory
-			if !safetyStop && observeInventory && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
-				if !c.idle && !pairSetup && !c.testProjectileComparison && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
+			if !safetyStop && observeInventory && (!c.planner.testSetupHold || c.testWalkThenPlan) && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
+				if !c.planner.testSetupHold && !c.idle && !pairSetup && !c.testProjectileComparison && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
 					if !c.planner.grenadeThrowPending(c.planner.World.Snapshot) && !c.planner.grenadeSelectionPending(c.planner.World.Snapshot) {
 						weaponRequest = c.planner.grenadeWeaponRequest(c.planner.World.Snapshot, cmd)
 						if weaponRequest == "" {
@@ -1011,6 +1012,7 @@ func (c *Client) run(ctx context.Context) error {
 					Defeated           []quake.Object          `json:"defeated,omitempty"`
 					Pickup             *PickupAttempt          `json:"pickup,omitempty"`
 					ResourceYield      *ResourceYield          `json:"resource_yield,omitempty"`
+					ResourceRisk       *ResourceRisk           `json:"resource_risk,omitempty"`
 					Resources          []ResourceMemory        `json:"resource_memory,omitempty"`
 					TestHealthMasked   bool                    `json:"test_health_masked,omitempty"`
 					Scenario           *harness.Status         `json:"scenario,omitempty"`
@@ -1069,6 +1071,7 @@ func (c *Client) run(ctx context.Context) error {
 					Obstacles:        c.planner.World.Snapshot.Obstacles,
 					Defeated:         c.planner.World.Snapshot.Defeated,
 					ResourceYield:    c.planner.World.ResourceYield,
+					ResourceRisk:     c.planner.World.ResourceRisk,
 					Resources:        c.planner.resourceMemory(),
 					TestHealthMasked: c.testHealthMasked(c.planner.World.Snapshot),
 					Scenario:         c.scenarioStatus(),

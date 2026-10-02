@@ -157,10 +157,21 @@ try{
         if(!$attacks -or !@($levelRows|Where-Object enemies).Count){throw 'Combat proof absent'}
         $report.metrics.monsters_killed=$null;$report.metrics.kill_count_basis='not available from client observations'
         $confirmed=@($levelRows|Where-Object {$_.pickup.state -eq 'confirmed'}|Group-Object {$_.pickup.entity.ToString()+':'+$_.pickup.end_frame}|ForEach-Object {$_.Group[0]})
-        if(!$confirmed.Count){throw 'Confirmed pickup proof absent'}
-        $resumed=@($levelRows|Where-Object {$_.goal -eq 'reach_level_exit' -and ($_.sent_command.forward -ne 0 -or $_.sent_command.side -ne 0) -and $_.frame -gt $confirmed[0].pickup.end_frame})
-        if(!$confirmed.Count -or !$resumed.Count){throw 'Confirmed pickup and resumed level objective proof absent'}
-        $report.pickup_confirmations=@($confirmed|ForEach-Object pickup);$report.resumed_after_pickup=$resumed[0]
+        $deferred=@($levelRows|Where-Object {$_.resource_risk.state -eq 'deferred' -and $_.resource_risk.reason -in 'current_exposure','route_exposure' -and ($_.enemies|Where-Object id -EQ $_.resource_risk.enemy)})
+        # A completed combat route need not spend an optional pickup. Require
+        # either inventory confirmation or observed threat-based deferral;
+        # isolated pickup fixtures still require actual inventory delta.
+        if($confirmed.Count){
+            $resumed=@($levelRows|Where-Object {$_.goal -eq 'reach_level_exit' -and ($_.sent_command.forward -ne 0 -or $_.sent_command.side -ne 0) -and $_.frame -gt $confirmed[0].pickup.end_frame})
+            if(!$resumed.Count){throw 'Resumed level objective after pickup proof absent'}
+            $report.resumed_after_pickup=$resumed[0];$report.resource_policy_evidence='confirmed_pickup'
+        }elseif($deferred.Count){
+            $resumed=@($levelRows|Where-Object {$_.goal -eq 'reach_level_exit' -and ($_.sent_command.forward -ne 0 -or $_.sent_command.side -ne 0) -and $_.frame -gt $deferred[0].frame})
+            if(!$resumed.Count){throw 'Resumed level objective after resource deferral proof absent'}
+            $report.resumed_after_resource_deferral=$resumed[0];$report.resource_policy_evidence='observed_threat_deferral'
+        }else{throw 'Neither confirmed pickup nor observed resource threat deferral'}
+        $report.pickup_confirmations=@($confirmed|ForEach-Object pickup)
+        $report.resource_deferrals=@($deferred|Group-Object {$_.resource_risk.entity.ToString()+':'+$_.resource_risk.reason}|ForEach-Object {$_.Group[0].resource_risk})
         $report.metrics.confirmed_pickups=$confirmed.Count
         $lastAttack=$levelRows|Where-Object {$_.sent_command.buttons -band 1}|Select-Object -Last 1
         $afterCombat=@($levelRows|Where-Object {$_.frame -gt $lastAttack.frame -and $_.goal -in 'reach_level_exit','approach_button','touch_button' -and ($_.sent_command.forward -ne 0 -or $_.sent_command.side -ne 0 -or $_.sent_command.up -gt 0)})

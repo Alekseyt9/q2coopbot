@@ -65,6 +65,7 @@ type ConfigFile struct {
 		WalkTarget                   string `json:"walk_target"`
 		WalkRoute                    bool   `json:"walk_route"`
 		WalkRunIn                    bool   `json:"walk_run_in"`
+		WalkThenPlan                 bool   `json:"walk_then_plan"`
 		WalkAfterFrames              int    `json:"walk_after_frames"`
 		WalkFrames                   int    `json:"walk_frames"`
 		RunInSpeed                   int    `json:"run_in_speed"`
@@ -194,6 +195,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestWalkTarget, cfg.TestWalkAfterFrames, cfg.TestWalkFrames = file.Test.WalkTarget, file.Test.WalkAfterFrames, file.Test.WalkFrames
 	cfg.TestRunInSpeed = file.Test.RunInSpeed
 	cfg.TestWalkRunIn = file.Test.WalkRunIn
+	cfg.TestWalkThenPlan = file.Test.WalkThenPlan
 	cfg.TestWalkRoute = file.Test.WalkRoute
 	cfg.TestTeleportAfter, cfg.TestTeleportAfterFrames = file.Test.TeleportAfter, file.Test.TeleportAfterFrames
 	cfg.TestTeleportReturn, cfg.TestTeleportReturnAfterFrames = file.Test.TeleportReturn, file.Test.TeleportReturnAfterFrames

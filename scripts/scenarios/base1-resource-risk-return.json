@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "name": "base1-resource-risk-return",
+  "map": "base1",
+  "next_map": "base2",
+  "origin": "236,1248,-231.875",
+  "item_origin": "220 1182 -240.875",
+  "walk_target": "401,1120,-231.875",
+  "walk_after_frames": 25,
+  "walk_frames": 80,
+  "cases": [
+    {"name": "weapon", "class": "weapon_shotgun", "initial_fixture": "", "expected": "pickup"},
+    {"name": "covered", "class": "weapon_shotgun", "initial_fixture": "", "monster_origin": "224 898 -231.875", "expected": "pickup"},
+    {"name": "exposed", "class": "weapon_shotgun", "initial_fixture": "", "monster_origin": "344 1042 -231.875", "expected": "current_exposure"},
+    {"name": "route", "class": "weapon_shotgun", "initial_fixture": "", "monster_origin": "296 898 -231.875", "expected": "route_exposure"}
+  ],
+  "scope": "Isolated native route exposure diagnostic. Monster AI frozen by existing server combat barrier, one bot, no release. Actual monster entities, server visibility, BSP and observed doors; no invented threat observation. Safe and covered routes must confirm inventory; current/path exposure must defer the remembered pickup. Not a moving-monster survival benchmark."
+}

@@ -28,6 +28,9 @@ func (c *Client) testWalkAge(frame int) int {
 
 // Test walking uses normal usercmd physics; only the initial placement teleports.
 func validateTestWalk(cfg Config) (quake.Vec3, error) {
+	if cfg.TestWalkThenPlan && (cfg.Idle || cfg.TestWalkRunIn || cfg.TestCombatBarrier || cfg.TestWalkTarget == "") {
+		return quake.Vec3{}, fmt.Errorf("test.walk_then_plan requires an active bot and an ordinary walking prelude")
+	}
 	if cfg.TestRunInSpeed < 0 || cfg.TestRunInSpeed > 300 || cfg.TestRunInSpeed > 0 && !cfg.TestWalkRunIn {
 		return quake.Vec3{}, fmt.Errorf("test.run_in_speed requires walk_run_in and a speed in 1..300")
 	}
@@ -45,7 +48,7 @@ func validateTestWalk(cfg Config) (quake.Vec3, error) {
 	if cfg.TestWalkTarget == "" && cfg.TestWalkAfterFrames == 0 && cfg.TestWalkFrames == 0 {
 		return quake.Vec3{}, nil
 	}
-	if !cfg.FramePaced || !cfg.Idle || cfg.TestTeleport == "" || cfg.TestWalkAfterFrames < 25 ||
+	if !cfg.FramePaced || (!cfg.Idle && !cfg.TestWalkThenPlan) || cfg.TestTeleport == "" || cfg.TestWalkAfterFrames < 25 ||
 		cfg.TestWalkFrames < 1 || cfg.TestWalkFrames > 1000 || cfg.TestTeleportAfter != "" || cfg.TestLineCross {
 		return quake.Vec3{}, fmt.Errorf("test.walk_target requires frame pacing, idle, initial teleport, delay >=25, 1..1000 frames and no other movement scenario")
 	}
@@ -101,11 +104,13 @@ func (p *testWalkPath) command(s quake.Snapshot, target quake.Vec3, geometry *qu
 		}
 		p.ready = true
 	}
-	for p.next < len(p.route) && quake.Horizontal(s.Self, p.route[p.next].Position) <= 24 {
+	// Reach corridor corners before turning; a broad arrival radius can leave
+	// the scripted walker facing a wall on the next segment.
+	for p.next < len(p.route) && quake.Horizontal(s.Self, p.route[p.next].Position) <= 1 {
 		p.next++
 	}
 	if p.next < len(p.route) {
-		cmd, reason := testWalkDiagnostic(s, p.route[p.next].Position, geometry, nav)
+		cmd, reason := testWalkDiagnosticTolerance(s, p.route[p.next].Position, geometry, nav, 1)
 		p.reason = reason
 		return cmd
 	}
@@ -120,6 +125,10 @@ func testWalkCommand(s quake.Snapshot, target quake.Vec3, geometry *quake.MapInf
 }
 
 func testWalkDiagnostic(s quake.Snapshot, target quake.Vec3, geometry *quake.MapInfo, nav *quake.Navigator) (quake.UserCmd, string) {
+	return testWalkDiagnosticTolerance(s, target, geometry, nav, 12)
+}
+
+func testWalkDiagnosticTolerance(s quake.Snapshot, target quake.Vec3, geometry *quake.MapInfo, nav *quake.Navigator, tolerance float64) (quake.UserCmd, string) {
 	cmd := quake.UserCmd{}
 	if s.Health <= 0 {
 		return cmd, "actor_dead"
@@ -132,7 +141,7 @@ func testWalkDiagnostic(s quake.Snapshot, target quake.Vec3, geometry *quake.Map
 	}
 	dx, dy := target[0]-s.Self[0], target[1]-s.Self[1]
 	distance := math.Hypot(dx, dy)
-	if distance <= 12 {
+	if distance <= tolerance {
 		return cmd, "within_horizontal_tolerance"
 	}
 	if reason := geometry.GroundMoveHazardStep(nav, s.Self, dx, dy, math.Min(30, distance)); reason != "" {

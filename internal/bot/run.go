@@ -49,6 +49,7 @@ type Config struct {
 	TestWalkTarget                      string
 	TestWalkRoute                       bool
 	TestWalkRunIn                       bool
+	TestWalkThenPlan                    bool
 	TestWalkAfterFrames, TestWalkFrames int
 	TestRunInSpeed                      int
 	Host, Name, GameDir, AASDir         string
@@ -333,10 +334,11 @@ func Run(ctx context.Context, cfg Config) error {
 		testInvulnerable:        cfg.TestInvulnerable,
 		testChangeEntry:         cfg.TestChangeEntry,
 		testWalkTarget:          walkTarget, testWalkAfterFrames: cfg.TestWalkAfterFrames, testWalkFrames: cfg.TestWalkFrames,
-		testRunInSpeed: cfg.TestRunInSpeed,
-		testWalkRoute:  cfg.TestWalkRoute,
-		testWalkRunIn:  cfg.TestWalkRunIn,
-		conn:           conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
+		testRunInSpeed:   cfg.TestRunInSpeed,
+		testWalkRoute:    cfg.TestWalkRoute,
+		testWalkRunIn:    cfg.TestWalkRunIn,
+		testWalkThenPlan: cfg.TestWalkThenPlan,
+		conn:             conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
 		decoder: quake.NewDecoder(), planner: &Planner{Campaign: cfg.Campaign, CampaignNextMap: cfg.CampaignNextMap, AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53, TestDisableProjectileLead: cfg.TestDisableProjectileLead, TestDisableHandGrenade: cfg.Idle || cfg.TestWeaponSwitchFixture == "hand_grenade_observe" || cfg.TestWeaponSwitchFixture == "hand_grenade_guard" || handGrenadeArmFixture(cfg.TestWeaponSwitchFixture)},
 		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name, checkpointControl: cfg.CheckpointControl, checkpointRestore: restore, checkpointMode: cfg.CheckpointMode,
 		memoryFile: cfg.MemoryFile, memorySession: cfg.MemorySession,

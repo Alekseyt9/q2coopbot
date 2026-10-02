@@ -16,6 +16,7 @@ type World struct {
 	Campaign          *CampaignDecision  `json:"campaign,omitempty"`
 	GrenadePrediction *GrenadePrediction `json:"grenade_prediction,omitempty"`
 	ResourceYield     *ResourceYield     `json:"resource_yield,omitempty"`
+	ResourceRisk      *ResourceRisk      `json:"resource_risk,omitempty"`
 	Pickup            *PickupAttempt     `json:"pickup,omitempty"`
 	SearchRoute       *SearchRouteCheck  `json:"search_route,omitempty"`
 	Map               string             `json:"map"`
@@ -302,6 +303,7 @@ func (p *Planner) setMap(name, root string) {
 func (p *Planner) update(s quake.Snapshot, root string) {
 	p.setMap(s.Map, root)
 	p.World.ResourceYield = nil
+	p.World.ResourceRisk = nil
 	p.observeResources(s)
 	if p.TestHideDoor53 && s.Map == "base2" {
 		visible := make([]quake.Mover, 0, len(s.Movers))

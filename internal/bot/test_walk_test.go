@@ -42,6 +42,24 @@ func TestCombatWalkWaitsForReleaseAndUsesReleaseClock(t *testing.T) {
 	}
 }
 
+func TestWalkingPreludeRequiresExplicitActiveRelease(t *testing.T) {
+	valid := Config{FramePaced: true, TestWalkThenPlan: true, TestTeleport: "352,1080,-231.875", TestWalkTarget: "480,977,-231.875", TestWalkRoute: true, TestWalkAfterFrames: 25, TestWalkFrames: 80}
+	if _, err := validateTestWalk(valid); err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []func(*Config){
+		func(c *Config) { c.Idle = true }, func(c *Config) { c.TestWalkRunIn = true },
+		func(c *Config) { c.TestCombatBarrier = true }, func(c *Config) { c.TestWalkTarget = "" },
+		func(c *Config) { c.TestWalkFrames = 0 }, func(c *Config) { c.TestTeleportAfter = "0,0,24" },
+	} {
+		cfg := valid
+		change(&cfg)
+		if _, err := validateTestWalk(cfg); err == nil {
+			t.Fatalf("accepted invalid prelude: %+v", cfg)
+		}
+	}
+}
+
 func TestCombatRunInRequiresBoundedExplicitFixture(t *testing.T) {
 	valid := Config{FramePaced: true, TestCombatBarrier: true, TestWalkRunIn: true, TestTeleport: "32,-224,24", TestWalkTarget: "160,-224,24", TestWalkFrames: 3}
 	if _, err := validateTestWalk(valid); err != nil {
