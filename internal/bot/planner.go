@@ -43,6 +43,7 @@ type World struct {
 	Updated           time.Time          `json:"updated"`
 }
 type Planner struct {
+	exitPreparation           *ExitPreparation
 	campaignMap               string
 	campaignDestination       string
 	Campaign                  bool
@@ -212,6 +213,7 @@ func (p *Planner) setMap(name, root string) {
 	p.button = nil
 	p.deathFrame = 0
 	p.healthActive = false
+	p.exitPreparation = nil
 	p.healthBanned = nil
 	p.resources = nil
 	p.pickup, p.pickupBanned, p.pickupNext = nil, nil, 0
@@ -490,6 +492,9 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	if item, ok := p.pickupGoal(s); ok {
 		goal = item
 		p.World.Goal = "collect_item"
+	}
+	if campaign && p.exitPreparation != nil && p.exitPreparation.State == "collecting" && p.World.Goal == "reach_level_exit" {
+		p.exitPreparation.State = "no_safe_resources"
 	}
 	if previousGoal != p.World.Goal {
 		// A stalled health/search task is not evidence that the new follow

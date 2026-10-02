@@ -23,9 +23,10 @@ type PlannerCheckpoint struct {
 }
 
 type CampaignCheckpoint struct {
-	Map         string `json:"map"`
-	Destination string `json:"destination"`
-	NextMap     string `json:"next_map"`
+	PreparationSpent *int   `json:"preparation_spent_frames,omitempty"`
+	Map              string `json:"map"`
+	Destination      string `json:"destination"`
+	NextMap          string `json:"next_map"`
 }
 
 type CheckpointResource struct {
@@ -48,6 +49,10 @@ func (p *Planner) CaptureCheckpoint() (PlannerCheckpoint, error) {
 	state := PlannerCheckpoint{Version: 1, Map: s.Map, CapturedFrame: s.Frame, Goal: p.World.Goal, DeathPoint: cloneCheckpointPoint(p.deathPoint)}
 	if p.Campaign {
 		state.Campaign = &CampaignCheckpoint{Map: p.campaignMap, Destination: p.campaignDestination, NextMap: p.CampaignNextMap}
+		if p.exitPreparation != nil {
+			spent := p.exitPreparation.SpentFrames
+			state.Campaign.PreparationSpent = &spent
+		}
 	}
 	if s.Frame <= 0 || s.Map == "" || s.Health <= 0 || !s.OnGround || len(s.Projectiles) > 0 || p.jump != nil || p.elevator != nil || p.grenadeThrowPending(s) || isHandGrenade(s.Weapon) && s.GunFrame >= 1 && s.GunFrame <= 15 {
 		return state, fmt.Errorf("planner checkpoint requires a living grounded idle motor state")
@@ -73,6 +78,9 @@ func (p *Planner) CaptureCheckpoint() (PlannerCheckpoint, error) {
 
 func (state PlannerCheckpoint) validate(mapName string) error {
 	if state.Campaign != nil {
+		if spent := state.Campaign.PreparationSpent; spent != nil && (*spent < 0 || *spent > exitPreparationFrames || state.Campaign.Map != state.Map) {
+			return fmt.Errorf("invalid campaign preparation budget")
+		}
 		for _, name := range []string{state.Campaign.Map, state.Campaign.Destination, state.Campaign.NextMap} {
 			if len(name) > 64 {
 				return fmt.Errorf("invalid campaign checkpoint")
@@ -141,6 +149,9 @@ func (p *Planner) RestoreCheckpoint(state PlannerCheckpoint, fresh quake.Snapsho
 	if state.Campaign != nil {
 		p.campaignMap = state.Campaign.Map
 		p.campaignDestination = state.Campaign.Destination
+		if spent := state.Campaign.PreparationSpent; spent != nil {
+			p.exitPreparation = &ExitPreparation{Map: fresh.Map, SpentFrames: *spent, lastFrame: fresh.Frame}
+		}
 	}
 	p.World.Snapshot = fresh
 	p.World.Goal = state.Goal

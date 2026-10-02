@@ -126,7 +126,7 @@ func usefulRememberedPickup(s quake.Snapshot, class string) bool {
 	if !strings.HasPrefix(class, "ammo_") {
 		return true
 	}
-	reserve := map[string]int{"ammo_shells": 10, "ammo_bullets": 40, "ammo_cells": 40, "ammo_rockets": 5, "ammo_slugs": 5, "ammo_grenades": 5}[class]
+	reserve := ammoReserves[pickupSpecs[class].name]
 	return reserve > 0 && pickupCount(s, pickupSpecs[class]) < reserve
 }
 

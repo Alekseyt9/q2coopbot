@@ -41,16 +41,20 @@ func (p *Planner) healthGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	if p.testSetupHold {
 		return quake.Vec3{}, false
 	}
+	if p.exitPreparationDone() && p.nearCampaignExit(s) && s.Health >= 45 {
+		p.healthActive = false
+		return quake.Vec3{}, false
+	}
 	if p.healthActive {
 		for _, item := range s.Pickups {
-			if item.Class == "item_health" && usefulHealth(s, item) && healthStand(item.Origin) == p.healthTarget && p.healthAllowed(item.Origin, s.Frame) {
+			if item.Class == "item_health" && usefulHealth(s, item) && healthStand(item.Origin) == p.healthTarget && p.healthAllowed(item.Origin, s.Frame) && p.exitHealthAllowed(s, item, false) {
 				return p.healthTarget, true
 			}
 		}
 	}
 	if p.healthActive {
 		for _, r := range p.resources {
-			if r.State == "unknown" && r.Item.Class == "item_health" && healthStand(r.Item.Origin) == p.healthTarget && usefulHealth(s, r.Item) && p.healthAllowed(r.Item.Origin, s.Frame) {
+			if r.State == "unknown" && r.Item.Class == "item_health" && healthStand(r.Item.Origin) == p.healthTarget && usefulHealth(s, r.Item) && p.healthAllowed(r.Item.Origin, s.Frame) && p.exitHealthAllowed(s, r.Item, true) {
 				r.Attempted = true
 				return p.healthTarget, true
 			}
@@ -68,7 +72,7 @@ func (p *Planner) healthGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		}
 	}
 	for _, item := range s.Pickups {
-		if item.Class == "item_health" && usefulHealth(s, item) && quake.Horizontal(s.Self, item.Origin) < 300 && p.healthAllowed(item.Origin, s.Frame) {
+		if item.Class == "item_health" && usefulHealth(s, item) && quake.Horizontal(s.Self, item.Origin) < 300 && p.healthAllowed(item.Origin, s.Frame) && p.exitHealthAllowed(s, item, false) {
 			// A nearby kit far above us may actually require a long detour.
 			// Keep existing stair/drop recovery; the walking-only pickup budget
 			// must not reject those established health routes.
@@ -81,7 +85,7 @@ func (p *Planner) healthGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		}
 	}
 	for _, item := range p.rememberedCandidates(s) {
-		if item.Class == "item_health" && usefulHealth(s, item) && p.healthAllowed(item.Origin, s.Frame) {
+		if item.Class == "item_health" && usefulHealth(s, item) && p.healthAllowed(item.Origin, s.Frame) && p.exitHealthAllowed(s, item, true) {
 			at := healthStand(item.Origin)
 			p.markResourceVisit(at)
 			return at, true
@@ -119,6 +123,12 @@ func (p *Planner) budgetHealthGoal(s quake.Snapshot, goal quake.Vec3) quake.Vec3
 	p.healthBanned[origin] = s.Frame + 150
 	p.healthActive = false
 	p.routeKnown = false
+	if p.Campaign && p.World.Campaign != nil && p.World.Campaign.Exit != nil {
+		if exit, ok := p.campaignGoal(s); ok {
+			p.World.Goal = "reach_level_exit"
+			return exit
+		}
+	}
 	p.World.Goal = "follow_teammate"
 	if s.Teammate != nil {
 		return *s.Teammate

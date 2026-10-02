@@ -6,21 +6,22 @@ import (
 )
 
 type CampaignDecision struct {
-	Objective string         `json:"objective"`
-	State     string         `json:"state"`
-	Exit      *quake.MapExit `json:"exit,omitempty"`
+	Objective   string           `json:"objective"`
+	State       string           `json:"state"`
+	Exit        *quake.MapExit   `json:"exit,omitempty"`
+	Preparation *ExitPreparation `json:"preparation,omitempty"`
 }
 
 // Before the exit, improve health using known useful kits. This is bounded
 // by the ordinary route/progress budget, not an obligation to reach full HP.
 func (p *Planner) preparingForExit(s quake.Snapshot) bool {
-	return p.Campaign && s.Teammate == nil && s.Health > 0 && s.Health < 75 &&
+	return !p.exitPreparationDone() && p.Campaign && s.Teammate == nil && s.Health > 0 && s.Health < 75 &&
 		p.World.Campaign != nil && p.World.Campaign.Exit != nil &&
 		quake.Horizontal(s.Self, p.World.Campaign.Exit.Center) < 768
 }
 
 func (p *Planner) preparingSuppliesForExit(s quake.Snapshot) bool {
-	if !p.Campaign || s.Teammate != nil || s.Health < 45 || p.World.Campaign == nil || p.World.Campaign.Exit == nil || quake.Horizontal(s.Self, p.World.Campaign.Exit.Center) >= 768 {
+	if p.exitPreparationDone() || !p.Campaign || s.Teammate != nil || s.Health < 45 || p.World.Campaign == nil || p.World.Campaign.Exit == nil || quake.Horizontal(s.Self, p.World.Campaign.Exit.Center) >= 768 {
 		return false
 	}
 	for _, enemy := range s.Enemies {
@@ -67,6 +68,7 @@ func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	d.State = "approach_exit"
 	p.campaignMap = s.Map
 	p.campaignDestination = destination
+	p.updateExitPreparation(s)
 	goal := selected.Center
 	if s.Self[2]+32 >= selected.Min[2] && s.Self[2]-24 <= selected.Max[2] {
 		goal[2] = s.Self[2]

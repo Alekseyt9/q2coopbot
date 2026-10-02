@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "name": "base1-campaign-prepare",
+  "map": "base1",
+  "next_map": "base2",
+  "origin": "-1488,1800,-23.875",
+  "initial_health": 60,
+  "items": [
+    {"class": "item_health", "origin": "-1500 1700 -32.875"},
+    {"class": "item_armor_jacket", "origin": "-1560 1760 -32.875"},
+    {"class": "ammo_shells", "origin": "-1450 1760 -32.875"}
+  ],
+  "scope": "Isolated native preparation near original base1 exit. One initial teleport/loadout (60HP, Shotgun, one Shell). Monsters and other pickups removed; original geometry, button, hatch and native transition retained. Available case must collect health, armor and ammo before transition; empty case must continue despite unmet reserves."
+}

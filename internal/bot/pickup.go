@@ -117,6 +117,13 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 			p.finishPickup(s, "interrupted")
 			return quake.Vec3{}, false
 		}
+		if p.exitPreparation != nil && p.nearCampaignExit(s) {
+			cost, routeOK := p.resourceWalkingRoute(s.Self, t.attempt.Target)
+			if !routeOK || !p.exitPickupAllowed(s, quake.Object{Class: t.attempt.Class}, t.attempt.Target, cost, t.attempt.FromMemory) {
+				p.finishPickup(s, "preparation_complete")
+				return quake.Vec3{}, false
+			}
+		}
 		if !p.resourceDetourAllowed(s, quake.Object{ID: t.attempt.Entity, Class: t.attempt.Class}, t.attempt.Target, t.attempt.FromMemory) {
 			p.finishPickup(s, "unsafe_route")
 			return quake.Vec3{}, false
@@ -187,6 +194,9 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		if !ok || cost > maxCost || (s.Health < 45 && cost > 256) || (returning && !returnPickupWithinBudget(s.Self, at, p.respawnRegroup.target, cost)) {
 			continue
 		}
+		if !p.exitPickupAllowed(s, item, at, cost, fromMemory) {
+			continue
+		}
 		if p.yieldPickup(s, item.ID, item.Class, at) {
 			continue
 		}
@@ -194,7 +204,7 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 			continue
 		}
 		sp := pickupSpecs[item.Class]
-		score := cost / float64(sp.rank)
+		score := cost / float64(p.exitPickupRank(item.Class, sp.rank))
 		if score >= best {
 			continue
 		}
