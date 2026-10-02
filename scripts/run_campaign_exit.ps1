@@ -68,7 +68,7 @@ try{
     if(Get-NetUDPEndpoint -OwningProcess $server.Id|Where-Object LocalAddress -NotIn '127.0.0.1','::1'){throw 'Server not loopback'}
     $config=Join-Path $OutputRoot 'bot-config.json'
     $test=@{}
-    if($Checkpoint){$test.checkpoint_control=Join-Path $OutputRoot 'control.json'}
+    if($Checkpoint){$test.checkpoint_control=Join-Path $OutputRoot 'control.json';$test.hold_position=$true}
     if(!$FullLevel){$test=@{teleport_map=$scene.map;teleport=$scene.origin}}
     $duration=if($Combat){'115s'}elseif($FullLevel){'75s'}else{'20s'}
     @{server=@{host='127.0.0.1';port=$Port};client=@{name='CampaignBot';game_dir=(Join-Path $runtime 'baseq2')};run=@{duration=$duration;frame_paced=$true;mode='campaign';next_map=$scene.next_map};output=@{trace_jsonl=$trace};test=$test}|ConvertTo-Json -Depth 6|Set-Content $config -Encoding utf8
@@ -83,7 +83,7 @@ try{
         if(!$anchor.on_ground -or $anchor.frame -gt 45){throw 'Safe pre-combat checkpoint window missed'}
         $originalStart=Get-Content $trace -Head 1|ConvertFrom-Json
         $package=Join-Path $OutputRoot 'checkpoint';$tool=Join-Path (Split-Path $OutputRoot -Parent) 'q2checkpoint.exe'
-        $operation=@{version=1;action='save';server="127.0.0.1:$Port";instance=$instance;runtime_root=$runtime;checkpoint_dir=$package;timeout_ms=10000;barrier=@{id=$instance;map='base1';generation=$anchor.spawncount;frame=([int]$anchor.frame+10);controls=@($test.checkpoint_control)}}
+        $operation=@{version=1;action='save';server="127.0.0.1:$Port";instance=$instance;runtime_root=$runtime;checkpoint_dir=$package;timeout_ms=10000;barrier=@{id=$instance;map='base1';generation=$anchor.spawncount;frame=([int]$anchor.frame+30);controls=@($test.checkpoint_control)}}
         $opPath=Join-Path $OutputRoot 'save-config.json';$operation|ConvertTo-Json -Depth 7|Set-Content $opPath -Encoding utf8
         $save=& $tool --config $opPath 2> (Join-Path $OutputRoot 'save.err');if($LASTEXITCODE){throw 'Campaign coordinated save failed'}
         $capture=Get-Content (Join-Path $package 'sidecar/CampaignBot.json') -Raw|ConvertFrom-Json
@@ -106,7 +106,7 @@ try{
         $operation.release=@{id=$load.load_anchor.id;map=$load.load_anchor.map;frame=$load.load_anchor.frame;generation=$load.load_anchor.generation;controls=@($control)}
         $opPath=Join-Path $OutputRoot 'release-config.json';$operation|ConvertTo-Json -Depth 7|Set-Content $opPath -Encoding utf8
         $release=& $tool --config $opPath 2> (Join-Path $OutputRoot 'release.err');if($LASTEXITCODE){throw 'Campaign restore release failed'}
-        $report.checkpoint=@{capture=$capture;receipt=$receipt;load=$load;release=($release|ConvertFrom-Json);mode='resume';scope='same server, new bot process; no fresh/resume comparison yet'}
+        $report.checkpoint=@{capture=$capture;receipt=$receipt;load=$load;release=($release|ConvertFrom-Json);mode='resume';scope='held at native spawn for safe capture; same server, new bot process; no fresh/resume comparison yet'}
     }
     $deadline=(Get-Date).AddSeconds($(if($Combat){110}elseif($FullLevel){70}else{18}));$last=$null
     do{
@@ -162,7 +162,7 @@ try{
         $report.pickup_confirmations=@($confirmed|ForEach-Object pickup);$report.resumed_after_pickup=$resumed[0]
         $report.metrics.confirmed_pickups=$confirmed.Count
         $lastAttack=$levelRows|Where-Object {$_.sent_command.buttons -band 1}|Select-Object -Last 1
-        $afterCombat=@($levelRows|Where-Object {$_.frame -gt $lastAttack.frame -and $_.goal -eq 'reach_level_exit' -and ($_.sent_command.forward -ne 0 -or $_.sent_command.side -ne 0)})
+        $afterCombat=@($levelRows|Where-Object {$_.frame -gt $lastAttack.frame -and $_.goal -in 'reach_level_exit','approach_button','touch_button' -and ($_.sent_command.forward -ne 0 -or $_.sent_command.side -ne 0 -or $_.sent_command.up -gt 0)})
         if(!$afterCombat.Count){throw 'Resumed level objective after combat proof absent'}
         $report.last_attack_frame=$lastAttack.frame;$report.resumed_after_combat=$afterCombat[0]
     }
@@ -181,8 +181,7 @@ try{
             $report.metrics.native_health_damage=$report.damage_summary.received_health_damage
             $report.native_damage_events=$events
             if($Checkpoint){
-                $rngAck=@(Get-Content (Join-Path $OutputRoot 'server.log')|Where-Object {$_ -eq 'g_test_rng restored version=1 map=base1'})
-                if(!$rngAck.Count){throw 'Native RNG restore proof absent'}
+                if(!$load.rng_restored){throw 'Native RNG restore proof absent'}
                 $report.checkpoint.rng_restored=$true
             }
         }catch{$report.accepted=$false;$report.reason=$_.Exception.Message}

@@ -114,6 +114,17 @@ func TestResourceMemoryBase1ReturnAndMissing(t *testing.T) {
 	if at, ok := p.healthGoal(s); !ok || at != healthStand(item.Origin) {
 		t.Fatal("needed kit not selected from memory")
 	}
+	p.Campaign = true
+	s.Teammate = nil
+	p.resources[42].Attempted = false
+	if at, ok := p.healthGoal(s); !ok || at != healthStand(item.Origin) {
+		t.Fatal("solo campaign cannot return to remembered health")
+	}
+	s.Health = 100
+	if _, ok := p.healthGoal(s); ok {
+		t.Fatal("campaign spends kit without need")
+	}
+	s.Health = 40
 	p.Nav = nil
 	p.resources[42].Attempted = false
 	if len(p.rememberedCandidates(s)) != 0 {

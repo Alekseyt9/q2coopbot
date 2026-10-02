@@ -45,6 +45,7 @@ type Manifest struct {
 	Files      []File        `json:"files"`
 }
 type Result struct {
+	RNGRestored     bool     `json:"rng_restored,omitempty"`
 	LoadAnchor      *Barrier `json:"load_anchor,omitempty"`
 	BarrierVerified bool     `json:"barrier_verified"`
 	Action          string   `json:"action"`
@@ -581,6 +582,7 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 		}
 	}
 	reply, err = request(ctx, c.Server, password, "load "+slot, timeout)
+	result.RNGRestored = strings.Contains(reply, "g_test_rng restored version=1 map="+manifest.Map+"\n")
 	if err != nil {
 		return result, err
 	}

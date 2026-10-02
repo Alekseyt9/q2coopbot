@@ -88,10 +88,20 @@ func (p *Planner) rememberedCandidates(s quake.Snapshot) []quake.Object {
 			continue
 		}
 		at := healthStand(r.Item.Origin)
-		if s.Teammate == nil || quake.Distance(*s.Teammate, at) > 384 || quake.Distance(s.Self, at) > 480 || !s.OnGround {
+		campaignHealth := p.Campaign && s.Teammate == nil && r.Item.Class == "item_health" && s.Health < 45
+		maxDistance := 480.0
+		if campaignHealth {
+			maxDistance = 1536
+		}
+		if !s.OnGround || quake.Distance(s.Self, at) > maxDistance || !campaignHealth && (s.Teammate == nil || quake.Distance(*s.Teammate, at) > 384) {
 			continue
 		}
-		if _, ok := p.resourceRoute(s.Self, at); ok {
+		cost, ok := p.resourceWalkingRoute(s.Self, at)
+		limit := 512.0
+		if campaignHealth {
+			limit = 2048
+		}
+		if ok && cost <= limit {
 			result = append(result, r.Item)
 		}
 	}
