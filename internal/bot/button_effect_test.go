@@ -1,9 +1,45 @@
 package bot
 
 import (
+	"os"
 	"q2coopbot/internal/quake"
 	"testing"
 )
+
+func TestBase3ShortTravelEffectRequiresClearCorridor(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires original base3 BSP")
+	}
+	g, err := quake.LoadMap(root, "base3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &Planner{World: World{Geometry: &g}}
+	from, to := quake.Vec3{-484, -360, -263.875}, quake.Vec3{-416, -320, -311.875}
+	for _, tc := range []struct {
+		name   string
+		offset quake.Vec3
+		want   bool
+	}{
+		{"closed", quake.Vec3{}, false},
+		{"partial", quake.Vec3{0, 4, 0}, false},
+		{"clear_below_old_limit", quake.Vec3{0, 56, 0}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			live := quake.Mover{Model: 21, Origin: tc.offset}
+			s := quake.Snapshot{Movers: []quake.Mover{live}}
+			if got := p.buttonDoorPassable(s, live, quake.Vec3{}, from, to); got != tc.want {
+				t.Fatalf("passable=%t, want %t", got, tc.want)
+			}
+		})
+	}
+	// Observing a raised platform is not proof the old descent is still open.
+	live := quake.Mover{Model: 20, Origin: quake.Vec3{0, 0, 50}}
+	if p.buttonDoorPassable(quake.Snapshot{Movers: []quake.Mover{live}}, live, quake.Vec3{}, from, to) {
+		t.Fatal("raised platform falsely cleared the descending corridor")
+	}
+}
 
 func TestPermanentButtonEffectObservationAndReset(t *testing.T) {
 	g := &quake.MapInfo{Entities: []quake.MapEntity{{Class: "func_button", Model: 34, Wait: -1}}}

@@ -6,6 +6,34 @@ import (
 	"testing"
 )
 
+func TestBase3WalkOffOntoObservedPlatform(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires original base3 BSP/AAS")
+	}
+	g, err := quake.LoadMap(root, "base3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base3.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := quake.Snapshot{Map: "base3", Frame: 68, Health: 100, OnGround: true, Gravity: 800, Self: quake.Vec3{-436, -350.25, -263.875}, Movers: []quake.Mover{{Model: 20}, {Model: 21, Origin: quake.Vec3{0, 68, 0}}}}
+	old := s
+	old.Frame--
+	p := &Planner{Campaign: true, Nav: n, goalPoint: quake.Vec3{-416, -320, -311.875}, doorPrevious: old, World: World{Geometry: &g, Snapshot: s, Goal: "reach_level_exit", Route: []quake.Waypoint{{Kind: 7, ToArea: 3483, Position: quake.Vec3{-399, -336, -264}}, {Kind: 7, ToArea: 3483, Position: quake.Vec3{-401, -336, -328}}}}}
+	if !p.planWalkOff() || p.jump.landing[0] != -416 || p.jump.landing[1] != -320 || p.jump.landing[2] < -312 || p.jump.landing[2] > -311 {
+		t.Fatalf("did not select actual footing inside the platform: %+v", p.jump)
+	}
+	// Missing consecutive observation cannot authorize lift footing.
+	p.jump = nil
+	p.doorPrevious.Frame -= 2
+	if p.planWalkOff() && p.jump.landing[0] == -416 && p.jump.landing[1] == -320 {
+		t.Fatal("unconfirmed stationary platform used as landing")
+	}
+}
+
 func TestBunk1WalkOff(t *testing.T) {
 	root, aas := os.Getenv("Q2_SEARCH_SCAN_ROOT"), os.Getenv("Q2_DROP_AAS")
 	if root == "" || aas == "" {

@@ -870,6 +870,10 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		p.World.Command.Skill = "route_corner_escape"
 	}
 	contactButton := p.button != nil && p.button.campaign && p.button.phase == "touch"
+	if !contactButton && s.OnGround && p.blockedDropApproach() && quake.Horizontal(s.Self, p.World.Route[0].Position) < 10 && p.planWalkOff() {
+		flight, _ := p.jumpCommand(cmd)
+		return flight
+	}
 	if !contactButton && quake.Horizontal(s.Self, target) < 10 && target[2]-s.Self[2] <= 2 {
 		if p.World.Command.LimitReason == "" {
 			p.World.Command.LimitReason = "at_waypoint"

@@ -90,7 +90,7 @@ func (p *Planner) campaignDependencyGoal(s quake.Snapshot) (quake.Vec3, bool, bo
 		return quake.Vec3{}, false, false
 	}
 	for _, mover := range s.Movers {
-		if mover.Model == d.DoorModel && quake.Distance(mover.Origin, d.initial) > 60 && p.campaignDependencyPassable(s, d, mover) {
+		if mover.Model == d.DoorModel && quake.Distance(mover.Origin, d.initial) > 1 && p.campaignDependencyPassable(s, d, mover) {
 			p.rememberCampaignDoor(mover)
 			p.campaignDependency = d.Parent
 			if d.Parent != nil {
@@ -135,6 +135,10 @@ func (p *Planner) campaignDependencyPassable(s quake.Snapshot, d *CampaignDepend
 	}
 	if g.MoverHullClear(mover, d.ProbeFrom, d.ProbeTo) {
 		return true
+	}
+	// A horizontal stair probe cannot validate a descending hatch corridor.
+	if math.Abs(d.ProbeTo[2]-d.ProbeFrom[2]) > 2 {
+		return false
 	}
 	dx, dy := d.ProbeTo[0]-d.ProbeFrom[0], d.ProbeTo[1]-d.ProbeFrom[1]
 	distance := math.Hypot(dx, dy)

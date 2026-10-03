@@ -17,6 +17,8 @@ type buttonTask struct {
 	doorModel      int
 	buttonModel    int
 	initial        quake.Vec3
+	probeFrom      quake.Vec3
+	probeTo        quake.Vec3
 	stand          quake.Vec3
 	touch          quake.Vec3
 	phase          string
@@ -146,7 +148,7 @@ func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
 	if math.IsInf(best, 1) {
 		return nil
 	}
-	return &buttonTask{action: action, buttonInitial: buttonOrigin, chain: p.World.Geometry.ButtonDoorChain(button.Model, model), campaign: campaign, doorModel: model, buttonModel: button.Model, initial: doorOrigin,
+	return &buttonTask{action: action, buttonInitial: buttonOrigin, chain: p.World.Geometry.ButtonDoorChain(button.Model, model), campaign: campaign, doorModel: model, buttonModel: button.Model, initial: doorOrigin, probeFrom: s.Self, probeTo: p.goalPoint,
 		stand: chosen[0], touch: chosen[1], phase: "approach", started: s.Frame, teammateEntity: s.TeammateEntity}
 }
 
@@ -225,7 +227,7 @@ func (p *Planner) applyButtonTask(s quake.Snapshot) {
 	}
 	doorObserved := false
 	for _, mover := range s.Movers {
-		if mover.Model == task.doorModel && quake.Distance(mover.Origin, task.initial) > 60 {
+		if mover.Model == task.doorModel && p.buttonDoorPassable(s, mover, task.initial, task.probeFrom, task.probeTo) {
 			p.button = nil
 			p.buttonCooldown = s.Frame + 30
 			return

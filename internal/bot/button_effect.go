@@ -18,6 +18,8 @@ type ButtonEffect struct {
 	CheckedFrame  int    `json:"checked_frame"`
 	buttonInitial quake.Vec3
 	doorInitial   quake.Vec3
+	probeFrom     quake.Vec3
+	probeTo       quake.Vec3
 }
 
 func (p *Planner) rememberButtonEffect(task *buttonTask, frame int) {
@@ -41,7 +43,7 @@ func (p *Planner) rememberButtonEffect(task *buttonTask, frame int) {
 	if p.buttonEffects == nil {
 		p.buttonEffects = map[buttonEffectKey]*ButtonEffect{}
 	}
-	p.buttonEffects[key] = &ButtonEffect{ButtonModel: task.buttonModel, DoorModel: task.doorModel, Action: task.action, State: "awaiting_door_effect", PressedFrame: frame, CheckedFrame: frame, buttonInitial: task.buttonInitial, doorInitial: task.initial}
+	p.buttonEffects[key] = &ButtonEffect{ButtonModel: task.buttonModel, DoorModel: task.doorModel, Action: task.action, State: "awaiting_door_effect", PressedFrame: frame, CheckedFrame: frame, buttonInitial: task.buttonInitial, doorInitial: task.initial, probeFrom: task.probeFrom, probeTo: task.probeTo}
 }
 
 func (p *Planner) updateButtonEffects(s quake.Snapshot) {
@@ -55,7 +57,7 @@ func (p *Planner) updateButtonEffects(s quake.Snapshot) {
 			}
 			if mover.Model == effect.DoorModel {
 				effect.CheckedFrame = s.Frame
-				if quake.Distance(mover.Origin, effect.doorInitial) > 60 {
+				if p.buttonDoorPassable(s, mover, effect.doorInitial, effect.probeFrom, effect.probeTo) {
 					if effect.State != "door_effect_observed" {
 						p.routeKnown = false
 					}
@@ -66,6 +68,16 @@ func (p *Planner) updateButtonEffects(s quake.Snapshot) {
 			}
 		}
 	}
+}
+
+// A short-travel hatch can clear the route before moving 60 units, whereas
+// a wide door can still obstruct it after moving that far. Require a real
+// observed displacement and recheck the original corridor against its hull.
+func (p *Planner) buttonDoorPassable(s quake.Snapshot, mover quake.Mover, initial, from, to quake.Vec3) bool {
+	if quake.Distance(mover.Origin, initial) <= 1 {
+		return false
+	}
+	return p.campaignDependencyPassable(s, &CampaignDependency{ProbeFrom: from, ProbeTo: to}, mover)
 }
 
 func (p *Planner) buttonEffectDecisions() []ButtonEffect {

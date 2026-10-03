@@ -1,10 +1,12 @@
 [CmdletBinding()]
-param([switch]$Worker,[switch]$Button,[switch]$Sequence,[switch]$Relay,[switch]$RelayBlocked,[switch]$Shoot,[switch]$OriginalShoot,[switch]$OriginalRelay,[int]$Seed=101,[int]$Port=31680,[string]$OutputRoot='',[string]$Client='')
+param([switch]$Worker,[switch]$Button,[switch]$Sequence,[switch]$Relay,[switch]$RelayBlocked,[switch]$Shoot,[switch]$OriginalShoot,[switch]$OriginalRelay,[switch]$OriginalHatch,[int]$Seed=101,[int]$Port=31680,[string]$OutputRoot='',[string]$Client='')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
 if($OriginalShoot -and ($Shoot -or $Sequence -or $Relay -or $RelayBlocked)){throw 'OriginalShoot requires an unmodified standalone map'}
 if($OriginalShoot){$Button=$true}
 if($OriginalRelay -and ($OriginalShoot -or $Shoot -or $Sequence -or $Relay -or $RelayBlocked)){throw 'OriginalRelay requires an unmodified standalone map'}
 if($OriginalRelay){$Button=$true}
+if($OriginalHatch -and ($OriginalShoot -or $OriginalRelay -or $Shoot -or $Sequence -or $Relay -or $RelayBlocked)){throw 'OriginalHatch requires an unmodified standalone map'}
+if($OriginalHatch){$Button=$true}
 if($Shoot){$Relay=$true}
 if($RelayBlocked -and !$Relay){throw 'RelayBlocked requires Relay'}
 if($Relay -and !$Sequence){$Button=$true}
@@ -26,6 +28,7 @@ if(!$Worker){
         if($using:Shoot){$args+='-Shoot'}
         if($using:OriginalShoot){$args+='-OriginalShoot'}
         if($using:OriginalRelay){$args+='-OriginalRelay'}
+        if($using:OriginalHatch){$args+='-OriginalHatch'}
         $child=Start-Process $using:exe -ArgumentList @($args|ForEach-Object {'"'+$_+'"'}) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $using:OutputRoot "worker-$_.log") -RedirectStandardError (Join-Path $using:OutputRoot "worker-$_.err")
         $child.WaitForExit();$r=Get-Content (Join-Path $out 'report.json') -Raw|ConvertFrom-Json;if($child.ExitCode){$r.accepted=$false};$r
     } -ThrottleLimit 2)
@@ -37,8 +40,8 @@ if(!$Worker){
 if(Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue){throw 'Port occupied'}
 if(Test-Path $OutputRoot){throw 'Fresh trial required'}
 New-Item -ItemType Directory $OutputRoot|Out-Null
-$map=if($OriginalRelay){'jail2'}elseif($OriginalShoot){'city3'}else{'base2'}
-$buttonModel=if($OriginalRelay){3}elseif($OriginalShoot){82}else{34};$doorModel=if($OriginalRelay){47}elseif($OriginalShoot){81}else{33}
+$map=if($OriginalHatch){'base3'}elseif($OriginalRelay){'jail2'}elseif($OriginalShoot){'city3'}else{'base2'}
+$buttonModel=if($OriginalHatch){45}elseif($OriginalRelay){3}elseif($OriginalShoot){82}else{34};$doorModel=if($OriginalHatch){21}elseif($OriginalRelay){47}elseif($OriginalShoot){81}else{33}
 $runtime=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map $map -RuntimeRoot (Join-Path $OutputRoot 'runtime')
 if($Relay){& "$PSScriptRoot/prepare_button_relay.ps1" -RuntimeRoot $runtime -Blocked:$RelayBlocked -Shoot:$Shoot}
 $server=$null;$bot=$null;$trace=Join-Path $OutputRoot 'bot.jsonl';$report=@{accepted=$false;seed=$Seed;reason='not_run'}
@@ -47,6 +50,7 @@ $goal=if($Button){'194,2024,-151.875'}else{'768,1792,24.125'}
 if($Sequence){$goal='768,1792,24.125;194,2024,-151.875'}
 if($OriginalShoot){$placement='-328,-72,-55.875';$goal='-328,0,-39.875'}
 if($OriginalRelay){$placement='-2776,300,24.125';$goal='-2880,288,24.125'}
+if($OriginalHatch){$placement='-484,-360,-263.875';$goal='-416,-320,-311.875;-416,-320,-263.875'}
 try{
     $env:Q2COOPBOT_TEST_RCON=[guid]::NewGuid().ToString('N')
     $args="-portable +set ip 127.0.0.1 +set noipx 1 +set dedicated 1 +set coop 1 +set deathmatch 0 +set cheats 1 +set maxclients 4 +set port $Port +set timescale 2 +set rcon_password $env:Q2COOPBOT_TEST_RCON +set sv_test_unlimited_loopback 1 +set g_test_seed $Seed +map $map"
@@ -87,6 +91,13 @@ try{
             if(!$exact.Count){throw 'Original exact BSP relay link absent'}
             $report.original_relay=$true;$report.exact_link_frames=$exact.Count
         }
+        if($OriginalHatch){
+            $secondCross=@($rows|Where-Object {$_.self[0] -gt -432 -and $_.self[0] -lt -400 -and $_.self[1] -gt -336 -and $_.self[1] -lt -304 -and $_.self[2] -lt -300})
+            $exact=@($rows|Where-Object {$_.campaign.button.button_model -eq 45 -and $_.campaign.button.door_model -eq 21 -and $_.campaign.button.chain.Count -eq 2 -and $_.campaign.button.chain[0].target -eq 't108' -and $_.campaign.button.chain[1].class -eq 'trigger_relay' -and $_.campaign.button.chain[1].target_name -eq 't108' -and $_.campaign.button.chain[1].target -eq 't133'})
+            $raised=@($rows|Where-Object {$_.campaign.test_goal_index -eq 1 -and $_.self[2] -gt -270 -and @($_.movers|Where-Object {$_.model -eq 20 -and $_.origin[2] -ge 47}).Count})
+            if(!$exact.Count -or !$raised.Count){throw 'Original hatch chain or native raised footing absent'}
+            $report.original_hatch=$true;$report.exact_link_frames=$exact.Count;$report.platform_arrival_frame=$raised[0].frame
+        }
         if($OriginalShoot){
             $exact=@($rows|Where-Object {$_.campaign.button.button_model -eq 82 -and $_.campaign.button.door_model -eq 81 -and $_.campaign.button.action -eq 'shoot' -and $_.campaign.button.chain.Count -eq 1 -and $_.campaign.button.chain[0].target -eq 't267'})
             if(!$exact.Count){throw 'Original exact BSP button link absent'}
@@ -108,7 +119,7 @@ try{
             if($Shoot -and $contact.Count -ne 1){throw 'Shoot retry after native button activation'}
             $report.effect_failure_frame=$failedEffect[0].frame;$report.retry_frames=$retries.Count
         }else{
-        if(!$approach.Count -or !$contact.Count -or !$pressed.Count -or !$opened.Count -or (!$OriginalShoot -and !$OriginalRelay -and $last.self[1] -lt 2012)){throw 'Original button selection/contact/observed opening/crossing absent'}
+        if(!$approach.Count -or !$contact.Count -or !$pressed.Count -or !$opened.Count -or (!$OriginalShoot -and !$OriginalRelay -and !$OriginalHatch -and $last.self[1] -lt 2012)){throw 'Original button selection/contact/observed opening/crossing absent'}
         if(!$secondCross.Count -or $pressed[0].frame -lt $contact[0].frame -or $opened[0].frame -lt $pressed[0].frame -or $secondCross[0].frame -lt $opened[0].frame){throw 'Native button/opening/crossing order invalid'}
         if(!$Shoot -and !$OriginalShoot -and ($rows|Where-Object {$_.arbitration.skill -like 'button_*' -and $_.sent_command.Buttons -ne 0})){throw 'Touch button fired weapon'}
         $report.approach_frames=$approach.Count;$report.touch_frames=$contact.Count;$report.first_press_frame=$pressed[0].frame

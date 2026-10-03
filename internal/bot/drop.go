@@ -106,7 +106,24 @@ func (p *Planner) planWalkOffRoute(r []quake.Waypoint) bool {
 	}
 	offsets := []quake.Vec3{{}, {24, 0, 0}, {-24, 0, 0}, {0, 24, 0}, {0, -24, 0}, {24, 24, 0}, {24, -24, 0}, {-24, 24, 0}, {-24, -24, 0}, {48, 0, 0}, {-48, 0, 0}, {0, 48, 0}, {0, -48, 0}}
 	if quake.Horizontal(end, p.goalPoint) <= 64 && math.Abs(end[2]-p.goalPoint[2]) <= 40 {
-		offsets = append(offsets, quake.Vec3{p.goalPoint[0] - end[0], p.goalPoint[1] - end[1], 0})
+		goalOffset := quake.Vec3{p.goalPoint[0] - end[0], p.goalPoint[1] - end[1], 0}
+		preferGoal := false
+		for _, mover := range s.Movers {
+			above := p.goalPoint
+			above[2] = s.Self[2]
+			if p.stationaryBridge(mover.Model, mover.Origin) {
+				if _, ok := g.MoverFooting(mover, above, 320); ok {
+					preferGoal = true
+				}
+			}
+		}
+		if preferGoal {
+			// AAS endpoints at a lift's rim can retain native ground contact
+			// with the upper ledge. Prefer the checked goal inside the brush.
+			offsets = append([]quake.Vec3{goalOffset}, offsets...)
+		} else {
+			offsets = append(offsets, goalOffset)
+		}
 	}
 	for _, offset := range offsets {
 		landing := end
@@ -130,8 +147,20 @@ func (p *Planner) planWalkOffRoute(r []quake.Waypoint) bool {
 			}
 			landing[2] = floorOrigin
 		}
+		// AAS records the static floor beneath a lift. Project onto an
+		// observed stationary brush when it supplies the actual landing.
+		for _, mover := range s.Movers {
+			if !p.stationaryBridge(mover.Model, mover.Origin) {
+				continue
+			}
+			above := landing
+			above[2] = s.Self[2]
+			if drop, ok := g.MoverFooting(mover, above, 320); ok {
+				landing[2] = math.Max(landing[2], above[2]-drop+.25)
+			}
+		}
 		damage := estimatedDropDamage(s.Self[2]-landing[2], s.SelfVelocity[2], s.Gravity)
-		if s.Self[2]-landing[2] > 320 || !affordableDrop(s.Health, damage) {
+		if s.Self[2]-landing[2] < 24 || s.Self[2]-landing[2] > 320 || !affordableDrop(s.Health, damage) {
 			continue
 		}
 		if s.Map == "base1" && r[1].ToArea == 1898 && len(r) > 2 {
@@ -154,7 +183,17 @@ func (p *Planner) planWalkOffRoute(r []quake.Waypoint) bool {
 			at[0] += corner[0]
 			at[1] += corner[1]
 			if _, ok := g.GroundDrop(at, floorTolerance); !ok {
-				safe = false
+				supported := false
+				for _, mover := range s.Movers {
+					if p.stationaryBridge(mover.Model, mover.Origin) {
+						if _, ok := g.MoverFooting(mover, at, floorTolerance); ok {
+							supported = true
+						}
+					}
+				}
+				if !supported {
+					safe = false
+				}
 			}
 		}
 		// Both the horizontal entry and the vertical column must fit the hull.
