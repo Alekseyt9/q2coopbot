@@ -93,3 +93,20 @@ func TestMoverEscapeRequiresFreeEndpointAndDoesNotEnterAnotherBrush(t *testing.T
 		t.Fatal("escape crossed another solid brush")
 	}
 }
+
+func TestBSPHazardVolumesUseNativeContentsAndPlayerHull(t *testing.T) {
+	planes, brush := testBoxBrush(Vec3{-40, -40, -32}, Vec3{40, 40, 0}, 0)
+	brush.contents = 8
+	g := &MapInfo{collision: &CollisionMap{planes: planes, brushes: []bspBrush{brush}, sides: []uint16{0, 1, 2, 3, 4, 5}, worldBrushes: []int{0}}}
+	if !g.PlayerTouchesHazard(Vec3{0, 0, 16}) || g.PlayerTouchesHazard(Vec3{0, 0, 25}) {
+		t.Fatal("lava hull contact not respected")
+	}
+	g.collision.brushes[0].contents = 16
+	if !g.PlayerTouchesHazard(Vec3{50, 0, 16}) {
+		t.Fatal("slime touched by hull edge not detected")
+	}
+	g.collision.brushes[0].contents = 32
+	if g.PlayerTouchesHazard(Vec3{0, 0, 16}) {
+		t.Fatal("ordinary water classified as lava/slime")
+	}
+}

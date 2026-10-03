@@ -113,7 +113,7 @@ func TestCampaignBase1ExitStairs(t *testing.T) {
 	}
 	p.World.Updated = time.Now()
 	cmd := p.command(quake.UserCmd{})
-	if cmd.Forward == 0 && cmd.Side == 0 || p.World.Command.MoveSource != "route_corner_bypass" {
+	if cmd.Forward == 0 && cmd.Side == 0 || (p.World.Command.MoveSource != "route_corner_bypass" && p.World.Command.MoveSource != "route_corner_detour") {
 		t.Fatal("blocked exit stairs", p.World.Command, p.World.Route[:2])
 	}
 }

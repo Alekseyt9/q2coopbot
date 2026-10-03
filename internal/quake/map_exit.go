@@ -31,7 +31,7 @@ func (m *MapInfo) Exits() []MapExit {
 		if destination == "" {
 			continue
 		}
-		bounds, ok := m.Model(e.Model)
+		bounds, ok := m.TouchBounds(e)
 		if !ok {
 			continue
 		}

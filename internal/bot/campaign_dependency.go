@@ -17,7 +17,7 @@ type CampaignDependency struct {
 
 // Discover goals only after an observed named door actually blocks movement.
 func (p *Planner) discoverCampaignDependency(s quake.Snapshot, dx, dy float64) {
-	if !p.Campaign || s.Teammate != nil || p.World.Goal != "reach_level_exit" || p.campaignDependency != nil || s.Frame < p.campaignDependencyRetry {
+	if !p.Campaign || s.Teammate != nil || p.World.Goal != "reach_level_exit" || p.campaignDependency != nil || p.campaignUnitTrip != nil || s.Frame < p.campaignDependencyRetry {
 		return
 	}
 	g := p.World.Geometry
@@ -39,7 +39,7 @@ func (p *Planner) discoverCampaignDependency(s quake.Snapshot, dx, dy float64) {
 	conditions := p.campaignUnitConditions(model)
 	best := math.Inf(1)
 	for _, activation := range g.TouchActivationsForDoor(model) {
-		bounds, _ := g.Model(activation.Trigger.Model)
+		bounds, _ := g.TouchBounds(activation.Trigger)
 		exit := quake.MapExit{Min: bounds.Min, Max: bounds.Max, Center: quake.Vec3{(bounds.Min[0] + bounds.Max[0]) / 2, (bounds.Min[1] + bounds.Max[1]) / 2, (bounds.Min[2] + bounds.Max[2]) / 2}}
 		at, ok := p.campaignExitContact(exit, s.Self)
 		if !ok {
@@ -91,6 +91,13 @@ func (p *Planner) campaignDependencyGoal(s quake.Snapshot) (quake.Vec3, bool, bo
 // validate all actual movement; this never makes a closed door passable.
 func (p *Planner) campaignDependencyNavigator(s quake.Snapshot) *quake.Navigator {
 	d := p.campaignDependency
+	if p.campaignUnitTrip != nil {
+		if s.Map == p.campaignUnitTrip.OriginMap {
+			d = p.campaignUnitTrip.Dependency
+		} else {
+			return p.Nav
+		}
+	}
 	if d == nil {
 		d = p.campaignExitBlock
 	}
@@ -142,7 +149,7 @@ func (p *Planner) campaignUnitConditions(model int) []quake.UnitCondition {
 	maps := []*quake.MapInfo{p.World.Geometry}
 	seen := map[string]bool{p.World.Map: true}
 	if p.campaignAssetRoot != "" {
-		for _, name := range p.CampaignRoute {
+		for _, name := range append(append([]string(nil), p.CampaignRoute...), p.CampaignUnitMaps...) {
 			if seen[name] {
 				continue
 			}
@@ -161,6 +168,7 @@ func (p *Planner) campaignUnitConditions(model int) []quake.UnitCondition {
 			}
 			for _, action := range info.UnitActions(conditions[i].RequiredFlags) {
 				action.TravelMaps = path
+				action.ReturnMaps = quake.UnitMapPaths(info.Name, maps)[p.World.Map]
 				conditions[i].Activations = append(conditions[i].Activations, action)
 			}
 		}

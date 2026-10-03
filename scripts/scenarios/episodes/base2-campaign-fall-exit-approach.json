@@ -3,24 +3,54 @@
   "title": "Solo base2: hull-блокировка перед нижним переходом в base3",
   "map": "base2",
   "kind": "dynamic_navigation",
-  "status": "open",
+  "status": "verified_full_parallel_2x",
   "reproduction": "observation_only",
   "scenario": "scripts/scenarios/base1-base2-campaign-chain.json",
   "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_exit.ps1 -Chain -Seed 101 -Port 31660",
-  "evidence": "workspace/artifacts/campaign-chain-20261003-133027-613/report.json",
+  "evidence": "workspace/artifacts/campaign-chain-20261003-142431-832/report.json",
   "observation": {
-    "seeds": [101, 102],
+    "seeds": [
+      101,
+      102
+    ],
     "timescale": 2,
-    "position": [-830.75, 167.5, -131.875],
+    "position": [
+      -830.75,
+      167.5,
+      -131.875
+    ],
     "health": 100,
-    "goal": [-884, 96, -407.875],
-    "next_waypoint": [-838, 169, -128],
+    "goal": [
+      -884,
+      96,
+      -407.875
+    ],
+    "next_waypoint": [
+      -838,
+      169,
+      -128
+    ],
     "reason": "static_hull_blocked",
-    "door47_angles": [0, 0, 270],
-    "door48_angles": [0, 0, 90]
+    "door47_angles": [
+      0,
+      0,
+      270
+    ],
+    "door48_angles": [
+      0,
+      0,
+      90
+    ]
   },
   "observed_failure": "Бот выбирает нижний base3$base2a после отказа от маршрута через door53, проходит до помещения нижнего выхода и стоит перед ближайшим walking reach. Прогресс одинаково остановился в обеих ветвях; native переход не подтверждён.",
   "expected_result": "Пройти подход с сохранением collision guards, выполнить проверенный walk-off через exit trigger38 и подтвердить native переход наbase3. Не принимать наличие AAS маршрута или pose створок за доказательство прохода.",
-  "missing_setup": ["Подключить специализированный -Chain runner к общему реестру E2E. Для воспроизведения уже доступен reproduction_command."],
-  "remaining_validation": ["Полный standing hull на ближайшем walking reach и у края створок", "Сопоставить стартовое перекрытие mover hull с native startsolid/allsolid", "Native base1→base2→base3 на2x,seeds101/102"]
+  "missing_setup": [
+    "Подключить специализированный -Chain runner к общему реестру E2E. Для воспроизведения уже доступен reproduction_command."
+  ],
+  "remaining_validation": [
+    "Боевая проверка с исходными монстрами",
+    "Автоматический уход на другую карту за cross-level условием и возврат"
+  ],
+  "failure_evidence": "workspace/artifacts/campaign-chain-20261003-133027-613/report.json",
+  "resolution": "Native base1→base2→base3 принята 2/2 на 2×, parallelism=2, seeds101/102, provenance_valid=true. Без монстров, телепортации, give и принудительной смены карты. Бот обходит пересечение с поднятой створкой, сохраняет точки локального обхода, проверяет опору полного корпуса и приземление по BSP, затем пересекает нижний воздушный exit38. Открытие door53 и удалённые кнопки этим прогоном не доказаны."
 }

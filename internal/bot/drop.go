@@ -104,13 +104,34 @@ func (p *Planner) planWalkOffRoute(r []quake.Waypoint) bool {
 	if dz := s.Self[2] - end[2]; dz < 24 || dz > 320 {
 		return false
 	}
-	for _, offset := range []quake.Vec3{{}, {24, 0, 0}, {-24, 0, 0}, {0, 24, 0}, {0, -24, 0}, {24, 24, 0}, {24, -24, 0}, {-24, 24, 0}, {-24, -24, 0}} {
+	offsets := []quake.Vec3{{}, {24, 0, 0}, {-24, 0, 0}, {0, 24, 0}, {0, -24, 0}, {24, 24, 0}, {24, -24, 0}, {-24, 24, 0}, {-24, -24, 0}, {48, 0, 0}, {-48, 0, 0}, {0, 48, 0}, {0, -48, 0}}
+	if quake.Horizontal(end, p.goalPoint) <= 64 && math.Abs(end[2]-p.goalPoint[2]) <= 40 {
+		offsets = append(offsets, quake.Vec3{p.goalPoint[0] - end[0], p.goalPoint[1] - end[1], 0})
+	}
+	for _, offset := range offsets {
 		landing := end
 		landing[0] += offset[0]
 		landing[1] += offset[1]
 		landing[2] += 0.125
+		// AAS walk-off endpoints can be above the real floor (notably the
+		// suspended base2 exit). Project to a nearby static landing instead
+		// of treating an airborne reach endpoint as standing support.
+		floorTolerance := 4.0
+		if drop, ok := g.GroundDrop(landing, 40); ok && drop > 4 {
+			floorTolerance = 18.5
+			floorOrigin := landing[2] - drop + .25
+			for _, corner := range []quake.Vec3{{12, 12, 0}, {12, -12, 0}, {-12, 12, 0}, {-12, -12, 0}} {
+				point := landing
+				point[0] += corner[0]
+				point[1] += corner[1]
+				if d, ok := g.GroundDrop(point, 40); ok {
+					floorOrigin = math.Max(floorOrigin, point[2]-d+.25)
+				}
+			}
+			landing[2] = floorOrigin
+		}
 		damage := estimatedDropDamage(s.Self[2]-landing[2], s.SelfVelocity[2], s.Gravity)
-		if !affordableDrop(s.Health, damage) {
+		if s.Self[2]-landing[2] > 320 || !affordableDrop(s.Health, damage) {
 			continue
 		}
 		if s.Map == "base1" && r[1].ToArea == 1898 && len(r) > 2 {
@@ -132,7 +153,7 @@ func (p *Planner) planWalkOffRoute(r []quake.Waypoint) bool {
 			at := landing
 			at[0] += corner[0]
 			at[1] += corner[1]
-			if _, ok := g.GroundDrop(at, 4); !ok {
+			if _, ok := g.GroundDrop(at, floorTolerance); !ok {
 				safe = false
 			}
 		}
@@ -159,7 +180,7 @@ func (p *Planner) planWalkOffRoute(r []quake.Waypoint) bool {
 			// Keep the probe just above the BSP/AAS floor rounding boundary.
 			at[2] -= drop - 0.5
 			area := p.Nav.AreaFor(at)
-			if !ok || area <= 0 || p.Nav.Areas[area].Contents&6 != 0 {
+			if !ok || g.PlayerTouchesHazard(at) || area > 0 && p.Nav.Areas[area].Contents&6 != 0 {
 				safe = false
 				break
 			}

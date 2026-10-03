@@ -25,12 +25,13 @@ type ConfigFile struct {
 		AASDir        string `json:"aas_dir"`
 	} `json:"client"`
 	Run struct {
-		CampaignRoute []string `json:"campaign_route"`
-		Mode          string   `json:"mode"`
-		NextMap       string   `json:"next_map"`
-		Duration      string   `json:"duration"`
-		FramePaced    bool     `json:"frame_paced"`
-		GameFrames    int      `json:"game_frames"`
+		CampaignRoute    []string `json:"campaign_route"`
+		CampaignUnitMaps []string `json:"campaign_unit_maps"`
+		Mode             string   `json:"mode"`
+		NextMap          string   `json:"next_map"`
+		Duration         string   `json:"duration"`
+		FramePaced       bool     `json:"frame_paced"`
+		GameFrames       int      `json:"game_frames"`
 	} `json:"run"`
 	Models struct {
 		System1 string `json:"system1"`
@@ -160,6 +161,19 @@ func LoadConfig(path string) (Config, error) {
 	cfg.Campaign = file.Run.Mode == "campaign"
 	cfg.CampaignNextMap = file.Run.NextMap
 	cfg.CampaignRoute = append([]string(nil), file.Run.CampaignRoute...)
+	cfg.CampaignUnitMaps = append([]string(nil), file.Run.CampaignUnitMaps...)
+	if len(cfg.CampaignUnitMaps) > 0 {
+		if !cfg.Campaign || len(cfg.CampaignRoute) == 0 || len(cfg.CampaignUnitMaps) > 64 {
+			return cfg, fmt.Errorf("run.campaign_unit_maps requires campaign_route and at most 64 maps")
+		}
+		seen := map[string]bool{}
+		for _, name := range cfg.CampaignUnitMaps {
+			if !regexp.MustCompile(`^[a-zA-Z0-9_]{1,64}$`).MatchString(name) || seen[name] {
+				return cfg, fmt.Errorf("invalid run.campaign_unit_maps")
+			}
+			seen[name] = true
+		}
+	}
 	if err := validateCampaignRoute(cfg.CampaignRoute); err != nil {
 		return cfg, err
 	}

@@ -2,22 +2,40 @@
   "id": "base2-campaign-remote-door-activation-route",
   "title": "Solo base2: недоступный активатор удалённо открываемой двери",
   "map": "base2",
-  "status": "open",
+  "status": "verified_full_parallel_2x",
   "reproduction": "observation_only",
   "scenario": "scripts/scenarios/base1-base2-campaign-chain.json",
   "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_exit.ps1 -Chain -Seed 101 -Port 31660",
-  "evidence": "workspace/artifacts/campaign-chain-20261003-133027-613/report.json",
+  "evidence": "workspace/artifacts/campaign-chain-20261003-142431-832/report.json",
   "pose_observation": {
     "model": 40,
-    "origin": [450, -958, -18],
-    "angles": [0, 0, 90],
-    "seeds": [101, 102],
+    "origin": [
+      450,
+      -958,
+      -18
+    ],
+    "angles": [
+      0,
+      0,
+      90
+    ],
+    "seeds": [
+      101,
+      102
+    ],
     "meaning": "Мост поднят поворотом вокруг продольной оси; неизменный pivot не означает горизонтальную опору. Ранее UDP-декодер пропускал углы entities. Углы теперь сохранены, опора/столкновения проверяются в текущей ориентации; общая достройка пути к активатору ещё не реализована."
   },
   "earlier_evidence": "workspace/artifacts/campaign-chain-20261003-121557-786/report.json",
   "symptom": "После полного base1 бот на base2 стоит [96,-213.25,8.125] перед дверью53. BSP-планировщик обнаруживает trigger_once20 → t67 → func_door_rotating49 → t6 → door53 и выбирает [244,-792,24.125], но AAS путь проходит через закрытую дверь. После исключения её reachability маршрут отсутствует: activation_route_unavailable. Обе ветви на2x,seeds101/102,100HP; base3 не достигнута.",
   "expected_result": "Найти доступный активатор и подтвердить открытие двери53 либо выбрать физически достижимый альтернативный выход в ту же следующую карту. Подтвердить настоящий переход наbase3; BSP target-цепочка не доказывает активацию. Межуровневые условия искать по native cross-level flags, не по совпадению targetname разных карт.",
-  "missing_setup": ["Привязка специализированного run_campaign_exit.ps1 -Chain к общему run_episode_regressions. Специализированный native сценарий уже воспроизводится командой reproduction_command."],
-  "partial_resolution": "Бот теперь выбирает альтернативный нижний выход base3$base2a через безопасный walk-off с пересечением воздушного триггера. Обе ветви дошли до [-830.75,167.5,-131.875],100HP, но остановились на новом hull-блокере; full chain0/2. Добавлен анализ cross-level условий, текущие game.serverflags остаются unknown. На base2 crosslevel t77 относится к flyers, а не к door53. Новый блокер записан отдельно в base2-campaign-fall-exit-approach.json.",
-  "remaining_validation": ["Диагностика достижимости активатора: обход, лестница, локальный переход или динамическая геометрия", "Фактическое открытие двери53 и возобновление exit goal", "Полный base1→base2→base3 без постановок", "Боевая версия с исходными монстрами"]
+  "missing_setup": [
+    "Привязка специализированного run_campaign_exit.ps1 -Chain к общему run_episode_regressions. Специализированный native сценарий уже воспроизводится командой reproduction_command."
+  ],
+  "partial_resolution": "Первоначальная блокировка door53 обойдена через альтернативный нижний exit38; полный native переход на base3 подтверждён. Планирование доступа к самому активатору door53 остаётся отдельной задачей.",
+  "remaining_validation": [
+    "Боевая проверка с исходными монстрами",
+    "Автоматический уход на другую карту за cross-level условием и возврат"
+  ],
+  "failure_evidence": "workspace/artifacts/campaign-chain-20261003-133027-613/report.json",
+  "resolution": "Native base1→base2→base3 принята 2/2 на 2×, parallelism=2, seeds101/102, provenance_valid=true. Без монстров, телепортации, give и принудительной смены карты. Бот обходит пересечение с поднятой створкой, сохраняет точки локального обхода, проверяет опору полного корпуса и приземление по BSP, затем пересекает нижний воздушный exit38. Открытие door53 и удалённые кнопки этим прогоном не доказаны."
 }

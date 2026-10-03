@@ -77,4 +77,41 @@ func TestBase2LowerExitCornerEscapesRaisedFlap(t *testing.T) {
 	if g.MoverHullClear(s.Movers[2], s.Self, end) || !g.MoverHullEscapeClear(s.Movers[2], s.Self, end) {
 		t.Fatal("step did not escape the observed raised flap", dx, dy)
 	}
+	if !p.planCornerDetour(s) || len(p.cornerDetour) < 2 {
+		t.Fatal("no bounded grounded path around raised flap")
+	}
+	at := s.Self
+	for _, waypoint := range p.cornerDetour {
+		if _, ok := p.cornerGroundStep(s, at, waypoint); !ok {
+			t.Fatal("detour contains an unsafe segment", at, waypoint)
+		}
+		at = waypoint
+	}
+	if !p.cornerWalkOffFrom(s, at) {
+		t.Fatal("detour did not end at a verified descent")
+	}
+	s.Health = 10
+	if p.cornerWalkOffFrom(s, at) {
+		t.Fatal("dangerous descent accepted at low health")
+	}
+	s.Health = 100
+	path := append([]quake.Vec3(nil), p.cornerDetour...)
+	observed := s
+	observed.Self = path[0]
+	observed.Self[2] += 4 // Native hull rests on the adjacent upper tread.
+	if _, ok := p.cornerDetourCommand(observed, quake.UserCmd{}); !ok || len(p.cornerDetour) >= len(path) {
+		t.Fatal("upper-tread observation did not advance the detour")
+	}
+	p.cornerDetour = path
+	if _, ok := p.cornerGroundStep(s, quake.Vec3{-803.75, 141.75, -131.875}, quake.Vec3{-811.75, 135.75, -127.875}); !ok {
+		t.Fatal("native stair edge support rejected")
+	}
+	// A pose change invalidates the pending step rather than executing a
+	// path computed for an old bridge orientation.
+	s.Movers[2].Origin = p.cornerDetour[0]
+	s.Movers[2].Angles = quake.Vec3{}
+	cmd, _ := p.cornerDetourCommand(s, quake.UserCmd{})
+	if cmd.Forward != 0 || cmd.Side != 0 || len(p.cornerDetour) != 0 {
+		t.Fatal("changed mover pose did not invalidate the detour")
+	}
 }

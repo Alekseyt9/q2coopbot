@@ -49,8 +49,10 @@ type Planner struct {
 	Campaign                  bool
 	CampaignNextMap           string
 	CampaignRoute             []string
+	CampaignUnitMaps          []string
 	campaignRouteIndex        int
 	campaignDependency        *CampaignDependency
+	campaignUnitTrip          *CampaignUnitTrip
 	campaignDependencyRetry   int
 	campaignAssetRoot         string
 	campaignExitOverride      int
@@ -128,6 +130,10 @@ type Planner struct {
 	cornerEscapeTarget        quake.Vec3
 	cornerEscapeStart         quake.Vec3
 	cornerEscapeUntil         int
+	cornerDetour              []quake.Vec3
+	cornerDetourGoal          quake.Vec3
+	cornerDetourUntil         int
+	cornerDetourRoute         []quake.Waypoint
 }
 
 // setTestGroundEdgeGoal bypasses route selection only for the live edge fixture.
@@ -231,6 +237,7 @@ func (p *Planner) setMap(name, root string) {
 	p.jump = nil
 	p.cornerHistory = nil
 	p.cornerEscapeUntil = 0
+	p.cornerDetour = nil
 	p.buttonCooldown = 0
 	p.failures = 0
 	p.decision = nil
@@ -568,6 +575,8 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 				// the search-policy check below still prevents its execution.
 				p.route, p.routeOK = p.Nav.Route(s.Self, goal)
 			}
+		} else if campaign && p.campaignUnitTrip != nil {
+			p.route, p.routeOK = p.campaignDependencyNavigator(s).Route(s.Self, goal)
 		} else if campaign && p.campaignDependency != nil {
 			p.route, p.routeOK = p.campaignDependencyRoute(s, goal)
 		} else if campaign && p.campaignExitOverride != 0 {
@@ -813,6 +822,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	if bridge, active := p.bridgeLinkCommand(cmd); active {
 		return bridge
 	}
+	if detour, ok := p.cornerDetourCommand(s, cmd); ok {
+		return detour
+	}
 	if p.planWalkOff() || p.planNearbyWalkOff() {
 		flight, _ := p.jumpCommand(quake.UserCmd{Yaw: cmd.Yaw})
 		return flight
@@ -975,6 +987,11 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		}
 		if hazard != "" {
 			if hazard == "static_hull_blocked" {
+				if p.planCornerDetour(s) {
+					if detour, ok := p.cornerDetourCommand(s, cmd); ok {
+						return detour
+					}
+				}
 				if sx, sy, ok := p.regroupCornerStep(s, target); ok {
 					p.routeKnown = false
 					p.World.Command.MoveSource = "route_corner_bypass"

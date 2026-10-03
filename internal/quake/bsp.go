@@ -50,6 +50,19 @@ func (m *MapInfo) Model(index int) (BSPModel, bool) {
 	return m.Models[index], true
 }
 
+// Touch triggers can translate an inline brush with an entity origin.
+func (m *MapInfo) TouchBounds(entity MapEntity) (BSPModel, bool) {
+	b, ok := m.Model(entity.Model)
+	if !ok {
+		return b, false
+	}
+	for axis := range b.Min {
+		b.Min[axis] += entity.Origin[axis]
+		b.Max[axis] += entity.Origin[axis]
+	}
+	return b, true
+}
+
 // ButtonForDoor finds a directly linked button and the action the Quake II
 // game code accepts for it. A remotely named button has no local touch hook.
 func (m *MapInfo) ButtonForDoor(doorModel int) (MapEntity, string, bool) {
@@ -384,6 +397,41 @@ func (m *CollisionMap) ClearShot(from, to Vec3) bool {
 
 func (m *CollisionMap) boxClear(from, to, mins, maxs Vec3) bool {
 	return m.boxClearLeaving(from, to, mins, maxs, false)
+}
+
+// PlayerTouchesHazard checks native BSP lava/slime volumes directly. AAS may
+// have no area below part of a fall corridor even when a static floor exists.
+func (m *MapInfo) PlayerTouchesHazard(at Vec3) bool {
+	if m == nil || !m.HasCollision() {
+		return true
+	}
+	c := m.collision
+	for _, index := range c.worldBrushes {
+		brush := c.brushes[index]
+		if brush.contents&(8|16) == 0 {
+			continue
+		}
+		outside := false
+		for side := brush.first; side < brush.first+brush.count; side++ {
+			plane := c.planes[c.sides[side]]
+			d := -plane.dist
+			for axis := 0; axis < 3; axis++ {
+				offset := Vec3{-16, -16, -24}[axis]
+				if plane.normal[axis] < 0 {
+					offset = Vec3{16, 16, 32}[axis]
+				}
+				d += (at[axis] + offset) * plane.normal[axis]
+			}
+			if d > 0 {
+				outside = true
+				break
+			}
+		}
+		if !outside {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *CollisionMap) boxClearLeaving(from, to, mins, maxs Vec3, allowLeaving bool) bool {

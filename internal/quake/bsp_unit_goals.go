@@ -19,6 +19,7 @@ type UnitAction struct {
 	Action     string     `json:"action"`
 	Activation Activation `json:"activation"`
 	TravelMaps []string   `json:"travel_maps,omitempty"`
+	ReturnMaps []string   `json:"return_maps,omitempty"`
 }
 
 // UnitMapPaths follows only known exits that preserve game.serverflags.

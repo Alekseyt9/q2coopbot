@@ -16,6 +16,7 @@ type CampaignDecision struct {
 	RouteIndex      int                 `json:"route_index,omitempty"`
 	CompletedLevels int                 `json:"completed_levels,omitempty"`
 	ExitApproach    string              `json:"exit_approach,omitempty"`
+	UnitTrip        *CampaignUnitTrip   `json:"unit_trip,omitempty"`
 }
 
 // A route explicitly resolves forward exits, including maps with return exits.
@@ -61,7 +62,21 @@ func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	d := &CampaignDecision{Objective: "complete_level", State: "exit_unknown"}
 	p.World.Campaign = d
 	next := p.CampaignNextMap
-	if len(p.CampaignRoute) > 0 {
+	if p.campaignUnitTrip == nil && p.campaignDependency != nil && p.campaignDependency.State == "unit_activation_required" {
+		p.startCampaignUnitTrip(s)
+	}
+	unitTravel := false
+	if p.campaignUnitTrip != nil {
+		goal, ok, handled, destination := p.campaignUnitGoal(s, d)
+		if handled {
+			return goal, ok
+		}
+		next = destination
+		unitTravel = destination != ""
+	}
+	if unitTravel {
+		d.RouteIndex, d.CompletedLevels = p.campaignRouteIndex, p.campaignRouteIndex
+	} else if len(p.CampaignRoute) > 0 {
 		index := p.campaignRouteIndex
 		if index < 0 || index >= len(p.CampaignRoute) {
 			d.State = "invalid_campaign_progress"
@@ -96,6 +111,9 @@ func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	for i := range exits {
 		x := &exits[i]
 		base := strings.SplitN(strings.TrimPrefix(x.Destination, "*"), "$", 2)[0]
+		if unitTravel && strings.HasPrefix(x.Destination, "*") {
+			continue
+		}
 		if next != "" && base != next {
 			continue
 		}
@@ -123,7 +141,15 @@ func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 			if strings.SplitN(strings.TrimPrefix(x.Destination, "*"), "$", 2)[0] != destination {
 				continue
 			}
+			if unitTravel && strings.HasPrefix(x.Destination, "*") {
+				continue
+			}
 			if at, ok := p.campaignExitContact(*x, s.Self); ok {
+				if unitTravel {
+					if _, reachable := p.campaignDependencyNavigator(s).Route(s.Self, at); !reachable {
+						continue
+					}
+				}
 				cost := quake.Distance(s.Self, at)
 				if cost < best {
 					best, selected = cost, x
@@ -134,11 +160,11 @@ func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		}
 	}
 	d.Exit = selected
-	if p.campaignDependency != nil && p.campaignDependency.State == "activation_route_unavailable" {
+	if !unitTravel && p.campaignDependency != nil && p.campaignDependency.State == "activation_route_unavailable" {
 		p.tryCampaignFallExit(s, destination)
 	}
 	var fallGoal *quake.Vec3
-	if p.campaignExitOverride != 0 {
+	if !unitTravel && p.campaignExitOverride != 0 {
 		for i := range exits {
 			if exits[i].Model == p.campaignExitOverride {
 				if at, ok := p.campaignFallContact(exits[i]); ok {
@@ -150,10 +176,14 @@ func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	}
 	d.Exit = selected
 	d.State = "approach_exit"
-	p.campaignMap = s.Map
-	p.campaignDestination = destination
-	if goal, ok, active := p.campaignDependencyGoal(s); active {
-		return goal, ok
+	if unitTravel {
+		d.State = p.campaignUnitTrip.State
+	} else {
+		p.campaignMap = s.Map
+		p.campaignDestination = destination
+		if goal, ok, active := p.campaignDependencyGoal(s); active {
+			return goal, ok
+		}
 	}
 	p.updateExitPreparation(s)
 	if fallGoal != nil {
