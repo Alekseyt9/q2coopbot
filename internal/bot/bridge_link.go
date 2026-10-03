@@ -8,6 +8,7 @@ import (
 type bridgeLink struct {
 	model               int
 	origin, entry, exit quake.Vec3
+	angles              quake.Vec3
 	crossing            bool
 }
 
@@ -25,16 +26,18 @@ func (p *Planner) stationaryBridge(model int, origin quake.Vec3) bool {
 		return false
 	}
 	found := false
+	var angles quake.Vec3
 	for _, m := range s.Movers {
 		if m.Model == model && m.Origin == origin {
 			found = true
+			angles = m.Angles
 		}
 	}
 	if !found {
 		return false
 	}
 	for _, m := range old.Movers {
-		if m.Model == model && m.Origin == origin {
+		if m.Model == model && m.Origin == origin && m.Angles == angles {
 			return true
 		}
 	}
@@ -94,7 +97,9 @@ func (p *Planner) deployedBridgeRoute() ([]quake.Waypoint, *bridgeLink, bool) {
 			continue
 		}
 		for _, m := range s.Movers {
-			if m.Model != e.Model || !p.stationaryBridge(m.Model, m.Origin) {
+			// Link endpoints below use untranslated model axes. Rotating
+			// geometry needs its own validated endpoint construction.
+			if m.Model != e.Model || m.Angles != (quake.Vec3{}) || !p.stationaryBridge(m.Model, m.Origin) {
 				continue
 			}
 			lo, hi := b.Min, b.Max
@@ -203,6 +208,14 @@ func (p *Planner) bridgeLinkCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 		p.World.Command.MoveLimitReason = "bridge_link_moved_or_hidden"
 		return cmd, true
 	}
+	for _, mover := range s.Movers {
+		if mover.Model == task.model && mover.Angles != task.angles {
+			p.bridgeLink = nil
+			p.routeKnown = false
+			p.World.Command.MoveLimitReason = "bridge_link_orientation_changed"
+			return cmd, true
+		}
+	}
 	if quake.Horizontal(s.Self, task.exit) <= 10 {
 		p.bridgeLink = nil
 		p.routeKnown = false
@@ -212,7 +225,7 @@ func (p *Planner) bridgeLinkCommand(cmd quake.UserCmd) (quake.UserCmd, bool) {
 		return cmd, false
 	}
 	task.crossing = true
-	live := quake.Mover{Model: task.model, Origin: task.origin}
+	live := quake.Mover{Model: task.model, Origin: task.origin, Angles: task.angles}
 	end := task.exit
 	if !s.OnGround || !p.bridgeLinkCorridor(s.Self, end, live) {
 		p.World.Command.MoveLimitReason = "bridge_link_unverified"

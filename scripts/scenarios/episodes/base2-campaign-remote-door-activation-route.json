@@ -1,0 +1,23 @@
+{
+  "id": "base2-campaign-remote-door-activation-route",
+  "title": "Solo base2: недоступный активатор удалённо открываемой двери",
+  "map": "base2",
+  "status": "open",
+  "reproduction": "ready",
+  "scenario": "scripts/scenarios/base1-base2-campaign-chain.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_exit.ps1 -Chain -Seed 101 -Port 31660",
+  "evidence": "workspace/artifacts/campaign-chain-20261003-130024-034/report.json",
+  "pose_observation": {
+    "model": 40,
+    "origin": [450, -958, -18],
+    "angles": [0, 0, 90],
+    "seeds": [101, 102],
+    "meaning": "Мост поднят поворотом вокруг продольной оси; неизменный pivot не означает горизонтальную опору. Ранее UDP-декодер пропускал углы entities. Углы теперь сохранены, опора/столкновения проверяются в текущей ориентации; общая достройка пути к активатору ещё не реализована."
+  },
+  "earlier_evidence": "workspace/artifacts/campaign-chain-20261003-121557-786/report.json",
+  "symptom": "После полного base1 бот на base2 стоит [96,-213.25,8.125] перед дверью53. BSP-планировщик обнаруживает trigger_once20 → t67 → func_door_rotating49 → t6 → door53 и выбирает [244,-792,24.125], но AAS путь проходит через закрытую дверь. После исключения её reachability маршрут отсутствует: activation_route_unavailable. Обе ветви на2x,seeds101/102,100HP; base3 не достигнута.",
+  "expected_result": "Найти физически доступный путь к активатору, активировать цепочку обычными usercmd, подтвердить изменение двери53, продолжить исходную цель и совершить настоящий переход наbase3. Не засчитывать связь target или координаты как фактическое открытие.",
+  "missing_setup": [],
+  "partial_resolution": "Реализованы ограниченный поиск BSP target-цепочки, выбор стоящей точки касания, промежуточная цель и запрет маршрута через наблюдаемую запертую дверь. Добавлено сохранение UDP angles, проверка повернутых brush models и отмена устаревших bridge links при изменении ориентации. Native full chain0/2: дверь53 не открыта, base3 не достигнута; короткое продолжение base1→base2 принято2/2.",
+  "remaining_validation": ["Диагностика достижимости активатора: обход, лестница, локальный переход или динамическая геометрия", "Фактическое открытие двери53 и возобновление exit goal", "Полный base1→base2→base3 без постановок", "Боевая версия с исходными монстрами"]
+}

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "name": "base1-base2-campaign-chain",
+  "map": "base1",
+  "next_map": "base2",
+  "campaign_route": ["base1", "base2", "base3"],
+  "scope": "Full native base1 and base2 navigation from normal spawn to base3; original geometry, pickups and movers; monsters removed; no teleport or forced map transition"
+}

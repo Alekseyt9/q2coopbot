@@ -69,6 +69,7 @@ type Entity struct {
 	RenderFX             int
 	Solid                uint16
 	Origin               Vec3
+	Angles               Vec3
 	OldOrigin            Vec3
 }
 type Frame struct {
@@ -247,7 +248,16 @@ func parseEntity(r *reader, number int, b uint32, old Entity) (Entity, error) {
 			out.Origin[i] = float64(x) / 8
 		}
 	}
-	for _, bit := range []uint32{0x400, 4, 8, 0x4000000, 0x20} {
+	for axis, bit := range []uint32{0x400, 4, 8} {
+		if b&bit != 0 {
+			v, err := r.byte()
+			if err != nil {
+				return out, err
+			}
+			out.Angles[axis] = float64(v) * 360 / 256
+		}
+	}
+	for _, bit := range []uint32{0x4000000, 0x20} {
 		if b&bit != 0 {
 			if e := r.skip(1); e != nil {
 				return out, e
@@ -721,6 +731,7 @@ type Mover struct {
 	ID     int  `json:"id"`
 	Model  int  `json:"model"`
 	Origin Vec3 `json:"origin"`
+	Angles Vec3 `json:"angles"`
 }
 type BeamObservation struct {
 	ID     int  `json:"id"`
@@ -834,7 +845,7 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 		}
 		if strings.HasPrefix(path, "*") {
 			if model, err := strconv.Atoi(strings.TrimPrefix(path, "*")); err == nil {
-				s.Movers = append(s.Movers, Mover{ID: entity.Number, Model: model, Origin: entity.Origin})
+				s.Movers = append(s.Movers, Mover{ID: entity.Number, Model: model, Origin: entity.Origin, Angles: entity.Angles})
 			}
 		}
 		if strings.Contains(path, "/monsters/") && Distance(entity.Origin, f.Origin) < 1024 {

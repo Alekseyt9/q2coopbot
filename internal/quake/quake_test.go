@@ -84,8 +84,8 @@ func TestSnapshotExposesGroundAndMover(t *testing.T) {
 	d := NewDecoder()
 	d.Config[30] = "4"
 	d.Config[39] = "*50"
-	s := d.Snapshot(Frame{Number: 3, PMFlags: 4, Entities: map[int]Entity{9: {Number: 9, Model: 7, Origin: Vec3{0, 0, -190}}}})
-	if !s.OnGround || len(s.Movers) != 1 || s.Movers[0].Model != 50 || s.Movers[0].Origin[2] != -190 {
+	s := d.Snapshot(Frame{Number: 3, PMFlags: 4, Entities: map[int]Entity{9: {Number: 9, Model: 7, Origin: Vec3{0, 0, -190}, Angles: Vec3{0, 90, 0}}}})
+	if !s.OnGround || len(s.Movers) != 1 || s.Movers[0].Model != 50 || s.Movers[0].Origin[2] != -190 || s.Movers[0].Angles != (Vec3{0, 90, 0}) {
 		t.Fatalf("mover snapshot: %+v", s)
 	}
 }

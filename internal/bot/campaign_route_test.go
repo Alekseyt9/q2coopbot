@@ -116,9 +116,24 @@ func TestBase2CampaignEntersGraphAfterNativeTransitionSpawn(t *testing.T) {
 		t.Skip("requires base2 BSP/AAS")
 	}
 	p := &Planner{Campaign: true, CampaignRoute: []string{"base1", "base2", "base3"}, campaignMap: "base1", campaignDestination: "base2", GameClock: true}
-	s := quake.Snapshot{Map: "base2", Frame: 3, Health: 100, OnGround: true, Self: quake.Vec3{848, 2292, -231.875}}
+	s := quake.Snapshot{Map: "base2", Frame: 1, Health: 100, OnGround: false, Self: quake.Vec3{848, 2292, -214}}
+	p.update(s, root)
+	if p.routeOK {
+		t.Fatal("airborne graph entry accepted")
+	}
+	s.Frame, s.OnGround, s.Self[2] = 10, true, -231.875
 	p.update(s, root)
 	if p.World.Goal != "reach_level_exit" || !p.routeOK || len(p.route) == 0 {
 		t.Fatalf("spawn cannot enter campaign route: %s %s", p.World.Goal, p.World.Navigation)
+	}
+	if p.World.Campaign.Exit.Destination != "base3$base2b" {
+		t.Fatal("suspended closer exit chosen", p.World.Campaign.Exit)
+	}
+	for _, exit := range p.World.Geometry.Exits() {
+		if exit.Destination == "base3$base2a" {
+			if _, ok := p.campaignExitContact(exit, s.Self); ok {
+				t.Fatal("floor below suspended trigger accepted as contact")
+			}
+		}
 	}
 }

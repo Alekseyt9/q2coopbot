@@ -8,12 +8,13 @@ import (
 )
 
 type CampaignDecision struct {
-	Objective       string           `json:"objective"`
-	State           string           `json:"state"`
-	Exit            *quake.MapExit   `json:"exit,omitempty"`
-	Preparation     *ExitPreparation `json:"preparation,omitempty"`
-	RouteIndex      int              `json:"route_index,omitempty"`
-	CompletedLevels int              `json:"completed_levels,omitempty"`
+	Objective       string              `json:"objective"`
+	State           string              `json:"state"`
+	Exit            *quake.MapExit      `json:"exit,omitempty"`
+	Preparation     *ExitPreparation    `json:"preparation,omitempty"`
+	Dependency      *CampaignDependency `json:"dependency,omitempty"`
+	RouteIndex      int                 `json:"route_index,omitempty"`
+	CompletedLevels int                 `json:"completed_levels,omitempty"`
 }
 
 // A route explicitly resolves forward exits, including maps with return exits.
@@ -135,6 +136,9 @@ func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	d.State = "approach_exit"
 	p.campaignMap = s.Map
 	p.campaignDestination = destination
+	if goal, ok, active := p.campaignDependencyGoal(s); active {
+		return goal, ok
+	}
 	p.updateExitPreparation(s)
 	if contact != nil {
 		return *contact, true

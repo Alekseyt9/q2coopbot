@@ -50,6 +50,9 @@ type Planner struct {
 	CampaignNextMap           string
 	CampaignRoute             []string
 	campaignRouteIndex        int
+	campaignDependency        *CampaignDependency
+	campaignDependencyRetry   int
+	campaignAssetRoot         string
 	grenadeThrow              *grenadeThrow
 	grenadeRequestFrame       int
 	grenadeRequestMap         string
@@ -206,6 +209,7 @@ func (p *Planner) applyTactic(d TacticalDecision) {
 }
 
 func (p *Planner) setMap(name, root string) {
+	p.campaignAssetRoot = root
 	if p.World.Map == name {
 		return
 	}
@@ -216,6 +220,8 @@ func (p *Planner) setMap(name, root string) {
 	p.deathFrame = 0
 	p.healthActive = false
 	p.exitPreparation = nil
+	p.campaignDependency = nil
+	p.campaignDependencyRetry = 0
 	p.healthBanned = nil
 	p.resources = nil
 	p.pickup, p.pickupBanned, p.pickupNext = nil, nil, 0
@@ -559,6 +565,8 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 				// the search-policy check below still prevents its execution.
 				p.route, p.routeOK = p.Nav.Route(s.Self, goal)
 			}
+		} else if campaign && p.campaignDependency != nil {
+			p.route, p.routeOK = p.campaignDependencyRoute(s, goal)
 		} else {
 			p.route, p.routeOK = p.directCrouchRoute(s, goal)
 			if !p.routeOK {
@@ -993,6 +1001,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		if hazard != "" {
 			cmd.Up = 0
 			if hazard == "dynamic_door_blocked" {
+				p.discoverCampaignDependency(s, dx, dy)
 				if bypass, ok := p.doorRouteBypass(s); ok {
 					p.World.Command.MoveSource = "door_route_bypass"
 					p.World.Command.Skill = "door_route_bypass"

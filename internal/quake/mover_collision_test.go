@@ -41,6 +41,28 @@ func TestBase2MoverExactSupport(t *testing.T) {
 	}
 }
 
+func TestBase2RaisedBridgeIsNotHorizontalSupport(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires base2 BSP")
+	}
+	g, err := LoadMap(root, "base2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Observed in both native campaign seeds: model40 rolls 90 degrees
+	// about its unchanged pivot. The unrotated model spans this point.
+	bridge := Mover{Model: 40, Origin: Vec3{450, -958, -18}}
+	at := Vec3{396, -810, 8.125}
+	if _, ok := g.MoverFooting(bridge, at, 1); !ok {
+		t.Fatal("fixture does not distinguish old horizontal pose")
+	}
+	bridge.Angles[2] = 90
+	if _, ok := g.MoverFooting(bridge, at, 18); ok {
+		t.Fatal("raised native bridge invented a floor")
+	}
+}
+
 // The E2E side-wall fixture reuses model1 at these two translations.
 // Verify actual brush collision, not just the fixture's intended bounds.
 func TestBase2ElevatorSideWallFixture(t *testing.T) {
