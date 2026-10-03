@@ -4,7 +4,35 @@ import (
 	"os"
 	"q2coopbot/internal/quake"
 	"testing"
+	"time"
 )
+
+func TestBase2DeepExitStartsVerifiedDropAtEntry(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires base2 BSP/AAS")
+	}
+	g, err := quake.LoadMap(root, "base2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base2.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := quake.Snapshot{Map: "base2", Frame: 1000, Health: 51, Gravity: 800, OnGround: true, Self: quake.Vec3{-881.5, 142.125, -127.875}, Movers: []quake.Mover{
+		{Model: 46, Origin: quake.Vec3{-4, 0, 0}}, {Model: 12},
+		{Model: 47, Origin: quake.Vec3{-888, 180, -156}, Angles: quake.Vec3{0, 0, 270}},
+		{Model: 48, Origin: quake.Vec3{-888, 12, -156}, Angles: quake.Vec3{0, 0, 90}},
+	}}
+	route := []quake.Waypoint{{Kind: 7, ToArea: 1971, Position: quake.Vec3{-888, 137, -128}}, {Kind: 7, ToArea: 1971, Position: quake.Vec3{-888, 135, -376}}, {Kind: 2, ToArea: 1988, Position: quake.Vec3{-892, 128.92929077148438, -384.0707092285156}}}
+	now := time.Now()
+	p := &Planner{Campaign: true, Nav: n, hasGoal: true, goalPoint: quake.Vec3{-884, 96, -407.875}, World: World{Geometry: &g, Snapshot: s, Map: s.Map, Goal: "reach_level_exit", Navigation: "ready", Route: route, Updated: now}}
+	cmd := p.commandAt(quake.UserCmd{}, now)
+	if p.jump == nil || !p.jump.drop || p.World.Command.LimitReason != "drop_prepare" {
+		t.Fatalf("deep exit stopped: cmd=%+v decision=%+v jump=%+v", cmd, p.World.Command, p.jump)
+	}
+}
 
 func TestBase2CampaignFallsThroughAlternateExit(t *testing.T) {
 	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")

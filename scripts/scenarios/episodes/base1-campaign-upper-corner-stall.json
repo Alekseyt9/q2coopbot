@@ -1,0 +1,21 @@
+{
+  "id": "base1-campaign-upper-corner-stall",
+  "title": "Остановка solo-бота в верхнем коридоре base1 после боя",
+  "map": "base1",
+  "kind": "navigation_stall",
+  "status": "open",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/base1-base2-campaign-combat-chain.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_exit.ps1 -Chain -Combat -Seed 301 -Port 31760",
+  "evidence": "workspace/artifacts/campaign-combat-chain-20261003-185845-651/run-1/bot.jsonl",
+  "report": "workspace/artifacts/campaign-combat-chain-20261003-185845-651/report.json",
+  "native_diagnostic": "workspace/artifacts/campaign-combat-chain-20261003-185845-651/run-1/failure-diagnostic.json",
+  "observed_seed": 302,
+  "observed_position": [-1906.75,1337,120.125],
+  "observed_health": 17,
+  "symptom": "Цель reach_level_exit; AAS route ready, первая точка[-1648.9,1316,120] примерно в259 единицах, постоянный static_hull_blocked. До native перехода не дошёл. Preparation budget_exhausted; доступная аптечка и причина отказа лечения пока не доказаны.",
+  "native_metrics": {"monsters_killed": 8, "received_health_damage": 112, "deaths": 0, "final_health": 17},
+  "hypotheses": ["Подход к далёкой первой точке AAS требует локального обхода; существующие corner-detour цели ограничены112 единицами", "НизкоеHP усложняет восстановление, но не доказано как причина static_hull_blocked"],
+  "missing_setup": ["Для точного повтора нужен checkpoint в этой позе; seed игровой логики не фиксирует сетевой момент подключения"],
+  "next_action": "Проверить геометрию и локальный маршрут из сохранённой позы; отдельно проверить доступность лечения. Не разрешать опасное падение при17HP."
+}

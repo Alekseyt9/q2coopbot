@@ -259,14 +259,15 @@ try{
             $frames=@($_.Group|Group-Object spawncount,frame|ForEach-Object {$_.Group[0]})
             $loss=0;$gain=0;$deaths=0;$prior=$frames[0]
             foreach($row in $frames){if($row.health -le 0 -and $prior.health -gt 0){$deaths++};if($row.spawncount -eq $prior.spawncount){$delta=$row.health-$prior.health;if($delta -lt 0){$loss-=$delta}else{$gain+=$delta}};$prior=$row}
-            @{map=$_.Name;frames=$frames.Count;initial_health=$frames[0].health;final_health=$frames[-1].health;minimum_health=($frames.health|Measure-Object -Minimum).Minimum;initial_armor=$frames[0].armor;final_armor=$frames[-1].armor;final_inventory=$frames[-1].inventory;observed_health_loss=$loss;observed_health_gain=$gain;deaths=$deaths;kills=$(if($_.Name -eq 'base3'){$null}else{0});kill_count_basis=$(if($_.Name -eq 'base3'){'destination only; combat not assessed'}else{'monsters removed in navigation fixture'});last_goal=$frames[-1].goal;last_campaign_state=$frames[-1].campaign.state;last_position=$frames[-1].self}
+            @{map=$_.Name;frames=$frames.Count;initial_health=$frames[0].health;final_health=$frames[-1].health;minimum_health=($frames.health|Measure-Object -Minimum).Minimum;initial_armor=$frames[0].armor;final_armor=$frames[-1].armor;final_inventory=$frames[-1].inventory;observed_health_loss=$loss;observed_health_gain=$gain;deaths=$deaths;kills=$(if($Combat -or $_.Name -eq 'base3'){$null}else{0});kill_count_basis=$(if($_.Name -eq 'base3'){'destination only; combat not assessed'}elseif($Combat){'native combat telemetry not yet assessed'}else{'monsters removed in navigation fixture'});last_goal=$frames[-1].goal;last_campaign_state=$frames[-1].campaign.state;last_position=$frames[-1].self}
         })
     }
     if($report.accepted){$report.server_chat=@(Get-Content (Join-Path $OutputRoot 'server.log')|Where-Object {$_ -like 'CampaignBot: *'})}
     if($Combat -and $report.accepted){
         try{
             . "$PSScriptRoot/read_damage_events.ps1"
-            $events=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log')|Where-Object {$_.map -eq $scene.map -and $_.spawncount -eq $levelRows[0].spawncount})
+            $allEvents=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log'))
+            $events=@($allEvents|Where-Object {$_.map -eq $scene.map -and $_.spawncount -eq $levelRows[0].spawncount})
             $selfID=$levelRows[0].self_entity
             if(!$events.Count -or $selfID -lt 1){throw 'Native source-generation damage proof absent'}
             $kills=@($events|Where-Object {$_.attacker -eq $selfID -and $_.target_class -like 'monster_*' -and $_.killed})
@@ -274,6 +275,23 @@ try{
             $report.damage_summary=Measure-BotDamage $events $selfID
             $report.metrics.native_health_damage=$report.damage_summary.received_health_damage
             $report.native_damage_events=$events
+            if($Chain){
+                foreach($level in @($report.levels|Where-Object map -ne 'base3')){
+                    $mapRows=@($rows|Where-Object map -eq $level.map)
+                    $generation=$mapRows[0].spawncount;$actor=$mapRows[0].self_entity
+                    $mapEvents=@($allEvents|Where-Object {$_.map -eq $level.map -and $_.spawncount -eq $generation})
+                    $mapAttacks=@($mapRows|Where-Object {$_.sent_command.buttons -band 1})
+                    if(!$mapEvents.Count -or !$mapAttacks.Count -or !@($mapRows|Where-Object enemies).Count){throw "Per-map combat proof absent: $($level.map)"}
+                    $summary=Measure-BotDamage $mapEvents $actor
+                    $level.kills=@($mapEvents|Where-Object {$_.attacker -eq $actor -and $_.target_class -like 'monster_*' -and $_.killed}).Count
+                    $level.kill_count_basis='native damage events credited to bot in this map generation'
+                    $level['native_health_damage']=$summary.received_health_damage
+                    $level['damage_summary']=$summary
+                    $level['attack_frames']=$mapAttacks.Count
+                    $level['spawncount']=$generation
+                }
+                $report.native_damage_events=$allEvents
+            }
             if($Checkpoint){
                 if(!$load.rng_restored){throw 'Native RNG restore proof absent'}
                 $report.checkpoint.rng_restored=$true

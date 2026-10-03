@@ -28,5 +28,5 @@ func affordableDrop(health int16, damage int) bool {
 	if damage == 0 {
 		return true
 	}
-	return damage <= 20 && damage <= int(health)/4 && int(health)-damage >= 25
+	return damage <= 20 && damage <= int(health)/3 && int(health)-damage >= 25
 }

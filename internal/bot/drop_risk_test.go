@@ -20,6 +20,7 @@ func TestDropDamageBudget(t *testing.T) {
 		{208, 0, 800, 100, 7, true}, {208, 0, 800, 32, 7, true},
 		{208, 0, 800, 31, 7, false}, {208, 0, 800, 7, 7, false},
 		{240, 0, 800, 40, 10, true}, {400, 0, 800, 100, 24, false},
+		{280, 0, 800, 51, 14, true}, {280, 0, 800, 40, 14, false},
 		{40, -600, 800, 7, 12, false}, {208, 0, 1600, 100, 33, false},
 	} {
 		damage := estimatedDropDamage(tc.height, tc.velocity, tc.gravity)
@@ -78,10 +79,10 @@ func TestNearbyDropAndQuickBypass(t *testing.T) {
 		t.Fatal(err)
 	}
 	goal := quake.Vec3{980, -574, -487.875}
-	for _, hp := range []int16{100, 44, 43, 7} {
+	for _, hp := range []int16{100, 44, 43, 36, 35, 7} {
 		p := &Planner{Nav: nav, GameClock: true, World: World{Map: "base3", Geometry: &g}}
 		p.update(quake.Snapshot{Map: "base3", Frame: 100, Health: hp, Gravity: 800, OnGround: true, Self: quake.Vec3{831, -574, -231.875}, Teammate: &goal}, "")
-		if accepted := p.planNearbyWalkOff(); accepted != (hp >= 44) {
+		if accepted := p.planNearbyWalkOff(); accepted != (hp >= 36) {
 			t.Fatalf("hp=%d accepted=%v", hp, accepted)
 		}
 		if p.jump != nil && p.jump.expectedDamage != 11 {
