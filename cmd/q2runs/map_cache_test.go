@@ -49,6 +49,18 @@ func TestMapCacheChangesAndNewFiles(t *testing.T) {
 	if request("newmap", first.Header().Get("ETag")).Code != 304 {
 		t.Fatal("conditional request not cached")
 	}
+	svgRequest := httptest.NewRequest("GET", "/api/map.svg?name=newmap", nil)
+	svgResponse := httptest.NewRecorder()
+	h.ServeHTTP(svgResponse, svgRequest)
+	if svgResponse.Code != 200 || svgResponse.Header().Get("Content-Type") != "image/svg+xml; charset=utf-8" || svgResponse.Header().Get("X-Map-Cache") != "HIT" {
+		t.Fatalf("SVG cache response: %d %v", svgResponse.Code, svgResponse.Header())
+	}
+	svgRequest.Header.Set("If-None-Match", svgResponse.Header().Get("ETag"))
+	svgConditional := httptest.NewRecorder()
+	h.ServeHTTP(svgConditional, svgRequest)
+	if svgConditional.Code != 304 {
+		t.Fatal("SVG conditional cache failed")
+	}
 	stamp := time.Now().Add(2 * time.Second)
 	os.Chtimes(path, stamp, stamp)
 	if request("newmap", "").Header().Get("X-Map-Cache") != "MISS" {

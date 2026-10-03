@@ -1,0 +1,41 @@
+{
+  "id": "base1-solo-openjev-cover",
+  "title": "Выход из укрытия: нестабильные попадания бластера и отсутствие повторного выхода",
+  "map": "base1",
+  "kind": "combat_tactics",
+  "status": "open",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/base1-solo-openjev-cover.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -Cover -Seed 1201 -Port 31890",
+  "evidence": "workspace/artifacts/solo-tactical-retreat-20261003-225658-677/report.json",
+  "earlier_evidence": [
+    "workspace/artifacts/solo-tactical-retreat-20261003-225256-588/report.json",
+    "workspace/artifacts/solo-tactical-retreat-20261003-225358-830/report.json"
+  ],
+  "validation": {
+    "passed": 1,
+    "total": 2,
+    "seeds": [1201, 1202],
+    "timescale": 2,
+    "parallelism": 2,
+    "provenance_valid": true,
+    "cover_window_health_damage": [0, 10],
+    "final_health": [25, 25],
+    "deaths": 0,
+    "kills": [0, 0],
+    "scope": "One hide/peek/fire/return cycle, not a complete fight"
+  },
+  "implemented": [
+    "Wall occlusion from all observed supported threats, short grounded movement with hazard/mover/teammate checks",
+    "Blaster muzzle trajectory check and nearby verified peek search; suppress shots when the checked corridor closes",
+    "Live model cover choice and bounded firing exposure; return behind wall",
+    "Runner requires damage within the cover exposure window rather than elsewhere in the run"
+  ],
+  "remaining_validation": [
+    "Find remaining native misses; nominal muzzle ray is not a guarantee of accuracy or moving-target interception",
+    "Repeat peeks while the target is hidden; current System1 gate needs a visible combat target",
+    "Complete a fight without remaining indefinitely behind cover",
+    "Other weapons, unseen threats, explosive protection and grouped combat are not accepted",
+    "General episode dispatcher is not bound; use the specialized runner"
+  ]
+}

@@ -19,12 +19,12 @@ import (
 var mapNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 type cachedMap struct {
-	mu               sync.Mutex
-	signature        string
-	body, compressed []byte
-	etag             string
+	mu                 sync.Mutex
+	signature          string
+	body, compressed   []byte
+	etag               string
 	svg, svgCompressed []byte
-	svgETag string
+	svgETag            string
 }
 
 // Stat loose BSPs and PAKs without opening their contents. This also detects
@@ -62,7 +62,9 @@ func (s *server) mapData(name string, asSVG bool) (body, compressed []byte, etag
 	defer entry.mu.Unlock()
 	signature := s.mapSignature(name)
 	if entry.body != nil && signature == entry.signature {
-		if asSVG {return entry.svg,entry.svgCompressed,entry.svgETag,true,nil}
+		if asSVG {
+			return entry.svg, entry.svgCompressed, entry.svgETag, true, nil
+		}
 		return entry.body, entry.compressed, entry.etag, true, nil
 	}
 	for _, root := range s.assets {
@@ -91,23 +93,27 @@ func (s *server) mapData(name string, asSVG bool) (body, compressed []byte, etag
 		svgWriter := gzip.NewWriter(&svgZip)
 		svgWriter.Write(entry.svg)
 		svgWriter.Close()
-		entry.svgCompressed=svgZip.Bytes()
-		entry.svgETag=fmt.Sprintf(`W/"%x"`,sha256.Sum256(entry.svg))
-		if asSVG{return entry.svg,entry.svgCompressed,entry.svgETag,false,nil}
+		entry.svgCompressed = svgZip.Bytes()
+		entry.svgETag = fmt.Sprintf(`W/"%x"`, sha256.Sum256(entry.svg))
+		if asSVG {
+			return entry.svg, entry.svgCompressed, entry.svgETag, false, nil
+		}
 		return entry.body, entry.compressed, entry.etag, false, nil
 	}
 	return nil, nil, "", false, fmt.Errorf("BSP не найден или повреждён; трейс доступен без схемы")
 }
 
 func (s *server) serveMap(w http.ResponseWriter, r *http.Request) {
-	asSVG:=strings.HasSuffix(r.URL.Path,".svg")
-	body, zipped, etag, hit, e := s.mapData(r.URL.Query().Get("name"),asSVG)
+	asSVG := strings.HasSuffix(r.URL.Path, ".svg")
+	body, zipped, etag, hit, e := s.mapData(r.URL.Query().Get("name"), asSVG)
 	if e != nil {
 		http.Error(w, e.Error(), 404)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if asSVG {w.Header().Set("Content-Type","image/svg+xml; charset=utf-8")}
+	if asSVG {
+		w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
+	}
 	w.Header().Set("Cache-Control", "public, no-cache")
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Vary", "Accept-Encoding")
@@ -139,7 +145,7 @@ func (s *server) warmMaps() {
 			}
 		}
 		for name := range names {
-			s.mapData(name,false)
+			s.mapData(name, false)
 		}
 		time.Sleep(10 * time.Second)
 	}

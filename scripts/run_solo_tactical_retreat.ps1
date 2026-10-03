@@ -36,7 +36,7 @@ try{
     $config=Join-Path $OutputRoot 'bot-config.json'
     $placement=if($Cover){'240,-416,24.125'}else{'32,-224,24'}
     $enemyClass=if($Cover){'monster_infantry'}else{'monster_parasite'}
-    @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};run=@{duration='15s';frame_paced=$true;mode='campaign';next_map='base2'};test=@{teleport_map='base1';teleport=$placement;spawn_map='base1';spawn_soldier='200,-224,24';spawn_class=$enemyClass;setup_hold_frames=$(if($Cover){10}else{0})};output=@{trace_jsonl=$trace}}|ConvertTo-Json -Depth 6|Set-Content $config
+    @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};run=@{duration='15s';frame_paced=$true;mode='campaign';next_map='base2'};test=@{teleport_map='base1';teleport=$placement;spawn_map='base1';spawn_soldier='200,-224,24';spawn_class=$enemyClass;setup_hold_frames=$(if($Cover){10}else{0});initial_health=$(if($Cover){25}else{0})};output=@{trace_jsonl=$trace}}|ConvertTo-Json -Depth 6|Set-Content $config
     $bot=Start-Process $Client -ArgumentList "--config `"$config`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
     $null=$bot.WaitForExit(25000);if(!$bot.HasExited){throw 'Bot timeout'};if($bot.ExitCode){throw 'Bot failed'}
     $rows=@(Get-Content $trace|ForEach-Object {$_|ConvertFrom-Json})
@@ -59,12 +59,24 @@ try{
     . "$PSScriptRoot/read_damage_events.ps1"
     $events=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log'));$actor=$rows[0].self_entity
     $report.damage_summary=Measure-BotDamage $events $actor
+    $report.final_health=$rows[-1].health;$report.trace=$trace
+    if($Cover){
+        # Do not count earlier normal attack damage as proof of the cover shot.
+        # The bounded 300-unit encounter allows at most three bolt flight frames.
+        $coverDamage=@($events|Where-Object {
+            $event=$_
+            $event.attacker -eq $actor -and $event.target_class -eq $enemyClass -and $event.live_health_damage -gt 0 -and
+            @($fired|Where-Object {$_.spawncount -eq $event.spawncount -and $event.frame -gt $_.frame -and $event.frame -le $_.frame+3}).Count -gt 0
+        })
+        $report.cover_window_health_damage=[int](($coverDamage|Measure-Object live_health_damage -Sum).Sum)
+        $report.cover_window_damage_frames=@($coverDamage.frame)
+    }
     $report.kills=@($events|Where-Object {$_.attacker -eq $actor -and $_.target_class -eq $enemyClass -and $_.killed}).Count
-    if($report.kills -ne 1){throw 'Native parasite kill absent'}
+    if($report.kills -ne 1 -and !$Cover){throw 'Native target kill absent'}
     if(@(Get-Content (Join-Path $OutputRoot 'server.log')|Where-Object {$_ -eq "g_test_seed ready version=1 seed=$Seed"}).Count -ne 1){throw 'Seed acknowledgement absent'}
     $commands=Get-Content (Join-Path $OutputRoot 'bot.err')
-    if(@($commands|Select-String 'client command: teleport ').Count -ne 1 -or @($commands|Select-String 'client command: spawnentity ').Count -ne 1 -or ($commands -match 'client command: (give|god|kill|map|gamemap) ')){throw 'Unexpected setup/gameplay command'}
-    $report.final_health=$rows[-1].health;$report.trace=$trace;if(!$Cover){$report.scope='Prepared single vulnerable native parasite, ordinary solo campaign commands; model-selected retreat plus shooting and observed movement, not general campaign acceptance'};$report.accepted=$true;$report.reason='accepted'
+    if(@($commands|Select-String 'client command: teleport ').Count -ne 1 -or @($commands|Select-String 'client command: spawnentity ').Count -ne 1 -or ($commands -match 'client command: (god|kill|map|gamemap) ') -or @($commands|Select-String 'client command: give '|Where-Object { !$Cover -or $_.Line -notlike '*client command: give health 25' }).Count){throw 'Unexpected setup/gameplay command'}
+    if($Cover -and $report.cover_window_health_damage -le 0){throw 'Native monster damage in cover firing window absent'};if(!$Cover){$report.scope='Prepared single vulnerable native parasite, ordinary solo campaign commands; model-selected retreat plus shooting and observed movement, not general campaign acceptance'};$report.accepted=$true;$report.reason='accepted'
 }catch{$report.reason=$_.Exception.Message}
 finally{foreach($process in @($bot,$server)){if($process -and !$process.HasExited){Stop-Process -Id $process.Id;$null=$process.WaitForExit(5000)}};$report|ConvertTo-Json -Depth 8|Set-Content (Join-Path $OutputRoot 'report.json')}
 if(!$report.accepted){throw $report.reason}

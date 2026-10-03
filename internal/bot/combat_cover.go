@@ -70,6 +70,68 @@ func coverWalkClear(w World, from, to quake.Vec3) bool {
 	return true
 }
 
+// ConnectRequest uses CENTER_HANDED. Baseq2 Blaster_Fire launches 24 units
+// forward and eight units below the eye, parallel to the view direction.
+// An eye ray alone can pass above a sloping brush which blocks the bolt.
+func coverBlasterClear(w World, at quake.Vec3, target quake.Object) bool {
+	s := w.Snapshot
+	s.Self = at
+	eye, aim := s.EyePoint(), target.AimPoint()
+	d := quake.Distance(eye, aim)
+	if d <= 24 {
+		return false
+	}
+	muzzle, end := at, at
+	muzzle[2] += eye[2] - at[2] - 8
+	for i := range muzzle {
+		f := (aim[i] - eye[i]) / d
+		muzzle[i] += 24 * f
+		end[i] = muzzle[i] + (d-24)*f
+	}
+	g := w.Geometry
+	return g.ClearShot(at, muzzle) && g.ClearShot(muzzle, end) &&
+		!g.DoorShotBlocked(s.Movers, at, muzzle) && !g.DoorShotBlocked(s.Movers, muzzle, end)
+}
+
+func coverPeek(w World, target quake.Object) (quake.Vec3, bool) {
+	// Other weapons have different launch offsets; enable them only after
+	// their firing corridors have their own verification.
+	if w.Snapshot.Weapon != "Blaster" {
+		return quake.Vec3{}, false
+	}
+	points := []quake.Vec3{w.Snapshot.Self}
+	for _, dir := range []quake.Vec3{{0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}} {
+		for _, r := range []float64{8, 12, 16} {
+			at := w.Snapshot.Self
+			at[0] += dir[0] * r
+			at[1] += dir[1] * r
+			points = append(points, at)
+		}
+	}
+	minimum, _ := combatDistanceBand(w.Snapshot.Weapon, target.Class)
+	for _, at := range points {
+		if quake.Distance(at, target.Origin) < minimum || !coverWalkClear(w, w.Snapshot.Self, at) {
+			continue
+		}
+		clear := true
+		for _, offset := range []quake.Vec3{{}, {.5, 0, 0}, {-.5, 0, 0}, {0, .5, 0}, {0, -.5, 0}} {
+			probe := at
+			probe[0] += offset[0]
+			probe[1] += offset[1]
+			clear = clear && coverBlasterClear(w, probe, target)
+		}
+		for _, e := range w.Snapshot.Enemies {
+			if e.ID != target.ID && quake.Distance(at, e.Origin) < quake.Distance(w.Snapshot.Self, e.Origin)-2 {
+				clear = false
+			}
+		}
+		if clear {
+			return at, true
+		}
+	}
+	return quake.Vec3{}, false
+}
+
 func plannedCover(w World) *coverCycle {
 	s := w.Snapshot
 	if !s.OnGround || s.Ducked || s.Health <= 0 || w.Geometry == nil || w.Goal != "reach_level_exit" && w.Goal != "cover_teammate" && w.Goal != "follow_teammate" {
@@ -94,6 +156,10 @@ func plannedCover(w World) *coverCycle {
 	if target == nil || target.Class != "monster_soldier_light" && target.Class != "monster_soldier" && target.Class != "monster_soldier_ss" && target.Class != "monster_infantry" {
 		return nil
 	}
+	peek, ok := coverPeek(w, *target)
+	if !ok {
+		return nil
+	}
 	dx, dy := s.Self[0]-target.Origin[0], s.Self[1]-target.Origin[1]
 	d := math.Hypot(dx, dy)
 	if d < 1 {
@@ -107,7 +173,7 @@ func plannedCover(w World) *coverCycle {
 			if s.Teammate != nil && quake.Distance(at, *s.Teammate) > combatLeash(profile) {
 				continue
 			}
-			if !coverWalkClear(w, s.Self, at) || !coverHidden(w.Geometry, at, s.Enemies) {
+			if !coverWalkClear(w, s.Self, at) || !coverWalkClear(w, peek, at) || !coverHidden(w.Geometry, at, s.Enemies) {
 				continue
 			}
 			groupSafe := true
@@ -117,7 +183,7 @@ func plannedCover(w World) *coverCycle {
 				}
 			}
 			if groupSafe {
-				return &coverCycle{mapName: s.Map, target: target.ID, hide: at, peek: s.Self, stage: "withdraw", started: s.Frame, until: s.Frame + 100}
+				return &coverCycle{mapName: s.Map, target: target.ID, hide: at, peek: peek, stage: "withdraw", started: s.Frame, until: s.Frame + 100}
 			}
 		}
 	}
@@ -166,13 +232,21 @@ func (p *Planner) combatCoverCommand(s quake.Snapshot, cmd quake.UserCmd, tactic
 	p.World.Command.MoveSource = p.World.Command.Skill
 	if c.stage == "fire" {
 		cmd.Forward, cmd.Side, cmd.Up = 0, 0, 0
-		if s.Frame-c.started >= 3 || enemy == nil || enemy.ClearShot == nil || !*enemy.ClearShot {
+		if enemy == nil || s.Weapon != "Blaster" || !coverBlasterClear(p.World, s.Self, *enemy) {
+			cmd.Buttons = 0
+			c.stage = "return"
+		}
+		if s.Frame-c.started >= 8 || enemy == nil || enemy.ClearShot == nil || !*enemy.ClearShot {
 			c.stage = "return"
 		}
 		return cmd, true
 	}
 	cmd.Buttons = 0
-	if quake.Horizontal(s.Self, to) < 4 {
+	arrival := 4.
+	if c.stage == "peek" {
+		arrival = .5
+	}
+	if quake.Horizontal(s.Self, to) < arrival {
 		cmd.Forward, cmd.Side, cmd.Up = 0, 0, 0
 		if quake.Horizontal(s.SelfVelocity, quake.Vec3{}) > 10 {
 			return cmd, true

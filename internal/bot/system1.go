@@ -123,6 +123,11 @@ func (t *Tactician) tick(w World) {
 	if t.model == "" || t.busy || time.Now().Before(t.next) || w.Map == "" || w.Snapshot.Frame == 0 || w.Snapshot.Health <= 0 || !w.Snapshot.OnGround || math.Abs(w.Snapshot.SelfVelocity[2]) > 1 || (w.Snapshot.Teammate == nil && (w.Campaign == nil || combatSpacing(w.Snapshot) == nil)) {
 		return
 	}
+	if w.Geometry != nil {
+		if drop, ok := w.Geometry.GroundDrop(w.Snapshot.Self, 4); ok && drop > 1 {
+			return
+		}
+	}
 	t.busy = true
 	options := t.options(w)
 	state := struct {
@@ -131,14 +136,29 @@ func (t *Tactician) tick(w World) {
 		Goal           string         `json:"goal"`
 		Combat         *CombatSpacing `json:"combat"`
 	}{plannedCover(w) != nil, w.Snapshot.Health, w.Goal, combatSpacing(w.Snapshot)}
+	log.Printf("system1 request frame=%d cover_available=%t options=%v", w.Snapshot.Frame, state.CoverAvailable, options)
 	go func() {
 		start := time.Now()
 		labels := make([]string, len(options))
 		for i, option := range options {
-			labels[i] = fmt.Sprintf("%c=%s", 'A'+i, option)
+			description := option
+			switch option {
+			case "attack":
+				description = "stand still and attack in the open"
+			case "cover":
+				description = "hide behind wall, peek to fire, return"
+			case "retreat":
+				description = "back away while firing"
+			case "follow":
+				description = "follow route"
+			}
+			labels[i] = fmt.Sprintf("%c=%s", 'A'+i, description)
 		}
-		facts, _ := json.Marshal(state)
-		prompt := "Choose Quake II tactic. If need_space=true prefer retreat. If cover_available=true prefer cover over stationary attack: hide, peek to shoot, return. Otherwise attack visible enemy. Follow means keep route. Output one offered letter only. State: " + string(facts) + " Options: " + strings.Join(labels, ", ") + " Answer:"
+		facts := fmt.Sprintf("Quake II health=%d. Goal=%s. ", state.Health, state.Goal)
+		if c := state.Combat; c != nil {
+			facts += fmt.Sprintf("Enemy %s, weapon %s, distance%.0f, minimum%.0f, need_space=%t, threats=%d. ", c.Enemy, c.Weapon, c.Distance, c.Minimum, c.NeedSpace, c.VisibleThreats)
+		}
+		prompt := facts + fmt.Sprintf("Verified wall cover available=%t. Choose a tactic to reduce damage; back away if too close. ", state.CoverAvailable) + strings.Join(labels, ". ") + ". Answer one letter:"
 		payload, _ := json.Marshal(map[string]any{"model": t.model, "prompt": prompt, "stream": false, "think": false, "keep_alive": "10m", "options": map[string]any{"temperature": 0, "num_predict": 1, "num_ctx": 1024}})
 		resp, e := t.http.Post(t.endpoint, "application/json", bytes.NewReader(payload))
 		if e != nil {
