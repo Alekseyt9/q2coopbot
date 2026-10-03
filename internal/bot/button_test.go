@@ -6,6 +6,34 @@ import (
 	"testing"
 )
 
+func TestOriginalRelayButtonApproachAvoidsClosedDoor(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires original jail2 BSP/AAS")
+	}
+	g, err := quake.LoadMap(root, "jail2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/jail2.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := quake.Snapshot{Map: "jail2", Frame: 7, Health: 100, OnGround: true, Self: quake.Vec3{-2783.25, 296.375, 24.125}, Movers: []quake.Mover{{Model: 47}, {Model: 48}, {Model: 3}}}
+	p := &Planner{Campaign: true, Nav: n, goalPoint: quake.Vec3{-2880, 288, 24.125}, World: World{Geometry: &g, GeometryStatus: "ready", Goal: "reach_level_exit", Navigation: "direct_clear"}}
+	task := p.selectButtonTask(s)
+	if task == nil || task.buttonModel != 3 || task.doorModel != 47 || len(task.chain) != 2 || task.chain[1].Target != "t29" {
+		t.Fatalf("original relay button not selected: %+v", task)
+	}
+	if task.stand != (quake.Vec3{-2776, 362, 24.125}) {
+		t.Fatalf("expected accessible east face, got %v", task.stand)
+	}
+	// The closer south face intersects door47 and must never be selected.
+	if _, reason := g.DoorMoveBlockStep(s.Movers, s.Self, -2814-s.Self[0], 316-s.Self[1], quake.Horizontal(s.Self, quake.Vec3{-2814, 316, 24.125})); reason == "" {
+		t.Fatal("regression fixture no longer blocks the south approach")
+	}
+}
+
 func TestCampaignButtonOnBlockedDirectRoute(t *testing.T) {
 	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
 	if root == "" {

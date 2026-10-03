@@ -130,6 +130,11 @@ func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
 		if distance > 256 || distance >= best || !p.World.Geometry.PlayerMoveClear(s.Self, stand) {
 			continue
 		}
+		// The nearest face may be behind the door this button must open.
+		// Static BSP clearance alone cannot establish a usable approach.
+		if _, blocked := p.World.Geometry.DoorMoveBlockStep(s.Movers, s.Self, stand[0]-s.Self[0], stand[1]-s.Self[1], distance); blocked != "" {
+			continue
+		}
 		if _, ok := p.World.Geometry.GroundDrop(stand, 24); !ok && !p.Nav.GroundedNear(stand) {
 			live := quake.Mover{Model: model, Origin: doorOrigin}
 			if !campaign || !p.stationaryBridge(model, doorOrigin) || !p.bridgeLinkCorridor(s.Self, stand, live) {

@@ -969,7 +969,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 			p.routeKnown = false
 		}
 	}
-	if s.OnGround && cmd.Up == 0 {
+	if s.OnGround && cmd.Up == 0 && !contactButton {
 		// A short verified ducked sweep can pass a low static ceiling.
 		// Keep the standing-hull door guard below: ducking must not bypass doors.
 		if math.Abs(target[2]-s.Self[2]) <= 2 &&
@@ -1035,6 +1035,11 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	if s.OnGround {
 		doorMovers := p.campaignDoorMovers(s)
 		hazard := p.World.Geometry.DoorMoveHazard(doorMovers, s.Self, dx, dy)
+		if contactButton {
+			// Contact runs at 40 units/s. A full-speed door probe can
+			// extend through the selected button into a wall/door behind it.
+			_, hazard = p.World.Geometry.DoorMoveBlockStep(doorMovers, s.Self, dx, dy, probeDistance)
+		}
 		// A clear short approach need not clear an entire full-speed tick.
 		// Recheck static and dynamic hulls every tick, and request only half
 		// the checked distance in 100 ms, even for a distant waypoint.

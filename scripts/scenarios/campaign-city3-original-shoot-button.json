@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "name": "campaign-city3-original-shoot-button",
+  "map": "city3",
+  "runner": "scripts/run_original_activation.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -OriginalShoot -Seed 101 -Port 31680",
+  "initial_position": [-328, -72, -55.875],
+  "test_goal": [-328, 0, -39.875],
+  "button_model": 82,
+  "door_model": 81,
+  "target": "t267",
+  "scope": "Original city3 BSP/AAS and exact native button82→t267→door81 link; no modified activator targets or button health. Monsters removed, one initial placement. Focused navigation test, not full campaign or combat acceptance.",
+  "acceptance": ["Trace selects original shoot button82 for door81 through t267", "One stationary Blaster firing frame", "Observed native button movement before door opening before crossing", "Alive, same map, no teammate or forced gameplay commands after placement"]
+}

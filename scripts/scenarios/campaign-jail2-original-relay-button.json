@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "name": "campaign-jail2-original-relay-button",
+  "map": "jail2",
+  "runner": "scripts/run_original_activation.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -OriginalRelay -Seed 101 -Port 31700",
+  "initial_position": [-2776, 300, 24.125],
+  "test_goal": [-2880, 288, 24.125],
+  "button_model": 3,
+  "door_model": 47,
+  "target_chain": ["t61", "t29"],
+  "scope": "Original jail2 BSP/AAS and native button3→t61→relay→t29→door47; all activation links preserved, including other effects of t61. Monsters removed, one initial placement. Focused navigation acceptance, not a whole level or combat test.",
+  "acceptance": ["Exact original relay chain in campaign.button", "Approach accessible face without traversing the closed door", "Native button movement before door opening before crossing", "Touch interaction without firing", "Alive, same map, no teammate; no forced gameplay after initial placement"]
+}

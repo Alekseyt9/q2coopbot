@@ -1,0 +1,18 @@
+{
+  "id": "campaign-city3-original-shoot-button",
+  "title": "Точный выбор исходной высокой shoot-кнопки city3 по BSP",
+  "map": "city3",
+  "kind": "campaign_dependency",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/campaign-city3-original-shoot-button.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -OriginalShoot -Seed 101 -Port 31680",
+  "evidence": "workspace/artifacts/original-activation-20261003-175618-250/report.json",
+  "failure_evidence": ["workspace/artifacts/original-activation-20261003-174755-924/report.json", "workspace/artifacts/original-activation-20261003-175041-223/report.json"],
+  "symptom": "Shoot-кнопка ошибочно требовала пересечения своего высотного диапазона с корпусом игрока. В BSP были также исключённые на всех skill версия двери70/кнопки69, дававшие ложную ненаблюдаемую блокировку. Короткий AAS route запрещал выбор кнопки несмотря на реальную закрытую дверь.",
+  "resolution": "Высотный контакт обязателен только для touch, shoot сохраняет проверку линии/позиции. Для non-deathmatch coop исключены entities со всеми NOT_EASY/MEDIUM/HARD, кроме worldspawn; индивидуальные ограничения остаются неизвестными без server skill. NOT_COOP не исключается: native g_spawn.c очищает этот бит без inhibit. Необходимость кнопки определяет реальная блокировка, не длина AAS маршрута. Выбранная связь строго button82→t267→door81.",
+  "validation": {"timescale": 2, "parallelism": 2, "seeds": [101,102], "positive_passed": 2, "provenance_valid": true, "exact_link_frames": [14,14], "shoot_frames": [1,1], "native_button_frames": [29,29], "door_open_frames": [39,39], "cross_frames": [41,41]},
+  "regression_evidence": ["workspace/artifacts/original-activation-20261003-175618-403/report.json", "workspace/artifacts/original-activation-20261003-175618-691/report.json"],
+  "missing_setup": ["Общий dispatcher ещё не привязан; использовать специализированный runner."],
+  "remaining_validation": ["Исходная relay-связка без изменения entities", "Длинный маршрут от нормального spawn и бой", "Skill-specific entities при неизвестном server skill", "Deathmatch не входит в контракт coopMapEntities"]
+}

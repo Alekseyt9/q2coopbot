@@ -1,0 +1,18 @@
+{
+  "id": "campaign-jail2-original-relay-button",
+  "title": "Подход к исходной relay-кнопке jail2 без пересечения закрытой двери",
+  "map": "jail2",
+  "kind": "campaign_dependency",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/campaign-jail2-original-relay-button.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -OriginalRelay -Seed 101 -Port 31700",
+  "evidence": "workspace/artifacts/original-activation-20261003-181408-948/report.json",
+  "failure_evidence": ["workspace/artifacts/original-activation-20261003-180816-093/report.json", "workspace/artifacts/original-activation-20261003-181057-808/report.json"],
+  "symptom": "Точная BSP связь выбрана правильно, но ближайшая сторона кнопки находилась за закрытой дверью. После выбора доступной стороны full-speed probe и crouch-проверка заглядывали за точку медленного контакта и снова блокировали нажатие.",
+  "resolution": "Выбор стороны подхода проверяет весь путь против observed/unknown дверей. Для campaign touch сохраняется медленный standing-контакт без автоматического crouch и door probe соответствует ограниченному шагу. Цепочка button3→t61→relay→t29→door47 остаётся исходной.",
+  "validation": {"timescale": 2, "parallelism": 2, "seeds": [101,102], "positive_passed": 2, "provenance_valid": true, "exact_link_frames": [20,20], "native_button_frames": [19,19], "door_open_frames": [27,27], "cross_frames": [35,35], "final_health": [100,100]},
+  "regression_evidence": ["workspace/artifacts/original-activation-20261003-181540-193/report.json", "workspace/artifacts/original-activation-20261003-181612-993/report.json"],
+  "missing_setup": ["Общий dispatcher ещё не привязан; использовать специализированный runner."],
+  "remaining_validation": ["Маршрут от нормального spawn и бой", "base3: исходная кнопка45 открывает люк21 и поднимает платформу20; отдельный native эпизод ещё не проверен", "Проверка эффектов короткоходных дверей по фактической доступности прохода вместо общего порога60"]
+}
