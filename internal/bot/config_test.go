@@ -3,10 +3,34 @@ package bot
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestCampaignRouteConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "route.json")
+	for _, data := range []string{
+		`{"run":{"mode":"companion","campaign_route":["base1","base2"]}}`,
+		`{"run":{"mode":"campaign","next_map":"base2","campaign_route":["base1","base2"]}}`,
+		`{"run":{"mode":"campaign","campaign_route":["base1"]}}`,
+	} {
+		if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadConfig(path); err == nil {
+			t.Fatal("invalid route config accepted", data)
+		}
+	}
+	if err := os.WriteFile(path, []byte(`{"run":{"mode":"campaign","campaign_route":["base1","base2","base3"]}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil || !cfg.Campaign || cfg.CampaignNextMap != "" || !slices.Equal(cfg.CampaignRoute, []string{"base1", "base2", "base3"}) {
+		t.Fatal(cfg.CampaignRoute, err)
+	}
+}
 
 func TestLoadConfigResolvesPathsAndDefaults(t *testing.T) {
 	dir := t.TempDir()

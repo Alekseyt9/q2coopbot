@@ -23,6 +23,7 @@ import (
 type Config struct {
 	Campaign                            bool
 	CampaignNextMap                     string
+	CampaignRoute                       []string
 	CheckpointControl                   string
 	CheckpointRestore                   string
 	CheckpointMode                      string
@@ -339,7 +340,7 @@ func Run(ctx context.Context, cfg Config) error {
 		testWalkRunIn:    cfg.TestWalkRunIn,
 		testWalkThenPlan: cfg.TestWalkThenPlan,
 		conn:             conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
-		decoder: quake.NewDecoder(), planner: &Planner{Campaign: cfg.Campaign, CampaignNextMap: cfg.CampaignNextMap, AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53, TestDisableProjectileLead: cfg.TestDisableProjectileLead, TestDisableHandGrenade: cfg.Idle || cfg.TestWeaponSwitchFixture == "hand_grenade_observe" || cfg.TestWeaponSwitchFixture == "hand_grenade_guard" || handGrenadeArmFixture(cfg.TestWeaponSwitchFixture)},
+		decoder: quake.NewDecoder(), planner: &Planner{Campaign: cfg.Campaign, CampaignNextMap: cfg.CampaignNextMap, CampaignRoute: append([]string(nil), cfg.CampaignRoute...), AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53, TestDisableProjectileLead: cfg.TestDisableProjectileLead, TestDisableHandGrenade: cfg.Idle || cfg.TestWeaponSwitchFixture == "hand_grenade_observe" || cfg.TestWeaponSwitchFixture == "hand_grenade_guard" || handGrenadeArmFixture(cfg.TestWeaponSwitchFixture)},
 		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name, checkpointControl: cfg.CheckpointControl, checkpointRestore: restore, checkpointMode: cfg.CheckpointMode,
 		memoryFile: cfg.MemoryFile, memorySession: cfg.MemorySession,
 		idle: cfg.Idle, duration: cfg.Duration, framePaced: cfg.FramePaced, gameFrames: cfg.GameFrames,

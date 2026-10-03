@@ -117,9 +117,12 @@ func (p *Planner) pickupGoal(s quake.Snapshot) (quake.Vec3, bool) {
 			p.finishPickup(s, "interrupted")
 			return quake.Vec3{}, false
 		}
-		if p.exitPreparation != nil && p.nearCampaignExit(s) {
+		if p.exitPreparationDone() && p.nearCampaignExit(s) {
 			cost, routeOK := p.resourceWalkingRoute(s.Self, t.attempt.Target)
-			if !routeOK || !p.exitPickupAllowed(s, quake.Object{Class: t.attempt.Class}, t.attempt.Target, cost, t.attempt.FromMemory) {
+			if !routeOK {
+				cost = math.Inf(1)
+			}
+			if !p.exitPickupAllowed(s, quake.Object{Class: t.attempt.Class}, t.attempt.Target, cost, t.attempt.FromMemory) {
 				p.finishPickup(s, "preparation_complete")
 				return quake.Vec3{}, false
 			}

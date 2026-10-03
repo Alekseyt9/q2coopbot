@@ -25,11 +25,12 @@ type ConfigFile struct {
 		AASDir        string `json:"aas_dir"`
 	} `json:"client"`
 	Run struct {
-		Mode       string `json:"mode"`
-		NextMap    string `json:"next_map"`
-		Duration   string `json:"duration"`
-		FramePaced bool   `json:"frame_paced"`
-		GameFrames int    `json:"game_frames"`
+		CampaignRoute []string `json:"campaign_route"`
+		Mode          string   `json:"mode"`
+		NextMap       string   `json:"next_map"`
+		Duration      string   `json:"duration"`
+		FramePaced    bool     `json:"frame_paced"`
+		GameFrames    int      `json:"game_frames"`
 	} `json:"run"`
 	Models struct {
 		System1 string `json:"system1"`
@@ -158,6 +159,13 @@ func LoadConfig(path string) (Config, error) {
 	}
 	cfg.Campaign = file.Run.Mode == "campaign"
 	cfg.CampaignNextMap = file.Run.NextMap
+	cfg.CampaignRoute = append([]string(nil), file.Run.CampaignRoute...)
+	if err := validateCampaignRoute(cfg.CampaignRoute); err != nil {
+		return cfg, err
+	}
+	if len(cfg.CampaignRoute) > 0 && (!cfg.Campaign || cfg.CampaignNextMap != "") {
+		return cfg, fmt.Errorf("run.campaign_route requires campaign and cannot be combined with next_map")
+	}
 	if cfg.CampaignNextMap != "" && (!cfg.Campaign || !regexp.MustCompile(`^[a-zA-Z0-9_]+$`).MatchString(cfg.CampaignNextMap)) {
 		return cfg, fmt.Errorf("run.next_map requires campaign and a map name")
 	}

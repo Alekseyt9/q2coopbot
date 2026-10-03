@@ -1,14 +1,17 @@
 [CmdletBinding()]
-param([switch]$Worker,[switch]$FullLevel,[switch]$Combat,[switch]$Checkpoint,[ValidateRange(0,2147483646)][int]$Seed=101,[int]$Port=31240,[string]$OutputRoot='',[string]$Client='',[string]$SourceRuntime='')
+param([switch]$Worker,[switch]$FullLevel,[switch]$Combat,[switch]$Checkpoint,[switch]$Continue,[ValidateSet('','available','empty')][string]$Prepare='',[ValidateRange(0,2147483646)][int]$Seed=101,[int]$Port=31240,[string]$OutputRoot='',[string]$Client='',[string]$SourceRuntime='')
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 if($Combat){$FullLevel=$true}
 if($Checkpoint -and !$Combat){throw 'Campaign checkpoint requires Combat'}
+if($Prepare -and ($Combat -or $FullLevel -or $Checkpoint)){throw 'Preparation requires isolated exit fixture'}
+if($Continue -and ($Prepare -or $Combat -or $FullLevel -or $Checkpoint)){throw 'Continuation requires isolated navigation fixture'}
 if(!$Worker){
     . "$PSScriptRoot/harness_manifest.ps1"
     $fingerprint=Get-HarnessFingerprint (Get-HarnessSourceRecords $repo)
     $SourceRuntime=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map base1 -KeepMonsters:$Combat
-    $prefix=if($Combat){'campaign-combat-'}elseif($FullLevel){'campaign-level-'}else{'campaign-exit-'}
+    if($Continue){& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map base2 | Out-Null}
+    $prefix=if($Continue){'campaign-continue-'}elseif($Prepare){'campaign-prepare-'+$Prepare+'-'}elseif($Combat){'campaign-combat-'}elseif($FullLevel){'campaign-level-'}else{'campaign-exit-'}
     $OutputRoot=Join-Path $repo ('workspace/artifacts/'+$prefix+(Get-Date -Format yyyyMMdd-HHmmss-fff))
     New-Item -ItemType Directory $OutputRoot|Out-Null
     $Client=Join-Path $OutputRoot 'q2coopbot.exe'
@@ -23,6 +26,8 @@ if(!$Worker){
         if($using:FullLevel){$workerArgs+='-FullLevel'}
         if($using:Combat){$workerArgs+='-Combat'}
         if($using:Checkpoint){$workerArgs+='-Checkpoint'}
+        if($using:Prepare){$workerArgs+=@('-Prepare',$using:Prepare)}
+        if($using:Continue){$workerArgs+='-Continue'}
         $workerLog=Join-Path $using:OutputRoot "worker-$_.log"
         $workerErr=Join-Path $using:OutputRoot "worker-$_.err"
         $quotedArgs=@($workerArgs|ForEach-Object {'"'+$_+'"'})
@@ -47,11 +52,25 @@ Copy-Item (Join-Path $SourceRuntime 'baseq2/game.dll') (Join-Path $runtime 'base
 foreach($asset in Get-ChildItem (Join-Path $SourceRuntime 'baseq2') -File -Recurse|Where-Object Extension -In '.pak','.aas','.bsp','.ent'){
     $dest=Join-Path (Join-Path $runtime 'baseq2') ([IO.Path]::GetRelativePath((Join-Path $SourceRuntime 'baseq2'),$asset.FullName))
     New-Item -ItemType Directory (Split-Path $dest -Parent) -Force|Out-Null
+    if($asset.Extension -eq '.ent'){Copy-Item $asset.FullName $dest;continue}
     try{New-Item -ItemType HardLink -Path $dest -Target $asset.FullName -ErrorAction Stop|Out-Null}catch{Copy-Item $asset.FullName $dest}
 }
-$sceneName=if($Combat){'base1-campaign-combat.json'}elseif($FullLevel){'base1-campaign-level.json'}else{'base1-campaign-exit.json'}
+$sceneName=if($Continue){'base1-campaign-continue.json'}elseif($Prepare){'base1-campaign-prepare.json'}elseif($Combat){'base1-campaign-combat.json'}elseif($FullLevel){'base1-campaign-level.json'}else{'base1-campaign-exit.json'}
 $scene=Get-Content (Join-Path "$PSScriptRoot/scenarios" $sceneName) -Raw|ConvertFrom-Json
+if($Continue){
+    foreach($ext in @('aas','ent')){Copy-Item -LiteralPath (Join-Path $repo "workspace/runtime/q2go-elevator-cycle-base2/baseq2/maps/base2.$ext") -Destination (Join-Path $runtime "baseq2/maps/base2.$ext") -Force}
+}
+if($Prepare){
+    $entPath=Join-Path $runtime 'baseq2/maps/base1.ent'
+    $blocks=@([regex]::Matches((Get-Content $entPath -Raw),'(?s)\{[^{}]*\}')|ForEach-Object Value)
+    $blocks=@($blocks|Where-Object {$_ -notmatch '"classname"\s+"(?:monster_|weapon_|ammo_|item_)'})
+    if($Prepare -eq 'available'){
+        foreach($item in $scene.items){$blocks+="{`n"+'"classname" "'+$item.class+"`"`n"+'"origin" "'+$item.origin+"`"`n}"}
+    }
+    [IO.File]::WriteAllText($entPath,($blocks -join "`n"),[Text.Encoding]::ASCII)
+}
 $report=@{accepted=$false;reason='not_run';port=$Port;timescale=2;seed=$Seed};$server=$null;$bot=$null
+if($Prepare){$report.preparation_fixture_sha256=(Get-FileHash $entPath).Hash}
 try{
     if($Combat){
         $fixture=Get-Content (Join-Path $SourceRuntime 'elevator-fixture.json') -Raw|ConvertFrom-Json
@@ -70,8 +89,11 @@ try{
     $test=@{}
     if($Checkpoint){$test.checkpoint_control=Join-Path $OutputRoot 'control.json';$test.hold_position=$true}
     if(!$FullLevel){$test=@{teleport_map=$scene.map;teleport=$scene.origin}}
-    $duration=if($Combat){'115s'}elseif($FullLevel){'75s'}else{'20s'}
-    @{server=@{host='127.0.0.1';port=$Port};client=@{name='CampaignBot';game_dir=(Join-Path $runtime 'baseq2')};run=@{duration=$duration;frame_paced=$true;mode='campaign';next_map=$scene.next_map};output=@{trace_jsonl=$trace};test=$test}|ConvertTo-Json -Depth 6|Set-Content $config -Encoding utf8
+    if($Prepare){$test.initial_health=$scene.initial_health;$test.weapon_switch_fixture='blaster'}
+    $duration=if($Combat){'115s'}elseif($FullLevel){'75s'}elseif($Prepare -or $Continue){'40s'}else{'20s'}
+    $run=@{duration=$duration;frame_paced=$true;mode='campaign'}
+    if($Continue){$run.campaign_route=$scene.campaign_route}else{$run.next_map=$scene.next_map}
+    @{server=@{host='127.0.0.1';port=$Port};client=@{name='CampaignBot';game_dir=(Join-Path $runtime 'baseq2')};run=$run;output=@{trace_jsonl=$trace};test=$test}|ConvertTo-Json -Depth 6|Set-Content $config -Encoding utf8
     $bot=Start-Process $Client -ArgumentList "--config `"$config`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
     if($Checkpoint){
         $deadline=(Get-Date).AddSeconds(10);$anchor=$null
@@ -108,17 +130,28 @@ try{
         $release=& $tool --config $opPath 2> (Join-Path $OutputRoot 'release.err');if($LASTEXITCODE){throw 'Campaign restore release failed'}
         $report.checkpoint=@{capture=$capture;receipt=$receipt;load=$load;release=($release|ConvertFrom-Json);mode='resume';scope='held at native spawn for safe capture; same server, new bot process; no fresh/resume comparison yet'}
     }
-    $deadline=(Get-Date).AddSeconds($(if($Combat){110}elseif($FullLevel){70}else{18}));$last=$null
+    $deadline=(Get-Date).AddSeconds($(if($Combat){110}elseif($FullLevel){70}elseif($Prepare -or $Continue){36}else{18}));$last=$null
     do{
         if(Test-Path $trace){foreach($line in Get-Content $trace -Tail 4){try{$last=$line|ConvertFrom-Json}catch{}}}
         if($last.map -eq $scene.next_map -and $last.campaign.state -eq 'level_completed'){break}
+        if($Continue -and $last.map -eq 'base2' -and $last.frame -ge 40 -and $last.goal -eq 'reach_level_exit' -and $last.campaign.route_index -eq 1){break}
         if($bot.HasExited -or $server.HasExited){throw 'Trial process exited'}
         Start-Sleep -Milliseconds 100
     }while((Get-Date) -lt $deadline)
-    if($last.map -ne $scene.next_map -or $last.campaign.state -ne 'level_completed'){throw 'No confirmed native transition'}
+    if($last.map -ne $scene.next_map -or (!$Continue -and $last.campaign.state -ne 'level_completed')){throw 'No confirmed native transition'}
     $rows=@(Get-Content $trace|ForEach-Object {try{$_|ConvertFrom-Json}catch{}})
     $levelRows=@($rows|Where-Object map -EQ $scene.map)
     if($rows|Where-Object teammate){throw 'Solo trial observed a teammate'}
+    if($Continue){
+        $newRows=@($rows|Where-Object map -EQ 'base2')
+        $moving=@($newRows|Where-Object {$_.goal -eq 'reach_level_exit' -and $_.campaign.state -eq 'approach_exit' -and $_.campaign.route_index -eq 1 -and $_.campaign.completed_levels -eq 1 -and $_.campaign.exit.destination -like 'base3*' -and ($_.sent_command.forward -ne 0 -or $_.sent_command.side -ne 0)})
+        if(!$moving.Count -or $newRows[0].spawncount -eq $rows[0].spawncount){throw 'New-map forward campaign goal absent'}
+        $displacement=0
+        foreach($row in $moving){$dx=$row.self[0]-$newRows[0].self[0];$dy=$row.self[1]-$newRows[0].self[1];$displacement=[math]::Max($displacement,[math]::Sqrt($dx*$dx+$dy*$dy))}
+        if($displacement -lt 64){throw 'New-map native displacement absent'}
+        if($newRows|Where-Object {$_.campaign.preparation.map -eq 'base1'}){throw 'Old-map preparation leaked'}
+        $report.continuation=@{first=$newRows[0];movement=$moving[-1];displacement=$displacement;scope=$scene.scope;destination='base3'}
+    }
     if($FullLevel){
         $first=if($Checkpoint){$originalStart}else{$rows[0]}
         if($first.map -ne $scene.map -or [math]::Abs($first.self[0]-128) -gt 1 -or [math]::Abs($first.self[1]+320) -gt 1 -or $first.self[2] -lt 24 -or $first.self[2] -gt 46 -or $first.health -ne 100){throw 'Normal base1 spawn proof absent'}
@@ -130,7 +163,8 @@ try{
     $opened=@($rows|Where-Object {$_.map -eq $scene.map -and ($_.movers|Where-Object {$_.model -eq 31 -and $_.origin[2] -lt -60})})
     if(!$button.Count -or !$opened.Count){throw 'Button contact/open hatch proof absent'}
     if(!$FullLevel){
-        $start=@($rows|Where-Object {$_.map -eq $scene.map -and [math]::Abs($_.self[0]+1632) -lt 1 -and [math]::Abs($_.self[1]-1600) -lt 1}|Select-Object -First 1)
+        $origin=@($scene.origin.Split(',')|ForEach-Object {[double]::Parse($_,[cultureinfo]::InvariantCulture)})
+        $start=@($rows|Where-Object {$_.map -eq $scene.map -and [math]::Abs($_.self[0]-$origin[0]) -lt 1 -and [math]::Abs($_.self[1]-$origin[1]) -lt 1}|Select-Object -First 1)
         if(!$start.Count -or $start[0].self[0]-16 -le -1712){throw 'Fixture starts inside exit'}
     }
     $log=Get-Content (Join-Path $OutputRoot 'bot.err') -Raw
@@ -139,7 +173,25 @@ try{
     if($seedAck.Count -ne 1){throw 'Native game seed acknowledgement absent'}
     $report.seed_verified=$true
     $expectedTeleports=if($FullLevel){0}else{1}
-    if(@([regex]::Matches($log,'client command: teleport ')).Count -ne $expectedTeleports -or $log -match 'client command: (map|gamemap|give|kill) '){throw 'Placement or forced gameplay command'}
+    $forbidden=if($Prepare){'client command: (map|gamemap|kill) '}else{'client command: (map|gamemap|give|kill) '}
+    if(@([regex]::Matches($log,'client command: teleport ')).Count -ne $expectedTeleports -or $log -match $forbidden){throw 'Placement or forced gameplay command'}
+    if($Prepare){
+        if(@([regex]::Matches($log,'client command: give health 60')).Count -ne 1 -or @([regex]::Matches($log,'client command: give ')).Count -ne 1){throw 'Initial health fixture mismatch'}
+        $stages=@($levelRows|Where-Object {$_.campaign.preparation})
+        if(!$stages.Count -or $start[0].health -ne 60 -or ($stages|Where-Object {$_.campaign.preparation.budget_frames -ne 200 -or $_.campaign.preparation.spent_frames -gt 200})){throw 'Preparation clock/loadout proof absent'}
+        if($Prepare -eq 'available'){
+            $ready=$stages|Where-Object {$_.campaign.preparation.state -eq 'ready' -and $_.health -ge 75 -and $_.armor -ge 25 -and ($_.inventory|Where-Object {$_.name -eq 'Shells' -and $_.count -ge 10})}|Select-Object -First 1
+            $picked=@($levelRows|Where-Object {$_.pickup.state -eq 'confirmed'}|Group-Object {$_.pickup.entity.ToString()+':'+$_.pickup.end_frame}|ForEach-Object {$_.Group[0].pickup})
+            if(!$ready -or !($picked|Where-Object class -EQ 'item_armor_jacket') -or !($picked|Where-Object class -EQ 'ammo_shells')){throw 'Combined health/armor/ammo readiness proof absent'}
+            $report.preparation_ready=$ready;$report.pickup_confirmations=$picked
+        }else{
+            if($levelRows|Where-Object {$_.health -ne 60 -or $_.armor -ne 0 -or $_.pickups -or $_.campaign.preparation.state -eq 'ready'}){throw 'Empty fixture acquired resources or claimed readiness'}
+            $continued=$stages|Where-Object {$_.campaign.preparation.state -eq 'no_safe_resources' -and $_.goal -eq 'reach_level_exit' -and ($_.sent_command.forward -ne 0 -or $_.sent_command.side -ne 0)}|Select-Object -First 1
+            if(!$continued){throw 'Missing resources delayed exit'}
+            $report.continued_without_resources=$continued
+        }
+        $report.preparation_case=$Prepare
+    }
     $report.accepted=$true;$report.reason='accepted';$report.approach=$approach[0];$report.button_contact=$button[0];$report.hatch_open=$opened[0];$report.completed=$last;$report.trace=$trace;$report.scope=$scene.scope
     $loss=0;$gain=0;$previous=$levelRows[0];$uniqueFrames=0;$attacks=0
     foreach($row in $levelRows){

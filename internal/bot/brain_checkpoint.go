@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"q2coopbot/internal/quake"
+	"slices"
 	"sort"
 )
 
@@ -23,10 +24,12 @@ type PlannerCheckpoint struct {
 }
 
 type CampaignCheckpoint struct {
-	PreparationSpent *int   `json:"preparation_spent_frames,omitempty"`
-	Map              string `json:"map"`
-	Destination      string `json:"destination"`
-	NextMap          string `json:"next_map"`
+	Route            []string `json:"route,omitempty"`
+	RouteIndex       int      `json:"route_index,omitempty"`
+	PreparationSpent *int     `json:"preparation_spent_frames,omitempty"`
+	Map              string   `json:"map"`
+	Destination      string   `json:"destination"`
+	NextMap          string   `json:"next_map"`
 }
 
 type CheckpointResource struct {
@@ -49,6 +52,8 @@ func (p *Planner) CaptureCheckpoint() (PlannerCheckpoint, error) {
 	state := PlannerCheckpoint{Version: 1, Map: s.Map, CapturedFrame: s.Frame, Goal: p.World.Goal, DeathPoint: cloneCheckpointPoint(p.deathPoint)}
 	if p.Campaign {
 		state.Campaign = &CampaignCheckpoint{Map: p.campaignMap, Destination: p.campaignDestination, NextMap: p.CampaignNextMap}
+		state.Campaign.Route = append([]string(nil), p.CampaignRoute...)
+		state.Campaign.RouteIndex = p.campaignRouteIndex
 		if p.exitPreparation != nil {
 			spent := p.exitPreparation.SpentFrames
 			state.Campaign.PreparationSpent = &spent
@@ -78,6 +83,16 @@ func (p *Planner) CaptureCheckpoint() (PlannerCheckpoint, error) {
 
 func (state PlannerCheckpoint) validate(mapName string) error {
 	if state.Campaign != nil {
+		c := state.Campaign
+		if err := validateCampaignRoute(c.Route); err != nil {
+			return err
+		}
+		if len(c.Route) == 0 && c.RouteIndex != 0 || len(c.Route) > 0 && (c.NextMap != "" || c.RouteIndex < 0 || c.RouteIndex >= len(c.Route) || c.Route[c.RouteIndex] != state.Map) {
+			return fmt.Errorf("invalid campaign route progress")
+		}
+		if len(c.Route) > 0 && c.Map != "" && (c.Map != state.Map || c.RouteIndex+1 >= len(c.Route) || c.Destination != c.Route[c.RouteIndex+1]) {
+			return fmt.Errorf("campaign exit differs from route")
+		}
 		if spent := state.Campaign.PreparationSpent; spent != nil && (*spent < 0 || *spent > exitPreparationFrames || state.Campaign.Map != state.Map) {
 			return fmt.Errorf("invalid campaign preparation budget")
 		}
@@ -128,7 +143,7 @@ func (p *Planner) RestoreCheckpoint(state PlannerCheckpoint, fresh quake.Snapsho
 	if err := state.validate(fresh.Map); err != nil {
 		return err
 	}
-	if (state.Campaign != nil) != p.Campaign || state.Campaign != nil && state.Campaign.NextMap != p.CampaignNextMap {
+	if (state.Campaign != nil) != p.Campaign || state.Campaign != nil && (state.Campaign.NextMap != p.CampaignNextMap || !slices.Equal(state.Campaign.Route, p.CampaignRoute)) {
 		return fmt.Errorf("campaign checkpoint/config mismatch")
 	}
 	if fresh.Frame <= 0 || fresh.Health <= 0 || !fresh.OnGround || p.observed || p.jump != nil || p.elevator != nil || p.grenadeThrow != nil || len(p.resources) > 0 {
@@ -149,6 +164,7 @@ func (p *Planner) RestoreCheckpoint(state PlannerCheckpoint, fresh quake.Snapsho
 	if state.Campaign != nil {
 		p.campaignMap = state.Campaign.Map
 		p.campaignDestination = state.Campaign.Destination
+		p.campaignRouteIndex = state.Campaign.RouteIndex
 		if spent := state.Campaign.PreparationSpent; spent != nil {
 			p.exitPreparation = &ExitPreparation{Map: fresh.Map, SpentFrames: *spent, lastFrame: fresh.Frame}
 		}

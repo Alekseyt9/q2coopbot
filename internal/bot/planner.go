@@ -48,6 +48,8 @@ type Planner struct {
 	campaignDestination       string
 	Campaign                  bool
 	CampaignNextMap           string
+	CampaignRoute             []string
+	campaignRouteIndex        int
 	grenadeThrow              *grenadeThrow
 	grenadeRequestFrame       int
 	grenadeRequestMap         string
@@ -543,7 +545,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			p.routeKnown = false
 		}
 	}
-	if !p.routeKnown || goalChanged && p.bridgeLink == nil || p.elevator == nil && p.bridgeLink == nil && now.Sub(p.routeAt) > 4*time.Second || teleported {
+	if !p.routeKnown || goalChanged && p.bridgeLink == nil || p.elevator == nil && p.bridgeLink == nil && now.Sub(p.routeAt) > 4*time.Second || teleported || campaign && !p.routeOK && s.OnGround && s.Frame%10 == 0 {
 		// A ride owns the board/exit pair of this route. A replacement route
 		// must not inherit its state or suppress subsequent route refreshes.
 		p.elevator = nil
@@ -567,7 +569,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			}
 			// A visible player can take priority immediately after spawning,
 			// while the spawn area still lacks outgoing AAS links.
-			if !p.routeOK && (regrouping || p.World.Goal == "follow_teammate") {
+			if !p.routeOK && (regrouping || p.World.Goal == "follow_teammate" || campaign) {
 				p.route, p.routeOK = p.regroupEntryRoute(s, goal)
 			}
 			if !p.routeOK {
