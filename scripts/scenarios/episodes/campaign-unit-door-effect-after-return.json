@@ -1,0 +1,19 @@
+{
+  "id": "campaign-unit-door-effect-after-return",
+  "title": "Межкарточный активатор: возврат к двери вне PVS и проверка прохода",
+  "map": "unit_a",
+  "kind": "campaign_dependency",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/campaign-unit-trip.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_unit_trip.ps1 -Seed 101 -Port 31670",
+  "negative_command": "pwsh -NoProfile -File scripts/run_campaign_unit_trip.ps1 -Blocked -Seed 101 -Port 31670",
+  "failure_evidence": "workspace/artifacts/campaign-unit-trip-20261003-145527-651/report.json",
+  "evidence": "workspace/artifacts/campaign-unit-trip-20261003-152112-404/report.json",
+  "negative_evidence": "workspace/artifacts/campaign-unit-trip-20261003-152118-455/report.json",
+  "symptom": "Бот выполнял переход unit_a→unit_b→unit_a и касался активатора, но дверь после загрузки могла уйти из PVS до первого snapshot. Отсутствие mover не подтверждало открытие; задача завершалась effect_unconfirmed.",
+  "resolution": "Цель хранится стеком: outbound, activate, return, verify. Контакт считается попыткой, flags остаются unknown. При отсутствующей ранее наблюдавшейся двери допускается короткая проба по безопасному полу; серверное перемещение в ранее закрытый brush подтверждает проходимость. Native положительный цикл продолжился до unit_c в обеих ветвях; отрицательный с удалённым setter вернулся к закрытой двери и не засчитал эффект/прогресс.",
+  "validation": {"timescale": 2, "parallelism": 2, "seeds": [101,102], "positive_passed": 2, "negative_passed": 2, "provenance_valid": true},
+  "missing_setup": ["Привязка специализированного runner к общему run_episode_regressions; observation_only обозначает отсутствие общей привязки, а не отсутствие native проверки."],
+  "remaining_validation": ["Native save/load активного межкарточного стека", "Группы частичных активаторов и shoot-действия", "Исходные игровые карты и боевая обстановка"]
+}

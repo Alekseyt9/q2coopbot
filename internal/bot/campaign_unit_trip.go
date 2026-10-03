@@ -14,19 +14,20 @@ type CampaignUnitGoal struct {
 }
 
 type CampaignUnitTrip struct {
-	State          string              `json:"state"`
-	OriginMap      string              `json:"origin_map"`
-	DoorModel      int                 `json:"door_model"`
-	Stack          []CampaignUnitGoal  `json:"stack"`
-	Attempted      bool                `json:"action_attempted"`
-	ElapsedFrames  int                 `json:"elapsed_frames"`
-	Dependency     *CampaignDependency `json:"dependency"`
-	EffectEvidence string              `json:"effect_evidence,omitempty"`
-	ProbeFrames    int                 `json:"probe_frames,omitempty"`
-	probing        bool
-	lastMap        string
-	lastFrame      int
-	verifyStarted  int
+	State            string              `json:"state"`
+	OriginMap        string              `json:"origin_map"`
+	DoorModel        int                 `json:"door_model"`
+	Stack            []CampaignUnitGoal  `json:"stack"`
+	Attempted        bool                `json:"action_attempted"`
+	ElapsedFrames    int                 `json:"elapsed_frames"`
+	Dependency       *CampaignDependency `json:"dependency"`
+	EffectEvidence   string              `json:"effect_evidence,omitempty"`
+	ProbeFrames      int                 `json:"probe_frames,omitempty"`
+	probing          bool
+	lastMap          string
+	lastFrame        int
+	verifyStarted    int
+	verifyStartedSet bool
 }
 
 func (p *Planner) startCampaignUnitTrip(s quake.Snapshot) bool {
@@ -80,7 +81,11 @@ func (p *Planner) campaignUnitGoal(s quake.Snapshot, d *CampaignDecision) (quake
 	d.RouteIndex, d.CompletedLevels = p.campaignRouteIndex, p.campaignRouteIndex
 	advanced := s.Map != t.lastMap || s.Frame > t.lastFrame
 	if advanced && t.probing {
-		t.ProbeFrames++
+		if s.Map == t.lastMap && s.Frame > t.lastFrame {
+			t.ProbeFrames += s.Frame - t.lastFrame
+		} else {
+			t.ProbeFrames++
+		}
 	}
 	if s.Map == t.lastMap && s.Frame > t.lastFrame {
 		t.ElapsedFrames += s.Frame - t.lastFrame
@@ -177,8 +182,9 @@ func (p *Planner) campaignUnitGoal(s quake.Snapshot, d *CampaignDecision) (quake
 				p.routeKnown = false
 				return quake.Vec3{}, false, false, ""
 			}
-			if t.verifyStarted == 0 {
+			if t.verifyStarted == 0 && !t.verifyStartedSet {
 				t.verifyStarted = s.Frame
+				t.verifyStartedSet = true
 			}
 			if s.Frame-t.verifyStarted > 100 {
 				t.State = "effect_unconfirmed"

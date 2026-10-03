@@ -128,6 +128,7 @@ type Client struct {
 	testGapFrames                           int
 	testLineCross                           bool
 	testHoldPosition                        bool
+	testHoldPositionMap                     string
 	testWalkTarget                          quake.Vec3
 	testWalkRoute                           bool
 	testWalkRunIn                           bool
@@ -702,7 +703,8 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			cmd := c.planner.command(c.previous)
 			chatMessage := ""
-			if !c.idle && !safetyStop && !c.testHoldPosition && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
+			holdPosition := c.testHoldPosition || c.testHoldPositionMap != "" && c.planner.World.Snapshot.Map == c.testHoldPositionMap
+			if !c.idle && !safetyStop && !holdPosition && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
 				chatMessage = c.planChat.command(c.planner, now)
 				if chatMessage != "" {
 					if err := c.command(chatMessage); err != nil {
@@ -765,7 +767,7 @@ func (c *Client) run(ctx context.Context) error {
 				cmd = quake.UserCmd{}
 				c.planner.World.Command = CommandDecision{MoveSource: "none", AimSource: "none", LimitReason: "test_teleport_settling"}
 			}
-			if c.testHoldPosition {
+			if holdPosition {
 				cmd.Forward, cmd.Side, cmd.Up = 0, 0, 0
 				c.planner.World.Command.MoveSource = "test_hold"
 			}

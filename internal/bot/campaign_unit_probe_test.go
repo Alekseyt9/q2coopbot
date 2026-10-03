@@ -65,6 +65,10 @@ func TestUnitDoorProbeRequiresNativeDisplacement(t *testing.T) {
 	}
 	s.Movers = nil
 	trip.ProbeFrames = 13
+	s.Self[0] = 111
+	if p.campaignUnitProbePassed(s) {
+		t.Fatal("late snapshot exceeded confirmation budget")
+	}
 	if _, active := p.campaignUnitProbeCommand(s, cmd); active {
 		t.Fatal("probe exceeded frame budget")
 	}

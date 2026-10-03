@@ -1,0 +1,18 @@
+{
+  "id": "campaign-unit-trip-checkpoint",
+  "title": "Сохранение удалённой подцели на другой карте и продолжение после загрузки",
+  "map": "unit_b",
+  "kind": "campaign_checkpoint",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/campaign-unit-trip.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_unit_trip.ps1 -Checkpoint -Seed 101 -Port 31670",
+  "negative_command": "pwsh -NoProfile -File scripts/run_campaign_unit_trip.ps1 -Checkpoint -Blocked -Seed 101 -Port 31670",
+  "evidence": "workspace/artifacts/campaign-unit-trip-20261003-153510-857/report.json",
+  "negative_evidence": "workspace/artifacts/campaign-unit-trip-20261003-153524-606/report.json",
+  "symptom": "Активный межкарточный стек прежде явно запрещал checkpoint; его нельзя было восстановить на удалённой карте без потери исходной цели и обратного пути.",
+  "resolution": "Native save на unit_b до контакта с активатором; новый процесс клиента после load восстанавливает исходную unit_a→unit_c цель, стек verify/return/activate, обратный путь и потраченный бюджет. Старые контактные кадры и команды пробного движения не переносятся. В обеих ветвях бюджет42 сохранён при смене network frame42→1; затем native активация, возврат и завершение unit_c. При удалённом setter отрицательный контроль заканчивается effect_unconfirmed после возврата, без ложного успеха.",
+  "validation": {"timescale": 2, "parallelism": 2, "seeds": [101,102], "positive_passed": 2, "negative_passed": 2, "provenance_valid": true},
+  "missing_setup": ["Специализированный runner доступен; общая привязка run_episode_regressions ещё отсутствует."],
+  "remaining_validation": ["Native save/load на этапах outbound, return и verify; сейчас покрыты unit-тестами", "Native save посреди пробного прохода", "Исходная кампания с монстрами"]
+}

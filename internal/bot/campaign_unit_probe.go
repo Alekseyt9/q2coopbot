@@ -10,7 +10,7 @@ import (
 // it became passable. Never infer or publish the hidden game.serverflags.
 func (p *Planner) campaignUnitProbePassed(s quake.Snapshot) bool {
 	t := p.campaignUnitTrip
-	if t == nil || !t.probing || t.State != "verify_effect" || !s.OnGround || s.Health <= 0 || s.Map != t.OriginMap || p.World.Geometry == nil {
+	if t == nil || !t.probing || t.ProbeFrames > 12 || t.State != "verify_effect" || !s.OnGround || s.Health <= 0 || s.Map != t.OriginMap || p.World.Geometry == nil {
 		return false
 	}
 	d := t.Dependency
@@ -37,7 +37,9 @@ func (p *Planner) campaignUnitProbeCommand(s quake.Snapshot, cmd quake.UserCmd) 
 	if quake.Horizontal(d.ProbeFrom, d.ProbeTo) > 40.01 || !g.MoverHullClear(closed, d.ProbeFrom, d.ProbeFrom) || g.MoverHullClear(closed, d.ProbeFrom, d.ProbeTo) {
 		return cmd, false
 	}
-	if d.ProbeFrom == d.ProbeTo || !t.probing && quake.Horizontal(s.Self, d.ProbeFrom) > 4 {
+	// Ordinary route arrival has a 10-unit tolerance. Allow that approach
+	// tolerance here, but only while still outside the old closed brush.
+	if d.ProbeFrom == d.ProbeTo || !t.probing && (quake.Horizontal(s.Self, d.ProbeFrom) > 10 || !g.MoverHullClear(closed, s.Self, s.Self)) {
 		return cmd, false
 	}
 	// Keep observed blockers strict. This probe is only for a door which was

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "name": "campaign-unit-trip",
+  "map": "unit_a",
+  "campaign_route": ["unit_a", "unit_c"],
+  "campaign_unit_maps": ["unit_b"],
+  "expected_visits": ["unit_a", "unit_b", "unit_a", "unit_c"],
+  "runner": "scripts/run_campaign_unit_trip.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_unit_trip.ps1 -Seed 101 -Port 31670",
+  "negative_command": "pwsh -NoProfile -File scripts/run_campaign_unit_trip.ps1 -Blocked -Seed 101 -Port 31670",
+  "checkpoint_command": "pwsh -NoProfile -File scripts/run_campaign_unit_trip.ps1 -Checkpoint -Seed 101 -Port 31670",
+  "checkpoint_negative_command": "pwsh -NoProfile -File scripts/run_campaign_unit_trip.ps1 -Checkpoint -Blocked -Seed 101 -Port 31670",
+  "scope": "Isolated native cross-level touch/return/effect fixture using translated original base1 brushes and static AAS. Custom spawn; no monsters/items, teleport, give, scripted movement or forced map changes. Negative control removes the setter at native startup and requires effect_unconfirmed on return. Not proof of a complete original campaign."
+}

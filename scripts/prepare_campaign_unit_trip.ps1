@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$RuntimeRoot)
+param([Parameter(Mandatory)][string]$RuntimeRoot,[switch]$Blocked)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 if(Test-Path $RuntimeRoot){throw 'Fresh unit fixture runtime required'}
@@ -89,6 +89,12 @@ $b=@'
 "map" "unit_a"
 }
 '@
+if($Blocked){
+    # A native startup trigger removes the setter before the client arrives.
+    # BSP retains the planned touch chain: an attempted action must not be
+    # mistaken for a successful runtime effect.
+    $b+="`n{`n`"classname`" `"trigger_always`"`n`"killtarget`" `"unit_set`"`n`"delay`" `"0.2`"`n}`n"
+}
 foreach($name in @('unit_a','unit_b','unit_c')){
     Copy-Item (Join-Path $repo 'workspace/runtime/q2go/baseq2/maps/base1.aas') (Join-Path $RuntimeRoot "baseq2/maps/$name.aas")
     $extra=if($name -eq 'unit_a'){$a}elseif($name -eq 'unit_b'){$b}else{''}
@@ -106,6 +112,6 @@ $text=$world[0].Value+"`n"+$mapSpawn+"`n"+$extra
     [IO.File]::WriteAllBytes((Join-Path $RuntimeRoot "baseq2/maps/$name.bsp"),$fixtureBsp)
     [IO.File]::WriteAllText((Join-Path $RuntimeRoot "baseq2/maps/$name.ent"),$text,[Text.Encoding]::ASCII)
 }
-@{version=1;source_map='base1';maps=@('unit_a','unit_b','unit_c');scope='Isolated cross-level fixture; reused original BSP/AAS, translated door and triggers; no monsters/items; fixture spawn';native_crosslevel_flags=$true}|ConvertTo-Json|Set-Content (Join-Path $RuntimeRoot 'unit-fixture.json')
+@{version=1;source_map='base1';maps=@('unit_a','unit_b','unit_c');scope='Isolated cross-level fixture; reused original BSP/AAS, translated door and triggers; no monsters/items; fixture spawn';native_crosslevel_flags=$true;setter_removed_at_runtime=[bool]$Blocked}|ConvertTo-Json|Set-Content (Join-Path $RuntimeRoot 'unit-fixture.json')
 $RuntimeRoot
 

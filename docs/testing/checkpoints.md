@@ -119,3 +119,9 @@ Go ./... с картами прошёл. Unit проверки отвергаю�
 Далее: короткий solo base1 на общих механиках движения/боя/подбора; checkpoint в безопасной точке этого эпизода; параллельное сравнение resume/fresh с реальными действиями; приёмка восстановленных дверей/лифтов/моста и врагов; затем управление save/load из JSON-сессии. Долгий сетевой обрыв остаётся отложенным.
 
 Обычная native-only регрессия без load-барьера также принята: workspace/artifacts/checkpoint-suite-20261001-211846-939/report.json,2/2 на2x/parallelism2, provenance_valid=true; проверены смена карты, load и повторный load той же карты, новая генерация, сохранённые позиция/HP/инвентарь.
+
+### Межкарточная цель кампании — 03.10.2026
+
+Planner sidecar schema1 теперь может хранить campaign.unit_trip и campaign.unit_maps. Это намерение и потраченные бюджеты, а не замена native save: пакет по-прежнему должен связывать sidecar с игровым состоянием через coordinated barrier. При restore требуется совпадение каталога/основного маршрута, согласованные stack/path/leg/current map и свежий живой grounded snapshot. Контактные кадры и motor probe сбрасываются; скрытые cross-level flags не выводятся из sidecar.
+
+Запуск: pwsh -NoProfile -File scripts/run_campaign_unit_trip.ps1 -Checkpoint -Seed101 -Port31670 (между -Seed и101 нужен пробел). Отрицательный контроль: добавить -Blocked. Native отчёты153510-857 и153524-606 в workspace/artifacts/campaign-unit-trip-20261003-*/report.json:2/2 каждый,2×,parallelism2,seeds101/102. Сохранение сделано на удалённой unit_b до touch, после load новый клиент продолжает исходную unit_a→unit_c задачу. Остальные этапы пока проверены unit; native save во время пробы остаётся TODO. Подробности и реестр — campaign_return.md и scripts/scenarios/episodes/campaign-unit-trip-checkpoint.json.

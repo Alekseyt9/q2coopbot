@@ -73,6 +73,7 @@ type Config struct {
 	FramePaced, Idle, ExitOnReconnect   bool
 	TestLineCross                       bool
 	TestHoldPosition                    bool
+	TestHoldPositionMap                 string
 	TestGroundEdgeProbe                 bool
 	TestNoAAS                           bool
 	TestDoorProbe                       bool
@@ -211,6 +212,9 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if cfg.TestHoldPosition && !cfg.FramePaced {
 		return fmt.Errorf("test.hold_position requires run.frame_paced")
+	}
+	if cfg.TestHoldPositionMap != "" && (!cfg.FramePaced || cfg.Host != "127.0.0.1" || cfg.CheckpointControl == "" || validateCampaignRoute([]string{cfg.TestHoldPositionMap, "fixture_end"}) != nil) {
+		return fmt.Errorf("test.hold_position_map requires loopback frame-paced checkpoint control and a valid map")
 	}
 	if cfg.TestNoAAS && !cfg.FramePaced {
 		return fmt.Errorf("test.no_aas requires run.frame_paced")
@@ -357,6 +361,7 @@ func Run(ctx context.Context, cfg Config) error {
 		testGapStart:   cfg.TestGapStart, testGapFrames: cfg.TestGapFrames,
 		testLineCross:            cfg.TestLineCross,
 		testHoldPosition:         cfg.TestHoldPosition,
+		testHoldPositionMap:      cfg.TestHoldPositionMap,
 		testProjectileComparison: cfg.TestProjectileComparison,
 		testCombatBarrier:        cfg.TestCombatBarrier,
 		testLight:                cfg.TestLight,

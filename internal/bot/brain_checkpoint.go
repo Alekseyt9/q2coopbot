@@ -24,12 +24,14 @@ type PlannerCheckpoint struct {
 }
 
 type CampaignCheckpoint struct {
-	Route            []string `json:"route,omitempty"`
-	RouteIndex       int      `json:"route_index,omitempty"`
-	PreparationSpent *int     `json:"preparation_spent_frames,omitempty"`
-	Map              string   `json:"map"`
-	Destination      string   `json:"destination"`
-	NextMap          string   `json:"next_map"`
+	UnitTrip         *CampaignUnitTripCheckpoint `json:"unit_trip,omitempty"`
+	UnitMaps         []string                    `json:"unit_maps,omitempty"`
+	Route            []string                    `json:"route,omitempty"`
+	RouteIndex       int                         `json:"route_index,omitempty"`
+	PreparationSpent *int                        `json:"preparation_spent_frames,omitempty"`
+	Map              string                      `json:"map"`
+	Destination      string                      `json:"destination"`
+	NextMap          string                      `json:"next_map"`
 }
 
 type CheckpointResource struct {
@@ -48,15 +50,20 @@ func cloneCheckpointPoint(point *quake.Vec3) *quake.Vec3 {
 }
 
 func (p *Planner) CaptureCheckpoint() (PlannerCheckpoint, error) {
-	if p.campaignUnitTrip != nil {
-		return PlannerCheckpoint{}, fmt.Errorf("checkpoint of an active campaign unit trip is not supported yet")
-	}
 	s := p.World.Snapshot
 	state := PlannerCheckpoint{Version: 1, Map: s.Map, CapturedFrame: s.Frame, Goal: p.World.Goal, DeathPoint: cloneCheckpointPoint(p.deathPoint)}
 	if p.Campaign {
 		state.Campaign = &CampaignCheckpoint{Map: p.campaignMap, Destination: p.campaignDestination, NextMap: p.CampaignNextMap}
 		state.Campaign.Route = append([]string(nil), p.CampaignRoute...)
 		state.Campaign.RouteIndex = p.campaignRouteIndex
+		state.Campaign.UnitMaps = append([]string(nil), p.CampaignUnitMaps...)
+		if p.campaignUnitTrip != nil {
+			trip, err := captureCampaignUnitTrip(p.campaignUnitTrip, s.Frame)
+			if err != nil {
+				return state, err
+			}
+			state.Campaign.UnitTrip = trip
+		}
 		if p.exitPreparation != nil {
 			spent := p.exitPreparation.SpentFrames
 			state.Campaign.PreparationSpent = &spent
@@ -90,10 +97,10 @@ func (state PlannerCheckpoint) validate(mapName string) error {
 		if err := validateCampaignRoute(c.Route); err != nil {
 			return err
 		}
-		if len(c.Route) == 0 && c.RouteIndex != 0 || len(c.Route) > 0 && (c.NextMap != "" || c.RouteIndex < 0 || c.RouteIndex >= len(c.Route) || c.Route[c.RouteIndex] != state.Map) {
+		if len(c.Route) == 0 && c.RouteIndex != 0 || len(c.Route) > 0 && (c.NextMap != "" || c.RouteIndex < 0 || c.RouteIndex >= len(c.Route) || c.UnitTrip == nil && c.Route[c.RouteIndex] != state.Map) {
 			return fmt.Errorf("invalid campaign route progress")
 		}
-		if len(c.Route) > 0 && c.Map != "" && (c.Map != state.Map || c.RouteIndex+1 >= len(c.Route) || c.Destination != c.Route[c.RouteIndex+1]) {
+		if len(c.Route) > 0 && c.Map != "" && (c.UnitTrip == nil && c.Map != state.Map || c.RouteIndex+1 >= len(c.Route) || c.Destination != c.Route[c.RouteIndex+1]) {
 			return fmt.Errorf("campaign exit differs from route")
 		}
 		if spent := state.Campaign.PreparationSpent; spent != nil && (*spent < 0 || *spent > exitPreparationFrames || state.Campaign.Map != state.Map) {
@@ -111,6 +118,9 @@ func (state PlannerCheckpoint) validate(mapName string) error {
 		}
 		if (state.Campaign.Map == "") != (state.Campaign.Destination == "") {
 			return fmt.Errorf("incomplete campaign exit checkpoint")
+		}
+		if err := validateCampaignUnitCheckpoint(c, state.Map); err != nil {
+			return err
 		}
 	}
 	if state.Version != 1 || state.Map == "" || state.Map != mapName || state.CapturedFrame <= 0 || len(state.Resources) > 4096 || len(state.Goal) > 128 {
@@ -146,7 +156,7 @@ func (p *Planner) RestoreCheckpoint(state PlannerCheckpoint, fresh quake.Snapsho
 	if err := state.validate(fresh.Map); err != nil {
 		return err
 	}
-	if (state.Campaign != nil) != p.Campaign || state.Campaign != nil && (state.Campaign.NextMap != p.CampaignNextMap || !slices.Equal(state.Campaign.Route, p.CampaignRoute)) {
+	if (state.Campaign != nil) != p.Campaign || state.Campaign != nil && (state.Campaign.NextMap != p.CampaignNextMap || !slices.Equal(state.Campaign.Route, p.CampaignRoute) || !slices.Equal(state.Campaign.UnitMaps, p.CampaignUnitMaps)) {
 		return fmt.Errorf("campaign checkpoint/config mismatch")
 	}
 	if fresh.Frame <= 0 || fresh.Health <= 0 || !fresh.OnGround || p.observed || p.jump != nil || p.elevator != nil || p.grenadeThrow != nil || len(p.resources) > 0 {
@@ -168,6 +178,15 @@ func (p *Planner) RestoreCheckpoint(state PlannerCheckpoint, fresh quake.Snapsho
 		p.campaignMap = state.Campaign.Map
 		p.campaignDestination = state.Campaign.Destination
 		p.campaignRouteIndex = state.Campaign.RouteIndex
+		if state.Campaign.UnitTrip != nil {
+			trip, err := restoreCampaignUnitTrip(state.Campaign.UnitTrip, fresh)
+			if err != nil {
+				return err
+			}
+			p.campaignUnitTrip = trip
+			// Map-local dependency routing is rebuilt from the fresh snapshot.
+			p.campaignDependency = nil
+		}
 		if spent := state.Campaign.PreparationSpent; spent != nil {
 			p.exitPreparation = &ExitPreparation{Map: fresh.Map, SpentFrames: *spent, lastFrame: fresh.Frame}
 		}
