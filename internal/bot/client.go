@@ -738,8 +738,15 @@ func (c *Client) run(ctx context.Context) error {
 			if !safetyStop && observeInventory && (!c.planner.testSetupHold || c.testWalkThenPlan) && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
 				if !c.planner.testSetupHold && !c.idle && !pairSetup && !c.testProjectileComparison && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
 					if !c.planner.grenadeThrowPending(c.planner.World.Snapshot) && !c.planner.grenadeSelectionPending(c.planner.World.Snapshot) {
-						weaponRequest = c.planner.grenadeWeaponRequest(c.planner.World.Snapshot, cmd)
-						if weaponRequest == "" {
+						buttonWeapon := c.planner.button != nil && c.planner.button.action == "shoot"
+						if buttonWeapon {
+							if c.planner.World.Snapshot.Weapon != "Blaster" && c.planner.World.Snapshot.Frame%10 == 0 {
+								weaponRequest = "use Blaster"
+							}
+						} else {
+							weaponRequest = c.planner.grenadeWeaponRequest(c.planner.World.Snapshot, cmd)
+						}
+						if weaponRequest == "" && !buttonWeapon {
 							weaponRequest = c.weaponSwitch.command(c.planner.World.Snapshot)
 						}
 					}

@@ -94,6 +94,7 @@ type Planner struct {
 	TestHideDoor53            bool
 	button                    *buttonTask
 	buttonCooldown            int
+	buttonEffects             map[buttonEffectKey]*ButtonEffect
 	World                     World
 	lastSelf                  quake.Vec3
 	lastProgress              time.Time
@@ -243,6 +244,7 @@ func (p *Planner) setMap(name, root string) {
 	p.cornerEscapeUntil = 0
 	p.cornerDetour = nil
 	p.buttonCooldown = 0
+	p.buttonEffects = nil
 	p.failures = 0
 	p.decision = nil
 	p.tactic = nil
@@ -756,6 +758,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		return cmd
 	}
 	p.applyButtonTask(s)
+	if shot, active := p.buttonShotCommand(s, prev, cmd); active {
+		return shot
+	}
 	var enemy *quake.Object
 	best := math.Inf(1)
 	for i := range s.Enemies {

@@ -1,0 +1,20 @@
+{
+  "id": "campaign-button-relay",
+  "title": "Поиск физической кнопки через промежуточный relay",
+  "map": "base2",
+  "kind": "campaign_dependency",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/campaign-button-relay.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Relay -Seed 101 -Port 31680",
+  "negative_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Relay -RelayBlocked -Seed 101 -Port 31680",
+  "evidence": "workspace/artifacts/original-activation-20261003-170455-573/report.json",
+  "negative_evidence": "workspace/artifacts/original-activation-20261003-170546-999/report.json",
+  "regression_evidence": "workspace/artifacts/original-activation-20261003-170546-758/report.json",
+  "symptom": "ButtonForDoor учитывал только совпадение button.target и door.targetname; физическая кнопка за relay не находилась.",
+  "resolution": "Используется ограниченный map-local targetPath с защитой от циклов и фильтром известных пересылающих классов. Исходная классификация touch/shoot и исключение remotely named touch buttons сохранены. campaign.button показывает выбранные модели, фазу и всю BSP цепочку. Планируемая связь не подменяет наблюдение door effect.",
+  "validation": {"timescale": 2, "parallelism": 2, "seeds": [101,102], "positive_passed": 2, "negative_passed": 2, "provenance_valid": true, "positive_chain_frames": [27,27], "native_press_frames": [25,25], "door_open_frames": [34,34], "door_cross_frames": [44,44], "negative_closed_door_frames_after100": [96,97]},
+  "negative_result": "Сервер удаляет relay через trigger_always killtarget. Бот действительно нажимает кнопку, но дверь остаётся на исходной высоте, пересечение и test_waypoint_reached отсутствуют. Accepted означает ожидаемый отказ, не прохождение.",
+  "missing_setup": ["Общий episode dispatcher ещё не привязан; запуск специализированным runner."],
+  "remaining_validation": ["Relay-связки на неизменённых исходных игровых картах", "Бой и путь от обычного spawn", "Выбор среди нескольких связанных кнопок", "Остановка повторных попыток при недействующем permanent button", "Shoot-кнопки и поворотные мосты"]
+}

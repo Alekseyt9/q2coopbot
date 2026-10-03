@@ -1,6 +1,7 @@
 [CmdletBinding()]
-param([switch]$Worker,[switch]$Button,[switch]$Sequence,[switch]$Relay,[switch]$RelayBlocked,[int]$Seed=101,[int]$Port=31680,[string]$OutputRoot='',[string]$Client='')
+param([switch]$Worker,[switch]$Button,[switch]$Sequence,[switch]$Relay,[switch]$RelayBlocked,[switch]$Shoot,[int]$Seed=101,[int]$Port=31680,[string]$OutputRoot='',[string]$Client='')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
+if($Shoot){$Relay=$true}
 if($RelayBlocked -and !$Relay){throw 'RelayBlocked requires Relay'}
 if($Relay -and !$Sequence){$Button=$true}
 if($Sequence -and $Button){throw 'Sequence includes button; do not combine switches'}
@@ -18,6 +19,7 @@ if(!$Worker){
         if($using:Sequence){$args+='-Sequence'}
         if($using:Relay){$args+='-Relay'}
         if($using:RelayBlocked){$args+='-RelayBlocked'}
+        if($using:Shoot){$args+='-Shoot'}
         $child=Start-Process $using:exe -ArgumentList @($args|ForEach-Object {'"'+$_+'"'}) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $using:OutputRoot "worker-$_.log") -RedirectStandardError (Join-Path $using:OutputRoot "worker-$_.err")
         $child.WaitForExit();$r=Get-Content (Join-Path $out 'report.json') -Raw|ConvertFrom-Json;if($child.ExitCode){$r.accepted=$false};$r
     } -ThrottleLimit 2)
@@ -30,7 +32,7 @@ if(Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue){throw 'Por
 if(Test-Path $OutputRoot){throw 'Fresh trial required'}
 New-Item -ItemType Directory $OutputRoot|Out-Null
 $runtime=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map base2 -RuntimeRoot (Join-Path $OutputRoot 'runtime')
-if($Relay){& "$PSScriptRoot/prepare_button_relay.ps1" -RuntimeRoot $runtime -Blocked:$RelayBlocked}
+if($Relay){& "$PSScriptRoot/prepare_button_relay.ps1" -RuntimeRoot $runtime -Blocked:$RelayBlocked -Shoot:$Shoot}
 $server=$null;$bot=$null;$trace=Join-Path $OutputRoot 'bot.jsonl';$report=@{accepted=$false;seed=$Seed;reason='not_run'}
 $placement=if($Button){'194,1940,-167.875'}else{'672,1792,24.125'}
 $goal=if($Button){'194,2024,-151.875'}else{'768,1792,24.125'}
@@ -64,6 +66,7 @@ try{
     if($Button -or $Sequence){
         $approach=@($rows|Where-Object {$_.arbitration.skill -eq 'button_approach'})
         $contact=@($rows|Where-Object {$_.arbitration.skill -eq 'button_touch'})
+        if($Shoot){$contact=@($rows|Where-Object {$_.arbitration.skill -eq 'button_shoot' -and $_.sent_command.Buttons -eq 1});if($contact|Where-Object {$_.weapon -ne 'Blaster' -or $_.sent_command.Forward -ne 0 -or $_.sent_command.Side -ne 0}){throw 'Unsafe shoot button weapon/movement'};if(!$contact.Count){throw 'Shoot button attempt absent'};$report.shoot_frames=$contact.Count;$report.shoot=$true}
         $pressed=@($rows|Where-Object {@($_.movers|Where-Object {$_.model -eq 34 -and $_.origin[1] -gt 1}).Count})
         $opened=@($rows|Where-Object {@($_.movers|Where-Object {$_.model -eq 33 -and $_.origin[2] -gt 60}).Count})
         $secondCross=@($rows|Where-Object {$_.self[1] -ge 2012 -and $_.self[0] -ge 152 -and $_.self[0] -le 236})
@@ -76,10 +79,16 @@ try{
             $closed=@($rows|Where-Object {$_.frame -gt $pressed[0].frame+100 -and @($_.movers|Where-Object {$_.model -eq 33 -and $_.origin[2] -eq 0}).Count})
             if(!$approach.Count -or !$contact.Count -or !$pressed.Count -or !$closed.Count -or $opened.Count -or $secondCross.Count -or $last.campaign.state -eq 'test_waypoint_reached'){throw 'Broken relay falsely completed or native attempted contact absent'}
             $report.expected_refusal=$true;$report.closed_door_frames=$closed.Count
+            $failedEffect=@($rows|Where-Object {@($_.campaign.button_effects|Where-Object {$_.button_model -eq 34 -and $_.door_model -eq 33 -and $_.state -eq 'door_effect_not_observed'}).Count})
+            if(!$failedEffect.Count){throw 'Permanent button missing-effect diagnosis absent'}
+            $retries=@($rows|Where-Object {$_.frame -gt $failedEffect[0].frame -and ($_.arbitration.skill -like 'button_*' -or $_.sent_command.Buttons -ne 0)})
+            if($retries.Count){throw 'Consumed permanent button retried'}
+            if($Shoot -and $contact.Count -ne 1){throw 'Shoot retry after native button activation'}
+            $report.effect_failure_frame=$failedEffect[0].frame;$report.retry_frames=$retries.Count
         }else{
         if(!$approach.Count -or !$contact.Count -or !$pressed.Count -or !$opened.Count -or $last.self[1] -lt 2012){throw 'Original button selection/contact/observed opening/crossing absent'}
         if(!$secondCross.Count -or $pressed[0].frame -lt $contact[0].frame -or $opened[0].frame -lt $pressed[0].frame -or $secondCross[0].frame -lt $opened[0].frame){throw 'Native button/opening/crossing order invalid'}
-        if($rows|Where-Object {$_.arbitration.skill -like 'button_*' -and $_.sent_command.Buttons -ne 0}){throw 'Touch button fired weapon'}
+        if(!$Shoot -and ($rows|Where-Object {$_.arbitration.skill -like 'button_*' -and $_.sent_command.Buttons -ne 0})){throw 'Touch button fired weapon'}
         $report.approach_frames=$approach.Count;$report.touch_frames=$contact.Count;$report.first_press_frame=$pressed[0].frame
         $report.button_touch_frame=$contact[0].frame;$report.button_door_open_frame=$opened[0].frame;$report.button_door_cross_frame=$secondCross[0].frame
         }

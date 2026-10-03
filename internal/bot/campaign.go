@@ -20,6 +20,7 @@ type CampaignDecision struct {
 	UnitTrip            *CampaignUnitTrip       `json:"unit_trip,omitempty"`
 	TestGoalIndex       int                     `json:"test_goal_index,omitempty"`
 	Button              *CampaignButtonDecision `json:"button,omitempty"`
+	ButtonEffects       []ButtonEffect          `json:"button_effects,omitempty"`
 }
 
 // A route explicitly resolves forward exits, including maps with return exits.
@@ -66,6 +67,8 @@ func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	p.campaignDoorMovers(s)
 	d.RememberedOpenDoors = p.campaignOpenedDoors
 	p.World.Campaign = d
+	p.updateButtonEffects(s)
+	d.ButtonEffects = p.buttonEffectDecisions()
 	if len(p.testCampaignGoals) > 0 {
 		d.Objective = "reach_test_waypoint"
 		d.State = "approach_test_waypoint"

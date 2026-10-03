@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "name": "campaign-shoot-button",
+  "map": "base2",
+  "runner": "scripts/run_original_activation.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Shoot -Seed 101 -Port 31680",
+  "negative_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Shoot -RelayBlocked -Seed 101 -Port 31680",
+  "scope": "Original base2 geometry/AAS; synthetic button34 health10→relay→door33. One initial placement, no monsters or forced weapon setup. Bot uses ordinary approach and Blaster firing. Negative native startup removes relay. Not an original-map shoot-button episode or combat validation.",
+  "acceptance": ["Observed button selected as shoot action", "Stopped aligned Blaster shot before native button movement", "Positive: door opens and bot crosses alive", "Negative: button activates but door remains closed, no false arrival", "No firing during touch-button regression"]
+}

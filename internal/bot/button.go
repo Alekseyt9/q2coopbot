@@ -7,6 +7,11 @@ import (
 )
 
 type buttonTask struct {
+	action         string
+	aimSince       int
+	shotAt         int
+	shots          int
+	buttonInitial  quake.Vec3
 	chain          []quake.MapEntity
 	campaign       bool
 	doorModel      int
@@ -20,6 +25,8 @@ type buttonTask struct {
 }
 
 type CampaignButtonDecision struct {
+	Action      string            `json:"action"`
+	Shots       int               `json:"shots,omitempty"`
 	DoorModel   int               `json:"door_model"`
 	ButtonModel int               `json:"button_model"`
 	Phase       string            `json:"phase"`
@@ -73,7 +80,10 @@ func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
 		return nil
 	}
 	button, action, ok := p.World.Geometry.ButtonForDoor(model)
-	if !ok || action != "touch" {
+	if !ok || (action != "touch" && action != "shoot") {
+		return nil
+	}
+	if p.buttonEffects[buttonEffectKey{button.Model, model}] != nil {
 		return nil
 	}
 	bounds, ok := p.World.Geometry.Model(button.Model)
@@ -92,13 +102,19 @@ func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
 		return nil
 	}
 	buttonObserved := false
+	var buttonOrigin quake.Vec3
 	for _, mover := range s.Movers {
 		if mover.Model == button.Model {
 			buttonObserved = true
+			buttonOrigin = mover.Origin
 			break
 		}
 	}
 	if !buttonObserved {
+		return nil
+	}
+	if button.Wait < 0 && quake.Distance(buttonOrigin, button.Origin) > 1 {
+		p.rememberButtonEffect(&buttonTask{action: action, buttonModel: button.Model, doorModel: model, buttonInitial: button.Origin, initial: doorOrigin}, s.Frame)
 		return nil
 	}
 	midX, midY := (bounds.Min[0]+bounds.Max[0])/2, (bounds.Min[1]+bounds.Max[1])/2
@@ -134,7 +150,7 @@ func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
 	if math.IsInf(best, 1) {
 		return nil
 	}
-	return &buttonTask{chain: p.World.Geometry.ButtonDoorChain(button.Model, model), campaign: campaign, doorModel: model, buttonModel: button.Model, initial: doorOrigin,
+	return &buttonTask{action: action, buttonInitial: buttonOrigin, chain: p.World.Geometry.ButtonDoorChain(button.Model, model), campaign: campaign, doorModel: model, buttonModel: button.Model, initial: doorOrigin,
 		stand: chosen[0], touch: chosen[1], phase: "approach", started: s.Frame, teammateEntity: s.TeammateEntity}
 }
 
@@ -180,6 +196,7 @@ func (p *Planner) campaignButtonStep(s quake.Snapshot, dx, dy, step float64) boo
 }
 
 func (p *Planner) applyButtonTask(s quake.Snapshot) {
+	p.updateButtonEffects(s)
 	if p.button == nil {
 		p.button = p.selectButtonTask(s)
 	}
@@ -196,6 +213,12 @@ func (p *Planner) applyButtonTask(s quake.Snapshot) {
 	for _, mover := range s.Movers {
 		if mover.Model == task.buttonModel {
 			buttonObserved = true
+			if quake.Distance(mover.Origin, task.buttonInitial) > 1 {
+				p.rememberButtonEffect(task, s.Frame)
+			}
+			if task.action == "shoot" && quake.Distance(mover.Origin, task.buttonInitial) > 1 {
+				task.phase = "wait_effect"
+			}
 			break
 		}
 	}
@@ -222,6 +245,10 @@ func (p *Planner) applyButtonTask(s quake.Snapshot) {
 	}
 	if task.phase == "approach" && quake.Horizontal(s.Self, task.stand) < 8 {
 		task.phase = "touch"
+		if task.action == "shoot" {
+			task.phase = "shoot"
+			task.aimSince = s.Frame
+		}
 	}
 	p.World.Goal = "approach_button"
 	p.goalPoint = task.stand
@@ -229,11 +256,14 @@ func (p *Planner) applyButtonTask(s quake.Snapshot) {
 		p.World.Goal = "touch_button"
 		p.goalPoint = task.touch
 	}
+	if task.action == "shoot" && task.phase != "approach" {
+		p.World.Goal = "shoot_button"
+	}
 	p.World.Navigation = "direct_clear"
 	p.World.Route = nil
 	p.hasGoal = true
 	p.World.Command.Skill = "button_" + task.phase
 	if task.campaign && p.World.Campaign != nil {
-		p.World.Campaign.Button = &CampaignButtonDecision{DoorModel: task.doorModel, ButtonModel: task.buttonModel, Phase: task.phase, Chain: task.chain}
+		p.World.Campaign.Button = &CampaignButtonDecision{Action: task.action, Shots: task.shots, DoorModel: task.doorModel, ButtonModel: task.buttonModel, Phase: task.phase, Chain: task.chain}
 	}
 }

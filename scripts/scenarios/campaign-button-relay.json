@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "campaign-button-relay",
+  "map": "base2",
+  "runner": "scripts/run_original_activation.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Relay -Seed 101 -Port 31680",
+  "negative_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Relay -RelayBlocked -Seed 101 -Port 31680",
+  "initial_position": [194, 1940, -167.875],
+  "test_goal": [194, 2024, -151.875],
+  "scope": "Original base2 geometry/AAS and button34/door33; modified entity link button34→test_button_relay→door33. Go BSP entities and native .ent are identical. Monsters removed; one initial teleport. Negative native startup removes relay while BSP retains the candidate. This is a synthetic link fixture on original geometry, not an original-map relay chain.",
+  "acceptance": ["Planned relay chain appears in campaign.button trace", "Native button is pressed without weapon fire", "Positive: observed door opening before crossing and arrival alive", "Negative: native button pressed but door stays closed over100 frames, no crossing or completed waypoint"]
+}

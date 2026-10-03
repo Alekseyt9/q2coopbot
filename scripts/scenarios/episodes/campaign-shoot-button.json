@@ -1,0 +1,20 @@
+{
+  "id": "campaign-shoot-button",
+  "title": "Активация физической кнопки выстрелом",
+  "map": "base2",
+  "kind": "campaign_dependency",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/campaign-shoot-button.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Shoot -Seed 101 -Port 31680",
+  "negative_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Shoot -RelayBlocked -Seed 101 -Port 31680",
+  "evidence": "workspace/artifacts/original-activation-20261003-171657-224/report.json",
+  "negative_evidence": "workspace/artifacts/original-activation-20261003-171954-143/report.json",
+  "regression_evidence": "workspace/artifacts/original-activation-20261003-171954-382/report.json",
+  "setup_failure_evidence": "workspace/artifacts/original-activation-20261003-171545-769/report.json",
+  "resolution": "Shoot-кнопка подходит как физическая подзадача. Бот подходит, останавливается, использует только Blaster, учитывает native center-hand muzzle height, ждёт3 кадра и совпадение предыдущего прицела, проверяет BSP/двери/movers/напарника. Не более3 импульсов с интервалом10 кадров на одну попытку. После наблюдаемого движения кнопки огонь прекращается; основной маршрут возвращается после движения двери. campaign.button показывает action/shots/phase/chain.",
+  "validation": {"timescale": 2, "parallelism": 2, "seeds": [101,102], "positive_passed": 2, "negative_passed": 2, "provenance_valid": true, "positive_shoot_frames": [1,1], "native_button_frames": [24,24], "door_open_frames": [33,33], "cross_frames": [43,43], "negative_shoot_frames": [4,4], "negative_closed_frames_after100": [96,96]},
+  "negative_result": "Сервер удалил relay: кнопка действительно сработала, но дверь не открылась, пересечения и завершения нет. Бот повторяет ограниченные попытки, всего4 shoot кадра за эпизод; это expected_refusal, не успех маршрута.",
+  "missing_setup": ["Общий dispatcher ещё не привязан; использовать специализированный runner."],
+  "remaining_validation": ["Исходные shoot-кнопки без модификации entity links", "Проверка переключения с другого оружия native", "Боевая обстановка и приоритет срочной защиты", "Напарник на линии — пока Go safety test, не native human episode", "Прекращение повторных попыток при неработающем permanent button"]
+}
