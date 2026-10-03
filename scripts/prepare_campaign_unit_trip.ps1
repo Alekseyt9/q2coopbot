@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$RuntimeRoot,[switch]$Blocked)
+param([Parameter(Mandatory)][string]$RuntimeRoot,[switch]$Blocked,[switch]$LocalChain)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 if(Test-Path $RuntimeRoot){throw 'Fresh unit fixture runtime required'}
@@ -89,7 +89,60 @@ $b=@'
 "map" "unit_a"
 }
 '@
-if($Blocked){
+if($LocalChain){
+    $a=@'
+{
+"classname" "func_door"
+"model" "*32"
+"origin" "1792 -1792 -104"
+"targetname" "main_lock"
+"angle" "-2"
+"wait" "-1"
+"lip" "0"
+"speed" "200"
+}
+{
+"classname" "func_door"
+"model" "*33"
+"origin" "1872 -1888 -104"
+"targetname" "side_lock"
+"angle" "-2"
+"wait" "-1"
+"lip" "0"
+"speed" "200"
+}
+{
+"classname" "trigger_once"
+"model" "*16"
+"origin" "120 32 0"
+"target" "main_lock"
+}
+{
+"classname" "trigger_once"
+"model" "*13"
+"origin" "2160 -1888 -56"
+"target" "side_relay"
+}
+{
+"classname" "trigger_relay"
+"targetname" "side_relay"
+"target" "side_lock"
+}
+{
+"classname" "trigger_multiple"
+"model" "*16"
+"origin" "-88 16 0"
+"target" "finish"
+}
+{
+"classname" "target_changelevel"
+"targetname" "finish"
+"map" "unit_c"
+}
+'@
+    if($Blocked){$a+="`n{`n`"classname`" `"trigger_always`"`n`"killtarget`" `"side_relay`"`n`"delay`" `"0.2`"`n}`n"}
+}
+elseif($Blocked){
     # A native startup trigger removes the setter before the client arrives.
     # BSP retains the planned touch chain: an attempted action must not be
     # mistaken for a successful runtime effect.
@@ -112,6 +165,6 @@ $text=$world[0].Value+"`n"+$mapSpawn+"`n"+$extra
     [IO.File]::WriteAllBytes((Join-Path $RuntimeRoot "baseq2/maps/$name.bsp"),$fixtureBsp)
     [IO.File]::WriteAllText((Join-Path $RuntimeRoot "baseq2/maps/$name.ent"),$text,[Text.Encoding]::ASCII)
 }
-@{version=1;source_map='base1';maps=@('unit_a','unit_b','unit_c');scope='Isolated cross-level fixture; reused original BSP/AAS, translated door and triggers; no monsters/items; fixture spawn';native_crosslevel_flags=$true;setter_removed_at_runtime=[bool]$Blocked}|ConvertTo-Json|Set-Content (Join-Path $RuntimeRoot 'unit-fixture.json')
+@{version=1;source_map='base1';maps=@('unit_a','unit_b','unit_c');scope='Isolated fixture; reused original BSP/AAS, translated doors and triggers; no monsters/items; fixture spawn';local_chain=[bool]$LocalChain;native_crosslevel_flags=(!$LocalChain);setter_removed_at_runtime=[bool]$Blocked}|ConvertTo-Json|Set-Content (Join-Path $RuntimeRoot 'unit-fixture.json')
 $RuntimeRoot
 

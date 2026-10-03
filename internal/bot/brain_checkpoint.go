@@ -50,6 +50,9 @@ func cloneCheckpointPoint(point *quake.Vec3) *quake.Vec3 {
 }
 
 func (p *Planner) CaptureCheckpoint() (PlannerCheckpoint, error) {
+	if p.campaignDependency != nil && p.campaignDependency.Parent != nil {
+		return PlannerCheckpoint{}, fmt.Errorf("checkpoint of nested local activation is not supported yet")
+	}
 	s := p.World.Snapshot
 	state := PlannerCheckpoint{Version: 1, Map: s.Map, CapturedFrame: s.Frame, Goal: p.World.Goal, DeathPoint: cloneCheckpointPoint(p.deathPoint)}
 	if p.Campaign {

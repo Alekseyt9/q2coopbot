@@ -32,7 +32,7 @@ type CampaignUnitTrip struct {
 
 func (p *Planner) startCampaignUnitTrip(s quake.Snapshot) bool {
 	d := p.campaignDependency
-	if d == nil || len(p.CampaignRoute) == 0 {
+	if d == nil || d.Parent != nil || len(p.CampaignRoute) == 0 {
 		return false
 	}
 	var selected *quake.UnitAction

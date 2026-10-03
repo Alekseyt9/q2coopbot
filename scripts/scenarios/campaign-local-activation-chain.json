@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "name": "campaign-local-activation-chain",
+  "map": "unit_a",
+  "campaign_route": ["unit_a", "unit_c"],
+  "expected_visits": ["unit_a", "unit_c"],
+  "runner": "scripts/run_campaign_unit_trip.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_unit_trip.ps1 -LocalChain -Seed 101 -Port 31670",
+  "negative_command": "pwsh -NoProfile -File scripts/run_campaign_unit_trip.ps1 -LocalChain -Blocked -Seed 101 -Port 31670",
+  "scope": "Native nested ordinary trigger→door links: door33 blocks the trigger for door32, another reachable trigger opens door33. Original base1 static BSP/AAS with custom translated entities/spawn; no monsters/items, teleport, give or forced map changes. Not a multiple-activators-to-one-door fixture."
+}

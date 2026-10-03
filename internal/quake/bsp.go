@@ -14,16 +14,17 @@ import (
 )
 
 type MapEntity struct {
-	Class      string `json:"class"`
-	Model      int    `json:"model,omitempty"`
-	Origin     Vec3   `json:"origin"`
-	Angles     Vec3   `json:"angles,omitempty"`
-	Damage     int    `json:"damage,omitempty"`
-	Target     string `json:"target,omitempty"`
-	TargetName string `json:"target_name,omitempty"`
-	Health     int    `json:"health,omitempty"`
-	SpawnFlags int    `json:"spawn_flags,omitempty"`
-	Map        string `json:"map,omitempty"`
+	Class      string  `json:"class"`
+	Model      int     `json:"model,omitempty"`
+	Origin     Vec3    `json:"origin"`
+	Angles     Vec3    `json:"angles,omitempty"`
+	Damage     int     `json:"damage,omitempty"`
+	Target     string  `json:"target,omitempty"`
+	TargetName string  `json:"target_name,omitempty"`
+	Health     int     `json:"health,omitempty"`
+	SpawnFlags int     `json:"spawn_flags,omitempty"`
+	Wait       float64 `json:"wait,omitempty"`
+	Map        string  `json:"map,omitempty"`
 }
 type MapInfo struct {
 	Name          string      `json:"name"`
@@ -637,6 +638,7 @@ func parseMapEntities(text string) []MapEntity {
 					e.Health, _ = strconv.Atoi(props["health"])
 					e.Damage, _ = strconv.Atoi(props["dmg"])
 					e.SpawnFlags, _ = strconv.Atoi(props["spawnflags"])
+					e.Wait, _ = strconv.ParseFloat(props["wait"], 64)
 					if strings.HasPrefix(props["model"], "*") {
 						e.Model, _ = strconv.Atoi(strings.TrimPrefix(props["model"], "*"))
 					}

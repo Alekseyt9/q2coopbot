@@ -15,5 +15,5 @@
   "resolution": "Цель хранится стеком: outbound, activate, return, verify. Контакт считается попыткой, flags остаются unknown. При отсутствующей ранее наблюдавшейся двери допускается короткая проба по безопасному полу; серверное перемещение в ранее закрытый brush подтверждает проходимость. Native положительный цикл продолжился до unit_c в обеих ветвях; отрицательный с удалённым setter вернулся к закрытой двери и не засчитал эффект/прогресс.",
   "validation": {"timescale": 2, "parallelism": 2, "seeds": [101,102], "positive_passed": 2, "negative_passed": 2, "provenance_valid": true},
   "missing_setup": ["Привязка специализированного runner к общему run_episode_regressions; observation_only обозначает отсутствие общей привязки, а не отсутствие native проверки."],
-  "remaining_validation": ["Native save/load активного межкарточного стека", "Группы частичных активаторов и shoot-действия", "Исходные игровые карты и боевая обстановка"]
+  "remaining_validation": ["Native save/load на activate подтверждён эпизодом campaign-unit-trip-checkpoint; остальные этапы остаются для native проверки", "Группы частичных активаторов и shoot-действия", "Исходные игровые карты и боевая обстановка"]
 }

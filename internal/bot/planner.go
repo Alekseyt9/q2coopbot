@@ -52,6 +52,7 @@ type Planner struct {
 	CampaignUnitMaps          []string
 	campaignRouteIndex        int
 	campaignDependency        *CampaignDependency
+	campaignOpenedDoors       map[int]quake.Mover
 	campaignUnitTrip          *CampaignUnitTrip
 	campaignDependencyRetry   int
 	campaignAssetRoot         string
@@ -229,6 +230,7 @@ func (p *Planner) setMap(name, root string) {
 	p.healthActive = false
 	p.exitPreparation = nil
 	p.campaignDependency = nil
+	p.campaignOpenedDoors = nil
 	p.campaignDependencyRetry = 0
 	p.campaignExitOverride, p.campaignExitBlock = 0, nil
 	p.healthBanned = nil
@@ -582,7 +584,10 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 		} else if campaign && p.campaignExitOverride != 0 {
 			p.route, p.routeOK = p.campaignDependencyNavigator(s).Route(s.Self, goal)
 		} else {
-			p.route, p.routeOK = p.directCrouchRoute(s, goal)
+			p.route, p.routeOK = p.campaignOpenedRoute(s, goal)
+			if !p.routeOK {
+				p.route, p.routeOK = p.directCrouchRoute(s, goal)
+			}
 			if !p.routeOK {
 				p.route, p.routeOK = p.bridgeRoute()
 			}
@@ -1021,12 +1026,13 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		}
 	}
 	if s.OnGround {
-		hazard := p.World.Geometry.DoorMoveHazard(s.Movers, s.Self, dx, dy)
+		doorMovers := p.campaignDoorMovers(s)
+		hazard := p.World.Geometry.DoorMoveHazard(doorMovers, s.Self, dx, dy)
 		// A clear short approach need not clear an entire full-speed tick.
 		// Recheck static and dynamic hulls every tick, and request only half
 		// the checked distance in 100 ms, even for a distant waypoint.
 		if hazard != "" && cmd.Up == 0 && p.World.Command.MoveSource == "route" && p.World.Geometry.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, 16) == "" {
-			if _, shortHazard := p.World.Geometry.DoorMoveBlockStep(s.Movers, s.Self, dx, dy, 16); shortHazard == "" {
+			if _, shortHazard := p.World.Geometry.DoorMoveBlockStep(doorMovers, s.Self, dx, dy, 16); shortHazard == "" {
 				hazard = ""
 				moveSpeedLimit = math.Min(moveSpeedLimit, 80)
 				p.World.Command.MoveLimitReason = "door_short_approach"

@@ -1,7 +1,8 @@
 [CmdletBinding()]
-param([switch]$Worker,[switch]$Blocked,[switch]$Checkpoint,[int]$Seed=101,[int]$Port=31670,[string]$OutputRoot='',[string]$Client='')
+param([switch]$Worker,[switch]$Blocked,[switch]$Checkpoint,[switch]$LocalChain,[int]$Seed=101,[int]$Port=31670,[string]$OutputRoot='',[string]$Client='')
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
+if($LocalChain -and $Checkpoint){throw 'Local chain checkpoint is not supported yet'}
 function Read-LastCompleteSnapshot([string]$Path){
     if(!(Test-Path $Path)){return $null}
     # Reading a file while it grows can deliver several rows or a prefix of
@@ -32,6 +33,7 @@ if(!$Worker){
         $args=@('-NoProfile','-File',$using:script,'-Worker','-Seed',($using:Seed+$_),'-Port',($using:Port+$_),'-OutputRoot',$out,'-Client',$using:Client)
         if($using:Blocked){$args+='-Blocked'}
         if($using:Checkpoint){$args+='-Checkpoint'}
+        if($using:LocalChain){$args+='-LocalChain'}
         $child=Start-Process $using:hostExe -ArgumentList @($args|ForEach-Object {'"'+$_+'"'}) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $using:OutputRoot "worker-$_.log") -RedirectStandardError (Join-Path $using:OutputRoot "worker-$_.err")
         $child.WaitForExit()
         $r=Get-Content (Join-Path $out 'report.json') -Raw|ConvertFrom-Json
@@ -39,14 +41,14 @@ if(!$Worker){
     } -ThrottleLimit 2)
     $valid=$fingerprint -eq (Get-HarnessFingerprint (Get-HarnessSourceRecords $repo))
     $accepted=$valid -and $results.Count -eq 2 -and @($results|Where-Object {!$_.accepted}).Count -eq 0
-    @{accepted=$accepted;provenance_valid=$valid;source_fingerprint=$fingerprint;checkpoint=[bool]$Checkpoint;negative_control=[bool]$Blocked;timescale=2;parallelism=2;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 30|Set-Content (Join-Path $OutputRoot 'report.json')
+    @{accepted=$accepted;provenance_valid=$valid;source_fingerprint=$fingerprint;local_chain=[bool]$LocalChain;checkpoint=[bool]$Checkpoint;negative_control=[bool]$Blocked;timescale=2;parallelism=2;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 30|Set-Content (Join-Path $OutputRoot 'report.json')
     "Campaign unit trip: $OutputRoot"
     if(!$accepted){throw 'Campaign unit trip rejected'};return
 }
 if(Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue){throw 'Port occupied'}
 if(Test-Path $OutputRoot){throw 'Fresh trial required'}
 New-Item -ItemType Directory $OutputRoot|Out-Null
-$runtime=& "$PSScriptRoot/prepare_campaign_unit_trip.ps1" -RuntimeRoot (Join-Path $OutputRoot 'runtime') -Blocked:$Blocked
+$runtime=& "$PSScriptRoot/prepare_campaign_unit_trip.ps1" -RuntimeRoot (Join-Path $OutputRoot 'runtime') -Blocked:$Blocked -LocalChain:$LocalChain
 $trace=Join-Path $OutputRoot 'bot.jsonl';$server=$null;$bot=$null
 $report=@{accepted=$false;seed=$Seed;timescale=2;port=$Port;reason='not_run'}
 try{
@@ -59,6 +61,7 @@ try{
     if(Get-NetUDPEndpoint -OwningProcess $server.Id|Where-Object LocalAddress -NotIn '127.0.0.1','::1'){throw 'Server not loopback'}
     $config=Join-Path $OutputRoot 'bot-config.json'
     $cfg=@{server=@{host='127.0.0.1';port=$Port};client=@{name='UnitBot';game_dir=(Join-Path $runtime 'baseq2')};run=@{duration='45s';frame_paced=$true;mode='campaign';campaign_route=@('unit_a','unit_c');campaign_unit_maps=@('unit_b')};output=@{trace_jsonl=$trace}}
+    if($LocalChain){$cfg.run.campaign_unit_maps=@()}
     if($Checkpoint){$cfg.test=@{checkpoint_control=(Join-Path $OutputRoot 'control.json');hold_position_map='unit_b'}}
     $cfg|ConvertTo-Json -Depth 6|Set-Content $config
     $bot=Start-Process $Client -ArgumentList "--config `"$config`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
@@ -103,12 +106,15 @@ try{
         $complete=Read-LastCompleteSnapshot $trace
         if($complete){$last=$complete}
         if($last.map -eq 'unit_c' -and $last.campaign.state -eq 'campaign_completed'){break}
+        if($LocalChain -and $Blocked -and $last.campaign.dependency.state -eq 'activation_timeout'){break}
         if($Blocked -and $last.campaign.unit_trip.state -eq 'effect_unconfirmed'){break}
         if($last.campaign.unit_trip.state -in @('unit_goal_timeout','unexpected_unit_map','effect_unconfirmed')){throw $last.campaign.unit_trip.state}
     }while(!$bot.HasExited -and (Get-Date) -lt $deadline)
     # Freeze the owned writer before validating the entire trace.
     if(!$bot.HasExited){Stop-Process -Id $bot.Id;$null=$bot.WaitForExit(5000)}
-    if($Blocked){
+    if($LocalChain -and $Blocked){
+        if($last.map -ne 'unit_a' -or $last.campaign.dependency.state -ne 'activation_timeout'){throw 'Local negative control did not retain blocked objective'}
+    }elseif($Blocked){
         if($last.map -ne 'unit_a' -or $last.campaign.unit_trip.state -ne 'effect_unconfirmed'){throw 'Negative control failed to retain blocked objective'}
     }elseif($last.map -ne 'unit_c' -or $last.campaign.state -ne 'campaign_completed'){throw 'Native unit cycle not completed'}
     $traces=if($Checkpoint){@($originalTrace,$trace)}else{@($trace)}
@@ -116,11 +122,19 @@ try{
     $visits=@();foreach($row in $rows){if(!$visits.Count -or $row.map -ne $visits[-1].map){$visits+=@{map=$row.map;generation=$row.spawncount;frame=$row.frame}}}
     $expected=if($Blocked){'unit_a,unit_b,unit_a'}else{'unit_a,unit_b,unit_a,unit_c'}
     $generations=if($Blocked){3}else{4}
+    if($LocalChain){$expected=if($Blocked){'unit_a'}else{'unit_a,unit_c'};$generations=if($Blocked){1}else{2}}
     if(($visits.map -join ',') -ne $expected -or @($visits.generation|Select-Object -Unique).Count -ne $generations){throw 'Native round trip/generations absent'}
+    if($LocalChain){
+        $nested=@($rows|Where-Object {$_.campaign.dependency.door_model -eq 33 -and $_.campaign.dependency.parent.door_model -eq 32})
+        if(!$nested.Count){throw 'Local dependency nesting absent'}
+        if(!$Blocked -and !@($rows|Where-Object {$_.frame -gt $nested[-1].frame -and $_.map -eq 'unit_a' -and $_.campaign.dependency.door_model -eq 32 -and !$_.campaign.dependency.parent}).Count){throw 'Parent activation was not resumed'}
+        $report.nested_frames=$nested.Count
+    }else{
     $tripRows=@($rows|Where-Object {$_.campaign.unit_trip})
     if(!$tripRows.Count -or @($tripRows|Where-Object {[int]$_.campaign.route_index -ne 0 -or [int]$_.campaign.completed_levels -ne 0}).Count){throw 'Remote visit advanced campaign'}
     $confirmed=@($tripRows|Where-Object {$_.map -eq 'unit_a' -and $_.campaign.unit_trip.state -eq 'effect_confirmed'})
     if(!@($tripRows|Where-Object {$_.map -eq 'unit_b' -and $_.campaign.unit_trip.action_attempted}).Count -or (!$Blocked -and !$confirmed.Count) -or ($Blocked -and $confirmed.Count)){throw 'Action attempt/effect evidence invalid'}
+    }
     if($rows|Where-Object {$_.teammate -or $_.health -le 0}){throw 'Unexpected teammate/death'}
     $log=Get-Content (Join-Path $OutputRoot 'bot.err') -Raw
     if($Checkpoint){$log+=Get-Content (Join-Path $OutputRoot 'restored-bot.err') -Raw}

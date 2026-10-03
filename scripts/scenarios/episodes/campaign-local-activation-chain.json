@@ -1,0 +1,20 @@
+{
+  "id": "campaign-local-activation-chain",
+  "title": "Путь к активатору основной двери перекрыт другой дверью",
+  "map": "unit_a",
+  "kind": "campaign_dependency",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/campaign-local-activation-chain.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_unit_trip.ps1 -LocalChain -Seed 101 -Port 31670",
+  "negative_command": "pwsh -NoProfile -File scripts/run_campaign_unit_trip.ps1 -LocalChain -Blocked -Seed 101 -Port 31670",
+  "evidence": "workspace/artifacts/campaign-unit-trip-20261003-160420-932/report.json",
+  "negative_evidence": "workspace/artifacts/campaign-unit-trip-20261003-160428-972/report.json",
+  "failure_evidence": "workspace/artifacts/campaign-unit-trip-20261003-155335-783/report.json",
+  "symptom": "Планировщик хранил только одну локальную dependency и не мог приостановить её при второй двери на пути к активатору. После ухода открытой двери из PVS обычный guard мог снова считать её закрытой.",
+  "resolution": "Обычные наблюдаемые блокировки образуют parent-цепочку глубиной до4 с запретом повторных моделей. После подтверждения свободного прохода через дочернюю дверь возобновляется исходный активатор; его бюджет на время дочерней задачи приостановлен. Для permanent non-toggle sliding doors сохраняется отдельно маркированная наблюдательная память позы, сбрасываемая на новой карте или противоречивом наблюдении. Короткий новый проход полностью проверяется по BSP/опоре/movers/hazards.",
+  "validation": {"timescale": 2, "parallelism": 2, "seeds": [101,102], "positive_passed": 2, "negative_passed": 2, "provenance_valid": true, "nested_frames_positive": [21,21]},
+  "negative_result": "Native удаление side_relay: дочерняя задача остаётся с parent32, заканчивается activation_timeout; проход/кампания не засчитаны.",
+  "missing_setup": ["Специализированный runner доступен; общая привязка run_episode_regressions ещё отсутствует."],
+  "remaining_validation": ["Исходные игровые карты с несколькими связками и монстрами", "Save/load вложенной локальной задачи — пока явно отклоняется", "Локальная parent-цепочка с межкарточным дочерним действием", "Кнопки со стрельбой, поворотные двери и мосты"]
+}

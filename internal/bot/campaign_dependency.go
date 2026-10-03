@@ -6,6 +6,7 @@ import (
 )
 
 type CampaignDependency struct {
+	Parent         *CampaignDependency   `json:"parent,omitempty"`
 	State          string                `json:"state"`
 	DoorModel      int                   `json:"door_model"`
 	Activation     quake.Activation      `json:"activation"`
@@ -19,12 +20,26 @@ type CampaignDependency struct {
 
 // Discover goals only after an observed named door actually blocks movement.
 func (p *Planner) discoverCampaignDependency(s quake.Snapshot, dx, dy float64) {
-	if !p.Campaign || s.Teammate != nil || p.World.Goal != "reach_level_exit" || p.campaignDependency != nil || p.campaignUnitTrip != nil || s.Frame < p.campaignDependencyRetry {
+	if !p.Campaign || s.Teammate != nil || p.World.Goal != "reach_level_exit" || p.campaignUnitTrip != nil || s.Frame < p.campaignDependencyRetry {
 		return
 	}
 	g := p.World.Geometry
 	model, reason := g.DoorMoveBlock(s.Movers, s.Self, dx, dy)
 	if reason != "dynamic_door_blocked" {
+		return
+	}
+	depth := 0
+	for d := p.campaignDependency; d != nil; d = d.Parent {
+		depth++
+		if d.DoorModel == model {
+			return
+		}
+	}
+	if depth >= 4 {
+		return
+	}
+	parent := p.campaignDependency
+	if parent != nil && parent.State != "approach_activation" {
 		return
 	}
 	var live *quake.Mover
@@ -40,6 +55,7 @@ func (p *Planner) discoverCampaignDependency(s quake.Snapshot, dx, dy float64) {
 	}
 	conditions := p.campaignUnitConditions(model)
 	best := math.Inf(1)
+	var selected *CampaignDependency
 	for _, activation := range g.TouchActivationsForDoor(model) {
 		bounds, _ := g.TouchBounds(activation.Trigger)
 		exit := quake.MapExit{Min: bounds.Min, Max: bounds.Max, Center: quake.Vec3{(bounds.Min[0] + bounds.Max[0]) / 2, (bounds.Min[1] + bounds.Max[1]) / 2, (bounds.Min[2] + bounds.Max[2]) / 2}}
@@ -49,13 +65,14 @@ func (p *Planner) discoverCampaignDependency(s quake.Snapshot, dx, dy float64) {
 		}
 		if cost := quake.Distance(s.Self, at); cost < best {
 			best = cost
-			p.campaignDependency = &CampaignDependency{State: "approach_activation", DoorModel: model, Activation: activation, Goal: at, UnitConditions: conditions, initial: live.Origin, started: s.Frame}
+			selected = &CampaignDependency{Parent: parent, State: "approach_activation", DoorModel: model, Activation: activation, Goal: at, UnitConditions: conditions, initial: live.Origin, started: s.Frame}
 		}
 	}
-	if p.campaignDependency == nil && len(conditions) > 0 {
-		p.campaignDependency = &CampaignDependency{State: "unit_activation_required", DoorModel: model, UnitConditions: conditions, initial: live.Origin, started: s.Frame}
+	if selected == nil && len(conditions) > 0 && parent == nil {
+		selected = &CampaignDependency{State: "unit_activation_required", DoorModel: model, UnitConditions: conditions, initial: live.Origin, started: s.Frame}
 	}
-	if p.campaignDependency != nil {
+	if selected != nil {
+		p.campaignDependency = selected
 		p.campaignDependency.ProbeFrom = s.Self
 		end := s.Self
 		if distance := math.Hypot(dx, dy); distance > 0 {
@@ -73,8 +90,14 @@ func (p *Planner) campaignDependencyGoal(s quake.Snapshot) (quake.Vec3, bool, bo
 		return quake.Vec3{}, false, false
 	}
 	for _, mover := range s.Movers {
-		if mover.Model == d.DoorModel && quake.Distance(mover.Origin, d.initial) > 60 {
-			p.campaignDependency = nil
+		if mover.Model == d.DoorModel && quake.Distance(mover.Origin, d.initial) > 60 && (d.ProbeFrom == d.ProbeTo || p.World.Geometry.MoverHullClear(mover, d.ProbeFrom, d.ProbeTo)) {
+			p.rememberCampaignDoor(mover)
+			p.campaignDependency = d.Parent
+			if d.Parent != nil {
+				d.Parent.started += s.Frame - d.started
+				p.routeKnown = false
+				return p.campaignDependencyGoal(s)
+			}
 			p.routeKnown = false
 			return quake.Vec3{}, false, false
 		}
@@ -88,6 +111,10 @@ func (p *Planner) campaignDependencyGoal(s quake.Snapshot) (quake.Vec3, bool, bo
 	}
 	if s.Frame-d.started > 300 {
 		d.State = "activation_timeout"
+		// Failed nested attempts remain explicit; don't loop between parents.
+		if d.Parent != nil {
+			return quake.Vec3{}, false, true
+		}
 		p.campaignDependency = nil
 		p.campaignDependencyRetry = s.Frame + 100
 		return quake.Vec3{}, false, true
@@ -113,18 +140,29 @@ func (p *Planner) campaignDependencyNavigator(s quake.Snapshot) *quake.Navigator
 	if d == nil || p.Nav == nil {
 		return p.Nav
 	}
-	mover := quake.Mover{Model: d.DoorModel, Origin: d.initial}
-	for _, m := range s.Movers {
-		if m.Model == d.DoorModel {
-			mover = m
-			break
+	blockers := []quake.Mover{}
+	for node := d; node != nil; node = node.Parent {
+		mover := quake.Mover{Model: node.DoorModel, Origin: node.initial}
+		for _, m := range s.Movers {
+			if m.Model == node.DoorModel {
+				mover = m
+				break
+			}
 		}
+		blockers = append(blockers, mover)
 	}
 	n := *p.Nav
 	n.Edges = make([][]quake.Edge, len(p.Nav.Edges))
 	for area, list := range p.Nav.Edges {
 		for _, edge := range list {
-			if p.World.Geometry.MoverHullClear(mover, edge.Start, edge.End) {
+			clear := true
+			for _, mover := range blockers {
+				if !p.World.Geometry.MoverHullClear(mover, edge.Start, edge.End) {
+					clear = false
+					break
+				}
+			}
+			if clear {
 				n.Edges[area] = append(n.Edges[area], edge)
 			}
 		}

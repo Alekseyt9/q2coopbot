@@ -8,15 +8,16 @@ import (
 )
 
 type CampaignDecision struct {
-	Objective       string              `json:"objective"`
-	State           string              `json:"state"`
-	Exit            *quake.MapExit      `json:"exit,omitempty"`
-	Preparation     *ExitPreparation    `json:"preparation,omitempty"`
-	Dependency      *CampaignDependency `json:"dependency,omitempty"`
-	RouteIndex      int                 `json:"route_index,omitempty"`
-	CompletedLevels int                 `json:"completed_levels,omitempty"`
-	ExitApproach    string              `json:"exit_approach,omitempty"`
-	UnitTrip        *CampaignUnitTrip   `json:"unit_trip,omitempty"`
+	RememberedOpenDoors map[int]quake.Mover `json:"remembered_open_doors,omitempty"`
+	Objective           string              `json:"objective"`
+	State               string              `json:"state"`
+	Exit                *quake.MapExit      `json:"exit,omitempty"`
+	Preparation         *ExitPreparation    `json:"preparation,omitempty"`
+	Dependency          *CampaignDependency `json:"dependency,omitempty"`
+	RouteIndex          int                 `json:"route_index,omitempty"`
+	CompletedLevels     int                 `json:"completed_levels,omitempty"`
+	ExitApproach        string              `json:"exit_approach,omitempty"`
+	UnitTrip            *CampaignUnitTrip   `json:"unit_trip,omitempty"`
 }
 
 // A route explicitly resolves forward exits, including maps with return exits.
@@ -60,6 +61,8 @@ func (p *Planner) preparingSuppliesForExit(s quake.Snapshot) bool {
 // Ambiguous destinations require next_map; do not guess a return transition.
 func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	d := &CampaignDecision{Objective: "complete_level", State: "exit_unknown"}
+	p.campaignDoorMovers(s)
+	d.RememberedOpenDoors = p.campaignOpenedDoors
 	p.World.Campaign = d
 	next := p.CampaignNextMap
 	if p.campaignUnitTrip == nil && p.campaignDependency != nil && p.campaignDependency.State == "unit_activation_required" {
