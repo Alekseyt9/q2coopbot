@@ -55,17 +55,8 @@ func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
 	if p.World.Navigation != "ready" && p.World.Navigation != "unreachable" && p.World.Navigation != "direct_clear" {
 		return nil
 	}
-	if p.World.Navigation == "ready" && !(campaign && s.Self[2]-p.goalPoint[2] > 64) {
-		travel, at := 0.0, s.Self
-		for _, waypoint := range p.World.Route {
-			travel += quake.Horizontal(at, waypoint.Position)
-			at = waypoint.Position
-		}
-		travel += quake.Horizontal(at, p.goalPoint)
-		if travel < 1.5*quake.Horizontal(s.Self, p.goalPoint) {
-			return nil
-		}
-	}
+	// A short AAS route can still cross a closed door. The observed collision
+	// below, rather than route length, decides whether an activator is needed.
 	model, reason := p.World.Geometry.DoorMoveBlock(s.Movers, s.Self,
 		p.goalPoint[0]-s.Self[0], p.goalPoint[1]-s.Self[1])
 	if campaign && reason != "dynamic_door_blocked" {
@@ -87,7 +78,7 @@ func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
 		return nil
 	}
 	bounds, ok := p.World.Geometry.Model(button.Model)
-	if !ok || s.Self[2]+32 < bounds.Min[2] || s.Self[2]-24 > bounds.Max[2] {
+	if !ok || action == "touch" && (s.Self[2]+32 < bounds.Min[2] || s.Self[2]-24 > bounds.Max[2]) {
 		return nil
 	}
 	var doorOrigin quake.Vec3
@@ -215,9 +206,9 @@ func (p *Planner) applyButtonTask(s quake.Snapshot) {
 			buttonObserved = true
 			if quake.Distance(mover.Origin, task.buttonInitial) > 1 {
 				p.rememberButtonEffect(task, s.Frame)
-			}
-			if task.action == "shoot" && quake.Distance(mover.Origin, task.buttonInitial) > 1 {
-				task.phase = "wait_effect"
+				if task.action == "shoot" || p.buttonEffects[buttonEffectKey{task.buttonModel, task.doorModel}] != nil {
+					task.phase = "wait_effect"
+				}
 			}
 			break
 		}

@@ -1,0 +1,20 @@
+{
+  "id": "campaign-button-effect-missing",
+  "title": "Повторное использование сработавшей постоянной кнопки без эффекта на дверь",
+  "map": "base2",
+  "kind": "campaign_dependency",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/campaign-button-effect-missing.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Shoot -RelayBlocked -Seed 101 -Port 31680",
+  "touch_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Relay -RelayBlocked -Seed 101 -Port 31680",
+  "failure_evidence": "workspace/artifacts/original-activation-20261003-171954-143/report.json",
+  "evidence": "workspace/artifacts/original-activation-20261003-173145-123/report.json",
+  "touch_evidence": "workspace/artifacts/original-activation-20261003-172949-567/report.json",
+  "regression_evidence": ["workspace/artifacts/original-activation-20261003-173144-535/report.json", "workspace/artifacts/original-activation-20261003-173144-802/report.json"],
+  "symptom": "После timeout80 короткая buttonTask терялась; бот снова выбирал permanent button, уже сработавшую без открытия двери. Было4 shoot кадра вместо одного.",
+  "resolution": "Пара button/door хранит отдельную наблюдательную память потреблённой permanent button Wait<0. Запись только по реальному движению кнопки, не по выстрелу/контакту. После срабатывания touch и shoot останавливаются; выбор той же пары исключён даже после отмены task. При наблюдаемой двери после80 кадров состояние door_effect_not_observed. Потеря PVS не доказывает ни сброс, ни отсутствие эффекта. Позднее движение двери подтверждает эффект; реальный возврат кнопки в исходную позу снимает ограничение. На новой карте память очищается; temporary buttons не исключаются.",
+  "validation": {"timescale": 2, "parallelism": 2, "seeds": [101,102], "shoot_refusal_passed": 2, "touch_refusal_passed": 2, "provenance_valid": true, "shoot_frames": [1,1], "shoot_failure_frames": [106,105], "retry_frames": [0,0], "touch_failure_frames": [105,105]},
+  "missing_setup": ["Общий episode dispatcher ещё не привязан; использовать специализированный runner."],
+  "remaining_validation": ["Native позднее открытие/реальный сброс кнопки — пока Go tests", "Отдельный native checkpoint контракт памяти эффекта", "Выбор альтернативной кнопки при неработающей первой", "Исходные игровые связки с задержкой и боем"]
+}

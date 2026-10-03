@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet('base1','base2','base3')][string]$Map='base3',[switch]$SideWalls,[switch]$KeepMonsters,[string]$RuntimeRoot='')
+param([ValidatePattern('^[a-zA-Z0-9_]+$')][string]$Map='base3',[switch]$SideWalls,[switch]$KeepMonsters,[string]$RuntimeRoot='')
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 $runtime=Join-Path $repo ('workspace/runtime/q2go-elevator-cycle'+$(if($Map -eq 'base3'){''}else{'-'+$Map}))

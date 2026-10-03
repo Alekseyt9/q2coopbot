@@ -6,13 +6,17 @@ import "q2coopbot/internal/quake"
 // button movement; the parent task still waits for the actual door effect.
 func (p *Planner) buttonShotCommand(s quake.Snapshot, prev, cmd quake.UserCmd) (quake.UserCmd, bool) {
 	task := p.button
-	if task == nil || task.action != "shoot" || task.phase == "approach" {
+	if task == nil || task.phase == "approach" || task.action != "shoot" && task.phase != "wait_effect" {
 		return cmd, false
 	}
 	cmd.Forward, cmd.Side, cmd.Up, cmd.Buttons = 0, 0, 0, 0
 	p.World.Command.MoveSource = "button"
 	p.World.Command.AimSource = "button"
 	p.World.Command.Skill = "button_" + task.phase
+	if task.action != "shoot" {
+		p.World.Command.LimitReason = "button_wait_effect"
+		return cmd, true
+	}
 	g := p.World.Geometry
 	if g == nil {
 		return cmd, true

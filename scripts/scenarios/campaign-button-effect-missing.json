@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "name": "campaign-button-effect-missing",
+  "map": "base2",
+  "runner": "scripts/run_original_activation.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Shoot -RelayBlocked -Seed 101 -Port 31680",
+  "touch_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Relay -RelayBlocked -Seed 101 -Port 31680",
+  "scope": "Synthetic broken relay on original base2 geometry. Permanent button34 is genuinely activated; native relay removed, door33 stays closed. One initial placement, no monsters. Accepted means expected refusal, not successful passage.",
+  "acceptance": ["Observed native activation before recording consumed button", "No additional shoot pulse or selected button task after missing-effect diagnosis", "door_effect_not_observed in campaign.button_effects after80 frames with observed door", "No crossing or false waypoint completion", "Shoot case exactly one firing frame"]
+}

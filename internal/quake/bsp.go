@@ -857,7 +857,7 @@ func LoadMap(root, name string) (MapInfo, error) {
 	if lightErr != nil {
 		lightError = lightErr.Error()
 	}
-	info := MapInfo{Name: name, BSPSource: source, Planes: len(planes) / 20, Nodes: len(nodes) / 28, Leaves: len(leaves) / 28, Brushes: len(brushes) / 12, Entities: parseMapEntities(string(entities)), Models: modelBounds, collision: c, lighting: lighting, LightingError: lightError,
+	info := MapInfo{Name: name, BSPSource: source, Planes: len(planes) / 20, Nodes: len(nodes) / 28, Leaves: len(leaves) / 28, Brushes: len(brushes) / 12, Entities: coopMapEntities(parseMapEntities(string(entities))), Models: modelBounds, collision: c, lighting: lighting, LightingError: lightError,
 		visibility: parseBSPVisibility(visibilityData, nodes, leaves, c.planes)}
 	info.initStaticLasers()
 	return info, nil
