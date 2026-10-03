@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"q2coopbot/internal/quake"
 	"regexp"
@@ -82,6 +83,9 @@ func (t *Tactician) options(w World) []string {
 			actions = append(actions, "retreat")
 		}
 	}
+	if plannedCover(w) != nil {
+		actions = append(actions, "cover")
+	}
 	return actions
 }
 
@@ -116,16 +120,17 @@ func (t *Tactician) poll(w World) (TacticalDecision, bool) {
 	}
 }
 func (t *Tactician) tick(w World) {
-	if t.model == "" || t.busy || time.Now().Before(t.next) || w.Map == "" || w.Snapshot.Frame == 0 || w.Snapshot.Health <= 0 || (w.Snapshot.Teammate == nil && (w.Campaign == nil || combatSpacing(w.Snapshot) == nil)) {
+	if t.model == "" || t.busy || time.Now().Before(t.next) || w.Map == "" || w.Snapshot.Frame == 0 || w.Snapshot.Health <= 0 || !w.Snapshot.OnGround || math.Abs(w.Snapshot.SelfVelocity[2]) > 1 || (w.Snapshot.Teammate == nil && (w.Campaign == nil || combatSpacing(w.Snapshot) == nil)) {
 		return
 	}
 	t.busy = true
 	options := t.options(w)
 	state := struct {
-		Health int16          `json:"health"`
-		Goal   string         `json:"goal"`
-		Combat *CombatSpacing `json:"combat"`
-	}{w.Snapshot.Health, w.Goal, combatSpacing(w.Snapshot)}
+		CoverAvailable bool           `json:"cover_available"`
+		Health         int16          `json:"health"`
+		Goal           string         `json:"goal"`
+		Combat         *CombatSpacing `json:"combat"`
+	}{plannedCover(w) != nil, w.Snapshot.Health, w.Goal, combatSpacing(w.Snapshot)}
 	go func() {
 		start := time.Now()
 		labels := make([]string, len(options))
@@ -133,7 +138,7 @@ func (t *Tactician) tick(w World) {
 			labels[i] = fmt.Sprintf("%c=%s", 'A'+i, option)
 		}
 		facts, _ := json.Marshal(state)
-		prompt := "Choose Quake II tactic. Retreat if need_space; otherwise attack visible enemy. Follow means keep route. Output one offered letter only. State: " + string(facts) + " Options: " + strings.Join(labels, ", ") + " Answer:"
+		prompt := "Choose Quake II tactic. If need_space=true prefer retreat. If cover_available=true prefer cover over stationary attack: hide, peek to shoot, return. Otherwise attack visible enemy. Follow means keep route. Output one offered letter only. State: " + string(facts) + " Options: " + strings.Join(labels, ", ") + " Answer:"
 		payload, _ := json.Marshal(map[string]any{"model": t.model, "prompt": prompt, "stream": false, "think": false, "keep_alive": "10m", "options": map[string]any{"temperature": 0, "num_predict": 1, "num_ctx": 1024}})
 		resp, e := t.http.Post(t.endpoint, "application/json", bytes.NewReader(payload))
 		if e != nil {
@@ -168,7 +173,7 @@ func (t *Tactician) tick(w World) {
 			return
 		}
 		d := TacticalDecision{Action: options[index], At: time.Now(), LatencyMS: time.Since(start).Milliseconds(), Map: w.Map, Frame: w.Snapshot.Frame, Source: "live"}
-		if (d.Action == "attack" || d.Action == "retreat") && state.Combat != nil {
+		if (d.Action == "attack" || d.Action == "retreat" || d.Action == "cover") && state.Combat != nil {
 			d.Target = state.Combat.Target
 		}
 		t.pending <- tacticalResult{decision: d}

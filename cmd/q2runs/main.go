@@ -24,15 +24,22 @@ import (
 var web embed.FS
 
 type point struct {
-	Map         string          `json:"map"`
-	Frame       int             `json:"frame"`
-	Connection  int             `json:"connection"`
-	Spawncount  int             `json:"spawncount"`
-	Self        *quake.Vec3     `json:"self"`
-	Teammate    *quake.Vec3     `json:"teammate,omitempty"`
-	Health      int             `json:"health"`
-	Goal        string          `json:"goal"`
-	Arbitration json.RawMessage `json:"arbitration,omitempty"`
+	Map          string          `json:"map"`
+	Frame        int             `json:"frame"`
+	Connection   int             `json:"connection"`
+	Spawncount   int             `json:"spawncount"`
+	Self         *quake.Vec3     `json:"self"`
+	Teammate     *quake.Vec3     `json:"teammate,omitempty"`
+	Health       int             `json:"health"`
+	Armor        *int            `json:"armor"`
+	Ammo         *int            `json:"ammo"`
+	Weapon       string          `json:"weapon"`
+	SelfVelocity *quake.Vec3     `json:"self_velocity,omitempty"`
+	OnGround     *bool           `json:"on_ground,omitempty"`
+	Ducked       *bool           `json:"ducked,omitempty"`
+	WeaponReason string          `json:"weapon_reason,omitempty"`
+	Goal         string          `json:"goal"`
+	Arbitration  json.RawMessage `json:"arbitration,omitempty"`
 }
 type run struct {
 	ID       string    `json:"id"`
@@ -41,11 +48,13 @@ type run struct {
 	Bytes    int64     `json:"bytes"`
 }
 type server struct {
-	root    string
-	assets  []string
-	mu      sync.Mutex
-	runs    []run
-	scanned time.Time
+	root     string
+	assets   []string
+	mu       sync.Mutex
+	runs     []run
+	scanned  time.Time
+	mapMu    sync.Mutex
+	mapCache map[string]*cachedMap
 }
 
 // Ignore non-telemetry JSONL and tolerate an unfinished final line of a live trace.
@@ -143,9 +152,12 @@ func (s *server) handler() http.Handler {
 			size = 100
 		}
 		q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+		mapFilter := r.URL.Query().Get("map")
+		mapSet := make(map[string]bool)
 		filtered := make([]run, 0)
 		for _, run := range runs {
-			if strings.Contains(strings.ToLower(run.ID+" "+run.Map), q) {
+			mapSet[run.Map] = true
+			if (mapFilter == "" || run.Map == mapFilter) && strings.Contains(strings.ToLower(run.ID+" "+run.Map), q) {
 				filtered = append(filtered, run)
 			}
 		}
@@ -162,7 +174,12 @@ func (s *server) handler() http.Handler {
 		if end > total {
 			end = total
 		}
-		respond(w, map[string]any{"items": filtered[start:end], "page": page, "pages": pages, "size": size, "total": total})
+		maps := make([]string, 0, len(mapSet))
+		for name := range mapSet {
+			maps = append(maps, name)
+		}
+		sort.Strings(maps)
+		respond(w, map[string]any{"items": filtered[start:end], "page": page, "pages": pages, "size": size, "total": total, "maps": maps})
 	})
 	mux.HandleFunc("GET /api/trace", func(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Query().Get("id")
@@ -200,15 +217,9 @@ func (s *server) handler() http.Handler {
 		respond(w, map[string]any{"points": rows, "skipped": skipped})
 	})
 	mux.HandleFunc("GET /api/map", func(w http.ResponseWriter, r *http.Request) {
-		for _, root := range s.assets {
-			outline, e := quake.LoadMapOutline(root, r.URL.Query().Get("name"))
-			if e == nil {
-				respond(w, outline)
-				return
-			}
-		}
-		http.Error(w, "BSP не найден в каталогах assets; трейс доступен без схемы", 404)
+		s.serveMap(w, r)
 	})
+	mux.HandleFunc("GET /api/map.svg", s.serveMap)
 	files, _ := fs.Sub(web, "web")
 	mux.Handle("/", http.FileServer(http.FS(files)))
 	return mux
@@ -223,6 +234,7 @@ func main() {
 		log.Fatal(e)
 	}
 	s := &server{root: abs, assets: strings.Split(*assets, ";")}
+	go s.warmMaps()
 	fmt.Printf("Quake II Run Explorer: http://%s\nTraces: %s\n", *addr, abs)
 	srv := http.Server{Addr: *addr, Handler: s.handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Fatal(srv.ListenAndServe())

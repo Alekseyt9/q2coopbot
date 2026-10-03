@@ -43,6 +43,8 @@ type World struct {
 	Updated           time.Time          `json:"updated"`
 }
 type Planner struct {
+	cover                     *coverCycle
+	coverRetry                int
 	exitPreparation           *ExitPreparation
 	campaignMap               string
 	campaignDestination       string
@@ -228,6 +230,8 @@ func (p *Planner) setMap(name, root string) {
 	p.World = World{Map: name, Navigation: "aas_missing", GeometryStatus: "unavailable"}
 	p.laserEvidence = nil
 	p.Nav = nil
+	p.cover = nil
+	p.coverRetry = 0
 	p.button = nil
 	p.deathFrame = 0
 	p.healthActive = false
@@ -814,6 +818,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		return yield
 	}
 	profile := combatSpacing(s)
+	if covered, ok := p.combatCoverCommand(s, cmd, tactic); ok {
+		return covered
+	}
 	p.World.Command.CombatSpacing = profile
 	spacingGoal := s.Teammate != nil && (p.World.Goal == "cover_teammate" || p.World.Goal == "follow_teammate") && quake.Distance(s.Self, *s.Teammate) <= combatLeash(profile) || s.Teammate == nil && p.Campaign && p.World.Goal == "reach_level_exit"
 	if spacingGoal && profile != nil && profile.Distance < profile.Minimum+32 && (tactic == "" || tactic == "attack" || tactic == "retreat") {
