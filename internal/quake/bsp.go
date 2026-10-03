@@ -247,6 +247,9 @@ func (m *MapInfo) DoorMoveBlockStep(movers []Mover, origin Vec3, dx, dy, step fl
 			if visible {
 				min[axis] += mover.Origin[axis]
 				max[axis] += mover.Origin[axis]
+			} else {
+				min[axis] += entity.Origin[axis]
+				max[axis] += entity.Origin[axis]
 			}
 		}
 		playerMin, playerMax := Vec3{-16, -16, -24}, Vec3{16, 16, 32}

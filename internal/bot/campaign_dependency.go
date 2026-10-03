@@ -11,6 +11,8 @@ type CampaignDependency struct {
 	Activation     quake.Activation      `json:"activation"`
 	Goal           quake.Vec3            `json:"goal"`
 	UnitConditions []quake.UnitCondition `json:"unit_conditions,omitempty"`
+	ProbeFrom      quake.Vec3            `json:"probe_from"`
+	ProbeTo        quake.Vec3            `json:"probe_to"`
 	initial        quake.Vec3
 	started        int
 }
@@ -54,6 +56,13 @@ func (p *Planner) discoverCampaignDependency(s quake.Snapshot, dx, dy float64) {
 		p.campaignDependency = &CampaignDependency{State: "unit_activation_required", DoorModel: model, UnitConditions: conditions, initial: live.Origin, started: s.Frame}
 	}
 	if p.campaignDependency != nil {
+		p.campaignDependency.ProbeFrom = s.Self
+		end := s.Self
+		if distance := math.Hypot(dx, dy); distance > 0 {
+			end[0] += dx / distance * 40
+			end[1] += dy / distance * 40
+		}
+		p.campaignDependency.ProbeTo = end
 		p.routeKnown = false
 	}
 }

@@ -732,6 +732,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	if flight, active := p.jumpCommand(cmd); active {
 		return flight
 	}
+	if probe, active := p.campaignUnitProbeCommand(s, cmd); active {
+		return probe
+	}
 	if p.elevator != nil && p.routeIndex < len(p.route) && p.route[p.routeIndex].ElevatorPhase == "board" {
 		cmd = p.elevatorCommand(cmd, p.route[p.routeIndex])
 		p.World.Command = CommandDecision{MoveSource: "elevator", AimSource: "elevator", Skill: "elevator", LimitReason: p.World.Elevator}

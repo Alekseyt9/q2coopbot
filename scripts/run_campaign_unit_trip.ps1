@@ -54,7 +54,7 @@ try{
     $visits=@();foreach($row in $rows){if(!$visits.Count -or $row.map -ne $visits[-1].map){$visits+=@{map=$row.map;generation=$row.spawncount;frame=$row.frame}}}
     if(($visits.map -join ',') -ne 'unit_a,unit_b,unit_a,unit_c' -or @($visits.generation|Select-Object -Unique).Count -ne 4){throw 'Native round trip/generations absent'}
     $tripRows=@($rows|Where-Object {$_.campaign.unit_trip})
-    if(!$tripRows.Count -or @($tripRows|Where-Object {$_.campaign.route_index -ne 0 -or $_.campaign.completed_levels -ne 0}).Count){throw 'Remote visit advanced campaign'}
+    if(!$tripRows.Count -or @($tripRows|Where-Object {[int]$_.campaign.route_index -ne 0 -or [int]$_.campaign.completed_levels -ne 0}).Count){throw 'Remote visit advanced campaign'}
     if(!@($tripRows|Where-Object {$_.map -eq 'unit_b' -and $_.campaign.unit_trip.action_attempted}).Count -or !@($tripRows|Where-Object {$_.map -eq 'unit_a' -and $_.campaign.unit_trip.state -eq 'effect_confirmed'}).Count){throw 'Action attempt/observed effect absent'}
     if($rows|Where-Object {$_.teammate -or $_.health -le 0}){throw 'Unexpected teammate/death'}
     $log=Get-Content (Join-Path $OutputRoot 'bot.err') -Raw

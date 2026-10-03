@@ -9,6 +9,30 @@ import (
 	"time"
 )
 
+func TestCampaignUnitMapsConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "unit.json")
+	for _, data := range []string{
+		`{"run":{"mode":"companion","campaign_unit_maps":["unit_b"]}}`,
+		`{"run":{"mode":"campaign","campaign_unit_maps":["unit_b"]}}`,
+		`{"run":{"mode":"campaign","campaign_route":["unit_a","unit_c"],"campaign_unit_maps":["../unit_b"]}}`,
+		`{"run":{"mode":"campaign","campaign_route":["unit_a","unit_c"],"campaign_unit_maps":["unit_b","unit_b"]}}`,
+	} {
+		if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadConfig(path); err == nil {
+			t.Fatal("invalid unit map config accepted", data)
+		}
+	}
+	if err := os.WriteFile(path, []byte(`{"run":{"mode":"campaign","campaign_route":["unit_a","unit_c"],"campaign_unit_maps":["unit_b"]}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil || !slices.Equal(cfg.CampaignUnitMaps, []string{"unit_b"}) {
+		t.Fatal(cfg.CampaignUnitMaps, err)
+	}
+}
+
 func TestCampaignRouteConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "route.json")
 	for _, data := range []string{

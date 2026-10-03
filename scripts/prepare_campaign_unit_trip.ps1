@@ -23,7 +23,7 @@ if($world.Count -ne 1){throw 'Worldspawn absent/ambiguous'}
 $spawn=@'
 {
 "classname" "info_player_start"
-"origin" "144 -384 32"
+"origin" "144 -304 32"
 "angle" "180"
 }
 '@
@@ -31,7 +31,7 @@ $a=@'
 {
 "classname" "func_door"
 "model" "*32"
-"origin" "1792 -1840 -104"
+"origin" "1792 -1792 -104"
 "targetname" "unit_lock"
 "angle" "-2"
 "wait" "-1"
@@ -47,7 +47,7 @@ $a=@'
 {
 "classname" "trigger_multiple"
 "model" "*16"
-"origin" "-64 -64 0"
+"origin" "-88 16 0"
 "target" "finish"
 }
 {
@@ -58,7 +58,7 @@ $a=@'
 {
 "classname" "trigger_multiple"
 "model" "*8"
-"origin" "0 -160 0"
+"origin" "0 0 0"
 "target" "remote"
 }
 {
@@ -90,10 +90,22 @@ $b=@'
 }
 '@
 foreach($name in @('unit_a','unit_b','unit_c')){
-    [IO.File]::WriteAllBytes((Join-Path $RuntimeRoot "baseq2/maps/$name.bsp"),$bsp)
     Copy-Item (Join-Path $repo 'workspace/runtime/q2go/baseq2/maps/base1.aas') (Join-Path $RuntimeRoot "baseq2/maps/$name.aas")
     $extra=if($name -eq 'unit_a'){$a}elseif($name -eq 'unit_b'){$b}else{''}
-    [IO.File]::WriteAllText((Join-Path $RuntimeRoot "baseq2/maps/$name.ent"),($world[0].Value+"`n"+$spawn+"`n"+$extra),[Text.Encoding]::ASCII)
+    $mapSpawn=if($name -eq 'unit_b'){$spawn.Replace('144 -304 32','192 -304 32')}else{$spawn}
+$text=$world[0].Value+"`n"+$mapSpawn+"`n"+$extra
+    # Go reads BSP entities; native Yamagi may use .ent. Keep both identical.
+    # Append a replacement entity lump; collision/model/visibility lumps stay
+    # byte-for-byte unchanged and use the source geometry's AAS.
+    $entityBytes=[Text.Encoding]::ASCII.GetBytes($text+[char]0)
+    $fixtureBsp=[byte[]]::new($bsp.Length+$entityBytes.Length)
+    [Array]::Copy($bsp,$fixtureBsp,$bsp.Length)
+    [Array]::Copy($entityBytes,0,$fixtureBsp,$bsp.Length,$entityBytes.Length)
+    [Array]::Copy([BitConverter]::GetBytes([int]$bsp.Length),0,$fixtureBsp,8,4)
+    [Array]::Copy([BitConverter]::GetBytes([int]$entityBytes.Length),0,$fixtureBsp,12,4)
+    [IO.File]::WriteAllBytes((Join-Path $RuntimeRoot "baseq2/maps/$name.bsp"),$fixtureBsp)
+    [IO.File]::WriteAllText((Join-Path $RuntimeRoot "baseq2/maps/$name.ent"),$text,[Text.Encoding]::ASCII)
 }
 @{version=1;source_map='base1';maps=@('unit_a','unit_b','unit_c');scope='Isolated cross-level fixture; reused original BSP/AAS, translated door and triggers; no monsters/items; fixture spawn';native_crosslevel_flags=$true}|ConvertTo-Json|Set-Content (Join-Path $RuntimeRoot 'unit-fixture.json')
 $RuntimeRoot
+
