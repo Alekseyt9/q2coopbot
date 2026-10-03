@@ -84,7 +84,12 @@ func (p *Planner) regroupEntryRouteStep(s quake.Snapshot, goal quake.Vec3, step 
 			if seen[at] || math.Abs(at[0]-s.Self[0]) > 128 || math.Abs(at[1]-s.Self[1]) > 128 {
 				continue
 			}
-			if !g.PlayerMoveClear(current.at, at) || !regroupGroundSupported(g, current.at, dir, step) {
+			standing := g.PlayerMoveClear(current.at, at) && regroupGroundSupported(g, current.at, dir, step)
+			// A ducked player can leave a low ceiling outside the standing AAS.
+			// Reconnect only across supported flat ground; the movement guard
+			// retains crouch until the entire commanded hull fits standing.
+			crouching := s.Ducked && !g.PlayerMoveClear(s.Self, s.Self) && g.CrouchStepClear(current.at, dir[0], dir[1], step)
+			if (!standing && !crouching) || g.PlayerTouchesHazard(at) || g.LaserMoveHazard(current.at, at) {
 				continue
 			}
 			if _, reason := g.DoorMoveBlockStep(s.Movers, current.at, dir[0], dir[1], step); reason != "" {
@@ -102,7 +107,7 @@ func (p *Planner) regroupEntryRouteStep(s quake.Snapshot, goal quake.Vec3, step 
 			}
 			seen[at] = true
 			path := append(append([]quake.Waypoint(nil), current.path...), quake.Waypoint{Position: at, Kind: 2})
-			if route, ok := p.Nav.Route(at, goal); ok {
+			if route, ok := p.Nav.Route(at, goal); ok && g.PlayerMoveClear(at, at) {
 				return append(path, route...), true
 			}
 			queue = append(queue, node{at: at, path: path})

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "name": "base1-campaign-upper-corner",
+  "map": "base1",
+  "runner": "scripts/run_original_activation.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -OriginalCorner -Seed 301 -Port 31680",
+  "initial_position": [-1906.75, 1337, 120.125],
+  "test_goal": [-1644, 1316, 120.125],
+  "scope": "Original BSP/AAS, monsters removed, one initial teleport. Native teleport raises initial pose by 10 units; bot settles on upper floor and follows normal campaign commands. Focused geometry reproduction at 100HP; captured 17HP pose is also covered by an asset-backed Go test. Combat and resource recovery require the separate combat chain.",
+  "acceptance": [
+    "Observed initial corner placement and route_corner_detour commands",
+    "Native arrival at the far AAS corridor waypoint",
+    "No fall below upper floor after initial placement; alive on base1 with no teammate",
+    "Only initial teleport, no forced movement/give/kill/map commands",
+    "Two parallel servers and clients at timescale 2 with distinct acknowledged seeds"
+  ]
+}

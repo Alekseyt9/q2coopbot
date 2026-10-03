@@ -1,6 +1,7 @@
 [CmdletBinding()]
-param([switch]$Worker,[switch]$Button,[switch]$Sequence,[switch]$Relay,[switch]$RelayBlocked,[switch]$Shoot,[switch]$OriginalShoot,[switch]$OriginalRelay,[switch]$OriginalHatch,[int]$Seed=101,[int]$Port=31680,[string]$OutputRoot='',[string]$Client='')
+param([switch]$Worker,[switch]$Button,[switch]$Sequence,[switch]$Relay,[switch]$RelayBlocked,[switch]$Shoot,[switch]$OriginalShoot,[switch]$OriginalRelay,[switch]$OriginalHatch,[switch]$OriginalCorner,[int]$Seed=101,[int]$Port=31680,[string]$OutputRoot='',[string]$Client='')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
+if($OriginalCorner -and ($Button -or $Sequence -or $Relay -or $RelayBlocked -or $Shoot -or $OriginalShoot -or $OriginalRelay -or $OriginalHatch)){throw 'OriginalCorner requires a standalone navigation fixture'}
 if($OriginalShoot -and ($Shoot -or $Sequence -or $Relay -or $RelayBlocked)){throw 'OriginalShoot requires an unmodified standalone map'}
 if($OriginalShoot){$Button=$true}
 if($OriginalRelay -and ($OriginalShoot -or $Shoot -or $Sequence -or $Relay -or $RelayBlocked)){throw 'OriginalRelay requires an unmodified standalone map'}
@@ -29,18 +30,19 @@ if(!$Worker){
         if($using:OriginalShoot){$args+='-OriginalShoot'}
         if($using:OriginalRelay){$args+='-OriginalRelay'}
         if($using:OriginalHatch){$args+='-OriginalHatch'}
+        if($using:OriginalCorner){$args+='-OriginalCorner'}
         $child=Start-Process $using:exe -ArgumentList @($args|ForEach-Object {'"'+$_+'"'}) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $using:OutputRoot "worker-$_.log") -RedirectStandardError (Join-Path $using:OutputRoot "worker-$_.err")
         $child.WaitForExit();$r=Get-Content (Join-Path $out 'report.json') -Raw|ConvertFrom-Json;if($child.ExitCode){$r.accepted=$false};$r
     } -ThrottleLimit 2)
     $valid=$fingerprint -eq (Get-HarnessFingerprint (Get-HarnessSourceRecords $repo))
     $accepted=$valid -and @($results|Where-Object {!$_.accepted}).Count -eq 0
-    @{accepted=$accepted;original_hatch=[bool]$OriginalHatch;original_relay=[bool]$OriginalRelay;original_shoot=[bool]$OriginalShoot;button=[bool]$Button;sequence=[bool]$Sequence;relay=[bool]$Relay;expected_refusal=[bool]$RelayBlocked;provenance_valid=$valid;source_fingerprint=$fingerprint;timescale=2;parallelism=2;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 15|Set-Content (Join-Path $OutputRoot 'report.json')
+    @{accepted=$accepted;original_corner=[bool]$OriginalCorner;original_hatch=[bool]$OriginalHatch;original_relay=[bool]$OriginalRelay;original_shoot=[bool]$OriginalShoot;button=[bool]$Button;sequence=[bool]$Sequence;relay=[bool]$Relay;expected_refusal=[bool]$RelayBlocked;provenance_valid=$valid;source_fingerprint=$fingerprint;timescale=2;parallelism=2;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 15|Set-Content (Join-Path $OutputRoot 'report.json')
     "Original activation: $OutputRoot";if(!$accepted){throw 'Original activation rejected'};return
 }
 if(Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue){throw 'Port occupied'}
 if(Test-Path $OutputRoot){throw 'Fresh trial required'}
 New-Item -ItemType Directory $OutputRoot|Out-Null
-$map=if($OriginalHatch){'base3'}elseif($OriginalRelay){'jail2'}elseif($OriginalShoot){'city3'}else{'base2'}
+$map=if($OriginalCorner){'base1'}elseif($OriginalHatch){'base3'}elseif($OriginalRelay){'jail2'}elseif($OriginalShoot){'city3'}else{'base2'}
 $buttonModel=if($OriginalHatch){45}elseif($OriginalRelay){3}elseif($OriginalShoot){82}else{34};$doorModel=if($OriginalHatch){21}elseif($OriginalRelay){47}elseif($OriginalShoot){81}else{33}
 $runtime=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map $map -RuntimeRoot (Join-Path $OutputRoot 'runtime')
 if($Relay){& "$PSScriptRoot/prepare_button_relay.ps1" -RuntimeRoot $runtime -Blocked:$RelayBlocked -Shoot:$Shoot}
@@ -51,6 +53,7 @@ if($Sequence){$goal='768,1792,24.125;194,2024,-151.875'}
 if($OriginalShoot){$placement='-328,-72,-55.875';$goal='-328,0,-39.875'}
 if($OriginalRelay){$placement='-2776,300,24.125';$goal='-2880,288,24.125'}
 if($OriginalHatch){$placement='-484,-360,-263.875';$goal='-416,-320,-311.875;-416,-320,-263.875'}
+if($OriginalCorner){$placement='-1906.75,1337,120.125';$goal='-1644,1316,120.125'}
 try{
     $env:Q2COOPBOT_TEST_RCON=[guid]::NewGuid().ToString('N')
     $args="-portable +set ip 127.0.0.1 +set noipx 1 +set dedicated 1 +set coop 1 +set deathmatch 0 +set cheats 1 +set maxclients 4 +set port $Port +set timescale 2 +set rcon_password $env:Q2COOPBOT_TEST_RCON +set sv_test_unlimited_loopback 1 +set g_test_seed $Seed +map $map"
@@ -126,7 +129,15 @@ try{
         $report.button_touch_frame=$contact[0].frame;$report.button_door_open_frame=$opened[0].frame;$report.button_door_cross_frame=$secondCross[0].frame
         }
     }
-    if(!$Button){
+    if($OriginalCorner){
+        $detour=@($rows|Where-Object {$_.arbitration.skill -eq 'route_corner_detour'})
+        if(!$detour.Count){throw 'Local corner repair was not exercised'}
+        $placed=@($rows|Where-Object {[math]::Abs($_.self[0]+1906.75) -lt 1 -and [math]::Abs($_.self[1]-1337) -lt 1})
+        if(!$placed.Count){throw 'Observed initial corner placement absent'}
+        if($rows|Where-Object {$_.frame -ge $placed[0].frame -and $_.self[2] -lt 110}){throw 'Grounded corner repair left the upper floor'}
+        $report.original_corner=$true;$report.detour_frames=$detour.Count
+    }
+    if(!$Button -and !$OriginalCorner){
     $dependency=@($rows|Where-Object {$_.campaign.dependency.door_model -eq 24 -and $_.campaign.dependency.activation.trigger.model -eq 23})
     $contact=@($rows|Where-Object {$_.self[0]+16 -gt 456 -and $_.self[0]-16 -lt 464 -and $_.self[1]+16 -gt 1728 -and $_.self[1]-16 -lt 1848 -and $_.self[2]+32 -gt 0 -and $_.self[2]-24 -lt 56})
     $opened=@($rows|Where-Object {@($_.movers|Where-Object {$_.model -eq 24 -and $_.origin[2] -lt -60}).Count})
@@ -146,7 +157,8 @@ try{
     if($commands.Count -ne 1 -or $commands[0].Line -notlike ('*teleport '+$placement.Replace(',',' '))){throw 'Initial placement proof invalid'}
     if((Get-Content (Join-Path $OutputRoot 'bot.err') -Raw) -match 'client command: (give|kill|map|gamemap) '){throw 'Forced gameplay command'}
     if(@(Get-Content (Join-Path $OutputRoot 'server.log')|Where-Object {$_ -eq "g_test_seed ready version=1 seed=$Seed"}).Count -ne 1){throw 'Seed acknowledgement absent'}
-    $report.accepted=$true;$report.reason='accepted';$report.first_contact_frame=$contact[0].frame;$report.first_open_frame=$opened[0].frame;$report.last=$last;$report.trace=$trace
+    $report.accepted=$true;$report.reason='accepted';$report.last=$last;$report.trace=$trace
+    if(!$OriginalCorner){$report.first_contact_frame=$contact[0].frame;$report.first_open_frame=$opened[0].frame}
     $report.fixture=Get-Content (Join-Path $runtime 'elevator-fixture.json') -Raw|ConvertFrom-Json
     $report.entities_sha256=(Get-FileHash (Join-Path $runtime "baseq2/maps/$map.ent")).Hash
 }catch{$report.reason=$_.Exception.Message}

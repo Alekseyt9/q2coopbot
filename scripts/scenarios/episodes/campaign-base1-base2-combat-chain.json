@@ -7,12 +7,35 @@
   "reproduction": "observation_only",
   "scenario": "scripts/scenarios/base1-base2-campaign-combat-chain.json",
   "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_exit.ps1 -Chain -Combat -Seed 301 -Port 31760",
-  "evidence": "workspace/artifacts/campaign-combat-chain-20261003-185513-568/report.json",
-  "repeat_evidence": "workspace/artifacts/campaign-combat-chain-20261003-185845-651/report.json",
-  "failure_evidence": ["workspace/artifacts/campaign-combat-chain-20261003-184644-336/report.json"],
-  "resolution": "Добавлен оригинальный боевой runtime для base2, упорядоченные native переходы и per-map серверные метрики. Близкая точка парного AAS walk-off запускает полный проверенный спуск до at_waypoint и для перепада более64. Допустимый урон падения ограничен20, третью текущегоHP и остатком не менее25.",
-  "validation": {"timescale": 2, "parallelism": 2, "seeds": [301,302], "first_corrected_suite_passed": 2, "final_repeat_passed": 1, "final_repeat_total": 2, "provenance_valid": true, "deathless": false},
+  "evidence": "workspace/artifacts/campaign-combat-chain-20261003-191819-151/report.json",
+  "repeat_evidence": "workspace/artifacts/campaign-combat-chain-20261003-192055-762/report.json",
+  "failure_evidence": [
+    "workspace/artifacts/campaign-combat-chain-20261003-184644-336/report.json",
+    "workspace/artifacts/campaign-combat-chain-20261003-185845-651/report.json"
+  ],
+  "resolution": "Добавлен оригинальный боевой runtime для base2, упорядоченные native переходы и per-map серверные метрики. Близкая точка парного AAS walk-off запускает полный проверенный спуск до at_waypoint и для перепада более64. Допустимый урон падения ограничен20, третью текущегоHP и остатком не менее25. Локальный обход угла base1 умеет присоединяться к дальней точке AAS по проверенному наземному коридору.",
+  "validation": {
+    "timescale": 2,
+    "parallelism": 2,
+    "seeds": [
+      301,
+      302,
+      401,
+      402
+    ],
+    "first_corrected_suite_passed": 2,
+    "final_repeat_passed": 1,
+    "final_repeat_total": 2,
+    "provenance_valid": true,
+    "deathless": false
+  },
   "regression_evidence": "workspace/artifacts/original-activation-20261003-185556-286/report.json",
-  "missing_setup": ["Общий dispatcher ещё не привязан; использовать специализированный runner."],
-  "remaining_validation": ["base1-campaign-upper-corner-stall: повторная ветвь seed302 застряла с17HP", "Прохождение без смертей и устойчивость на большем наборе seeds", "Base3 является только конечной картой; её прохождение не проверено"]
+  "missing_setup": [
+    "Общий dispatcher ещё не привязан; использовать специализированный runner."
+  ],
+  "remaining_validation": [
+    "base2-campaign-low-health-unreachable-exit: seed401 остановился с18HP, navigation=unreachable",
+    "Прохождение без смертей, восстановление ресурсов и устойчивость на большем наборе seeds",
+    "Base3 является только конечной картой; её прохождение не проверено"
+  ]
 }

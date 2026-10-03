@@ -14,12 +14,15 @@ func (p *Planner) planCornerDetour(s quake.Snapshot) bool {
 		return false
 	}
 	var goals []quake.Vec3
-	for _, wp := range p.World.Route[1:] {
+	for i, wp := range p.World.Route {
 		if wp.Kind != 2 && wp.Kind != 7 {
 			break
 		}
-		if quake.Horizontal(s.Self, wp.Position) >= 24 && quake.Horizontal(s.Self, wp.Position) <= 112 && math.Abs(wp.Position[2]-s.Self[2]) <= 18 {
+		if (i > 0 || quake.Horizontal(s.Self, wp.Position) > 112) && quake.Horizontal(s.Self, wp.Position) >= 24 && quake.Horizontal(s.Self, wp.Position) <= 384 && math.Abs(wp.Position[2]-s.Self[2]) <= 18 {
 			goals = append(goals, wp.Position)
+		}
+		if len(goals) >= 4 {
+			break
 		}
 		if wp.Kind == 7 {
 			break
@@ -39,9 +42,16 @@ func (p *Planner) planCornerDetour(s quake.Snapshot) bool {
 	for head := 0; head < len(nodes) && head < 625; head++ {
 		n := nodes[head]
 		reached := head > 0 && p.cornerWalkOffFrom(s, n.point)
+		var connection []quake.Vec3
 		for _, goal := range goals {
 			if head > 0 && quake.Horizontal(n.point, goal) <= 10 && math.Abs(n.point[2]-goal[2]) <= 8 {
 				reached = true
+			}
+			if !reached && head > 0 && quake.Horizontal(s.Self, goal) > 112 {
+				if path, ok := p.cornerRouteConnection(s, n.point, goal); ok {
+					connection, reached = path, true
+					break
+				}
 			}
 		}
 		if reached {
@@ -53,6 +63,7 @@ func (p *Planner) planCornerDetour(s quake.Snapshot) bool {
 			for i := len(reverse) - 1; i >= 0; i-- {
 				p.cornerDetour = append(p.cornerDetour, reverse[i])
 			}
+			p.cornerDetour = append(p.cornerDetour, connection...)
 			p.cornerDetourGoal, p.cornerDetourUntil = p.goalPoint, s.Frame+100
 			p.cornerDetourRoute = append([]quake.Waypoint(nil), p.World.Route...)
 			return true
@@ -80,6 +91,29 @@ func (p *Planner) planCornerDetour(s quake.Snapshot) bool {
 		}
 	}
 	return false
+}
+
+// Keep the small corner search bounded. A distant AAS waypoint can be joined
+// only by a fully checked ground corridor, never by extending the grid blindly.
+func (p *Planner) cornerRouteConnection(s quake.Snapshot, from, to quake.Vec3) ([]quake.Vec3, bool) {
+	distance := quake.Horizontal(from, to)
+	if distance < 1 || distance > 384 || math.Abs(to[2]-from[2]) > 18 || !p.World.Geometry.PlayerMoveClear(from, to) {
+		return nil, false
+	}
+	steps := int(math.Ceil(distance / 8))
+	path := make([]quake.Vec3, 0, steps)
+	at := from
+	for i := 1; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		next := quake.Vec3{from[0] + (to[0]-from[0])*t, from[1] + (to[1]-from[1])*t, at[2]}
+		next, ok := p.cornerGroundStep(s, at, next)
+		if !ok {
+			return nil, false
+		}
+		path = append(path, next)
+		at = next
+	}
+	return path, math.Abs(at[2]-to[2]) <= 8
 }
 
 // A walk-off's AAS start may already lie beyond static floor support. Stop
