@@ -21,6 +21,13 @@ func TestBase1CoverCycleAndGroupGuard(t *testing.T) {
 	if !g.ClearShot(s.EyePoint(), s.Enemies[0].AimPoint()) || coverBlasterClear(w, s.Self, s.Enemies[0]) {
 		t.Fatal("fixture must expose eye-visible but muzzle-blocked target")
 	}
+	// ClearShot shrinks brushes for visibility. A grazing bolt still collides
+	// in MASK_SHOT and this original target cannot have a flat local peek.
+	if plannedCover(w) != nil {
+		t.Fatal("grazing wall trajectory offered as cover")
+	}
+	s.Enemies[0].Origin[0] = 240
+	w.Snapshot = s
 	c := plannedCover(w)
 	if c == nil {
 		t.Fatal("no short wall cover")
@@ -28,15 +35,25 @@ func TestBase1CoverCycleAndGroupGuard(t *testing.T) {
 	if !coverHidden(&g, c.hide, s.Enemies) || !coverWalkClear(w, c.peek, c.hide) {
 		t.Fatal("invalid cover corridor")
 	}
-	if c.peek == s.Self || !coverBlasterClear(w, c.peek, s.Enemies[0]) {
+	if !coverBlasterClear(w, c.peek, s.Enemies[0]) {
 		t.Fatal("peek did not repair blocked blaster trajectory")
 	}
 	blocked := *c
 	blocked.stage = "fire"
-	guard := &Planner{World: w, cover: &blocked}
-	guarded, handled := guard.combatCoverCommand(s, quake.UserCmd{Buttons: 1}, "")
+	blockedWorld := w
+	blockedWorld.Snapshot.Enemies = append([]quake.Object(nil), s.Enemies...)
+	blockedWorld.Snapshot.Enemies[0].Origin[0] = 200
+	guard := &Planner{World: blockedWorld, cover: &blocked}
+	guarded, handled := guard.combatCoverCommand(blockedWorld.Snapshot, quake.UserCmd{Buttons: 1}, "")
 	if !handled || guarded.Buttons != 0 || blocked.stage != "return" {
 		t.Fatal("blocked muzzle was allowed to fire")
+	}
+	mixed := w
+	mixed.Snapshot.Enemies = append(append([]quake.Object(nil), s.Enemies...), quake.Object{ID: 2, Class: "monster_tank", Origin: quake.Vec3{200, -224, 24}})
+	mixedCover := *c
+	mixedPlanner := &Planner{World: mixed, cover: &mixedCover}
+	if _, handled := mixedPlanner.combatCoverCommand(mixed.Snapshot, quake.UserCmd{}, ""); handled || mixedPlanner.cover != nil {
+		t.Fatal("new explosive threat after target did not cancel cover")
 	}
 	p := &Planner{Campaign: true, World: w, cover: c}
 	cmd, ok := p.combatCoverCommand(s, quake.UserCmd{Buttons: 1}, "cover")
@@ -46,7 +63,7 @@ func TestBase1CoverCycleAndGroupGuard(t *testing.T) {
 	s.Self = c.hide
 	p.World.Snapshot = s
 	p.combatCoverCommand(s, quake.UserCmd{}, "")
-	s.Frame += 2
+	s.Frame += 4
 	p.World.Snapshot = s
 	p.combatCoverCommand(s, quake.UserCmd{}, "")
 	if c.stage != "peek" {
@@ -74,8 +91,22 @@ func TestBase1CoverCycleAndGroupGuard(t *testing.T) {
 	s.Self = c.hide
 	p.World.Snapshot = s
 	p.combatCoverCommand(s, quake.UserCmd{}, "")
+	if p.cover == nil || c.stage != "wait" || c.rounds != 1 {
+		t.Fatal("cycle did not schedule another protected peek")
+	}
+	clear = false // Target remains observed but its line is occluded.
+	s.Frame += 4
+	p.World.Snapshot = s
+	p.combatCoverCommand(s, quake.UserCmd{}, "")
+	if c.stage != "peek" {
+		t.Fatal("hidden observed target did not permit repeat")
+	}
+	s.Enemies = nil
+	s.Self = c.hide
+	p.World.Snapshot = s
+	p.combatCoverCommand(s, quake.UserCmd{Buttons: 1}, "")
 	if p.cover != nil {
-		t.Fatal("cycle did not end behind wall")
+		t.Fatal("lost target kept maneuver alive")
 	}
 	w.Snapshot.Enemies = append(w.Snapshot.Enemies, quake.Object{ID: 2, Class: "monster_infantry", Solid: 8290, Origin: quake.Vec3{240, -448, 24}, ClearShot: &clear})
 	if coverHidden(&g, c.hide, w.Snapshot.Enemies) {

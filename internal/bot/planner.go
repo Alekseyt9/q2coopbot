@@ -45,6 +45,8 @@ type World struct {
 type Planner struct {
 	cover                     *coverCycle
 	coverRetry                int
+	circleTarget              int
+	circleDirection           float64
 	exitPreparation           *ExitPreparation
 	campaignMap               string
 	campaignDestination       string
@@ -232,6 +234,7 @@ func (p *Planner) setMap(name, root string) {
 	p.Nav = nil
 	p.cover = nil
 	p.coverRetry = 0
+	p.circleTarget, p.circleDirection = 0, 0
 	p.button = nil
 	p.deathFrame = 0
 	p.healthActive = false
@@ -822,6 +825,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		return covered
 	}
 	p.World.Command.CombatSpacing = profile
+	if tactic == "circle" {
+		return p.combatCircle(cmd)
+	}
 	spacingGoal := s.Teammate != nil && (p.World.Goal == "cover_teammate" || p.World.Goal == "follow_teammate") && quake.Distance(s.Self, *s.Teammate) <= combatLeash(profile) || s.Teammate == nil && p.Campaign && p.World.Goal == "reach_level_exit"
 	if spacingGoal && profile != nil && profile.Distance < profile.Minimum+32 && (tactic == "" || tactic == "attack" || tactic == "retreat") {
 		if profile.NeedSpace {

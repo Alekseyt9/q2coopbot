@@ -1,0 +1,172 @@
+{
+  "id": "base1-solo-openjev-cover-fight",
+  "title": "OpenJev: повторные выходы из укрытия до убийства infantry",
+  "map": "base1",
+  "kind": "combat_tactics",
+  "status": "partial_native_validation",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/base1-solo-openjev-cover-fight.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -CoverFight -CoverTargetX 240 -Seed 1801 -Port 31960",
+  "evidence": "workspace/artifacts/solo-tactical-retreat-20261003-231842-563/report.json",
+  "validation": {
+    "parallelism": 2,
+    "timescale": 2,
+    "total": 6,
+    "results": [
+      {
+        "seed": 1602,
+        "accepted": true,
+        "exposures": 5,
+        "health": 7,
+        "received_damage": 18,
+        "dealt_damage": 100,
+        "kills": 1,
+        "cover_projectiles": {
+          "mod": 1,
+          "projectiles_fired": 10,
+          "live_monster_hit_projectiles": 10,
+          "geometry": 0,
+          "sky": 0,
+          "expired": 0,
+          "unresolved": 0,
+          "unknown_freed": 0,
+          "corpse_contacts": 0,
+          "zero_health_damage_contacts": 0,
+          "other_damage_contacts": 0,
+          "live_monster_hit_fraction": 1.0
+        },
+        "report": "workspace/artifacts/solo-tactical-retreat-20261003-231555-031/report.json"
+      },
+      {
+        "seed": 1601,
+        "accepted": true,
+        "exposures": 8,
+        "health": 19,
+        "received_damage": 6,
+        "dealt_damage": 100,
+        "kills": 1,
+        "cover_projectiles": {
+          "mod": 1,
+          "projectiles_fired": 12,
+          "live_monster_hit_projectiles": 10,
+          "geometry": 2,
+          "sky": 0,
+          "expired": 0,
+          "unresolved": 0,
+          "unknown_freed": 0,
+          "corpse_contacts": 0,
+          "zero_health_damage_contacts": 0,
+          "other_damage_contacts": 0,
+          "live_monster_hit_fraction": 0.8333333333333334
+        },
+        "report": "workspace/artifacts/solo-tactical-retreat-20261003-231555-031/report.json"
+      },
+      {
+        "seed": 1701,
+        "accepted": true,
+        "exposures": 6,
+        "health": 13,
+        "received_damage": 12,
+        "dealt_damage": 100,
+        "kills": 1,
+        "cover_projectiles": {
+          "mod": 1,
+          "projectiles_fired": 10,
+          "live_monster_hit_projectiles": 10,
+          "geometry": 0,
+          "sky": 0,
+          "expired": 0,
+          "unresolved": 0,
+          "unknown_freed": 0,
+          "corpse_contacts": 0,
+          "zero_health_damage_contacts": 0,
+          "other_damage_contacts": 0,
+          "live_monster_hit_fraction": 1.0
+        },
+        "report": "workspace/artifacts/solo-tactical-retreat-20261003-231641-284/report.json"
+      },
+      {
+        "seed": 1702,
+        "accepted": true,
+        "exposures": 6,
+        "health": 25,
+        "received_damage": 0,
+        "dealt_damage": 100,
+        "kills": 1,
+        "cover_projectiles": {
+          "mod": 1,
+          "projectiles_fired": 10,
+          "live_monster_hit_projectiles": 10,
+          "geometry": 0,
+          "sky": 0,
+          "expired": 0,
+          "unresolved": 0,
+          "unknown_freed": 0,
+          "corpse_contacts": 0,
+          "zero_health_damage_contacts": 0,
+          "other_damage_contacts": 0,
+          "live_monster_hit_fraction": 1.0
+        },
+        "report": "workspace/artifacts/solo-tactical-retreat-20261003-231641-284/report.json"
+      },
+      {
+        "seed": 1801,
+        "accepted": true,
+        "exposures": 10,
+        "health": 25,
+        "received_damage": 0,
+        "dealt_damage": 100,
+        "kills": 1,
+        "cover_projectiles": {
+          "mod": 1,
+          "projectiles_fired": 13,
+          "live_monster_hit_projectiles": 10,
+          "geometry": 3,
+          "sky": 0,
+          "expired": 0,
+          "unresolved": 0,
+          "unknown_freed": 0,
+          "corpse_contacts": 0,
+          "zero_health_damage_contacts": 0,
+          "other_damage_contacts": 0,
+          "live_monster_hit_fraction": 0.7692307692307693
+        },
+        "report": "workspace/artifacts/solo-tactical-retreat-20261003-231842-563/report.json"
+      },
+      {
+        "seed": 1802,
+        "accepted": true,
+        "exposures": 9,
+        "health": 22,
+        "received_damage": 3,
+        "dealt_damage": 100,
+        "kills": 1,
+        "cover_projectiles": {
+          "mod": 1,
+          "projectiles_fired": 14,
+          "live_monster_hit_projectiles": 10,
+          "geometry": 4,
+          "sky": 0,
+          "expired": 0,
+          "unresolved": 0,
+          "unknown_freed": 0,
+          "corpse_contacts": 0,
+          "zero_health_damage_contacts": 0,
+          "other_damage_contacts": 0,
+          "live_monster_hit_fraction": 0.7142857142857143
+        },
+        "report": "workspace/artifacts/solo-tactical-retreat-20261003-231842-563/report.json"
+      }
+    ],
+    "scope": "Prepared single infantry fight after 12-round limit; final two cases include the additional late-threat guard, other four precede that guard",
+    "passed": 6
+  },
+  "remaining_validation": [
+    "Other weapons and grouped combat not accepted",
+    "Invisible target absent from snapshot aborts maneuver; no memory-based shots",
+    "Macro expires after 12 rounds or 300 frames; restarting combat from hidden pose after budget expiry not accepted",
+    "General campaign death rate and comparison with attack/circling not measured",
+    "Original x=200 grazing-wall pose has no certified flat peek; native fallback fight remains separate open episode",
+    "General episode dispatcher not bound"
+  ]
+}

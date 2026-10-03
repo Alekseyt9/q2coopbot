@@ -4,14 +4,28 @@
   "map": "base1",
   "runner": "scripts/run_solo_tactical_retreat.ps1",
   "reproduction_command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -Cover -Seed 1201 -Port 31890",
-  "bot_origin": [240, -416, 24.125],
+  "bot_origin": [
+    240,
+    -416,
+    24.125
+  ],
   "initial_health": 25,
   "setup_hold_frames": 10,
   "target_class": "monster_infantry",
-  "target_origin": [200, -224, 24],
+  "target_origin": [
+    200,
+    -224,
+    24
+  ],
   "model": "hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0",
   "scope": "Single vulnerable native infantry encounter on original base1 BSP/AAS with original monsters removed; Blaster, no weapon grants. One initial teleport, spawn and health fixture. Live model choice, no forced tactical decision. Cycle acceptance does not require a kill or prove sustained combat.",
   "acceptance": [
+    "Asset-backed plannedCover refuses the original eye-visible but MASK_SHOT-blocked flat candidate",
+    "The positive -Cover runner can reject this original pose; this is not an accepted full fight",
+    "Keep original native evidence; validate general fallback fighting separately"
+  ],
+  "current_expected_behavior": "Reject the original x=200 flat cover candidate: an eye-visible trajectory can still collide with the sloping world brush. Old positive acceptance below is historical; use base1-solo-openjev-cover-fight for accepted repeated combat.",
+  "historical_acceptance": [
     "Live OpenJev cover decision",
     "Hidden wait, enemy-aimed firing exposure, then hidden return in trace",
     "Native live monster damage during the firing window plus at most three projectile flight frames, matching spawncount",

@@ -11,6 +11,7 @@ type coverCycle struct {
 	hide, peek     quake.Vec3
 	stage          string
 	started, until int
+	rounds         int
 }
 
 // A local wall is cover only from the currently observed threats. Never use
@@ -74,9 +75,13 @@ func coverWalkClear(w World, from, to quake.Vec3) bool {
 // forward and eight units below the eye, parallel to the view direction.
 // An eye ray alone can pass above a sloping brush which blocks the bolt.
 func coverBlasterClear(w World, at quake.Vec3, target quake.Object) bool {
+	return coverBlasterAimClear(w, at, target.AimPoint())
+}
+
+func coverBlasterAimClear(w World, at, aim quake.Vec3) bool {
 	s := w.Snapshot
 	s.Self = at
-	eye, aim := s.EyePoint(), target.AimPoint()
+	eye := s.EyePoint()
 	d := quake.Distance(eye, aim)
 	if d <= 24 {
 		return false
@@ -89,7 +94,9 @@ func coverBlasterClear(w World, at quake.Vec3, target quake.Object) bool {
 		end[i] = muzzle[i] + (d-24)*f
 	}
 	g := w.Geometry
-	return g.ClearShot(at, muzzle) && g.ClearShot(muzzle, end) &&
+	launch, flight := g.TraceProjectile(at, muzzle), g.TraceProjectile(muzzle, end)
+	return launch.Valid && !launch.StartSolid && launch.Fraction == 1 &&
+		flight.Valid && !flight.StartSolid && flight.Fraction == 1 &&
 		!g.DoorShotBlocked(s.Movers, at, muzzle) && !g.DoorShotBlocked(s.Movers, muzzle, end)
 }
 
@@ -183,7 +190,7 @@ func plannedCover(w World) *coverCycle {
 				}
 			}
 			if groupSafe {
-				return &coverCycle{mapName: s.Map, target: target.ID, hide: at, peek: peek, stage: "withdraw", started: s.Frame, until: s.Frame + 100}
+				return &coverCycle{mapName: s.Map, target: target.ID, hide: at, peek: peek, stage: "withdraw", started: s.Frame, until: s.Frame + 300}
 			}
 		}
 	}
@@ -205,9 +212,14 @@ func (p *Planner) combatCoverCommand(s quake.Snapshot, cmd quake.UserCmd, tactic
 	}
 	var enemy *quake.Object
 	for i := range s.Enemies {
+		class := s.Enemies[i].Class
+		if class != "monster_soldier_light" && class != "monster_soldier" && class != "monster_soldier_ss" && class != "monster_infantry" {
+			p.cover = nil
+			p.coverRetry = s.Frame + 40
+			return cmd, false
+		}
 		if s.Enemies[i].ID == c.target {
 			enemy = &s.Enemies[i]
-			break
 		}
 	}
 	if enemy == nil && c.stage != "return" {
@@ -236,6 +248,10 @@ func (p *Planner) combatCoverCommand(s quake.Snapshot, cmd quake.UserCmd, tactic
 			cmd.Buttons = 0
 			c.stage = "return"
 		}
+		if p.World.Command.AimPoint != nil && !coverBlasterAimClear(p.World, s.Self, *p.World.Command.AimPoint) {
+			cmd.Buttons = 0
+			c.stage = "return"
+		}
 		if s.Frame-c.started >= 8 || enemy == nil || enemy.ClearShot == nil || !*enemy.ClearShot {
 			c.stage = "return"
 		}
@@ -256,15 +272,33 @@ func (p *Planner) combatCoverCommand(s quake.Snapshot, cmd quake.UserCmd, tactic
 			c.stage = "wait"
 			c.started = s.Frame
 		case "wait":
-			if s.Frame-c.started >= 2 {
-				c.stage = "peek"
+			if s.Frame-c.started >= 4 && enemy != nil {
+				// The model selected this bounded maneuver. While hidden, continue
+				// it using the still observed target, rather than requiring another
+				// visible-target model decision or firing at a stale memory.
+				w := p.World
+				w.Snapshot.Self = c.peek
+				peek, valid := coverPeek(w, *enemy)
+				if valid && coverWalkClear(p.World, s.Self, peek) {
+					c.peek = peek
+					c.stage = "peek"
+				} else if s.Frame-c.started >= 10 {
+					p.cover = nil
+					p.coverRetry = s.Frame + 40
+				}
 			}
 		case "peek":
 			c.stage = "fire"
 			c.started = s.Frame
 		case "return":
-			p.cover = nil
-			p.coverRetry = s.Frame + 60
+			c.rounds++
+			if enemy != nil && c.rounds < 12 && s.Weapon == "Blaster" {
+				c.stage = "wait"
+				c.started = s.Frame
+			} else {
+				p.cover = nil
+				p.coverRetry = s.Frame + 60
+			}
 		}
 		return cmd, true
 	}

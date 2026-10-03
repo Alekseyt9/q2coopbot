@@ -86,10 +86,13 @@ func (t *Tactician) options(w World) []string {
 	if plannedCover(w) != nil {
 		actions = append(actions, "cover")
 	}
+	if _, _, ok := circleStep(w, 0); ok {
+		actions = append(actions, "circle")
+	}
 	return actions
 }
 
-var tacticLetter = regexp.MustCompile(`(?i)\b[A-E]\b`)
+var tacticLetter = regexp.MustCompile(`(?i)\b[A-F]\b`)
 
 func (t *Tactician) poll(w World) (TacticalDecision, bool) {
 	select {
@@ -149,6 +152,8 @@ func (t *Tactician) tick(w World) {
 				description = "hide behind wall, peek to fire, return"
 			case "retreat":
 				description = "back away while firing"
+			case "circle":
+				description = "move sideways around enemy while firing, keep distance"
 			case "follow":
 				description = "follow route"
 			}
@@ -193,7 +198,7 @@ func (t *Tactician) tick(w World) {
 			return
 		}
 		d := TacticalDecision{Action: options[index], At: time.Now(), LatencyMS: time.Since(start).Milliseconds(), Map: w.Map, Frame: w.Snapshot.Frame, Source: "live"}
-		if (d.Action == "attack" || d.Action == "retreat" || d.Action == "cover") && state.Combat != nil {
+		if (d.Action == "attack" || d.Action == "retreat" || d.Action == "cover" || d.Action == "circle") && state.Combat != nil {
 			d.Target = state.Combat.Target
 		}
 		t.pending <- tacticalResult{decision: d}

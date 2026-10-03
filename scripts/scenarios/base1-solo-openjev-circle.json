@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "base1-solo-openjev-circle",
+  "map": "base1",
+  "runner": "scripts/run_solo_tactical_retreat.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -Circle -Seed 2101 -Port 31990",
+  "bot_origin": [32, -224, 24],
+  "initial_health": 25,
+  "setup_hold_frames": 10,
+  "target_class": "monster_infantry",
+  "target_origin": [200, -224, 24],
+  "model": "hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0",
+  "scope": "Single vulnerable infantry on original base1 BSP/AAS with original monsters removed. One initial teleport/spawn/health fixture, Blaster, ordinary map pickups remain. Live model selects circle, Go checks each local arc; retreat/attack can occur elsewhere in the fight. No full 360-degree orbit, grouped combat or campaign claim.",
+  "acceptance": [
+    "Live accepted OpenJev circle decision",
+    "At least two firing movement frames with enemy aim and current circle decision",
+    "At least two observed steps have more than two units tangential movement and less than eight units radius change, relative to the same-frame enemy position",
+    "Native projectile spawn matched to the circle command frame/spawncount, live damage attributed by shot ID",
+    "Native infantry killed, bot never dies, no teammate or map transition",
+    "Distinct acknowledged seeds, timescale 2, parallelism 2, unchanged source fingerprint"
+  ]
+}

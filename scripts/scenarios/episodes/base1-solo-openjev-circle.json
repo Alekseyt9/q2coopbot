@@ -1,0 +1,138 @@
+{
+  "id": "base1-solo-openjev-circle",
+  "title": "OpenJev: короткая боковая дуга со стрельбой и отход при сближении",
+  "map": "base1",
+  "kind": "combat_tactics",
+  "status": "partial_native_validation",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/base1-solo-openjev-circle.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -Circle -Seed 2101 -Port 31990",
+  "evidence": "workspace/artifacts/solo-tactical-retreat-20261003-234535-497/report.json",
+  "repeat_evidence": "workspace/artifacts/solo-tactical-retreat-20261003-234401-384/report.json",
+  "failed_evidence": [
+    "workspace/artifacts/solo-tactical-retreat-20261003-234040-001/report.json",
+    "workspace/artifacts/solo-tactical-retreat-20261003-234140-947/report.json"
+  ],
+  "validation": {
+    "deaths": 0,
+    "parallelism": 2,
+    "total": 4,
+    "scope": "Prepared single infantry fight; short local arcs chosen by real OpenJev; other maneuvers may participate in kill",
+    "passed": 4,
+    "timescale": 2,
+    "results": [
+      {
+        "seed": 1902,
+        "accepted": true,
+        "live_circle_decisions": 3,
+        "circle_firing_frames": 34,
+        "observed_lateral_steps": 34,
+        "circle_damage": 70,
+        "received_damage": 0,
+        "final_health": 84,
+        "kills": 1,
+        "projectiles": {
+          "mod": 1,
+          "projectiles_fired": 7,
+          "live_monster_hit_projectiles": 7,
+          "geometry": 0,
+          "sky": 0,
+          "expired": 0,
+          "unresolved": 0,
+          "unknown_freed": 0,
+          "corpse_contacts": 0,
+          "zero_health_damage_contacts": 0,
+          "other_damage_contacts": 0,
+          "live_monster_hit_fraction": 1.0
+        },
+        "report": "workspace/artifacts/solo-tactical-retreat-20261003-234401-384/report.json"
+      },
+      {
+        "seed": 1901,
+        "accepted": true,
+        "live_circle_decisions": 2,
+        "circle_firing_frames": 29,
+        "observed_lateral_steps": 29,
+        "circle_damage": 50,
+        "received_damage": 18,
+        "final_health": 66,
+        "kills": 1,
+        "projectiles": {
+          "mod": 1,
+          "projectiles_fired": 5,
+          "live_monster_hit_projectiles": 5,
+          "geometry": 0,
+          "sky": 0,
+          "expired": 0,
+          "unresolved": 0,
+          "unknown_freed": 0,
+          "corpse_contacts": 0,
+          "zero_health_damage_contacts": 0,
+          "other_damage_contacts": 0,
+          "live_monster_hit_fraction": 1.0
+        },
+        "report": "workspace/artifacts/solo-tactical-retreat-20261003-234401-384/report.json"
+      },
+      {
+        "seed": 2102,
+        "accepted": true,
+        "live_circle_decisions": 3,
+        "circle_firing_frames": 45,
+        "observed_lateral_steps": 43,
+        "circle_damage": 70,
+        "received_damage": 0,
+        "final_health": 84,
+        "kills": 1,
+        "projectiles": {
+          "mod": 1,
+          "projectiles_fired": 9,
+          "live_monster_hit_projectiles": 7,
+          "geometry": 2,
+          "sky": 0,
+          "expired": 0,
+          "unresolved": 0,
+          "unknown_freed": 0,
+          "corpse_contacts": 0,
+          "zero_health_damage_contacts": 0,
+          "other_damage_contacts": 0,
+          "live_monster_hit_fraction": 0.7777777777777778
+        },
+        "report": "workspace/artifacts/solo-tactical-retreat-20261003-234535-497/report.json"
+      },
+      {
+        "seed": 2101,
+        "accepted": true,
+        "live_circle_decisions": 3,
+        "circle_firing_frames": 46,
+        "observed_lateral_steps": 46,
+        "circle_damage": 60,
+        "received_damage": 0,
+        "final_health": 84,
+        "kills": 1,
+        "projectiles": {
+          "mod": 1,
+          "projectiles_fired": 8,
+          "live_monster_hit_projectiles": 6,
+          "geometry": 2,
+          "sky": 0,
+          "expired": 0,
+          "unresolved": 0,
+          "unknown_freed": 0,
+          "corpse_contacts": 0,
+          "zero_health_damage_contacts": 0,
+          "other_damage_contacts": 0,
+          "live_monster_hit_fraction": 0.75
+        },
+        "report": "workspace/artifacts/solo-tactical-retreat-20261003-234535-497/report.json"
+      }
+    ]
+  },
+  "remaining_validation": [
+    "Full 360-degree orbit not accepted; a local arc can reverse or stop at obstacles",
+    "Multiple enemies, teammate corridor and moving geometry have no dedicated native acceptance here",
+    "Group rejection, airborne/lost target and close-range fallback are asset-backed Go tests",
+    "Campaign death rate and advantage over attack/retreat/cover not measured",
+    "First 6.572-second model response was stale; latency cause not established",
+    "General episode dispatcher not bound"
+  ]
+}

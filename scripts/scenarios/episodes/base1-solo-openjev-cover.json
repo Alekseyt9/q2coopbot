@@ -1,6 +1,6 @@
 {
   "id": "base1-solo-openjev-cover",
-  "title": "Выход из укрытия: нестабильные попадания бластера и отсутствие повторного выхода",
+  "title": "Наклонная стена: ложная пригодность укрытия по линии видимости",
   "map": "base1",
   "kind": "combat_tactics",
   "status": "open",
@@ -15,14 +15,26 @@
   "validation": {
     "passed": 1,
     "total": 2,
-    "seeds": [1201, 1202],
+    "seeds": [
+      1201,
+      1202
+    ],
     "timescale": 2,
     "parallelism": 2,
     "provenance_valid": true,
-    "cover_window_health_damage": [0, 10],
-    "final_health": [25, 25],
+    "cover_window_health_damage": [
+      0,
+      10
+    ],
+    "final_health": [
+      25,
+      25
+    ],
     "deaths": 0,
-    "kills": [0, 0],
+    "kills": [
+      0,
+      0
+    ],
     "scope": "One hide/peek/fire/return cycle, not a complete fight"
   },
   "implemented": [
@@ -32,10 +44,14 @@
     "Runner requires damage within the cover exposure window rather than elsewhere in the run"
   ],
   "remaining_validation": [
-    "Find remaining native misses; nominal muzzle ray is not a guarantee of accuracy or moving-target interception",
-    "Repeat peeks while the target is hidden; current System1 gate needs a visible combat target",
-    "Complete a fight without remaining indefinitely behind cover",
+    "Native fallback fight from original x=200 target position is not accepted; retain regression evidence",
     "Other weapons, unseen threats, explosive protection and grouped combat are not accepted",
     "General episode dispatcher is not bound; use the specialized runner"
+  ],
+  "resolution": [
+    "Exact MASK_SHOT TraceProjectile replaces forgiving visibility for bolt corridor",
+    "Original target x=200 has no certified flat local peek; plannedCover now rejects it in the asset-backed test",
+    "Repeated hidden peeks are validated separately in base1-solo-openjev-cover-fight with target x=240",
+    "The old positive runner at x=200 is expected to reject; a general fallback fight from that pose remains unaccepted"
   ]
 }

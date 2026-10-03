@@ -132,7 +132,7 @@ func (p *Planner) combatRetreat(cmd quake.UserCmd, profile *CombatSpacing) quake
 			}
 			groupSafe := true
 			for _, e := range s.Enemies {
-				if e.ClearShot != nil && *e.ClearShot && quake.Distance(s.Self, e.Origin) < 650 && quake.Distance(next, e.Origin) < quake.Distance(s.Self, e.Origin)-2 {
+				if quake.Distance(s.Self, e.Origin) < 650 && quake.Distance(next, e.Origin) < quake.Distance(s.Self, e.Origin)-2 {
 					groupSafe = false
 					break
 				}

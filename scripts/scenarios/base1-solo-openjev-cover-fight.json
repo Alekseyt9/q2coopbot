@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "name": "base1-solo-openjev-cover-fight",
+  "map": "base1",
+  "runner": "scripts/run_solo_tactical_retreat.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -CoverFight -CoverTargetX 240 -Seed 1601 -Port 31930",
+  "bot_origin": [240, -416, 24.125],
+  "initial_health": 25,
+  "setup_hold_frames": 10,
+  "target_class": "monster_infantry",
+  "target_origin": [240, -224, 24],
+  "model": "hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0",
+  "scope": "Original base1 BSP/AAS with original monsters removed; single vulnerable infantry, Blaster, one initial teleport/spawn/health fixture. Live model selects cover; Go executes a bounded repeated maneuver. Different target placement from the original grazing-wall regression. No grouped combat or general campaign claim.",
+  "acceptance": [
+    "Accepted live OpenJev cover choice",
+    "Hidden wait and return, at least two firing exposures",
+    "Native projectile spawn matched to cover command frame and spawncount; damage attributed by shot ID",
+    "Infantry killed, bot alive, no teammate or map change",
+    "Acknowledged distinct seeds, timescale 2, parallelism 2, unchanged source fingerprint"
+  ]
+}
