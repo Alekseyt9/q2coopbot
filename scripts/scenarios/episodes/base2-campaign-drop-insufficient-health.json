@@ -1,0 +1,21 @@
+{
+  "id": "base2-campaign-drop-insufficient-health",
+  "title": "Бот дошёл до падения к выходу base2, но здоровья недостаточно",
+  "map": "base2",
+  "kind": "campaign_resource_block",
+  "status": "open",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/base1-base2-campaign-combat-chain.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_exit.ps1 -Chain -Combat -Seed 401 -Port 31760",
+  "evidence": "workspace/artifacts/campaign-combat-chain-20261003-193815-784/run-0/bot.jsonl",
+  "report": "workspace/artifacts/campaign-combat-chain-20261003-193815-784/report.json",
+  "native_diagnostic": "workspace/artifacts/campaign-combat-chain-20261003-193815-784/run-0/failure-diagnostic.json",
+  "observed_position": [-881.5,142.125,-127.875],
+  "observed_health": 36,
+  "observed_seed": 401,
+  "exit_model": 38,
+  "symptom": "navigation ready, fall_through_trigger, at_waypoint. Health36 cannot afford estimated14 damage under current policy (max thirdHP, remaining at least25). Preparation budget_exhausted. This is a resource deadlock, not proof that the geometry repair failed.",
+  "native_metrics": {"map":"base2","monsters_killed":20,"deaths":4,"final_health":36},
+  "missing_setup": ["Exact checkpoint not captured; seed does not fix connection timing", "Useful reachable health resource is not yet established"],
+  "next_action": "Reduce combat deaths and self-damage using System1 tactics; investigate healing or another genuinely reachable exit before hazardous descent. Do not weaken fall safety just to pass the scenario."
+}

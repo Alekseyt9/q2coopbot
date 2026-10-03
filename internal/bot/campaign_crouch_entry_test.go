@@ -40,8 +40,8 @@ func TestBase2CampaignEscapesUnclassifiedDuckedPosition(t *testing.T) {
 		t.Fatal("did not crawl out", cmd, p.World.Command)
 	}
 	s.Ducked = false
-	if _, ok := p.regroupEntryRoute(s, goal); ok {
-		t.Fatal("standing body allowed through low ceiling")
+	if _, ok := p.regroupEntryRoute(s, goal); !ok {
+		t.Fatal("observed low ceiling must allow initiating crouch")
 	}
 	s.Ducked = true
 	s.OnGround = false

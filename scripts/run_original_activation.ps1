@@ -1,6 +1,7 @@
 [CmdletBinding()]
-param([switch]$Worker,[switch]$Button,[switch]$Sequence,[switch]$Relay,[switch]$RelayBlocked,[switch]$Shoot,[switch]$OriginalShoot,[switch]$OriginalRelay,[switch]$OriginalHatch,[switch]$OriginalCorner,[int]$Seed=101,[int]$Port=31680,[string]$OutputRoot='',[string]$Client='')
+param([switch]$Worker,[switch]$Button,[switch]$Sequence,[switch]$Relay,[switch]$RelayBlocked,[switch]$Shoot,[switch]$OriginalShoot,[switch]$OriginalRelay,[switch]$OriginalHatch,[switch]$OriginalCorner,[switch]$OriginalCrouch,[int]$Seed=101,[int]$Port=31680,[string]$OutputRoot='',[string]$Client='')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
+if($OriginalCrouch -and ($OriginalCorner -or $Button -or $Sequence -or $Relay -or $RelayBlocked -or $Shoot -or $OriginalShoot -or $OriginalRelay -or $OriginalHatch)){throw 'OriginalCrouch requires a standalone navigation fixture'}
 if($OriginalCorner -and ($Button -or $Sequence -or $Relay -or $RelayBlocked -or $Shoot -or $OriginalShoot -or $OriginalRelay -or $OriginalHatch)){throw 'OriginalCorner requires a standalone navigation fixture'}
 if($OriginalShoot -and ($Shoot -or $Sequence -or $Relay -or $RelayBlocked)){throw 'OriginalShoot requires an unmodified standalone map'}
 if($OriginalShoot){$Button=$true}
@@ -31,12 +32,13 @@ if(!$Worker){
         if($using:OriginalRelay){$args+='-OriginalRelay'}
         if($using:OriginalHatch){$args+='-OriginalHatch'}
         if($using:OriginalCorner){$args+='-OriginalCorner'}
+        if($using:OriginalCrouch){$args+='-OriginalCrouch'}
         $child=Start-Process $using:exe -ArgumentList @($args|ForEach-Object {'"'+$_+'"'}) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $using:OutputRoot "worker-$_.log") -RedirectStandardError (Join-Path $using:OutputRoot "worker-$_.err")
         $child.WaitForExit();$r=Get-Content (Join-Path $out 'report.json') -Raw|ConvertFrom-Json;if($child.ExitCode){$r.accepted=$false};$r
     } -ThrottleLimit 2)
     $valid=$fingerprint -eq (Get-HarnessFingerprint (Get-HarnessSourceRecords $repo))
     $accepted=$valid -and @($results|Where-Object {!$_.accepted}).Count -eq 0
-    @{accepted=$accepted;original_corner=[bool]$OriginalCorner;original_hatch=[bool]$OriginalHatch;original_relay=[bool]$OriginalRelay;original_shoot=[bool]$OriginalShoot;button=[bool]$Button;sequence=[bool]$Sequence;relay=[bool]$Relay;expected_refusal=[bool]$RelayBlocked;provenance_valid=$valid;source_fingerprint=$fingerprint;timescale=2;parallelism=2;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 15|Set-Content (Join-Path $OutputRoot 'report.json')
+    @{accepted=$accepted;original_crouch=[bool]$OriginalCrouch;original_corner=[bool]$OriginalCorner;original_hatch=[bool]$OriginalHatch;original_relay=[bool]$OriginalRelay;original_shoot=[bool]$OriginalShoot;button=[bool]$Button;sequence=[bool]$Sequence;relay=[bool]$Relay;expected_refusal=[bool]$RelayBlocked;provenance_valid=$valid;source_fingerprint=$fingerprint;timescale=2;parallelism=2;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 15|Set-Content (Join-Path $OutputRoot 'report.json')
     "Original activation: $OutputRoot";if(!$accepted){throw 'Original activation rejected'};return
 }
 if(Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue){throw 'Port occupied'}
@@ -54,6 +56,7 @@ if($OriginalShoot){$placement='-328,-72,-55.875';$goal='-328,0,-39.875'}
 if($OriginalRelay){$placement='-2776,300,24.125';$goal='-2880,288,24.125'}
 if($OriginalHatch){$placement='-484,-360,-263.875';$goal='-416,-320,-311.875;-416,-320,-263.875'}
 if($OriginalCorner){$placement='-1906.75,1337,120.125';$goal='-1644,1316,120.125'}
+if($OriginalCrouch){$placement='55.75,1088.625,14.125';$goal='87.75,1088.625,24.125'}
 try{
     $env:Q2COOPBOT_TEST_RCON=[guid]::NewGuid().ToString('N')
     $args="-portable +set ip 127.0.0.1 +set noipx 1 +set dedicated 1 +set coop 1 +set deathmatch 0 +set cheats 1 +set maxclients 4 +set port $Port +set timescale 2 +set rcon_password $env:Q2COOPBOT_TEST_RCON +set sv_test_unlimited_loopback 1 +set g_test_seed $Seed +map $map"
@@ -129,6 +132,13 @@ try{
         $report.button_touch_frame=$contact[0].frame;$report.button_door_open_frame=$opened[0].frame;$report.button_door_cross_frame=$secondCross[0].frame
         }
     }
+    if($OriginalCrouch){
+        $crawled=@($rows|Where-Object {$_.arbitration.skill -eq 'crouch_passage' -and $_.sent_command.Up -lt 0 -and ($_.sent_command.Forward -ne 0 -or $_.sent_command.Side -ne 0)})
+        $ducked=@($rows|Where-Object {$_.ducked -and $_.self[0] -lt 72 -and $_.self[1] -gt 1080 -and $_.self[1] -lt 1100})
+        if(!$crawled.Count -or !$ducked.Count){throw 'Observed native crouched escape absent'}
+        if($last.self[0] -lt 76 -or $last.ducked){throw 'Did not regain standing AAS corridor'}
+        $report.original_crouch=$true;$report.crouch_frames=$crawled.Count
+    }
     if($OriginalCorner){
         $detour=@($rows|Where-Object {$_.arbitration.skill -eq 'route_corner_detour'})
         if(!$detour.Count){throw 'Local corner repair was not exercised'}
@@ -137,7 +147,7 @@ try{
         if($rows|Where-Object {$_.frame -ge $placed[0].frame -and $_.self[2] -lt 110}){throw 'Grounded corner repair left the upper floor'}
         $report.original_corner=$true;$report.detour_frames=$detour.Count
     }
-    if(!$Button -and !$OriginalCorner){
+    if(!$Button -and !$OriginalCorner -and !$OriginalCrouch){
     $dependency=@($rows|Where-Object {$_.campaign.dependency.door_model -eq 24 -and $_.campaign.dependency.activation.trigger.model -eq 23})
     $contact=@($rows|Where-Object {$_.self[0]+16 -gt 456 -and $_.self[0]-16 -lt 464 -and $_.self[1]+16 -gt 1728 -and $_.self[1]-16 -lt 1848 -and $_.self[2]+32 -gt 0 -and $_.self[2]-24 -lt 56})
     $opened=@($rows|Where-Object {@($_.movers|Where-Object {$_.model -eq 24 -and $_.origin[2] -lt -60}).Count})
@@ -158,7 +168,7 @@ try{
     if((Get-Content (Join-Path $OutputRoot 'bot.err') -Raw) -match 'client command: (give|kill|map|gamemap) '){throw 'Forced gameplay command'}
     if(@(Get-Content (Join-Path $OutputRoot 'server.log')|Where-Object {$_ -eq "g_test_seed ready version=1 seed=$Seed"}).Count -ne 1){throw 'Seed acknowledgement absent'}
     $report.accepted=$true;$report.reason='accepted';$report.last=$last;$report.trace=$trace
-    if(!$OriginalCorner){$report.first_contact_frame=$contact[0].frame;$report.first_open_frame=$opened[0].frame}
+    if(!$OriginalCorner -and !$OriginalCrouch){$report.first_contact_frame=$contact[0].frame;$report.first_open_frame=$opened[0].frame}
     $report.fixture=Get-Content (Join-Path $runtime 'elevator-fixture.json') -Raw|ConvertFrom-Json
     $report.entities_sha256=(Get-FileHash (Join-Path $runtime "baseq2/maps/$map.ent")).Hash
 }catch{$report.reason=$_.Exception.Message}

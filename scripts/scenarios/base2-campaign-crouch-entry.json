@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "base2-campaign-crouch-entry",
+  "map": "base2",
+  "runner": "scripts/run_original_activation.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -OriginalCrouch -Seed 401 -Port 31680",
+  "initial_position": [55.75,1088.625,14.125],
+  "observed_initial_position": [55.75,1088.625,24.125],
+  "test_goal": [87.75,1088.625,24.125],
+  "scope": "Original BSP/AAS, monsters removed, one initial teleport (native adds10 height). Normal campaign planning and usercmds crawl out of a position outside standing AAS, then regain standing room. Native100HP; captured18HP covered by Go test. Full combat chain is separate.",
+  "acceptance": ["Observed native ducked pose under ceiling", "crouch_passage movement with Up<0", "Standing arrival at goal", "Alive, same map, no teammate or forced gameplay commands after initial placement", "Two parallel2x runs with distinct acknowledged seeds"]
+}

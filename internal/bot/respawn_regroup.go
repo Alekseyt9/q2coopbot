@@ -88,7 +88,7 @@ func (p *Planner) regroupEntryRouteStep(s quake.Snapshot, goal quake.Vec3, step 
 			// A ducked player can leave a low ceiling outside the standing AAS.
 			// Reconnect only across supported flat ground; the movement guard
 			// retains crouch until the entire commanded hull fits standing.
-			crouching := s.Ducked && !g.PlayerMoveClear(s.Self, s.Self) && g.CrouchStepClear(current.at, dir[0], dir[1], step)
+			crouching := !g.PlayerMoveClear(s.Self, s.Self) && g.CrouchMoveClear(s.Self, s.Self) && g.CrouchStepClear(current.at, dir[0], dir[1], step)
 			if (!standing && !crouching) || g.PlayerTouchesHazard(at) || g.LaserMoveHazard(current.at, at) {
 				continue
 			}
