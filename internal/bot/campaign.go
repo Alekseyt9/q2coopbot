@@ -15,6 +15,7 @@ type CampaignDecision struct {
 	Dependency      *CampaignDependency `json:"dependency,omitempty"`
 	RouteIndex      int                 `json:"route_index,omitempty"`
 	CompletedLevels int                 `json:"completed_levels,omitempty"`
+	ExitApproach    string              `json:"exit_approach,omitempty"`
 }
 
 // A route explicitly resolves forward exits, including maps with return exits.
@@ -133,6 +134,21 @@ func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		}
 	}
 	d.Exit = selected
+	if p.campaignDependency != nil && p.campaignDependency.State == "activation_route_unavailable" {
+		p.tryCampaignFallExit(s, destination)
+	}
+	var fallGoal *quake.Vec3
+	if p.campaignExitOverride != 0 {
+		for i := range exits {
+			if exits[i].Model == p.campaignExitOverride {
+				if at, ok := p.campaignFallContact(exits[i]); ok {
+					selected, contact, fallGoal = &exits[i], nil, &at
+					d.ExitApproach = "fall_through_trigger"
+				}
+			}
+		}
+	}
+	d.Exit = selected
 	d.State = "approach_exit"
 	p.campaignMap = s.Map
 	p.campaignDestination = destination
@@ -140,6 +156,9 @@ func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		return goal, ok
 	}
 	p.updateExitPreparation(s)
+	if fallGoal != nil {
+		return *fallGoal, true
+	}
 	if contact != nil {
 		return *contact, true
 	}

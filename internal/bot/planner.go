@@ -53,6 +53,8 @@ type Planner struct {
 	campaignDependency        *CampaignDependency
 	campaignDependencyRetry   int
 	campaignAssetRoot         string
+	campaignExitOverride      int
+	campaignExitBlock         *CampaignDependency
 	grenadeThrow              *grenadeThrow
 	grenadeRequestFrame       int
 	grenadeRequestMap         string
@@ -222,6 +224,7 @@ func (p *Planner) setMap(name, root string) {
 	p.exitPreparation = nil
 	p.campaignDependency = nil
 	p.campaignDependencyRetry = 0
+	p.campaignExitOverride, p.campaignExitBlock = 0, nil
 	p.healthBanned = nil
 	p.resources = nil
 	p.pickup, p.pickupBanned, p.pickupNext = nil, nil, 0
@@ -567,6 +570,8 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			}
 		} else if campaign && p.campaignDependency != nil {
 			p.route, p.routeOK = p.campaignDependencyRoute(s, goal)
+		} else if campaign && p.campaignExitOverride != 0 {
+			p.route, p.routeOK = p.campaignDependencyNavigator(s).Route(s.Self, goal)
 		} else {
 			p.route, p.routeOK = p.directCrouchRoute(s, goal)
 			if !p.routeOK {
@@ -975,7 +980,16 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 					p.World.Command.MoveSource = "route_corner_bypass"
 					p.World.Command.Skill = "route_corner_bypass"
 					p.World.Command.LimitReason = "verified_corner_step"
-					return worldMove(cmd, s, sx, sy, 80, false)
+					cornerSpeed := 80.0
+					for _, mover := range s.Movers {
+						if !p.World.Geometry.MoverHullClear(mover, s.Self, s.Self) {
+							// Complete the checked 16-unit escape in one 100 ms
+							// tick; half a step can remain native allsolid.
+							cornerSpeed = 160
+							break
+						}
+					}
+					return worldMove(cmd, s, sx, sy, cornerSpeed, false)
 				}
 			}
 			p.World.Command.MoveSource = "none"

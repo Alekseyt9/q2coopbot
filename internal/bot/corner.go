@@ -41,9 +41,7 @@ func (p *Planner) regroupCornerStep(s quake.Snapshot, target quake.Vec3) (float6
 		x, y := 16*(ux*math.Cos(turn)-uy*math.Sin(turn)), 16*(ux*math.Sin(turn)+uy*math.Cos(turn))
 		directions = append(directions, quake.Vec3{x, y, 0})
 	}
-	if base2Slope {
-		directions = append(directions, quake.Vec3{0, 16, 0}, quake.Vec3{16, 0, 0}, quake.Vec3{0, -16, 0}, quake.Vec3{-16, 0, 0})
-	}
+	directions = append(directions, quake.Vec3{0, 16, 0}, quake.Vec3{16, 0, 0}, quake.Vec3{0, -16, 0}, quake.Vec3{-16, 0, 0})
 	for _, dir := range directions {
 		x, y := dir[0], dir[1]
 		end := s.Self
@@ -54,7 +52,7 @@ func (p *Planner) regroupCornerStep(s quake.Snapshot, target quake.Vec3) (float6
 		}
 		blocked := false
 		for _, mover := range s.Movers {
-			if !g.MoverHullClear(mover, s.Self, end) {
+			if !g.MoverHullEscapeClear(mover, s.Self, end) {
 				blocked = true
 				break
 			}

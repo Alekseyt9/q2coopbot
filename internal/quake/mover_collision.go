@@ -15,6 +15,17 @@ func (m *MapInfo) MoverFooting(live Mover, point Vec3, maxDrop float64) (float64
 	return c.groundDrop(point, maxDrop)
 }
 func (m *MapInfo) MoverHullClear(live Mover, from, to Vec3) bool {
+	return m.moverHullClear(live, from, to, false)
+}
+
+// MoverHullEscapeClear permits leaving an existing overlap, as the native
+// startsolid trace does. The endpoint must be fully free in both hull models;
+// entering another brush or remaining allsolid still fails.
+func (m *MapInfo) MoverHullEscapeClear(live Mover, from, to Vec3) bool {
+	return m.MoverHullClear(live, to, to) && m.moverHullClear(live, from, to, true)
+}
+
+func (m *MapInfo) moverHullClear(live Mover, from, to Vec3, allowLeaving bool) bool {
 	c, ok := m.moverCollision(live)
 	if !ok {
 		return false
@@ -23,7 +34,7 @@ func (m *MapInfo) MoverHullClear(live Mover, from, to Vec3) bool {
 		from[axis] -= live.Origin[axis]
 		to[axis] -= live.Origin[axis]
 	}
-	if !c.boxClear(from, to, Vec3{-16, -16, -24}, Vec3{16, 16, 32}) {
+	if !c.boxClearLeaving(from, to, Vec3{-16, -16, -24}, Vec3{16, 16, 32}, allowLeaving) {
 		return false
 	}
 	if live.Angles != (Vec3{}) {
@@ -34,7 +45,7 @@ func (m *MapInfo) MoverHullClear(live Mover, from, to Vec3) bool {
 		local.worldBrushes = local.modelBrushes[live.Model]
 		from = inverseBrushVector(from, live.Angles)
 		to = inverseBrushVector(to, live.Angles)
-		return local.boxClear(from, to, Vec3{-16, -16, -24}, Vec3{16, 16, 32})
+		return local.boxClearLeaving(from, to, Vec3{-16, -16, -24}, Vec3{16, 16, 32}, allowLeaving)
 	}
 	return true
 }

@@ -3,10 +3,10 @@
   "title": "Solo base2: недоступный активатор удалённо открываемой двери",
   "map": "base2",
   "status": "open",
-  "reproduction": "ready",
+  "reproduction": "observation_only",
   "scenario": "scripts/scenarios/base1-base2-campaign-chain.json",
   "reproduction_command": "pwsh -NoProfile -File scripts/run_campaign_exit.ps1 -Chain -Seed 101 -Port 31660",
-  "evidence": "workspace/artifacts/campaign-chain-20261003-130024-034/report.json",
+  "evidence": "workspace/artifacts/campaign-chain-20261003-133027-613/report.json",
   "pose_observation": {
     "model": 40,
     "origin": [450, -958, -18],
@@ -16,8 +16,8 @@
   },
   "earlier_evidence": "workspace/artifacts/campaign-chain-20261003-121557-786/report.json",
   "symptom": "После полного base1 бот на base2 стоит [96,-213.25,8.125] перед дверью53. BSP-планировщик обнаруживает trigger_once20 → t67 → func_door_rotating49 → t6 → door53 и выбирает [244,-792,24.125], но AAS путь проходит через закрытую дверь. После исключения её reachability маршрут отсутствует: activation_route_unavailable. Обе ветви на2x,seeds101/102,100HP; base3 не достигнута.",
-  "expected_result": "Найти физически доступный путь к активатору, активировать цепочку обычными usercmd, подтвердить изменение двери53, продолжить исходную цель и совершить настоящий переход наbase3. Не засчитывать связь target или координаты как фактическое открытие.",
-  "missing_setup": [],
-  "partial_resolution": "Реализованы ограниченный поиск BSP target-цепочки, выбор стоящей точки касания, промежуточная цель и запрет маршрута через наблюдаемую запертую дверь. Добавлено сохранение UDP angles, проверка повернутых brush models и отмена устаревших bridge links при изменении ориентации. Native full chain0/2: дверь53 не открыта, base3 не достигнута; короткое продолжение base1→base2 принято2/2.",
+  "expected_result": "Найти доступный активатор и подтвердить открытие двери53 либо выбрать физически достижимый альтернативный выход в ту же следующую карту. Подтвердить настоящий переход наbase3; BSP target-цепочка не доказывает активацию. Межуровневые условия искать по native cross-level flags, не по совпадению targetname разных карт.",
+  "missing_setup": ["Привязка специализированного run_campaign_exit.ps1 -Chain к общему run_episode_regressions. Специализированный native сценарий уже воспроизводится командой reproduction_command."],
+  "partial_resolution": "Бот теперь выбирает альтернативный нижний выход base3$base2a через безопасный walk-off с пересечением воздушного триггера. Обе ветви дошли до [-830.75,167.5,-131.875],100HP, но остановились на новом hull-блокере; full chain0/2. Добавлен анализ cross-level условий, текущие game.serverflags остаются unknown. На base2 crosslevel t77 относится к flyers, а не к door53. Новый блокер записан отдельно в base2-campaign-fall-exit-approach.json.",
   "remaining_validation": ["Диагностика достижимости активатора: обход, лестница, локальный переход или динамическая геометрия", "Фактическое открытие двери53 и возобновление exit goal", "Полный base1→base2→base3 без постановок", "Боевая версия с исходными монстрами"]
 }

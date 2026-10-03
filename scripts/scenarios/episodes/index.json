@@ -112,6 +112,8 @@
     "bunk1-follow-unreachable-20260930.json",
     "bunk1-dynamic-bridge-wrong-elevator.json",
     "jail2-live-door-blocked-20260930.json",
-    "jail3-live-stuck-20260930-204726.json"
+    "jail3-live-stuck-20260930-204726.json",
+    "base2-campaign-remote-door-activation-route.json",
+    "base2-campaign-fall-exit-approach.json"
   ]
 }

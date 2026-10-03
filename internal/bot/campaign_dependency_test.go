@@ -29,6 +29,9 @@ func TestBase2BSPCampaignDependency(t *testing.T) {
 	if !ok || p.World.Campaign.State != "unlock_exit_route" {
 		t.Fatal(p.World.Campaign)
 	}
+	if len(p.campaignDependency.UnitConditions) != 0 {
+		t.Fatal("base2 flyer cross-level trigger falsely linked to door53")
+	}
 	route, ok := p.campaignDependencyRoute(s, goal)
 	if ok || len(route) != 0 || p.campaignDependency.State != "activation_route_unavailable" {
 		t.Fatal("route through locked door accepted")

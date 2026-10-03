@@ -61,3 +61,21 @@ func TestUnitTouchActionRelayAndCycle(t *testing.T) {
 		t.Fatal("monster-only trigger offered")
 	}
 }
+
+func TestUnitMapPathsKeepRevisitsButRespectUnitBoundary(t *testing.T) {
+	makeMap := func(name string, destinations ...string) *MapInfo {
+		info := &MapInfo{Name: name, Models: []BSPModel{{}, {Min: Vec3{}, Max: Vec3{10, 10, 10}}}}
+		for _, destination := range destinations {
+			info.Entities = append(info.Entities, MapEntity{Class: "trigger_changelevel", Model: 1, Map: destination})
+		}
+		return info
+	}
+	a := makeMap("a", "b$from_a", "*c$start")
+	b := makeMap("b", "a$return", "missing")
+	c := makeMap("c", "d")
+	d := makeMap("d")
+	paths := UnitMapPaths("a", []*MapInfo{a, b, c, d})
+	if len(paths) != 2 || len(paths["b"]) != 2 || paths["b"][0] != "a" || paths["b"][1] != "b" {
+		t.Fatal("unit reset or missing maps crossed", paths)
+	}
+}

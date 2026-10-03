@@ -6,13 +6,13 @@ import (
 )
 
 type CampaignDependency struct {
-	State      string           `json:"state"`
-	DoorModel  int              `json:"door_model"`
-	Activation quake.Activation `json:"activation"`
-	Goal       quake.Vec3       `json:"goal"`
+	State          string                `json:"state"`
+	DoorModel      int                   `json:"door_model"`
+	Activation     quake.Activation      `json:"activation"`
+	Goal           quake.Vec3            `json:"goal"`
 	UnitConditions []quake.UnitCondition `json:"unit_conditions,omitempty"`
-	initial    quake.Vec3
-	started    int
+	initial        quake.Vec3
+	started        int
 }
 
 // Discover goals only after an observed named door actually blocks movement.
@@ -91,6 +91,9 @@ func (p *Planner) campaignDependencyGoal(s quake.Snapshot) (quake.Vec3, bool, bo
 // validate all actual movement; this never makes a closed door passable.
 func (p *Planner) campaignDependencyNavigator(s quake.Snapshot) *quake.Navigator {
 	d := p.campaignDependency
+	if d == nil {
+		d = p.campaignExitBlock
+	}
 	if d == nil || p.Nav == nil {
 		return p.Nav
 	}
@@ -150,8 +153,16 @@ func (p *Planner) campaignUnitConditions(model int) []quake.UnitCondition {
 		}
 	}
 	for i := range conditions {
+		paths := quake.UnitMapPaths(p.World.Map, maps)
 		for _, info := range maps {
-			conditions[i].Activations = append(conditions[i].Activations, info.UnitActions(conditions[i].RequiredFlags)...)
+			path, sameUnit := paths[info.Name]
+			if !sameUnit {
+				continue
+			}
+			for _, action := range info.UnitActions(conditions[i].RequiredFlags) {
+				action.TravelMaps = path
+				conditions[i].Activations = append(conditions[i].Activations, action)
+			}
 		}
 	}
 	return conditions

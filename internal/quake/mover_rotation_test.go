@@ -72,3 +72,24 @@ func TestBrushOrientationMatchesQuakeAxes(t *testing.T) {
 		}
 	}
 }
+
+func TestMoverEscapeRequiresFreeEndpointAndDoesNotEnterAnotherBrush(t *testing.T) {
+	planes, brush := testBoxBrush(Vec3{-8, -8, -32}, Vec3{8, 8, 32}, 0)
+	g := &MapInfo{collision: &CollisionMap{planes: planes, brushes: []bspBrush{brush}, sides: []uint16{0, 1, 2, 3, 4, 5}, modelBrushes: [][]int{nil, {0}}}}
+	mover := Mover{Model: 1, Angles: Vec3{0, 0, 90}}
+	from, to := Vec3{20, 0, 0}, Vec3{36, 0, 0}
+	if g.MoverHullClear(mover, from, to) || !g.MoverHullEscapeClear(mover, from, to) {
+		t.Fatal("startsolid escape not distinguished from ordinary clear sweep")
+	}
+	if g.MoverHullEscapeClear(mover, from, Vec3{22, 0, 0}) || g.MoverHullEscapeClear(mover, to, from) {
+		t.Fatal("allsolid or entering the mover accepted")
+	}
+	otherPlanes, other := testBoxBrush(Vec3{52, -8, -32}, Vec3{60, 8, 32}, 6)
+	g.collision.planes = append(g.collision.planes, otherPlanes...)
+	g.collision.sides = append(g.collision.sides, 6, 7, 8, 9, 10, 11)
+	g.collision.brushes = append(g.collision.brushes, other)
+	g.collision.modelBrushes[1] = append(g.collision.modelBrushes[1], 1)
+	if g.MoverHullEscapeClear(mover, from, Vec3{90, 0, 0}) {
+		t.Fatal("escape crossed another solid brush")
+	}
+}

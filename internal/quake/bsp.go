@@ -383,13 +383,17 @@ func (m *CollisionMap) ClearShot(from, to Vec3) bool {
 }
 
 func (m *CollisionMap) boxClear(from, to, mins, maxs Vec3) bool {
+	return m.boxClearLeaving(from, to, mins, maxs, false)
+}
+
+func (m *CollisionMap) boxClearLeaving(from, to, mins, maxs Vec3, allowLeaving bool) bool {
 	for _, index := range m.worldBrushes {
 		brush := m.brushes[index]
 		if brush.contents&3 == 0 {
 			continue
 		}
 		enter, leave := 0.0, 1.0
-		outside, startOutside := false, false
+		outside, startOutside, endOutside := false, false, false
 		for side := brush.first; side < brush.first+brush.count; side++ {
 			plane := m.planes[m.sides[side]]
 			minDot := 0.0
@@ -408,6 +412,9 @@ func (m *CollisionMap) boxClear(from, to, mins, maxs Vec3) bool {
 			if d1 > 0 {
 				startOutside = true
 			}
+			if d2 > 0 {
+				endOutside = true
+			}
 			if d1 > 0 && d2 > 0 {
 				outside = true
 				break
@@ -421,6 +428,11 @@ func (m *CollisionMap) boxClear(from, to, mins, maxs Vec3) bool {
 			} else {
 				leave = math.Min(leave, fraction)
 			}
+		}
+		// Native CM_ClipBoxToBrush permits leaving a startsolid brush.
+		// Only the explicit mover escape uses this; static sweeps stay strict.
+		if allowLeaving && !startOutside && endOutside {
+			continue
 		}
 		if !outside && (!startOutside || enter < leave && enter < 1 && leave > 0) {
 			return false

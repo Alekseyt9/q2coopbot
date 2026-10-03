@@ -1,14 +1,16 @@
 package quake
 
+import "strings"
+
 // UnitCondition describes a native cross-level flag requirement. All bits in
 // RequiredFlags must be set; UDP does not expose the actual game.serverflags.
 type UnitCondition struct {
-	Map           string        `json:"map"`
-	RequiredFlags int           `json:"required_flags"`
-	FlagState     string        `json:"flag_state"`
-	Target        MapEntity     `json:"target"`
-	Chain         []MapEntity   `json:"chain"`
-	Activations   []UnitAction  `json:"activations,omitempty"`
+	Map           string       `json:"map"`
+	RequiredFlags int          `json:"required_flags"`
+	FlagState     string       `json:"flag_state"`
+	Target        MapEntity    `json:"target"`
+	Chain         []MapEntity  `json:"chain"`
+	Activations   []UnitAction `json:"activations,omitempty"`
 }
 
 type UnitAction struct {
@@ -16,6 +18,38 @@ type UnitAction struct {
 	SetsFlags  int        `json:"sets_flags"`
 	Action     string     `json:"action"`
 	Activation Activation `json:"activation"`
+	TravelMaps []string   `json:"travel_maps,omitempty"`
+}
+
+// UnitMapPaths follows only known exits that preserve game.serverflags.
+// A '*map' transition starts another unit and clears cross-level flags.
+func UnitMapPaths(start string, maps []*MapInfo) map[string][]string {
+	known := map[string]*MapInfo{}
+	for _, info := range maps {
+		if info != nil {
+			known[info.Name] = info
+		}
+	}
+	paths := map[string][]string{start: {start}}
+	queue := []string{start}
+	for head := 0; head < len(queue); head++ {
+		info := known[queue[head]]
+		if info == nil {
+			continue
+		}
+		for _, exit := range info.Exits() {
+			if strings.HasPrefix(exit.Destination, "*") {
+				continue
+			}
+			next := strings.SplitN(exit.Destination, "$", 2)[0]
+			if _, visited := paths[next]; visited || known[next] == nil {
+				continue
+			}
+			paths[next] = append(append([]string{}, paths[queue[head]]...), next)
+			queue = append(queue, next)
+		}
+	}
+	return paths
 }
 
 // UnitDoorConditions does not interpret a same-named target on another map as
