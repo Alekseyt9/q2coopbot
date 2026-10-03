@@ -78,10 +78,10 @@ func combatDistanceBand(weapon, class string) (float64, float64) {
 func (p *Planner) combatRetreat(cmd quake.UserCmd, profile *CombatSpacing) quake.UserCmd {
 	s := p.World.Snapshot
 	p.World.Command.MoveLimitReason = "combat_retreat_blocked"
-	if profile == nil || !profile.NeedSpace || !s.OnGround || s.Teammate == nil || !p.World.Geometry.MovementComplete() || p.elevator != nil || p.button != nil || p.jump != nil {
+	if profile == nil || !profile.NeedSpace || !s.OnGround || (s.Teammate == nil && !p.Campaign) || !p.World.Geometry.MovementComplete() || p.elevator != nil || p.button != nil || p.jump != nil {
 		return cmd
 	}
-	if quake.Distance(s.Self, *s.Teammate) > combatLeash(profile) {
+	if s.Teammate != nil && quake.Distance(s.Self, *s.Teammate) > combatLeash(profile) {
 		return cmd
 	}
 	var enemy *quake.Object
@@ -94,8 +94,10 @@ func (p *Planner) combatRetreat(cmd quake.UserCmd, profile *CombatSpacing) quake
 	if enemy == nil {
 		return cmd
 	}
-	if reposition := p.combatFiringPosition(cmd, profile, *enemy); p.World.Command.MoveSource == "combat_firing_position" {
-		return reposition
+	if s.Teammate != nil {
+		if reposition := p.combatFiringPosition(cmd, profile, *enemy); p.World.Command.MoveSource == "combat_firing_position" {
+			return reposition
+		}
 	}
 	dx, dy := s.Self[0]-enemy.Origin[0], s.Self[1]-enemy.Origin[1]
 	d := math.Hypot(dx, dy)
@@ -114,7 +116,7 @@ func (p *Planner) combatRetreat(cmd quake.UserCmd, profile *CombatSpacing) quake
 		for _, angle := range []float64{0, math.Pi / 4, -math.Pi / 4, math.Pi / 2, -math.Pi / 2} {
 			x, y := dx*math.Cos(angle)-dy*math.Sin(angle), dx*math.Sin(angle)+dy*math.Cos(angle)
 			next := quake.Vec3{s.Self[0] + step*x, s.Self[1] + step*y, s.Self[2]}
-			if profile.Enemy == "monster_parasite" && quake.Horizontal(s.Self, enemy.Origin) >= parasiteFiringDistance && p.World.Command.AimSource == "enemy" {
+			if s.Teammate != nil && profile.Enemy == "monster_parasite" && quake.Horizontal(s.Self, enemy.Origin) >= parasiteFiringDistance && p.World.Command.AimSource == "enemy" {
 				candidate := s
 				candidate.Self = next
 				to := enemy.AimPoint()
@@ -125,7 +127,7 @@ func (p *Planner) combatRetreat(cmd quake.UserCmd, profile *CombatSpacing) quake
 					continue
 				}
 			}
-			if (quake.Horizontal(next, *s.Teammate) < 48 && quake.Horizontal(next, *s.Teammate) < quake.Horizontal(s.Self, *s.Teammate)+1) || quake.Distance(next, *s.Teammate) > combatLeash(profile) {
+			if s.Teammate != nil && ((quake.Horizontal(next, *s.Teammate) < 48 && quake.Horizontal(next, *s.Teammate) < quake.Horizontal(s.Self, *s.Teammate)+1) || quake.Distance(next, *s.Teammate) > combatLeash(profile)) {
 				continue
 			}
 			groupSafe := true
@@ -142,6 +144,16 @@ func (p *Planner) combatRetreat(cmd quake.UserCmd, profile *CombatSpacing) quake
 				continue
 			}
 			if _, hazard := p.World.Geometry.DoorMoveBlockStep(s.Movers, s.Self, x, y, step); hazard != "" {
+				continue
+			}
+			moverBlocked := false
+			for _, mover := range s.Movers {
+				if !p.World.Geometry.MoverHullClear(mover, s.Self, next) {
+					moverBlocked = true
+					break
+				}
+			}
+			if moverBlocked {
 				continue
 			}
 			p.World.Command.MoveSource = "combat_retreat"

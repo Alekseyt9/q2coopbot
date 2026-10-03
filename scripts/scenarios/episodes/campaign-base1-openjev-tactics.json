@@ -1,0 +1,15 @@
+{
+ "id":"campaign-base1-openjev-tactics",
+ "title":"OpenJev System1 в одиночном бою base1",
+ "map":"base1",
+ "kind":"combat_tactics",
+ "status":"partial_native_validation",
+ "reproduction":"observation_only",
+ "scenario":"scripts/scenarios/campaign-base1-openjev-tactics.json",
+ "evidence":"workspace/artifacts/campaign-combat-20261003-215018-536/report.json",
+ "baseline_evidence":"workspace/artifacts/campaign-combat-20261003-215133-735/report.json",
+ "latency_evidence":"workspace/artifacts/openjev-latency-20261003-215225-194/report.json",
+ "comparison_evidence":"workspace/artifacts/openjev-latency-20261003-215225-194/combat-comparison.json",
+ "validation":{"timescale":2,"parallelism":2,"seeds":[501,502],"model_live_decisions":23,"model_selected_actions":["attack"],"model_deaths":0,"baseline_deaths":1,"model_self_damage":0,"baseline_self_damage":103},
+ "remaining_validation":["No statistical improvement claim from two seeds; engine/connection starts differ","Retreat was executed by Go spacing controller, not selected by OpenJev in these runs","Add model-selected retreat, cover and circle scenarios; group and lowHP constraints","Cold-start latency not isolated; warm compact46..150ms, longer106..140ms","General episode dispatcher not bound"]
+}

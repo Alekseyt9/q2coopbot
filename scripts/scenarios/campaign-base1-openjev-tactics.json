@@ -1,0 +1,10 @@
+{
+ "version":1,
+ "name":"campaign-base1-openjev-tactics",
+ "map":"base1",
+ "runner":"scripts/run_campaign_exit.ps1",
+ "reproduction_command":"pwsh -NoProfile -File scripts/run_campaign_exit.ps1 -Combat -Seed 501 -Port 31760 -System1 hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0",
+ "baseline_command":"pwsh -NoProfile -File scripts/run_campaign_exit.ps1 -Combat -Seed 501 -Port 31760",
+ "scope":"Original native base1 combat from spawn, two distinct seeds, timescale2, two servers/clients. Transition to base2 ends test; no base2 combat acceptance. Compare model live decisions separately from ordinary Go fallback. Seeds do not guarantee identical connection/engine initial states.",
+ "acceptance":["Native transition and combat proof","Report model, accepted live decisions, stale results, errors and retreat frames","Compare native deaths, self damage, health damage, kills and HP; two seeds do not prove stable improvement"]
+}

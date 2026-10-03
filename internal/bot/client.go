@@ -1013,6 +1013,7 @@ func (c *Client) run(ctx context.Context) error {
 					Goal               string                  `json:"goal"`
 					ChatMessage        string                  `json:"chat_message,omitempty"`
 					Campaign           *CampaignDecision       `json:"campaign,omitempty"`
+					Tactic             *TacticalDecision       `json:"tactic,omitempty"`
 					GoalPoint          *quake.Vec3             `json:"goal_point,omitempty"`
 					Route              []quake.Waypoint        `json:"route,omitempty"`
 					Jump               *JumpTrace              `json:"jump_plan,omitempty"`
@@ -1070,6 +1071,7 @@ func (c *Client) run(ctx context.Context) error {
 					Inventory:    c.planner.World.Snapshot.Inventory, InventoryKnown: c.planner.World.Snapshot.InventoryKnown, InventoryAgeFrames: c.planner.World.Snapshot.InventoryAgeFrames,
 					Goal: c.planner.World.Goal, ChatMessage: chatMessage, SearchTarget: c.planner.World.SearchTarget,
 					Campaign: c.planner.World.Campaign,
+					Tactic:   c.planner.World.Tactic,
 					Route:    c.planner.World.Route, Jump: c.planner.World.Jump, Gravity: c.planner.World.Snapshot.Gravity, GunFrame: c.planner.World.Snapshot.GunFrame, ViewAngles: c.planner.World.Snapshot.ViewAngles, Pickups: c.planner.World.Snapshot.Pickups,
 					Beams:            c.planner.World.Snapshot.Beams,
 					RemovedEntities:  c.planner.World.Snapshot.RemovedEntities,

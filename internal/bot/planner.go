@@ -398,7 +398,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	} else {
 		p.World.Strategy = nil
 	}
-	if p.tactic != nil && time.Since(p.tactic.At) < 3*time.Second {
+	if p.tactic != nil && time.Since(p.tactic.At) < 3*time.Second && p.tactic.current(s) {
 		p.World.Tactic = p.tactic
 	} else {
 		p.World.Tactic = nil
@@ -815,7 +815,8 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	}
 	profile := combatSpacing(s)
 	p.World.Command.CombatSpacing = profile
-	if (p.World.Goal == "cover_teammate" || p.World.Goal == "follow_teammate") && profile != nil && profile.Distance < profile.Minimum+32 && s.Teammate != nil && quake.Distance(s.Self, *s.Teammate) <= combatLeash(profile) && (tactic == "" || tactic == "attack" || tactic == "retreat") {
+	spacingGoal := s.Teammate != nil && (p.World.Goal == "cover_teammate" || p.World.Goal == "follow_teammate") && quake.Distance(s.Self, *s.Teammate) <= combatLeash(profile) || s.Teammate == nil && p.Campaign && p.World.Goal == "reach_level_exit"
+	if spacingGoal && profile != nil && profile.Distance < profile.Minimum+32 && (tactic == "" || tactic == "attack" || tactic == "retreat") {
 		if profile.NeedSpace {
 			return p.combatRetreat(cmd, profile)
 		}

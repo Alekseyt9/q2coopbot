@@ -1,0 +1,13 @@
+{
+  "version":1,
+  "name":"base1-solo-openjev-retreat",
+  "map":"base1",
+  "runner":"scripts/run_solo_tactical_retreat.ps1",
+  "reproduction_command":"pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -Seed 601 -Port 31820",
+  "bot_origin":[32,-224,24],
+  "target_class":"monster_parasite",
+  "target_origin":[200,-224,24],
+  "model":"hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0",
+  "scope":"Prepared single vulnerable native parasite, original base1 BSP/AAS with original monsters removed. One initial teleport and one spawnentity. Solo campaign uses normal commands and real OpenJev. No forced retreat decision, invulnerability or equipment grants; ordinary items remain on map.",
+  "acceptance":["Accepted live retreat decision from OpenJev in trace","At least two firing movement frames while live retreat is current","At least two observed steps increase distance from same-frame enemy origin","Native parasite kill, no death, no teammate, same map","Acknowledged distinct seeds, timescale2, parallelism2, unchanged source fingerprint"]
+}

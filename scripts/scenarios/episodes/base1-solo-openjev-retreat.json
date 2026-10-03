@@ -1,0 +1,14 @@
+{
+  "id":"base1-solo-openjev-retreat",
+  "title":"OpenJev выбирает отход со стрельбой в solo бою с Parasite",
+  "map":"base1",
+  "kind":"combat_tactics",
+  "status":"partial_native_validation",
+  "reproduction":"observation_only",
+  "scenario":"scripts/scenarios/base1-solo-openjev-retreat.json",
+  "reproduction_command":"pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -Seed 601 -Port 31820",
+  "evidence":"workspace/artifacts/solo-tactical-retreat-20261003-220032-068/report.json",
+  "repeat_evidence":"workspace/artifacts/solo-tactical-retreat-20261003-220148-788/report.json",
+  "validation":{"passed":4,"total":4,"seeds":[601,602,701,702],"timescale":2,"parallelism":2,"deaths":0,"self_damage":0,"final_health":[72,95,76,89],"native_health_damage":[67,34,53,40],"model_retreat_decisions":[4,3,4,3],"scope":"prepared single parasite; model-selected retreat, native movement and firing"},
+  "remaining_validation":["General episode dispatcher not bound; specialized runner required","Multiple threats and blocked retreat validated by existing unit checks, not this single-enemy native case","No general deathless campaign or optimal damage claim","Next: cover with short lateral firing exposure, then circle maneuver under group constraints"]
+}

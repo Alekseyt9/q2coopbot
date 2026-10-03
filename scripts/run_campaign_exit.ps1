@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Worker,[switch]$FullLevel,[switch]$Combat,[switch]$Checkpoint,[switch]$Continue,[switch]$Chain,[ValidateSet('','available','empty')][string]$Prepare='',[ValidateRange(0,2147483646)][int]$Seed=101,[int]$Port=31240,[string]$OutputRoot='',[string]$Client='',[string]$SourceRuntime='')
+param([switch]$Worker,[switch]$FullLevel,[switch]$Combat,[switch]$Checkpoint,[switch]$Continue,[switch]$Chain,[ValidateSet('','available','empty')][string]$Prepare='',[ValidateRange(0,2147483646)][int]$Seed=101,[int]$Port=31240,[string]$OutputRoot='',[string]$Client='',[string]$SourceRuntime='',[string]$System1='')
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 if($Chain){if($Checkpoint -or $Prepare){throw 'Chain cannot combine checkpoint/preparation fixtures'};$Continue=$true;$FullLevel=$true}
@@ -30,6 +30,7 @@ if(!$Worker){
         if($using:Prepare){$workerArgs+=@('-Prepare',$using:Prepare)}
         if($using:Continue){$workerArgs+='-Continue'}
         if($using:Chain){$workerArgs+='-Chain'}
+        if($using:System1){$workerArgs+=@('-System1',$using:System1)}
         $workerLog=Join-Path $using:OutputRoot "worker-$_.log"
         $workerErr=Join-Path $using:OutputRoot "worker-$_.err"
         $quotedArgs=@($workerArgs|ForEach-Object {'"'+$_+'"'})
@@ -40,7 +41,7 @@ if(!$Worker){
     } -ThrottleLimit 2)
     $valid=$fingerprint -eq (Get-HarnessFingerprint (Get-HarnessSourceRecords $repo))
     $accepted=$valid -and $results.Count -eq 2 -and @($results|Where-Object {!$_.accepted}).Count -eq 0
-    @{accepted=$accepted;provenance_valid=$valid;source_fingerprint=$fingerprint;timescale=2;parallelism=2;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 12|Set-Content (Join-Path $OutputRoot 'report.json') -Encoding utf8
+    @{accepted=$accepted;provenance_valid=$valid;source_fingerprint=$fingerprint;timescale=2;parallelism=2;system1=$System1;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 12|Set-Content (Join-Path $OutputRoot 'report.json') -Encoding utf8
     Write-Output "Campaign exit: $OutputRoot"
     if(!$accepted){throw 'Campaign exit rejected'}
     return
@@ -102,7 +103,7 @@ try{
     $duration=if($Chain){'180s'}elseif($Combat){'115s'}elseif($FullLevel){'75s'}elseif($Prepare -or $Continue){'40s'}else{'20s'}
     $run=@{duration=$duration;frame_paced=$true;mode='campaign'}
     if($Continue){$run.campaign_route=$scene.campaign_route}else{$run.next_map=$scene.next_map}
-    @{server=@{host='127.0.0.1';port=$Port};client=@{name='CampaignBot';game_dir=(Join-Path $runtime 'baseq2')};run=$run;output=@{trace_jsonl=$trace};test=$test}|ConvertTo-Json -Depth 6|Set-Content $config -Encoding utf8
+    @{server=@{host='127.0.0.1';port=$Port};client=@{name='CampaignBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};run=$run;output=@{trace_jsonl=$trace};test=$test}|ConvertTo-Json -Depth 6|Set-Content $config -Encoding utf8
     $bot=Start-Process $Client -ArgumentList "--config `"$config`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
     if($Checkpoint){
         $deadline=(Get-Date).AddSeconds(10);$anchor=$null
@@ -297,6 +298,12 @@ try{
                 $report.checkpoint.rng_restored=$true
             }
         }catch{$report.accepted=$false;$report.reason=$_.Exception.Message}
+    }
+    if($System1 -and (Test-Path $trace)){
+        $tacticRows=@(Get-Content $trace|ForEach-Object {try{$_|ConvertFrom-Json}catch{}})
+        $live=@($tacticRows|Where-Object {$_.tactic.source -eq 'live'}|ForEach-Object {$_.tactic}|Sort-Object map,frame,action -Unique)
+        $errLog=Get-Content (Join-Path $OutputRoot 'bot.err')
+        $report.system1=@{model=$System1;live_decisions=$live.Count;decisions=$live;stale_results=@($errLog|Select-String 'system1 stale').Count;errors=@($errLog|Select-String 'system1 error').Count;retreat_frames=@($tacticRows|Where-Object {$_.arbitration.move_source -eq 'combat_retreat'}).Count;fallback='ordinary Go controller when no current decision';validation='navigation/combat acceptance does not require a model decision'}
     }
     $report|ConvertTo-Json -Depth 12|Set-Content (Join-Path $OutputRoot 'report.json') -Encoding utf8
 }
