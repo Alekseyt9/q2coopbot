@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "name": "campaign-base3-original-hatch-platform",
+  "map": "base3",
+  "runner": "scripts/run_original_activation.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -OriginalHatch -Seed 101 -Port 31730",
+  "initial_position": [-484, -360, -263.875],
+  "test_goals": [[-416, -320, -311.875], [-416, -320, -263.875]],
+  "button_model": 45,
+  "hatch_model": 21,
+  "platform_model": 20,
+  "target_chains": [["t108", "t133"], ["t108", "t133", "t134"]],
+  "scope": "Original BSP/AAS and all native activation links preserved, including relay delays3+3 seconds. Monsters removed; one initial placement, then ordinary campaign planner and native physics. Focused hatch/descent/platform episode, not full campaign/combat acceptance.",
+  "acceptance": ["Exact button45→t108→relay→t133→hatch21 in trace", "Native button movement before hatch opening before descent", "Grounded arrival advances the first test goal", "Observed raised platform20 and second goal reached", "Alive, same map, no teammate, no touch firing and no forced gameplay after placement"]
+}

@@ -34,7 +34,7 @@ if(!$Worker){
     } -ThrottleLimit 2)
     $valid=$fingerprint -eq (Get-HarnessFingerprint (Get-HarnessSourceRecords $repo))
     $accepted=$valid -and @($results|Where-Object {!$_.accepted}).Count -eq 0
-    @{accepted=$accepted;original_relay=[bool]$OriginalRelay;original_shoot=[bool]$OriginalShoot;button=[bool]$Button;sequence=[bool]$Sequence;relay=[bool]$Relay;expected_refusal=[bool]$RelayBlocked;provenance_valid=$valid;source_fingerprint=$fingerprint;timescale=2;parallelism=2;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 15|Set-Content (Join-Path $OutputRoot 'report.json')
+    @{accepted=$accepted;original_hatch=[bool]$OriginalHatch;original_relay=[bool]$OriginalRelay;original_shoot=[bool]$OriginalShoot;button=[bool]$Button;sequence=[bool]$Sequence;relay=[bool]$Relay;expected_refusal=[bool]$RelayBlocked;provenance_valid=$valid;source_fingerprint=$fingerprint;timescale=2;parallelism=2;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 15|Set-Content (Join-Path $OutputRoot 'report.json')
     "Original activation: $OutputRoot";if(!$accepted){throw 'Original activation rejected'};return
 }
 if(Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue){throw 'Port occupied'}

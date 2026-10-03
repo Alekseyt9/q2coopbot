@@ -2,17 +2,17 @@
 param([switch]$Worker,[switch]$FullLevel,[switch]$Combat,[switch]$Checkpoint,[switch]$Continue,[switch]$Chain,[ValidateSet('','available','empty')][string]$Prepare='',[ValidateRange(0,2147483646)][int]$Seed=101,[int]$Port=31240,[string]$OutputRoot='',[string]$Client='',[string]$SourceRuntime='')
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
-if($Chain){if($Combat -or $Checkpoint -or $Prepare){throw 'Chain currently requires navigation without combat/checkpoint'};$Continue=$true;$FullLevel=$true}
+if($Chain){if($Checkpoint -or $Prepare){throw 'Chain cannot combine checkpoint/preparation fixtures'};$Continue=$true;$FullLevel=$true}
 if($Combat){$FullLevel=$true}
 if($Checkpoint -and !$Combat){throw 'Campaign checkpoint requires Combat'}
 if($Prepare -and ($Combat -or $FullLevel -or $Checkpoint)){throw 'Preparation requires isolated exit fixture'}
-if($Continue -and ($Prepare -or $Combat -or ($FullLevel -and !$Chain) -or $Checkpoint)){throw 'Continuation requires isolated navigation fixture'}
+if($Continue -and ($Prepare -or ($Combat -and !$Chain) -or ($FullLevel -and !$Chain) -or $Checkpoint)){throw 'Continuation requires navigation fixture or Combat Chain'}
 if(!$Worker){
     . "$PSScriptRoot/harness_manifest.ps1"
     $fingerprint=Get-HarnessFingerprint (Get-HarnessSourceRecords $repo)
     $SourceRuntime=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map base1 -KeepMonsters:$Combat
-    if($Continue){& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map base2 | Out-Null}
-    $prefix=if($Chain){'campaign-chain-'}elseif($Continue){'campaign-continue-'}elseif($Prepare){'campaign-prepare-'+$Prepare+'-'}elseif($Combat){'campaign-combat-'}elseif($FullLevel){'campaign-level-'}else{'campaign-exit-'}
+    if($Continue){& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map base2 -KeepMonsters:$Combat | Out-Null}
+    $prefix=if($Chain -and $Combat){'campaign-combat-chain-'}elseif($Chain){'campaign-chain-'}elseif($Continue){'campaign-continue-'}elseif($Prepare){'campaign-prepare-'+$Prepare+'-'}elseif($Combat){'campaign-combat-'}elseif($FullLevel){'campaign-level-'}else{'campaign-exit-'}
     $OutputRoot=Join-Path $repo ('workspace/artifacts/'+$prefix+(Get-Date -Format yyyyMMdd-HHmmss-fff))
     New-Item -ItemType Directory $OutputRoot|Out-Null
     $Client=Join-Path $OutputRoot 'q2coopbot.exe'
@@ -57,10 +57,11 @@ foreach($asset in Get-ChildItem (Join-Path $SourceRuntime 'baseq2') -File -Recur
     if($asset.Extension -eq '.ent'){Copy-Item $asset.FullName $dest;continue}
     try{New-Item -ItemType HardLink -Path $dest -Target $asset.FullName -ErrorAction Stop|Out-Null}catch{Copy-Item $asset.FullName $dest}
 }
-$sceneName=if($Chain){'base1-base2-campaign-chain.json'}elseif($Continue){'base1-campaign-continue.json'}elseif($Prepare){'base1-campaign-prepare.json'}elseif($Combat){'base1-campaign-combat.json'}elseif($FullLevel){'base1-campaign-level.json'}else{'base1-campaign-exit.json'}
+$sceneName=if($Chain -and $Combat){'base1-base2-campaign-combat-chain.json'}elseif($Chain){'base1-base2-campaign-chain.json'}elseif($Continue){'base1-campaign-continue.json'}elseif($Prepare){'base1-campaign-prepare.json'}elseif($Combat){'base1-campaign-combat.json'}elseif($FullLevel){'base1-campaign-level.json'}else{'base1-campaign-exit.json'}
 $scene=Get-Content (Join-Path "$PSScriptRoot/scenarios" $sceneName) -Raw|ConvertFrom-Json
 if($Continue){
-    foreach($ext in @('aas','ent')){Copy-Item -LiteralPath (Join-Path $repo "workspace/runtime/q2go-elevator-cycle-base2/baseq2/maps/base2.$ext") -Destination (Join-Path $runtime "baseq2/maps/base2.$ext") -Force}
+    $secondRuntime=Join-Path $repo ('workspace/runtime/q2go-elevator-cycle-base2'+$(if($Combat){'-combat'}else{''}))
+    foreach($ext in @('aas','ent')){Copy-Item -LiteralPath (Join-Path $secondRuntime "baseq2/maps/base2.$ext") -Destination (Join-Path $runtime "baseq2/maps/base2.$ext") -Force}
 }
 if($Chain){Copy-Item -LiteralPath (Join-Path $repo 'workspace/runtime/q2go/baseq2/maps/base3.aas') -Destination (Join-Path $runtime 'baseq2/maps/base3.aas') -Force}
 if($Prepare){
@@ -79,6 +80,11 @@ try{
         $fixture=Get-Content (Join-Path $SourceRuntime 'elevator-fixture.json') -Raw|ConvertFrom-Json
         if($fixture.map -ne $scene.map -or $fixture.removed_monsters -ne 0 -or $fixture.source_monsters -lt 1 -or $fixture.scope -ne 'original_combat'){throw 'Original combat fixture proof absent'}
         $report.fixture=$fixture
+        if($Chain){
+            $secondFixture=Get-Content (Join-Path $secondRuntime 'elevator-fixture.json') -Raw|ConvertFrom-Json
+            if($secondFixture.map -ne 'base2' -or $secondFixture.removed_monsters -ne 0 -or $secondFixture.source_monsters -lt 1 -or $secondFixture.scope -ne 'original_combat'){throw 'Second-map original combat fixture proof absent'}
+            $report.second_fixture=$secondFixture
+        }
     }
     $env:Q2COOPBOT_TEST_RCON=[guid]::NewGuid().ToString('N');$instance=[guid]::NewGuid().ToString('N')
     $args="-portable +set ip 127.0.0.1 +set noipx 1 +set dedicated 1 +set coop 1 +set deathmatch 0 +set cheats 1 +set maxclients 4 +set port $Port +set timescale 2 +set rcon_password $env:Q2COOPBOT_TEST_RCON +set sv_harness_instance $instance +set sv_test_unlimited_loopback 1 +map $($scene.map)"

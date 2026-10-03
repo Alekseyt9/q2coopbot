@@ -1,0 +1,18 @@
+{
+  "id": "campaign-base3-original-hatch-platform",
+  "title": "Исходный люк base3, спуск на платформу и подъём после relay-кнопки",
+  "map": "base3",
+  "kind": "campaign_dependency",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/campaign-base3-original-hatch-platform.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -OriginalHatch -Seed 101 -Port 31730",
+  "evidence": "workspace/artifacts/original-activation-20261003-183725-206/report.json",
+  "failure_evidence": ["workspace/artifacts/original-activation-20261003-182339-994/report.json", "workspace/artifacts/original-activation-20261003-183141-074/report.json"],
+  "symptom": "AAS задаёт статический пол под платформой и точку схода на краю люка. Бот мог остановиться at_waypoint или drop_missed, хотя исходная кнопка уже сработала.",
+  "resolution": "Эффект двери требует реального смещения и проверки исходного коридора вместо порога60. Для вертикального коридора запрещена подмена горизонтальной stair-проверкой. Walk-off учитывает подтверждённую в двух последовательных snapshots неподвижную brush-опору, проверяет корпус/углы/опасности и предпочитает близкую цель внутри платформы вместо крайней точки AAS. У близкой пары walk-off запускается проверенный спуск до at_waypoint.",
+  "validation": {"timescale": 2, "parallelism": 2, "seeds": [101,102], "positive_passed": 2, "provenance_valid": true, "native_button_frames": [19,19], "hatch_open_frames": [59,59], "descent_frames": [74,74], "platform_arrival_frames": [87,87], "final_health": [100,100], "hatch_effect_observed_frame": 57, "hatch_effect_observed_displacement": 50, "native_final_displacements": {"hatch_y": 68, "platform_z": 50}},
+  "regression_evidence": ["workspace/artifacts/original-activation-20261003-183725-407/report.json", "workspace/artifacts/original-activation-20261003-183725-650/report.json"],
+  "missing_setup": ["Общий dispatcher ещё не привязан; использовать специализированный runner."],
+  "remaining_validation": ["Длинный маршрут от spawn и бой", "Подъём платформы в середине запланированного спуска и повторное планирование", "Другие исходные люки/платформы, включая неизвестный PVS"]
+}

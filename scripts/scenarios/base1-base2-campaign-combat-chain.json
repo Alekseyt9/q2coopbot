@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "name": "base1-base2-campaign-combat-chain",
+  "map": "base1",
+  "next_map": "base2",
+  "campaign_route": ["base1", "base2", "base3"],
+  "scope": "Solo native base1 and base2 from normal spawn with original monsters, resources, movers and activation links. Ordered native transitions to base3, no teleport, scripted movement, give/kill or forced map change. Base3 is destination only."
+}
