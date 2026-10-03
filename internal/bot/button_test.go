@@ -1,9 +1,39 @@
 package bot
 
 import (
+	"os"
 	"q2coopbot/internal/quake"
 	"testing"
 )
+
+func TestCampaignButtonOnBlockedDirectRoute(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires base2 BSP/AAS")
+	}
+	g, err := quake.LoadMap(root, "base2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base2.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := quake.Snapshot{Map: "base2", Frame: 20, Health: 100, OnGround: true, Self: quake.Vec3{194, 1971.875, -151.875}, Movers: []quake.Mover{{Model: 33}, {Model: 34}}}
+	p := &Planner{Campaign: true, Nav: n, goalPoint: quake.Vec3{194, 2024, -151.875}, World: World{Geometry: &g, GeometryStatus: "ready", Goal: "reach_level_exit", Navigation: "direct_clear"}}
+	task := p.selectButtonTask(s)
+	if task == nil || task.doorModel != 33 || task.buttonModel != 34 || !task.campaign {
+		t.Fatal("blocked direct route did not select original linked button", task)
+	}
+	s.Movers = s.Movers[:1]
+	if p.selectButtonTask(s) != nil {
+		t.Fatal("unobserved button selected")
+	}
+	s.Movers = []quake.Mover{{Model: 33, Origin: quake.Vec3{0, 0, 74}}, {Model: 34}}
+	if p.selectButtonTask(s) != nil {
+		t.Fatal("open passage selected button again")
+	}
+}
 
 func TestButtonOwnerLossCancelsBeforeSearchEarlyReturn(t *testing.T) {
 	for _, kind := range []string{"hidden", "changed", "dead"} {

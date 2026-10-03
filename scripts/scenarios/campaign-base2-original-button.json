@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "campaign-base2-original-button",
+  "map": "base2",
+  "runner": "scripts/run_original_activation.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Button -Seed 101 -Port 31680",
+  "initial_position": [194, 1940, -167.875],
+  "test_goal": [194, 2024, -151.875],
+  "button_model": 34,
+  "door_model": 33,
+  "scope": "Original BSP/AAS and original button34→door33 target link. One initial test teleport, no monsters, no forced interaction or movement. Ordinary campaign button selection must approach/touch without firing; native button and door must move, then the bot must cross alive. Focused episode, not full level completion."
+}

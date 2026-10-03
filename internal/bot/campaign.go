@@ -8,16 +8,18 @@ import (
 )
 
 type CampaignDecision struct {
-	RememberedOpenDoors map[int]quake.Mover `json:"remembered_open_doors,omitempty"`
-	Objective           string              `json:"objective"`
-	State               string              `json:"state"`
-	Exit                *quake.MapExit      `json:"exit,omitempty"`
-	Preparation         *ExitPreparation    `json:"preparation,omitempty"`
-	Dependency          *CampaignDependency `json:"dependency,omitempty"`
-	RouteIndex          int                 `json:"route_index,omitempty"`
-	CompletedLevels     int                 `json:"completed_levels,omitempty"`
-	ExitApproach        string              `json:"exit_approach,omitempty"`
-	UnitTrip            *CampaignUnitTrip   `json:"unit_trip,omitempty"`
+	RememberedOpenDoors map[int]quake.Mover     `json:"remembered_open_doors,omitempty"`
+	Objective           string                  `json:"objective"`
+	State               string                  `json:"state"`
+	Exit                *quake.MapExit          `json:"exit,omitempty"`
+	Preparation         *ExitPreparation        `json:"preparation,omitempty"`
+	Dependency          *CampaignDependency     `json:"dependency,omitempty"`
+	RouteIndex          int                     `json:"route_index,omitempty"`
+	CompletedLevels     int                     `json:"completed_levels,omitempty"`
+	ExitApproach        string                  `json:"exit_approach,omitempty"`
+	UnitTrip            *CampaignUnitTrip       `json:"unit_trip,omitempty"`
+	TestGoalIndex       int                     `json:"test_goal_index,omitempty"`
+	Button              *CampaignButtonDecision `json:"button,omitempty"`
 }
 
 // A route explicitly resolves forward exits, including maps with return exits.
@@ -64,17 +66,27 @@ func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	p.campaignDoorMovers(s)
 	d.RememberedOpenDoors = p.campaignOpenedDoors
 	p.World.Campaign = d
-	if p.testCampaignGoal != nil {
+	if len(p.testCampaignGoals) > 0 {
 		d.Objective = "reach_test_waypoint"
 		d.State = "approach_test_waypoint"
+		d.TestGoalIndex = p.testCampaignGoalIndex
 		if goal, ok, active := p.campaignDependencyGoal(s); active {
 			return goal, ok
 		}
-		if s.OnGround && quake.Distance(s.Self, *p.testCampaignGoal) < 12 {
+		goal := p.testCampaignGoals[p.testCampaignGoalIndex]
+		if s.OnGround && quake.Distance(s.Self, goal) < 12 {
+			if p.testCampaignGoalIndex+1 < len(p.testCampaignGoals) {
+				p.testCampaignGoalIndex++
+				p.routeKnown = false
+				d.TestGoalIndex = p.testCampaignGoalIndex
+				return p.testCampaignGoals[p.testCampaignGoalIndex], true
+			}
 			d.State = "test_waypoint_reached"
+			d.TestGoalIndex = p.testCampaignGoalIndex
 			return quake.Vec3{}, false
 		}
-		return *p.testCampaignGoal, true
+		d.TestGoalIndex = p.testCampaignGoalIndex
+		return goal, true
 	}
 	next := p.CampaignNextMap
 	if p.campaignUnitTrip == nil && p.campaignDependency != nil && p.campaignDependency.State == "unit_activation_required" {

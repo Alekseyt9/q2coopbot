@@ -1,0 +1,20 @@
+{
+  "id": "campaign-base2-original-button",
+  "title": "Бот не выбирает кнопку для двери, блокирующей прямой маршрут",
+  "map": "base2",
+  "kind": "campaign_dependency",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/campaign-base2-original-button.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Button -Seed 101 -Port 31680",
+  "evidence": "workspace/artifacts/original-activation-20261003-164708-716/report.json",
+  "failure_evidence": "workspace/artifacts/original-activation-20261003-164348-854/report.json",
+  "setup_failure_evidence": "workspace/artifacts/original-activation-20261003-164514-911/report.json",
+  "symptom": "Кампания шла по direct_clear до закрытой двери33. Выбор связанной touch-кнопки34 был разрешён только при ready/unreachable, поэтому бот останавливался перед дверью.",
+  "resolution": "Выбор кнопки допускается также для direct_clear, при сохранении проверки настоящей блокировки, BSP связи, наблюдения двери/кнопки и доступности подхода. Добавлен исходный native эпизод с отдельным режимом -Button.",
+  "validation": {"timescale": 2, "parallelism": 2, "seeds": [101,102], "positive_passed": 2, "provenance_valid": true, "approach_frames": [11,11], "touch_frames": [16,16], "first_native_press_frames": [26,26], "first_open_frames": [35,35]},
+  "setup_correction": "Промежуточная точка[194,2032,-151.875] пересекала статическую стену корпусом: бот уже нажал кнопку и прошёл дверь, но не мог достигнуть точки. Финальная точка[194,2024,-151.875] проверена полным hull.",
+  "regression_evidence": "workspace/artifacts/original-activation-20261003-164756-175/report.json",
+  "missing_setup": ["Общая привязка run_episode_regressions отсутствует; использовать специализированный runner."],
+  "remaining_validation": ["Полное прохождение от spawn с монстрами", "Несколько независимых кнопок/проходов последовательно", "Удалённые кнопки и промежуточные relay", "Shoot-кнопки и поворотные мосты"]
+}

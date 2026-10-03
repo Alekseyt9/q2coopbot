@@ -112,17 +112,35 @@ func transitionMapArgument(destination, previous string) (string, error) {
 	return destination + " " + previous, nil
 }
 
-func Run(ctx context.Context, cfg Config) error {
-	var testCampaignGoal *quake.Vec3
-	if cfg.TestCampaignGoal != "" {
-		if !cfg.Campaign || !cfg.FramePaced || cfg.Host != "127.0.0.1" || cfg.TestTeleportMap == "" || cfg.CheckpointRestore != "" {
-			return fmt.Errorf("test.campaign_goal requires loopback frame-paced campaign placement without checkpoint restore")
+// Test-only itinerary: each waypoint is reached by normal gameplay, with no
+// extra teleports or scripted button actions between stages.
+func parseTestCampaignGoals(value string) ([]quake.Vec3, error) {
+	parts := strings.Split(value, ";")
+	if len(parts) > 16 {
+		return nil, fmt.Errorf("test.campaign_goal allows at most 16 waypoints")
+	}
+	var points []quake.Vec3
+	for _, part := range parts {
+		point, err := parseTestTeleport(part)
+		if err != nil {
+			return nil, err
 		}
-		point, err := parseTestTeleport(cfg.TestCampaignGoal)
+		points = append(points, point)
+	}
+	return points, nil
+}
+
+func Run(ctx context.Context, cfg Config) error {
+	var testCampaignGoals []quake.Vec3
+	if cfg.TestCampaignGoal != "" {
+		if !cfg.Campaign || !cfg.FramePaced || cfg.Host != "127.0.0.1" || cfg.TestTeleportMap == "" || cfg.CheckpointRestore != "" || cfg.CheckpointControl != "" {
+			return fmt.Errorf("test.campaign_goal requires loopback frame-paced campaign placement without checkpoint control/restore")
+		}
+		points, err := parseTestCampaignGoals(cfg.TestCampaignGoal)
 		if err != nil {
 			return err
 		}
-		testCampaignGoal = &point
+		testCampaignGoals = points
 	}
 	var restore *checkpoint.Capture
 	if cfg.CheckpointRestore != "" {
@@ -386,7 +404,7 @@ func Run(ctx context.Context, cfg Config) error {
 	client.planner.TestDisableSearch = cfg.TestDisableSearch
 	client.planner.testDoorPassSpeed = float64(cfg.TestDoorPassSpeed)
 	client.planner.TestDisableProbe = cfg.TestDisableProbe
-	client.planner.testCampaignGoal = testCampaignGoal
+	client.planner.testCampaignGoals = testCampaignGoals
 	if cfg.TracePath != "" {
 		client.traceFile, err = os.Create(cfg.TracePath)
 		if err != nil {

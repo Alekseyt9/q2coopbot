@@ -52,7 +52,8 @@ type Planner struct {
 	CampaignUnitMaps          []string
 	campaignRouteIndex        int
 	campaignDependency        *CampaignDependency
-	testCampaignGoal          *quake.Vec3
+	testCampaignGoals         []quake.Vec3
+	testCampaignGoalIndex     int
 	campaignOpenedDoors       map[int]quake.Mover
 	campaignUnitTrip          *CampaignUnitTrip
 	campaignDependencyRetry   int

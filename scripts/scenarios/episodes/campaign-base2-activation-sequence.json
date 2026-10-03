@@ -1,0 +1,16 @@
+{
+  "id": "campaign-base2-activation-sequence",
+  "title": "Две независимые исходные связки активатор→проход в одной сессии base2",
+  "map": "base2",
+  "kind": "campaign_dependency",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/campaign-base2-activation-sequence.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Sequence -Seed 101 -Port 31680",
+  "evidence": "workspace/artifacts/original-activation-20261003-165444-496/report.json",
+  "resolution": "Добавлен test-only маршрут из нескольких контрольных точек. Бот достигает первой после trigger23→door24, затем обычной навигацией возвращается и идёт к button34→door33. Активаторы не заданы сценарием как команды. Native runner проверяет порядок контакта/открытия/пересечения и отсутствие дополнительных постановок.",
+  "validation": {"timescale": 2, "parallelism": 2, "seeds": [101,102], "positive_passed": 2, "provenance_valid": true, "first_trigger_contact_frames": [42,42], "first_open_frames": [46,46], "dependency_release_frames": [48,48], "second_goal_frames": [59,59], "native_button_press_frames": [168,168], "second_door_open_frames": [177,177], "second_door_cross_frames": [186,186], "final_health": [100,100]},
+  "regression_evidence": ["workspace/artifacts/original-activation-20261003-165527-696/report.json", "workspace/artifacts/original-activation-20261003-165528-063/report.json"],
+  "missing_setup": ["Общая привязка run_episode_regressions отсутствует; использовать специализированный runner."],
+  "remaining_validation": ["Самостоятельный выбор выхода вместо тестовых точек", "Боевые условия и полный маршрут от spawn", "Удалённые кнопки через relay", "Shoot-активаторы", "Save/load test-only itinerary запрещён; нужен отдельный контракт при необходимости"]
+}

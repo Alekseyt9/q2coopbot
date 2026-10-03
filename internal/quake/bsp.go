@@ -64,7 +64,7 @@ func (m *MapInfo) TouchBounds(entity MapEntity) (BSPModel, bool) {
 	return b, true
 }
 
-// ButtonForDoor finds a directly linked button and the action the Quake II
+// ButtonForDoor finds a linked button and the action the Quake II
 // game code accepts for it. A remotely named button has no local touch hook.
 func (m *MapInfo) ButtonForDoor(doorModel int) (MapEntity, string, bool) {
 	if m == nil {
@@ -75,7 +75,10 @@ func (m *MapInfo) ButtonForDoor(doorModel int) (MapEntity, string, bool) {
 			continue
 		}
 		for _, button := range m.Entities {
-			if button.Class != "func_button" || button.Target != door.TargetName {
+			if button.Class != "func_button" || button.Target == "" {
+				continue
+			}
+			if _, ok := m.targetPath(button.Target, door.TargetName, []MapEntity{button}, map[string]bool{}); !ok {
 				continue
 			}
 			if _, ok := m.Model(button.Model); !ok {
@@ -90,6 +93,26 @@ func (m *MapInfo) ButtonForDoor(doorModel int) (MapEntity, string, bool) {
 		}
 	}
 	return MapEntity{}, "", false
+}
+
+// ButtonDoorChain exposes the bounded, map-local planned link for diagnostics.
+// A BSP chain is only a candidate; the actual door effect must be observed.
+func (m *MapInfo) ButtonDoorChain(button, doorModel int) []MapEntity {
+	if m == nil {
+		return nil
+	}
+	for _, door := range m.Entities {
+		if door.Model != doorModel || (door.Class != "func_door" && door.Class != "func_door_rotating") || door.TargetName == "" {
+			continue
+		}
+		for _, source := range m.Entities {
+			if source.Model == button && source.Class == "func_button" {
+				path, _ := m.targetPath(source.Target, door.TargetName, []MapEntity{source}, map[string]bool{})
+				return path
+			}
+		}
+	}
+	return nil
 }
 
 // ClearShot reports whether the loaded BSP has a clear static line of fire.

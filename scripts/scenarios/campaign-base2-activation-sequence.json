@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "campaign-base2-activation-sequence",
+  "map": "base2",
+  "runner": "scripts/run_original_activation.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Sequence -Seed 101 -Port 31680",
+  "initial_position": [672, 1792, 24.125],
+  "test_goals": [[768, 1792, 24.125], [194, 2024, -151.875]],
+  "expected_links": [{"trigger_model": 23, "door_model": 24}, {"button_model": 34, "door_model": 33}],
+  "scope": "One native session on original base2 BSP/AAS and original target links. Test-only waypoint itinerary; bot discovers activators through ordinary gameplay. One initial teleport, no placement between stages, monsters removed. Not autonomous exit selection or full level completion.",
+  "acceptance": ["Native trigger contact, observed opening, prompt dependency release and first door crossing", "Second waypoint selected only after physical arrival at first", "Automatic button approach/touch without firing after first stage", "Native button press before second door opening before crossing", "Alive, same map, no teammate, no activation timeout, one initial teleport only"]
+}

@@ -7,6 +7,7 @@ import (
 )
 
 type buttonTask struct {
+	chain          []quake.MapEntity
 	campaign       bool
 	doorModel      int
 	buttonModel    int
@@ -16,6 +17,13 @@ type buttonTask struct {
 	phase          string
 	started        int
 	teammateEntity int
+}
+
+type CampaignButtonDecision struct {
+	DoorModel   int               `json:"door_model"`
+	ButtonModel int               `json:"button_model"`
+	Phase       string            `json:"phase"`
+	Chain       []quake.MapEntity `json:"chain"`
 }
 
 func (p *Planner) cancelButtonTask(frame int) {
@@ -37,7 +45,7 @@ func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
 		s.Frame < p.buttonCooldown || quake.Horizontal(s.Self, p.goalPoint) > 256 {
 		return nil
 	}
-	if p.World.Navigation != "ready" && p.World.Navigation != "unreachable" {
+	if p.World.Navigation != "ready" && p.World.Navigation != "unreachable" && p.World.Navigation != "direct_clear" {
 		return nil
 	}
 	if p.World.Navigation == "ready" && !(campaign && s.Self[2]-p.goalPoint[2] > 64) {
@@ -126,7 +134,7 @@ func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
 	if math.IsInf(best, 1) {
 		return nil
 	}
-	return &buttonTask{campaign: campaign, doorModel: model, buttonModel: button.Model, initial: doorOrigin,
+	return &buttonTask{chain: p.World.Geometry.ButtonDoorChain(button.Model, model), campaign: campaign, doorModel: model, buttonModel: button.Model, initial: doorOrigin,
 		stand: chosen[0], touch: chosen[1], phase: "approach", started: s.Frame, teammateEntity: s.TeammateEntity}
 }
 
@@ -225,4 +233,7 @@ func (p *Planner) applyButtonTask(s quake.Snapshot) {
 	p.World.Route = nil
 	p.hasGoal = true
 	p.World.Command.Skill = "button_" + task.phase
+	if task.campaign && p.World.Campaign != nil {
+		p.World.Campaign.Button = &CampaignButtonDecision{DoorModel: task.doorModel, ButtonModel: task.buttonModel, Phase: task.phase, Chain: task.chain}
+	}
 }
