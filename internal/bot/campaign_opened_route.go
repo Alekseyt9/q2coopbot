@@ -49,6 +49,13 @@ func (p *Planner) campaignOpenedRoute(s quake.Snapshot, goal quake.Vec3) ([]quak
 	if !p.Campaign || p.campaignDependency != nil || p.campaignUnitTrip != nil || len(p.campaignOpenedDoors) == 0 || !s.OnGround || p.Nav == nil || p.World.Geometry == nil {
 		return nil, false
 	}
+	return p.checkedCampaignGroundRoute(s, goal)
+}
+
+func (p *Planner) checkedCampaignGroundRoute(s quake.Snapshot, goal quake.Vec3) ([]quake.Waypoint, bool) {
+	if !p.Campaign || !s.OnGround || p.Nav == nil || p.World.Geometry == nil {
+		return nil, false
+	}
 	g := p.World.Geometry
 	distance := quake.Horizontal(s.Self, goal)
 	if distance < 8 || distance > 256 || math.Abs(goal[2]-s.Self[2]) > 1 || !g.PlayerMoveClear(s.Self, goal) {

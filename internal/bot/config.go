@@ -77,6 +77,7 @@ type ConfigFile struct {
 		ChangeAfterFrames            int    `json:"change_after_frames"`
 		TeleportMap                  string `json:"teleport_map"`
 		Teleport                     string `json:"teleport"`
+		CampaignGoal                 string `json:"campaign_goal"`
 		TeleportAfter                string `json:"teleport_after"`
 		TeleportAfterFrames          int    `json:"teleport_after_frames"`
 		TeleportReturn               string `json:"teleport_return"`
@@ -199,6 +200,7 @@ func LoadConfig(path string) (Config, error) {
 		cfg.TestChangeAfter = 20
 	}
 	cfg.TestTeleportMap, cfg.TestTeleport = file.Test.TeleportMap, file.Test.Teleport
+	cfg.TestCampaignGoal = file.Test.CampaignGoal
 	cfg.TestScenario = resolve(file.Test.Scenario)
 	cfg.TestSession = resolve(file.Test.Session)
 	cfg.TestSessionRole = file.Test.SessionRole

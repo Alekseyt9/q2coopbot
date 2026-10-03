@@ -59,6 +59,7 @@ type Config struct {
 	System1Model, System2Model          string
 	TestChangeMap, TestRCONPassword     string
 	TestTeleportMap, TestTeleport       string
+	TestCampaignGoal                    string
 	TestTeleportAfter                   string
 	TestTeleportAfterFrames             int
 	TestTeleportReturn                  string
@@ -112,6 +113,17 @@ func transitionMapArgument(destination, previous string) (string, error) {
 }
 
 func Run(ctx context.Context, cfg Config) error {
+	var testCampaignGoal *quake.Vec3
+	if cfg.TestCampaignGoal != "" {
+		if !cfg.Campaign || !cfg.FramePaced || cfg.Host != "127.0.0.1" || cfg.TestTeleportMap == "" || cfg.CheckpointRestore != "" {
+			return fmt.Errorf("test.campaign_goal requires loopback frame-paced campaign placement without checkpoint restore")
+		}
+		point, err := parseTestTeleport(cfg.TestCampaignGoal)
+		if err != nil {
+			return err
+		}
+		testCampaignGoal = &point
+	}
 	var restore *checkpoint.Capture
 	if cfg.CheckpointRestore != "" {
 		if !cfg.FramePaced || cfg.Host != "127.0.0.1" || cfg.CheckpointControl == "" || (cfg.CheckpointMode != "resume" && cfg.CheckpointMode != "fresh") || cfg.MemoryFile != "" || cfg.TestSession != "" || cfg.TestTeleport != "" || cfg.TestTeleportAfter != "" || cfg.TestSpawnSoldier != "" || cfg.TestInitialHealth != 0 || cfg.TestInvulnerable {
@@ -374,6 +386,7 @@ func Run(ctx context.Context, cfg Config) error {
 	client.planner.TestDisableSearch = cfg.TestDisableSearch
 	client.planner.testDoorPassSpeed = float64(cfg.TestDoorPassSpeed)
 	client.planner.TestDisableProbe = cfg.TestDisableProbe
+	client.planner.testCampaignGoal = testCampaignGoal
 	if cfg.TracePath != "" {
 		client.traceFile, err = os.Create(cfg.TracePath)
 		if err != nil {

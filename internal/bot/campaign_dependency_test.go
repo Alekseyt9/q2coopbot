@@ -1,10 +1,69 @@
 package bot
 
 import (
+	"context"
 	"os"
 	"q2coopbot/internal/quake"
 	"testing"
 )
+
+func TestCampaignWaypointRequiresIsolatedTestConfig(t *testing.T) {
+	for _, cfg := range []Config{
+		{TestCampaignGoal: "1,2,3"},
+		{Campaign: true, FramePaced: true, Host: "192.168.1.1", TestTeleportMap: "base2", TestCampaignGoal: "1,2,3"},
+		{Campaign: true, FramePaced: true, Host: "127.0.0.1", TestTeleportMap: "base2", TestCampaignGoal: "NaN,2,3"},
+		{Campaign: true, FramePaced: true, Host: "127.0.0.1", TestTeleportMap: "base2", TestCampaignGoal: "1,2,3", CheckpointRestore: "save.json"},
+	} {
+		if err := Run(context.Background(), cfg); err == nil {
+			t.Fatal("unsafe test waypoint configuration accepted")
+		}
+	}
+}
+
+func TestBase2ActivationDoorLip(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires base2 BSP/AAS")
+	}
+	g, err := quake.LoadMap(root, "base2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := quake.LoadAAS(root + "/maps/base2.aas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	from := quake.Vec3{676.75, 1787, 24.125}
+	to := quake.Vec3{705.43783045, 1759.12512988, 24.125}
+	for _, test := range []struct {
+		name     string
+		offset   float64
+		released bool
+	}{
+		{"closed", 0, false}, {"partial", -80, false}, {"eight_unit_lip", -120, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			d := &CampaignDependency{DoorModel: 24, ProbeFrom: from, ProbeTo: to, started: 1, Goal: quake.Vec3{476, 1788, 24.125}}
+			p := &Planner{Campaign: true, Nav: n, campaignDependency: d, World: World{Geometry: &g, Campaign: &CampaignDecision{}}}
+			s := quake.Snapshot{Frame: 50, OnGround: true, Self: from, Movers: []quake.Mover{{Model: 24, Origin: quake.Vec3{0, 0, test.offset}}}}
+			if test.released && g.MoverHullClear(s.Movers[0], from, to) {
+				t.Fatal("fixture must require native step over lip")
+			}
+			if test.offset == 0 {
+				if _, ok := p.campaignDependencyRoute(s, d.Goal); !ok {
+					t.Fatal("safe flat route to original trigger unavailable")
+				}
+				if _, ok := p.checkedCampaignGroundRoute(s, quake.Vec3{768, 1792, 24.125}); ok {
+					t.Fatal("flat fallback crossed closed door")
+				}
+			}
+			_, _, active := p.campaignDependencyGoal(s)
+			if active == test.released || (p.campaignDependency == nil) != test.released {
+				t.Fatal("incorrect opening confirmation", active, p.campaignDependency)
+			}
+		})
+	}
+}
 
 func TestBase2BSPCampaignDependency(t *testing.T) {
 	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")

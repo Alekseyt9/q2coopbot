@@ -90,7 +90,7 @@ func (p *Planner) campaignDependencyGoal(s quake.Snapshot) (quake.Vec3, bool, bo
 		return quake.Vec3{}, false, false
 	}
 	for _, mover := range s.Movers {
-		if mover.Model == d.DoorModel && quake.Distance(mover.Origin, d.initial) > 60 && (d.ProbeFrom == d.ProbeTo || p.World.Geometry.MoverHullClear(mover, d.ProbeFrom, d.ProbeTo)) {
+		if mover.Model == d.DoorModel && quake.Distance(mover.Origin, d.initial) > 60 && p.campaignDependencyPassable(s, d, mover) {
 			p.rememberCampaignDoor(mover)
 			p.campaignDependency = d.Parent
 			if d.Parent != nil {
@@ -121,6 +121,28 @@ func (p *Planner) campaignDependencyGoal(s quake.Snapshot) (quake.Vec3, bool, bo
 	}
 	p.World.Campaign.State = "unlock_exit_route"
 	return d.Goal, true, true
+}
+
+// Native doors can retain a small lip after opening. Use the same bounded
+// step clearance as movement, rather than waiting for a level hull sweep.
+func (p *Planner) campaignDependencyPassable(s quake.Snapshot, d *CampaignDependency, mover quake.Mover) bool {
+	if d.ProbeFrom == d.ProbeTo {
+		return true
+	}
+	g := p.World.Geometry
+	if g == nil {
+		return false
+	}
+	if g.MoverHullClear(mover, d.ProbeFrom, d.ProbeTo) {
+		return true
+	}
+	dx, dy := d.ProbeTo[0]-d.ProbeFrom[0], d.ProbeTo[1]-d.ProbeFrom[1]
+	distance := math.Hypot(dx, dy)
+	if distance == 0 {
+		return false
+	}
+	_, reason := g.DoorMoveBlockStep(s.Movers, d.ProbeFrom, dx, dy, distance)
+	return reason == ""
 }
 
 // Remove edges intersecting the observed blocking door. Ordinary guards still
@@ -176,6 +198,10 @@ func (p *Planner) campaignDependencyRoute(s quake.Snapshot, goal quake.Vec3) ([]
 		return nil, false
 	}
 	if route, ok := n.Route(s.Self, goal); ok {
+		p.campaignDependency.State = "approach_activation"
+		return route, true
+	}
+	if route, ok := p.checkedCampaignGroundRoute(s, goal); ok {
 		p.campaignDependency.State = "approach_activation"
 		return route, true
 	}

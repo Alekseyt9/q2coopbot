@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "campaign-base2-original-activation",
+  "map": "base2",
+  "runner": "scripts/run_original_activation.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Seed 101 -Port 31680",
+  "initial_position": [672, 1792, 24.125],
+  "test_goal": [768, 1792, 24.125],
+  "trigger_model": 23,
+  "door_model": 24,
+  "scope": "Original BSP/AAS and original trigger23→door24 link. Monsters removed; one initial loopback test teleport, then ordinary campaign navigation to a focused test waypoint. Requires native trigger contact, observed opening, prompt dependency release without timeout, and crossing alive. Not a full level or normal-spawn campaign completion test."
+}

@@ -1,0 +1,20 @@
+{
+  "id": "campaign-base2-original-activation",
+  "title": "Открытая дверь base2 с небольшим порогом не освобождает задачу активатора",
+  "map": "base2",
+  "kind": "campaign_dependency",
+  "status": "verified_full_parallel_2x",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/campaign-base2-original-activation.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_original_activation.ps1 -Seed 101 -Port 31680",
+  "evidence": "workspace/artifacts/original-activation-20261003-163618-061/report.json",
+  "failure_evidence": "workspace/artifacts/original-activation-20261003-162325-080/report.json",
+  "preliminary_evidence": "workspace/artifacts/original-activation-20261003-162758-320/report.json",
+  "symptom": "Фильтр AAS не находил короткий ровный путь к trigger23. После исправления бот нажимал триггер, но дверь24 оставляла порог высотой8; полная горизонтальная проверка корпуса не считала её открытой. Бот продолжал только после300 кадров таймаута.",
+  "resolution": "При отсутствии AAS пути допускается короткий ровный маршрут до256 с проверкой полного корпуса, опоры, всех movers и опасностей. Подтверждение открытой двери допускает безопасную native ступень до18 по DoorMoveBlockStep. Частичное открытие с высоким порогом отвергается. Runner проверяет всю трассу на таймаут и освобождение задачи не позже30 кадров после наблюдения открытия.",
+  "validation": {"timescale": 2, "parallelism": 2, "seeds": [101,102], "positive_passed": 2, "provenance_valid": true, "contact_frames": [41,47], "opening_frames": [45,51], "release_frames": [47,53]},
+  "preliminary_result": "Report162758-320 accepted по прежнему слабому контракту, но содержал activation_timeout; не является подтверждением исправления. Финальный report163618-061 проверен по усиленному контракту.",
+  "regression_evidence": ["workspace/artifacts/campaign-unit-trip-20261003-163653-611/report.json", "workspace/artifacts/campaign-unit-trip-20261003-163654-003/report.json"],
+  "missing_setup": ["Общая привязка run_episode_regressions отсутствует; использовать специализированный runner."],
+  "remaining_validation": ["Полный маршрут от исходного spawn с монстрами", "Несколько независимых связок на исходной карте", "Кнопки и shoot-активаторы", "Поворотные двери и мосты"]
+}

@@ -64,6 +64,18 @@ func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	p.campaignDoorMovers(s)
 	d.RememberedOpenDoors = p.campaignOpenedDoors
 	p.World.Campaign = d
+	if p.testCampaignGoal != nil {
+		d.Objective = "reach_test_waypoint"
+		d.State = "approach_test_waypoint"
+		if goal, ok, active := p.campaignDependencyGoal(s); active {
+			return goal, ok
+		}
+		if s.OnGround && quake.Distance(s.Self, *p.testCampaignGoal) < 12 {
+			d.State = "test_waypoint_reached"
+			return quake.Vec3{}, false
+		}
+		return *p.testCampaignGoal, true
+	}
 	next := p.CampaignNextMap
 	if p.campaignUnitTrip == nil && p.campaignDependency != nil && p.campaignDependency.State == "unit_activation_required" {
 		p.startCampaignUnitTrip(s)
