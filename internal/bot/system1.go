@@ -61,6 +61,9 @@ func NewTactician(model string) *Tactician {
 func (t *Tactician) options(w World) []string {
 	s := w.Snapshot
 	actions := []string{"follow"}
+	if intent := combatIntent(w); intent != nil && intent.Action == "engage" {
+		actions = nil // Route travel is not a tactic for an active campaign threat.
+	}
 	if w.Goal == "recover_health" {
 		actions = append(actions, "recover")
 	}
@@ -138,7 +141,8 @@ func (t *Tactician) tick(w World) {
 		Health         int16          `json:"health"`
 		Goal           string         `json:"goal"`
 		Combat         *CombatSpacing `json:"combat"`
-	}{plannedCover(w) != nil, w.Snapshot.Health, w.Goal, combatSpacing(w.Snapshot)}
+		Intent         *CombatIntent  `json:"intent"`
+	}{plannedCover(w) != nil, w.Snapshot.Health, w.Goal, combatSpacing(w.Snapshot), combatIntent(w)}
 	log.Printf("system1 request frame=%d cover_available=%t options=%v", w.Snapshot.Frame, state.CoverAvailable, options)
 	go func() {
 		start := time.Now()
@@ -160,6 +164,9 @@ func (t *Tactician) tick(w World) {
 			labels[i] = fmt.Sprintf("%c=%s", 'A'+i, description)
 		}
 		facts := fmt.Sprintf("Quake II health=%d. Goal=%s. ", state.Health, state.Goal)
+		if state.Intent != nil {
+			facts += fmt.Sprintf("Campaign intent=%s (%s). ", state.Intent.Action, state.Intent.Reason)
+		}
 		if c := state.Combat; c != nil {
 			facts += fmt.Sprintf("Enemy %s, weapon %s, distance%.0f, minimum%.0f, need_space=%t, threats=%d. ", c.Enemy, c.Weapon, c.Distance, c.Minimum, c.NeedSpace, c.VisibleThreats)
 		}

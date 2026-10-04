@@ -716,7 +716,9 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	p.World.Command = CommandDecision{MoveSource: "none", AimSource: "none"}
 	p.World.Jump = nil
 	s := p.World.Snapshot
-	defer func() { result = p.guardHandGrenade(s, p.limitMachinegunBurst(s, p.limitLaserMovement(s, result))) }()
+	defer func() {
+		result = p.guardBarrelShot(s, p.guardHandGrenade(s, p.limitMachinegunBurst(s, p.limitLaserMovement(s, result))))
+	}()
 	if !isRailgun(s.Weapon) || s.Health <= 0 {
 		p.railAim = railAim{}
 	}
@@ -760,6 +762,16 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	if p.World.Tactic != nil {
 		tactic = p.World.Tactic.Action
 	}
+	intent := combatIntent(p.World)
+	p.World.Command.CombatIntent = intent
+	if intent != nil && intent.Action == "engage" && (tactic == "follow" || tactic == "recover") {
+		// A route decision made before this threat/resource change is no
+		// longer permission to turn away from the current visible enemy.
+		tactic = ""
+	}
+	if intent != nil && intent.Action == "recover" {
+		tactic = "recover" // Resource travel outranks an older stationary attack.
+	}
 	if tactic == "hold" {
 		p.World.Command.LimitReason = "tactic_hold"
 		return cmd
@@ -786,7 +798,8 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	if isRailgun(s.Weapon) {
 		combatRange = 1000
 	}
-	if p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && tactic != "follow" && tactic != "recover" && enemy != nil && best < combatRange && (s.Ammo > 0 || strings.Contains(strings.ToLower(s.Weapon), "blast")) && enemy.ClearShot != nil && *enemy.ClearShot {
+	routeFire := intent != nil && intent.Action == "recover"
+	if p.World.Goal != "search_last_seen" && p.World.Goal != "probe_last_seen" && p.World.Goal != "touch_button" && p.World.Goal != "approach_button" && (tactic != "follow" && tactic != "recover" || routeFire) && enemy != nil && best < combatRange && (s.Ammo > 0 || strings.Contains(strings.ToLower(s.Weapon), "blast")) && enemy.ClearShot != nil && *enemy.ClearShot {
 		from, to := s.EyePoint(), enemy.AimPoint()
 		to, leadSeconds := p.projectileAim(s, *enemy)
 		p.World.Command.AimPoint = &to
@@ -840,6 +853,13 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		if p.World.Command.LimitReason == "" {
 			p.World.Command.LimitReason = "tactic_" + tactic + "_stationary"
 		}
+		return cmd
+	}
+	if intent != nil && intent.Action == "engage" {
+		// Keep firing while the model is pending or its combat target was
+		// lost. A current replacement threat still interrupts exit travel.
+		// Close-range spacing/retreat and verified cover/circle ran above.
+		p.World.Command.MoveLimitReason = "campaign_combat_hold"
 		return cmd
 	}
 	if exit, active := p.platformExitCommand(cmd); active {

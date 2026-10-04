@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "name": "base1-openjev-group-circle",
+  "map": "base1",
+  "runner": "scripts/run_solo_tactical_retreat.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -Group -Seed 2501 -Port 32030",
+  "bot_origin": [32, -224, 24],
+  "initial_health": 100,
+  "setup_hold_frames": 10,
+  "targets": [
+    {"class": "monster_infantry", "origin": [200, -224, 24], "setup": "one client spawn command"},
+    {"class": "monster_infantry", "origin": [200, -320, 24], "setup": "startup entity fixture"}
+  ],
+  "model": "hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0",
+  "scope": "Original BSP/AAS and native movers; original monsters removed, two vulnerable infantry. Blaster, normal pickups and explosive barrels remain. Different health fixture from solo circle. Real model choice, no invulnerability or forced tactical decision.",
+  "acceptance": [
+    "Live circle choice, native lateral movement and damage attributed to circle projectiles",
+    "At least two observed firing circle steps with two enemies present",
+    "No observed circle step reduces distance to another enemy by over four units, measured against its same-frame origin; this is a tolerance for observed movement, not a change to the two-unit planned-path limit",
+    "Both infantry killed, no bot death, no map transition or teammate",
+    "Distinct acknowledged seeds, timescale 2, parallelism 2, unchanged source fingerprint"
+  ]
+}

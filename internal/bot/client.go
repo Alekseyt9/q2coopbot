@@ -1004,6 +1004,7 @@ func (c *Client) run(ctx context.Context) error {
 					GrenadePrediction  *GrenadePrediction      `json:"grenade_prediction,omitempty"`
 					Explosions         []quake.ExplosionEvent  `json:"explosions,omitempty"`
 					Projectiles        []quake.Object          `json:"projectiles,omitempty"`
+					Barrels            []quake.Object          `json:"barrels,omitempty"`
 					ViewAngles         [3]int16                `json:"view_angles"`
 					GroundPrediction   *GroundPrediction       `json:"ground_prediction,omitempty"`
 					GroundSurface      string                  `json:"ground_surface"`
@@ -1080,6 +1081,7 @@ func (c *Client) run(ctx context.Context) error {
 					LaserEvidence:    c.planner.World.LaserEvidence,
 					Pickup:           c.planner.World.Pickup,
 					Obstacles:        c.planner.World.Snapshot.Obstacles,
+					Barrels:          c.planner.World.Snapshot.Barrels,
 					Defeated:         c.planner.World.Snapshot.Defeated,
 					ResourceYield:    c.planner.World.ResourceYield,
 					ResourceRisk:     c.planner.World.ResourceRisk,

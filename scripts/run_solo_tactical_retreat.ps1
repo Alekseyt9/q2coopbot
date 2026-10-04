@@ -1,6 +1,18 @@
 [CmdletBinding()]
 param([switch]$Worker,[switch]$Group,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
+function Measure-BarrelSafety($Rows,$Events) {
+    $actor=$Rows[0].self_entity
+    $blocked=@($Rows|Where-Object {$_.arbitration.limit_reason -eq 'barrel_blast_risk'})
+    @{
+        observed_frames=@($Rows|Where-Object {$_.barrels.Count -gt 0}).Count
+        suppressed_frames=$blocked.Count
+        suppressed_attack_violations=@($blocked|Where-Object {$_.sent_command.Buttons -band 1}).Count
+        self_health_damage=[int](($Events|Where-Object {$_.target -eq $actor -and $_.mod -eq 26}|Measure-Object live_health_damage -Sum).Sum)
+        barrel_contacts=@($Events|Where-Object {$_.attacker -eq $actor -and $_.target_class -eq 'misc_explobox' -and $_.mod -ne 26}).Count
+        scope='Observed stock barrels and Blaster shot guard; no unseen barrel or other weapon acceptance'
+    }
+}
 if($CoverFight){$Cover=$true}
 if($Group){$Circle=$true}
 if($Circle -and $Cover){throw 'Circle and Cover are separate fixtures'}
@@ -55,6 +67,10 @@ try{
     $bot=Start-Process $Client -ArgumentList "--config `"$config`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
     $null=$bot.WaitForExit(25000);if(!$bot.HasExited){throw 'Bot timeout'};if($bot.ExitCode){throw 'Bot failed'}
     $rows=@(Get-Content $trace|ForEach-Object {$_|ConvertFrom-Json})
+    . "$PSScriptRoot/read_damage_events.ps1"
+    $events=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log'))
+    $report.barrel_safety=Measure-BarrelSafety $rows $events
+    if($report.barrel_safety.suppressed_attack_violations){throw 'Barrel guard retained attack'}
     $selected=@($rows|Where-Object {$_.tactic.source -eq 'live' -and $_.tactic.action -eq 'retreat'})
     $steps=@($selected|Where-Object {$_.arbitration.move_source -eq 'combat_retreat' -and ($_.sent_command.Forward -ne 0 -or $_.sent_command.Side -ne 0) -and ($_.sent_command.Buttons -band 1) -and $_.arbitration.aim_source -eq 'enemy'})
     $byFrame=@{};foreach($r in $rows){$byFrame[[int]$r.frame]=$r}
@@ -129,6 +145,22 @@ try{
     if(@($commands|Select-String 'client command: teleport ').Count -ne 1 -or @($commands|Select-String 'client command: spawnentity ').Count -ne 1 -or ($commands -match 'client command: (god|kill|map|gamemap) ') -or @($commands|Select-String 'client command: give '|Where-Object { (!$Cover -and !$Circle) -or $_.Line -notlike "*client command: give health $initialHealth" }).Count){throw 'Unexpected setup/gameplay command'}
     if($Circle -and $report.circle_health_damage -le 0){throw 'Native damage from circle projectiles absent'}
     if($Cover -and $report.cover_window_health_damage -le 0){throw 'Native monster damage in cover firing window absent'};if(!$Cover -and !$Circle){$report.scope='Prepared single vulnerable native parasite, ordinary solo campaign commands; model-selected retreat plus shooting and observed movement, not general campaign acceptance'};$report.accepted=$true;$report.reason='accepted'
-}catch{$report.reason=$_.Exception.Message}
+}catch{
+    $report.reason=$_.Exception.Message
+    # Keep server ground truth even when gameplay acceptance fails early.
+    if((Test-Path $trace) -and (Test-Path (Join-Path $OutputRoot 'server.log'))){
+        try{
+            $failureRows=@(Get-Content $trace|ForEach-Object {$_|ConvertFrom-Json})
+            . "$PSScriptRoot/read_damage_events.ps1"
+            $failureEvents=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log'))
+            $failureActor=$failureRows[0].self_entity
+            $report.barrel_safety=Measure-BarrelSafety $failureRows $failureEvents
+            $diagnostic=@{reason=$report.reason;minimum_health=($failureRows.health|Measure-Object -Minimum).Minimum;maps=@($failureRows.map|Sort-Object -Unique);last=($failureRows|Select-Object -Last 1 frame,map,self,health,goal,arbitration);damage=Measure-BotDamage $failureEvents $failureActor;kills=@($failureEvents|Where-Object {$_.attacker -eq $failureActor -and $_.target_class -eq $enemyClass -and $_.killed}).Count}
+            $diagnosticPath=Join-Path $OutputRoot 'failure-diagnostic.json'
+            $diagnostic|ConvertTo-Json -Depth 8|Set-Content $diagnosticPath
+            $report.failure_diagnostic=$diagnosticPath
+        }catch{$report.diagnostic_error=$_.Exception.Message}
+    }
+}
 finally{foreach($process in @($bot,$server)){if($process -and !$process.HasExited){Stop-Process -Id $process.Id;$null=$process.WaitForExit(5000)}};$report|ConvertTo-Json -Depth 8|Set-Content (Join-Path $OutputRoot 'report.json')}
 if(!$report.accepted){throw $report.reason}

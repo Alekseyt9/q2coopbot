@@ -766,6 +766,7 @@ type Snapshot struct {
 	DeltaAngles        [3]int16          `json:"delta_angles"`
 	Enemies            []Object          `json:"enemies"`
 	Projectiles        []Object          `json:"projectiles,omitempty"`
+	Barrels            []Object          `json:"barrels,omitempty"`
 	Obstacles          []Object          `json:"obstacles,omitempty"`
 	Defeated           []Object          `json:"defeated,omitempty"`
 	Pickups            []Object          `json:"pickups"`
@@ -840,6 +841,9 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 	}
 	for _, entity := range f.Entities {
 		path := strings.ToLower(d.Config[32+entity.Model])
+		if path == "models/objects/barrels/tris.md2" && entity.Solid != 0 {
+			s.Barrels = append(s.Barrels, Object{ID: entity.Number, Class: "misc_explobox", Origin: entity.Origin, Solid: entity.Solid})
+		}
 		if path == "models/objects/grenade2/tris.md2" {
 			s.Projectiles = append(s.Projectiles, Object{ID: entity.Number, Class: "hand_grenade", Origin: entity.Origin})
 		}

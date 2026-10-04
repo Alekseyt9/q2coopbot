@@ -1,0 +1,88 @@
+{
+  "id": "base1-openjev-group-circle",
+  "title": "Боковой манёвр с двумя infantry: безопасные дуги, нестабильное завершение боя",
+  "map": "base1",
+  "kind": "combat_tactics",
+  "status": "partial_native_validation",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/base1-openjev-group-circle.json",
+  "evidence": "workspace/artifacts/solo-tactical-retreat-20261004-000055-464/report.json",
+  "earlier_source_evidence": "workspace/artifacts/solo-tactical-retreat-20261003-235304-347/report.json",
+  "validation": {
+    "parallelism": 2,
+    "scope": "After adding occluded-threat retreat guard; initial 2301/2302 packet predates that change",
+    "results": [
+      {
+        "seed": 2401,
+        "accepted": false,
+        "reason": "Native target kill absent",
+        "group_circle_frames": 15,
+        "group_observed_steps": 15,
+        "group_unsafe_steps": 0,
+        "health": 76,
+        "kills": 0,
+        "report": "workspace/artifacts/solo-tactical-retreat-20261003-235631-096/report.json"
+      },
+      {
+        "seed": 2402,
+        "accepted": true,
+        "reason": "accepted",
+        "group_circle_frames": 33,
+        "group_observed_steps": 33,
+        "group_unsafe_steps": 0,
+        "health": 93,
+        "kills": 2,
+        "report": "workspace/artifacts/solo-tactical-retreat-20261003-235631-096/report.json"
+      },
+      {
+        "seed": 2501,
+        "accepted": false,
+        "reason": "Unexpected map/teammate/death",
+        "group_circle_frames": 27,
+        "group_observed_steps": 27,
+        "group_unsafe_steps": 0,
+        "health": null,
+        "kills": null,
+        "report": "workspace/artifacts/solo-tactical-retreat-20261004-000055-464/report.json"
+      },
+      {
+        "seed": 2502,
+        "accepted": false,
+        "reason": "Native target kill absent",
+        "group_circle_frames": 21,
+        "group_observed_steps": 21,
+        "group_unsafe_steps": 0,
+        "health": 87,
+        "kills": 1,
+        "report": "workspace/artifacts/solo-tactical-retreat-20261004-000055-464/report.json"
+      }
+    ],
+    "timescale": 2,
+    "full_acceptance_passed": 1,
+    "total": 4
+  },
+  "remaining_validation": [
+    "Barrel shot guard partially validated: see base1-group-barrel-self-kill; other weapons and moving into explosions remain open",
+    "Seed2401 leaves with zero kills; seed2502 leaves with one kill; both continue campaign route, but fail this full-fight acceptance",
+    "Native close-range grouped retreat is not separately accepted; occluded flank safety has asset-backed Go coverage",
+    "No mixed monster/weapon, teammate or general campaign safety claim",
+    "General episode dispatcher not bound"
+  ],
+  "barrel_guard_validation": {
+    "reports": [
+      "workspace/artifacts/solo-tactical-retreat-20261004-001632-591/report.json",
+      "workspace/artifacts/solo-tactical-retreat-20261004-001959-329/report.json"
+    ],
+    "seeds": [
+      2501,
+      2502,
+      2801,
+      2802
+    ],
+    "full_acceptance_passed": 2,
+    "total": 4,
+    "deaths": 0,
+    "barrel_self_health_damage": 0,
+    "scope": "After Blaster barrel guard; preserve earlier failures as earlier-source evidence"
+  }
+}
