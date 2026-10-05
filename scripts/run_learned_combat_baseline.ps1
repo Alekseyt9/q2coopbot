@@ -5,7 +5,8 @@ param(
     [ValidateSet(1,2)][int]$Timescale=2,
     [ValidateRange(20,500)][int]$GameFrames=300,
     [int]$Seed=9300,
-    [ValidateSet(0,10,20,30)][int]$TrainingMonsterHealth=0,
+    [ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,
+    [ValidateSet(0,100)][int]$ReleaseGameFrame=0,
     [ValidateRange(1024,65530)][int]$Port=32940,
     [ValidateSet('stocked','blaster','shotgun','hyper','rail','scarce')][string]$Loadout='stocked',
     [switch]$Mixed,
@@ -25,6 +26,7 @@ if($Loadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){thro
 if($TeacherVertical -and (!$Synchronous -or $CombatMode -ne 'rules' -or $Loadout -ne 'shotgun' -or $Feedback)){throw 'Vertical exercise requires synchronous fixed Shotgun rules without feedback'}
 if($RewardConfig -and !$Synchronous){throw 'Reward export requires -Synchronous'}
 if($TrainingMonsterHealth -and (!$Synchronous -or $Loadout -ne 'blaster' -or $Mixed -or $HealthKit -or $Feedback)){throw 'Curriculum requires isolated synchronous Blaster fixture'}
+if($ReleaseGameFrame -and (!$Synchronous -or $Loadout -ne 'blaster' -or $Mixed -or $HealthKit -or $GameFrames -lt 150)){throw 'Fixed release requires isolated synchronous Blaster fixture and >=150 game frames'}
 $repo=Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/harness_manifest.ps1"
 if(!$OutputRoot){$OutputRoot=Join-Path $repo ('workspace/artifacts/learned-combat-baseline-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))}
@@ -93,6 +95,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
         $arguments+=@('-CombatMode',$using:CombatMode);if($episodeProvider){$arguments+=@('-ProviderFile',$episodeProvider)}
         $arguments+=@('-GameFrames',$using:GameFrames)
         $arguments+=@('-TrainingMonsterHealth',$using:TrainingMonsterHealth)
+        $arguments+=@('-ReleaseGameFrame',$using:ReleaseGameFrame)
         if($using:Synchronous){$arguments+='-Synchronous'}
         if($using:TeacherVertical){$arguments+='-TeacherVertical'}
         if($using:Mixed){$arguments+=@('-ParasiteMixed','-ParasiteMixedClass','monster_gunner')}
@@ -148,6 +151,17 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             & $using:exporter @exportArguments
             if($LASTEXITCODE){throw 'Transition export failed'}
             $datasetReport=Get-Content -LiteralPath (Join-Path $dataset 'report.json') -Raw|ConvertFrom-Json
+            if($using:Synchronous){
+                $rngLog=Get-Content -LiteralPath (Join-Path $out 'server.log')
+                $rng=@($rngLog|Select-String '^g_test_rng_start game_frame=(\d+) phase=post_frame seed=(\d+) cursor_before=(\d+) cursor_after=256$')
+                $rngRelease=@($rngLog|Select-String 'g_test_combat_start game_frame=(\d+) ready=1 seed=(\d+)$')
+                if($rng.Count -ne 1 -or $rngRelease.Count -ne 1 -or [int]$rng[0].Matches[0].Groups[2].Value -ne ($using:Seed+$index) -or $rng[0].Matches[0].Groups[1].Value -ne $rngRelease[0].Matches[0].Groups[1].Value){throw 'Post-frame RNG seed not confirmed'}
+                if($using:ReleaseGameFrame -and [int]$rng[0].Matches[0].Groups[1].Value -ne $using:ReleaseGameFrame){throw 'Fixed release frame differs'}
+                if($using:ReleaseGameFrame){
+                    $weapon=@($rngLog|Select-String '^g_test_weapon_start game_frame=(\d+) actor=1 weapon=Blaster gunframe_before=\d+ gunframe_after=9$')
+                    if($weapon.Count -ne 1 -or [int]$weapon[0].Matches[0].Groups[1].Value -ne $using:ReleaseGameFrame){throw 'Fixed weapon phase differs'}
+                }
+            }
             $curriculumProof=$null
             if($using:TrainingMonsterHealth){
                 $nativeLog=Get-Content -LiteralPath (Join-Path $out 'server.log')
@@ -211,6 +225,9 @@ $manifest=[ordered]@{
     remote_peer=[bool]$remoteProvider
     feedback=[bool]$Feedback;feedback_version=$(if($Feedback){'combat_feedback_v1'}else{$null});relay_sha256=$(if($Feedback){(Get-FileHash -LiteralPath $relay).Hash}else{$null})
     training_monster_health=$TrainingMonsterHealth
+    post_frame_rng_reset=[bool]$Synchronous
+    release_game_frame=$ReleaseGameFrame
+    game_frame_budget=$(if($Synchronous){'Commands after combat barrier; preparation excluded'}else{'All commands; preparation included'})
     observation_version='combat_observation_v3';action_version='combat_action_v1';reward_version=$(if($RewardConfig){(Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json).version}else{$null});reward_config_sha256=$(if($RewardConfig){$rewardHash}else{$null});reward_config=$(if($RewardConfig){Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json}else{$null});server_outcome_version=$(if($Synchronous){'server_step_effects_v1'}else{'server_damage_window_v1'})
     timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;mixed=[bool]$Mixed;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous;teacher_vertical=[bool]$TeacherVertical
     reset=$(if($Synchronous){'Cold native server restart per episode; first usable fixture and fresh inventory verified; single-client barrier confirms independent episode RNG seed. Full-world/AI equivalence remains unconfirmed.'}else{'Cold native server restart per episode, verified first usable observed fixture fields. Inventory/RNG/AI/full-world equivalence remain unconfirmed.'})

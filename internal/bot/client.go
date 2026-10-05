@@ -378,11 +378,7 @@ func (c *Client) handle(packet []byte) {
 		c.seenCommands[request] = true
 		switch {
 		case request == "test_combat_go" && c.testCombatBarrier:
-			if c.testSynchronous {
-				c.combatControl.history = policy.History{}
-			}
-			c.testCombatGo = true
-			c.testCombatGoFrame = c.latestFrame
+			c.beginTestCombat()
 		case request == "changing":
 			c.begun = false
 			c.beginPending = ""

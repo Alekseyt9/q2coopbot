@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet(0,10,20,30)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$Synchronous,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
+param([ValidateSet(0,100)][int]$ReleaseGameFrame=0,[ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$Synchronous,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
 function Measure-BarrelSafety($Rows,$Events) {
     $actor=$Rows[0].self_entity
@@ -38,7 +38,7 @@ if(!$Worker){
         $args+=@('-Timescale',$using:Timescale); if($using:Rules){$args+='-Rules'};if($using:CombatCapture){$args+='-CombatCapture'}
         $args+=@('-CombatMode',$using:CombatMode);if($using:ProviderFile){$args+=@('-ProviderFile',$using:ProviderFile)}
         $args+=@('-GameFrames',$using:GameFrames)
-        $args+=@('-TrainingMonsterHealth',$using:TrainingMonsterHealth)
+        $args+=@('-TrainingMonsterHealth',$using:TrainingMonsterHealth);$args+=@('-ReleaseGameFrame',$using:ReleaseGameFrame)
         if($using:Synchronous){$args+='-Synchronous'}
         if($using:RequireMixedDetour){$args+='-RequireMixedDetour'}
         if($using:Cover){$args+='-Cover'}
@@ -86,7 +86,7 @@ try{
     $args="-portable +set ip 127.0.0.1 +set noipx 1 +set dedicated 1 +set coop 1 +set deathmatch 0 +set cheats 1 +set maxclients 4 +set port $Port +set timescale $Timescale +set rcon_password $env:Q2COOPBOT_TEST_RCON +set sv_test_unlimited_loopback 1 +set g_test_damage 1 +set g_test_seed $Seed +map base1"
     if($CombatCapture -and !$Synchronous){$args=$args.Replace('+map base1','+set sv_test_trace_client SoloRetreatBot +map base1')}
     if($Synchronous){
-        @("set sv_harness_instance learning-$Seed",'set sv_test_trace_client SoloRetreatBot','set sv_test_lockstep_client SoloRetreatBot','set g_test_combat_barrier 1','set g_test_combat_clients 1',"set g_test_combat_monster_health $TrainingMonsterHealth")|Set-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Encoding ascii
+        @("set sv_harness_instance learning-$Seed",'set sv_test_trace_client SoloRetreatBot','set sv_test_lockstep_client SoloRetreatBot','set g_test_combat_barrier 1','set g_test_combat_clients 1',"set g_test_combat_monster_health $TrainingMonsterHealth","set g_test_combat_release_frame $ReleaseGameFrame")|Set-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Encoding ascii
         $args=$args.Replace('+map base1','+exec learning-test.cfg +map base1')
     }
     if($Recovery -or $CornerEscape -or $ParasiteWeapon){$args=$args.Replace('+map base1',"+set skill $RecoverySkill +map base1");$report.skill=$RecoverySkill;$report.initial_health=$(if($CornerEscape){65}elseif($ParasiteWeapon){$ParasiteHealth}else{$RecoveryHealth})}

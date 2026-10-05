@@ -86,6 +86,8 @@ func run() error {
 		ModelSHA       string                   `json:"model_weights_sha256"`
 		Reward         learningenv.RewardConfig `json:"reward_config"`
 		TrainingHealth int                      `json:"training_monster_health"`
+		PostFrameRNG   bool                     `json:"post_frame_rng_reset"`
+		ReleaseFrame   int                      `json:"release_game_frame"`
 	}
 	if e := read(filepath.Join(*batch, "manifest.json"), &manifest); e != nil {
 		return e
@@ -235,6 +237,27 @@ func run() error {
 		logFile.Close()
 		if proofErr != nil {
 			return proofErr
+		}
+		if manifest.PostFrameRNG {
+			logFile, e = os.Open(filepath.Join(r.Root, "server.log"))
+			if e != nil {
+				return e
+			}
+			proofErr = learningenv.VerifyPostFrameRNG(logFile, r.Seed, manifest.ReleaseFrame)
+			logFile.Close()
+			if proofErr != nil {
+				return proofErr
+			}
+			if manifest.ReleaseFrame > 0 {
+				for _, step := range steps {
+					if step.Owner == "provider" {
+						if step.Observation.GunFrame != 9 {
+							return fmt.Errorf("first policy weapon phase differs")
+						}
+						break
+					}
+				}
+			}
 		}
 		if target != 0 {
 			found := false

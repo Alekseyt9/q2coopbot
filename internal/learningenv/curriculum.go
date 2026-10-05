@@ -14,7 +14,7 @@ var curriculumPattern = regexp.MustCompile(`^g_test_curriculum monster_health ma
 // VerifyCurriculum checks offline initialization evidence; health is never a
 // policy feature. Ordinary episodes must contain no curriculum override.
 func VerifyCurriculum(r io.Reader, health, seed int) (int, error) {
-	if health != 0 && health != 10 && health != 20 && health != 30 {
+	if health != 0 && health != 10 && health != 20 && health != 30 && health != 40 && health != 60 && health != 100 {
 		return 0, fmt.Errorf("unsupported curriculum health")
 	}
 	s := bufio.NewScanner(r)
