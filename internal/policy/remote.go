@@ -151,6 +151,12 @@ func LoadProvider(path string, synchronous bool) (Provider, error) {
 	if header.Kind == MLPKind {
 		return LoadMLP(path)
 	}
+	if header.Kind == PPOKind {
+		if !synchronous {
+			return nil, fmt.Errorf("PPO pilot requires synchronous harness")
+		}
+		return LoadPPO(path)
+	}
 	if len(data) > 65536 {
 		return nil, fmt.Errorf("provider config too large")
 	}

@@ -1,0 +1,13 @@
+{
+  "version": "combat_dataset_spec_v1",
+  "selection_version": "teacher_tracking_candidates_v3",
+  "condition": {"map":"base1","loadout":"blaster","mixed":false,"health_kit":false,"synchronous":true},
+  "episodes": [
+    {"seed":13200,"split":"train"},{"seed":13201,"split":"train"},
+    {"seed":13202,"split":"train"},{"seed":13203,"split":"train"},
+    {"seed":13204,"split":"train"},{"seed":13205,"split":"train"},
+    {"seed":13206,"split":"train"},{"seed":13207,"split":"train"},
+    {"seed":13208,"split":"validation"},{"seed":13209,"split":"validation"},
+    {"seed":13210,"split":"test"},{"seed":13211,"split":"test"}
+  ]
+}

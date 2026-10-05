@@ -39,7 +39,7 @@ type Spec struct {
 }
 
 func (s Spec) Validate() error {
-	if s.Version != "combat_dataset_spec_v1" || s.SelectionVersion != SelectionVersion && s.SelectionVersion != ReleaseSelectionVersion && s.SelectionVersion != VerticalSelectionVersion || s.Condition.Map == "" || !s.Condition.Synchronous || len(s.Episodes) == 0 {
+	if s.Version != "combat_dataset_spec_v1" || s.SelectionVersion != SelectionVersion && s.SelectionVersion != ReleaseSelectionVersion && s.SelectionVersion != VerticalSelectionVersion && s.SelectionVersion != TrackingSelectionVersion || s.Condition.Map == "" || !s.Condition.Synchronous || len(s.Episodes) == 0 {
 		return fmt.Errorf("invalid dataset specification")
 	}
 	if (s.SelectionVersion == VerticalSelectionVersion) != s.Condition.TeacherVertical {
@@ -375,7 +375,7 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 			report.VerticalReady = false
 		}
 	}
-	if spec.SelectionVersion == ReleaseSelectionVersion && !report.AttackReady {
+	if (spec.SelectionVersion == ReleaseSelectionVersion || spec.SelectionVersion == TrackingSelectionVersion) && !report.AttackReady {
 		report.Ready = false
 	}
 	if spec.SelectionVersion == VerticalSelectionVersion && !report.VerticalReady {

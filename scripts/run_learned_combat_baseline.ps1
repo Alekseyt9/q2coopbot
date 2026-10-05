@@ -35,6 +35,9 @@ if($ProviderFile){$ProviderFile=(Resolve-Path -LiteralPath $ProviderFile).Path}
 $remoteProvider=$false
 $providerKind=$null
 if($ProviderFile){$providerKind=(Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).kind;$remoteProvider=($providerKind -eq 'combat_remote_v1')}
+$ppoProvider=($providerKind -eq 'combat_ppo_v1')
+$trainedProvider=$providerKind -in @('combat_bc_mlp_v1','combat_ppo_v1')
+if($ppoProvider -and !$Synchronous){throw 'PPO pilot requires synchronous mode'}
 if($remoteProvider -and !$Synchronous){throw 'Remote policy requires -Synchronous'}
 if($Feedback -and (!$remoteProvider -or !$RewardConfig)){throw 'Feedback requires remote provider, synchronous mode and reward config'}
 if($RewardConfig){$RewardConfig=(Resolve-Path -LiteralPath $RewardConfig).Path}
@@ -65,12 +68,12 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
         $index=$worker*$using:EpisodesPerWorker+$episode
         $out=Join-Path $using:OutputRoot "worker-$worker-episode-$episode"
 		$episodeProvider=$using:ProviderFile
-		if($using:remoteProvider){
+		if($using:remoteProvider -or $using:ppoProvider){
 			$template=Get-Content -LiteralPath $using:ProviderFile -Raw|ConvertFrom-Json
-			$template.episode="worker-$worker-seed-$($using:Seed+$index)"
-			$template.seed=$using:Seed+$index
+			if($using:remoteProvider){$template.episode="worker-$worker-seed-$($using:Seed+$index)";$template.seed=$using:Seed+$index}
+			if($using:ppoProvider){$template.sampling_seed=$using:Seed+$index}
 			$episodeProvider=Join-Path $using:OutputRoot "provider-worker-$worker-episode-$episode.json"
-			$template|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $episodeProvider -Encoding utf8NoBOM
+			$template|ConvertTo-Json -Depth 10|Set-Content -LiteralPath $episodeProvider -Encoding utf8NoBOM
 		}
 		$episodeProviderHash=$(if($episodeProvider){(Get-FileHash -LiteralPath $episodeProvider).Hash}else{$null})
 		$feedbackProcess=$null
@@ -192,7 +195,7 @@ if($ProviderFile){$valid=$valid -and $probeHash -eq (Get-FileHash -LiteralPath $
 if($RewardConfig){$valid=$valid -and $rewardHash -eq (Get-FileHash -LiteralPath $RewardConfig).Hash}
 $usable=@($results | Where-Object capture_valid)
 $manifest=[ordered]@{
-    version=2;stage=$(if($providerKind -eq 'combat_bc_mlp_v1'){'R4a BC control pilot'}else{'R1 dispatch and R2 transition pilot'});provider=$CombatMode;provider_kind=$providerKind;model_weights=$(if($providerKind -eq 'combat_bc_mlp_v1'){$ProviderFile}else{$null});model_weights_sha256=$(if($providerKind -eq 'combat_bc_mlp_v1'){$probeHash}else{$null});probe_sha256=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{$null})
+    version=2;stage=$(if($ppoProvider){'R4b PPO rollout pilot'}elseif($trainedProvider){'R4a BC control pilot'}else{'R1 dispatch and R2 transition pilot'});provider=$CombatMode;provider_kind=$providerKind;model_weights=$(if($trainedProvider){$ProviderFile}else{$null});model_weights_sha256=$(if($trainedProvider){$probeHash}else{$null});probe_sha256=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{$null});exporter_sha256=(Get-FileHash -LiteralPath $exporter).Hash
     remote_peer=[bool]$remoteProvider
     feedback=[bool]$Feedback;feedback_version=$(if($Feedback){'combat_feedback_v1'}else{$null});relay_sha256=$(if($Feedback){(Get-FileHash -LiteralPath $relay).Hash}else{$null})
     observation_version='combat_observation_v3';action_version='combat_action_v1';reward_version=$(if($RewardConfig){'combat_reward_v1'}else{$null});reward_config_sha256=$(if($RewardConfig){$rewardHash}else{$null});reward_config=$(if($RewardConfig){Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json}else{$null});server_outcome_version=$(if($Synchronous){'server_step_effects_v1'}else{'server_damage_window_v1'})

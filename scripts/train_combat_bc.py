@@ -58,6 +58,12 @@ def main():
     with torch.no_grad():
         for split,(sx,sy,sm,sa,sv) in datasets.items():
             raw=model(sx);metrics={'rows':len(sx),'masked_loss':float(loss(raw,sy,sm,sa,sv))}
+            coverage={}
+            for row in splits[split]:
+                weapon=row['observation']['weapon'];counts=coverage.setdefault(weapon,{'rows':0,'movement':0,'aim':0,'attack':0,'vertical':0})
+                counts['rows']+=1
+                for index,head in enumerate(['movement','aim','attack','vertical']):counts[head]+=int(row['mask'][index])
+            metrics['head_coverage_by_weapon']=coverage
             for head,cols,name,scale in [(0,slice(0,2),'movement_mae',1),(1,slice(2,4),'aim_mae_degrees',180)]:
                 metrics[name]=float((raw[sm[:,head],cols].tanh()-sy[sm[:,head],cols]).abs().mean()*scale)
             predicted=raw[:,4]>=0;am=sm[:,2];metrics['attack_accuracy']=float((predicted[am]==sa[am].bool()).float().mean());metrics['attack_positive_recall']=float(predicted[am & (sa==1)].float().mean());metrics['attack_negative_recall']=float((~predicted[am & (sa==0)]).float().mean());metrics['vertical_accuracy']=float((raw[sm[:,3],5:].argmax(1)==sv[sm[:,3]]).float().mean());report['metrics'][split]=metrics

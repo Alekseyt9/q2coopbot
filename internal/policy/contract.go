@@ -185,6 +185,8 @@ func ControlChanged(a, b quake.UserCmd) bool {
 }
 
 type Capture struct {
+	TeacherAimSource string        `json:"teacher_aim_source,omitempty"`
+	TeacherAimEntity int           `json:"teacher_aim_entity,omitempty"`
 	TeacherPrimitive string        `json:"teacher_primitive,omitempty"`
 	ClientSequence   uint32        `json:"client_sequence"`
 	Selection        *Selection    `json:"selection,omitempty"`
@@ -207,6 +209,7 @@ type Intervention struct {
 }
 
 type Selection struct {
+	Sample           *Sample        `json:"sample,omitempty"`
 	Mode             string         `json:"mode"`
 	Owner            string         `json:"owner"`
 	ProviderVersion  string         `json:"provider_version,omitempty"`

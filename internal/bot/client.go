@@ -1023,12 +1023,19 @@ func (c *Client) run(ctx context.Context) error {
 						combat.TeacherPrimitive = "vertical_flat_v1"
 						combat.LabelQuality = "scripted primitive; not tactical movement or positive combat quality"
 					}
+					if !directCombat {
+						combat.TeacherAimSource = c.planner.World.Command.AimSource
+						combat.TeacherAimEntity = c.planner.World.Command.AimEntity
+					}
 					if directCombat {
 						combat.Provider = combatSelection.ProviderVersion
 						combat.Proposed = *combatSelection.Candidate
 						combat.LabelQuality = "diagnostic_probe; not learned weights or positive demonstration"
 						if strings.HasPrefix(combat.Provider, "bc_mlp:") {
 							combat.LabelQuality = "trained BC candidate; unaccepted gameplay; not positive teacher demonstration"
+						}
+						if strings.HasPrefix(combat.Provider, "ppo:") {
+							combat.LabelQuality = "stochastic PPO rollout; not teacher demonstration or accepted combat"
 						}
 					}
 				}

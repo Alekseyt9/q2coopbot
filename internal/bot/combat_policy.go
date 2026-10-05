@@ -77,6 +77,9 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 	}
 	start := time.Now()
 	a, err := boundedDecision(b.provider, o)
+	if p, ok := b.provider.(*policy.PPO); ok {
+		sel.Sample = p.LastSample()
+	}
 	sel.Candidate = &a
 	var proposed quake.UserCmd
 	if err == nil {

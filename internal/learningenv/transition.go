@@ -14,6 +14,7 @@ const StepVersion = "combat_step_v1"
 const OutcomeVersion = "observed_outcome_v1"
 
 type Step struct {
+	Sample         *policy.Sample        `json:"sample,omitempty"`
 	Native         *NativeStep           `json:"native_step,omitempty"`
 	ClientSequence uint32                `json:"client_sequence"`
 	Execution      *Execution            `json:"server_execution"`
@@ -127,6 +128,7 @@ func (a *Assembler) finish(reason string, next *policy.Observation) (*Step, *Out
 		ClientSequence: p.ClientSequence,
 		Action:         p.Proposed, AppliedAction: p.Applied, LabelQuality: p.LabelQuality, Command: p.AppliedCommand, Next: next, Owner: owner(*p), Provider: p.Provider, Reason: reason, Truncated: reason != ""}
 	if p.Selection != nil {
+		s.Sample = p.Selection.Sample
 		s.Interventions = p.Selection.Interventions
 	}
 	o := &Outcome{Version: OutcomeVersion, Worker: a.Worker, Episode: a.Episode, Step: a.index}

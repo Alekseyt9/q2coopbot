@@ -48,26 +48,35 @@ func LoadMLP(path string) (*MLP, error) {
 	if f.Kind != MLPKind || f.Features != FeatureVersion || len(f.Layers) != 3 {
 		return nil, fmt.Errorf("unsupported BC architecture")
 	}
+	if err := validateLayers(f.Layers, 8); err != nil {
+		return nil, err
+	}
+	h := sha256.Sum256(data)
+	return &MLP{f, "bc_mlp:" + hex.EncodeToString(h[:])}, nil
+}
+func validateLayers(layers []DenseLayer, outputs int) error {
+	if len(layers) != 3 {
+		return fmt.Errorf("three dense layers required")
+	}
 	x, _ := Features(Observation{})
 	n := len(x)
-	for i, l := range f.Layers {
-		if len(l.Weight) != len(l.Bias) || len(l.Bias) == 0 || len(l.Bias) > 128 || i == 2 && len(l.Bias) != 8 {
-			return nil, fmt.Errorf("bad layer width")
+	for i, l := range layers {
+		if len(l.Weight) != len(l.Bias) || len(l.Bias) == 0 || len(l.Bias) > 128 || i == 2 && len(l.Bias) != outputs {
+			return fmt.Errorf("bad layer width")
 		}
 		for r, row := range l.Weight {
 			if len(row) != n {
-				return nil, fmt.Errorf("bad layer input")
+				return fmt.Errorf("bad layer input")
 			}
 			for _, v := range append(append([]float64{}, row...), l.Bias[r]) {
 				if math.IsNaN(v) || math.IsInf(v, 0) || math.Abs(v) > 1e4 {
-					return nil, fmt.Errorf("bad weight")
+					return fmt.Errorf("bad weight")
 				}
 			}
 		}
 		n = len(l.Bias)
 	}
-	h := sha256.Sum256(data)
-	return &MLP{f, "bc_mlp:" + hex.EncodeToString(h[:])}, nil
+	return nil
 }
 func (p *MLP) Version() string { return p.version }
 func (p *MLP) Raw(o Observation) ([]float64, error) {

@@ -1,0 +1,289 @@
+// Re-export native proof before preparing one frozen on-policy PPO batch.
+package main
+
+import (
+	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"math"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"q2coopbot/internal/learningenv"
+	"q2coopbot/internal/policy"
+	"reflect"
+	"strings"
+)
+
+func sha(path string) (string, error) {
+	b, e := os.ReadFile(path)
+	if e != nil {
+		return "", e
+	}
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:]), nil
+}
+func read(path string, v any) error {
+	b, e := os.ReadFile(path)
+	if e != nil {
+		return e
+	}
+	return json.Unmarshal(b, v)
+}
+func rows[T any](path string) ([]T, error) {
+	f, e := os.Open(path)
+	if e != nil {
+		return nil, e
+	}
+	defer f.Close()
+	s := bufio.NewScanner(f)
+	s.Buffer(make([]byte, 65536), 4*1024*1024)
+	var result []T
+	for s.Scan() {
+		var x T
+		if e = json.Unmarshal(s.Bytes(), &x); e != nil {
+			return nil, e
+		}
+		result = append(result, x)
+	}
+	return result, s.Err()
+}
+
+type row struct {
+	Features      []float64             `json:"features"`
+	NextValue     float64               `json:"next_value"`
+	Sample        policy.Sample         `json:"sample"`
+	Reward        float64               `json:"reward"`
+	Terminal      bool                  `json:"terminal"`
+	Truncated     bool                  `json:"truncated"`
+	Seed          int                   `json:"seed"`
+	Index         int                   `json:"index"`
+	Frame         int                   `json:"frame"`
+	NextFrame     int                   `json:"next_frame"`
+	Interventions []policy.Intervention `json:"interventions"`
+}
+
+func main() {
+	if e := run(); e != nil {
+		fmt.Fprintln(os.Stderr, e)
+		os.Exit(1)
+	}
+}
+func run() error {
+	batch := flag.String("batch", "", "fresh synchronous learned PPO batch")
+	out := flag.String("out", "", "fresh directory")
+	model := flag.String("model", "", "frozen original PPO model")
+	flag.Parse()
+	var manifest struct {
+		Provider    string `json:"provider"`
+		Kind        string `json:"provider_kind"`
+		Synchronous bool   `json:"synchronous"`
+		RewardSHA   string `json:"reward_config_sha256"`
+		ExporterSHA string `json:"exporter_sha256"`
+		ModelSHA    string `json:"model_weights_sha256"`
+	}
+	if e := read(filepath.Join(*batch, "manifest.json"), &manifest); e != nil {
+		return e
+	}
+	if manifest.Provider != "learned" || manifest.Kind != policy.PPOKind || !manifest.Synchronous {
+		return fmt.Errorf("fresh direct synchronous PPO batch required")
+	}
+	modelSHA, e := sha(*model)
+	if e != nil {
+		return e
+	}
+	if !strings.EqualFold(modelSHA, manifest.ModelSHA) {
+		return fmt.Errorf("wrong behavior model")
+	}
+	behavior, e := policy.LoadPPO(*model)
+	if e != nil {
+		return e
+	}
+	if !behavior.IsStochastic() {
+		return fmt.Errorf("deterministic rollout cannot train PPO")
+	}
+	var report struct {
+		Valid    bool `json:"provenance_valid"`
+		Complete bool `json:"capture_complete"`
+		Results  []struct {
+			Root      string `json:"root"`
+			Seed      int    `json:"seed"`
+			Valid     bool   `json:"capture_valid"`
+			Dispatch  bool   `json:"dispatch_valid"`
+			ConfigSHA string `json:"provider_config_sha256"`
+			Worker    int    `json:"worker"`
+		} `json:"results"`
+	}
+	if e = read(filepath.Join(*batch, "report.json"), &report); e != nil {
+		return e
+	}
+	if !report.Valid || !report.Complete {
+		return fmt.Errorf("invalid capture/provenance")
+	}
+	if e = os.Mkdir(*out, 0755); e != nil {
+		return e
+	}
+	f, e := os.Create(filepath.Join(*out, "rollout.jsonl"))
+	if e != nil {
+		return e
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	receipts := map[string]string{}
+	remember := func(path string) error {
+		h, e := sha(path)
+		if e == nil {
+			receipts[path] = h
+		}
+		return e
+	}
+	for _, p := range []string{*model, filepath.Join(*batch, "manifest.json"), filepath.Join(*batch, "report.json")} {
+		if e = remember(p); e != nil {
+			return e
+		}
+	}
+	exporter := filepath.Join(*batch, "q2combat-export.exe")
+	h, e := sha(exporter)
+	if e != nil {
+		return e
+	}
+	if !strings.EqualFold(h, manifest.ExporterSHA) {
+		return fmt.Errorf("exporter binary changed")
+	}
+	receipts[exporter] = h
+	seen := map[int]bool{}
+	count := 0
+	skipped := 0
+	terminals := 0
+	for i, r := range report.Results {
+		if !r.Valid || !r.Dispatch || seen[r.Seed] {
+			return fmt.Errorf("invalid episode")
+		}
+		seen[r.Seed] = true
+		var cfg struct {
+			Combat struct {
+				File string `json:"provider_file"`
+			} `json:"combat"`
+		}
+		if e = read(filepath.Join(r.Root, "bot-config.json"), &cfg); e != nil {
+			return e
+		}
+		h, e := sha(cfg.Combat.File)
+		if e != nil {
+			return e
+		}
+		if !strings.EqualFold(h, r.ConfigSHA) {
+			return fmt.Errorf("episode model changed")
+		}
+		p, e := policy.LoadPPO(cfg.Combat.File)
+		if e != nil {
+			return e
+		}
+		if p.Version() != behavior.Version() || !p.IsStochastic() || p.SamplingSeed() != int64(r.Seed) {
+			return fmt.Errorf("episode weight version or sampling seed differs")
+		}
+		rewardPath := filepath.Join(r.Root, "dataset", "reward-config.json")
+		h, e = sha(rewardPath)
+		if e != nil {
+			return e
+		}
+		if !strings.EqualFold(h, manifest.RewardSHA) {
+			return fmt.Errorf("reward changed")
+		}
+		paths := []string{filepath.Join(r.Root, "bot.jsonl"), filepath.Join(r.Root, "server.log"), filepath.Join(r.Root, "reset-expectation.json"), filepath.Join(r.Root, "bot-config.json"), cfg.Combat.File, rewardPath}
+		for _, path := range paths {
+			if e = remember(path); e != nil {
+				return e
+			}
+		}
+		replay := filepath.Join(*out, fmt.Sprintf("replay-%d", i))
+		args := []string{"--trace", paths[0], "--server-log", paths[1], "--reset-expectation", paths[2], "--reward-config", rewardPath, "--out", replay, "--worker", fmt.Sprintf("worker-%d", r.Worker), "--episode", fmt.Sprintf("seed-%d", r.Seed), "--end-reason", "game_frame_limit", "--client-name", "SoloRetreatBot", "--require-execution", "--synchronous"}
+		output, e := exec.Command(exporter, args...).CombinedOutput()
+		if e != nil {
+			return fmt.Errorf("native replay: %w %s", e, output)
+		}
+		for _, name := range []string{"steps.jsonl", "rewards.jsonl", "server_outcomes.jsonl"} {
+			a, e := sha(filepath.Join(replay, name))
+			if e != nil {
+				return e
+			}
+			b, e := sha(filepath.Join(r.Root, "dataset", name))
+			if e != nil {
+				return e
+			}
+			if a != b {
+				return fmt.Errorf("offline replay differs: %s", name)
+			}
+			if e = remember(filepath.Join(replay, name)); e != nil {
+				return e
+			}
+		}
+		steps, e := rows[learningenv.Step](filepath.Join(replay, "steps.jsonl"))
+		if e != nil {
+			return e
+		}
+		rewards, e := rows[learningenv.Reward](filepath.Join(replay, "rewards.jsonl"))
+		if e != nil {
+			return e
+		}
+		if len(steps) != len(rewards) {
+			return fmt.Errorf("reward length")
+		}
+		for j, s := range steps {
+			reward := rewards[j]
+			if s.Observation.Identity.Life != 1 || s.Owner != "provider" || s.Provider != p.Version() || s.Sample == nil || s.Next == nil || !reward.Available || reward.Score == nil {
+				skipped++
+				continue
+			}
+			if reward.Step != s.Index || s.Sample.SamplingSeed != int64(r.Seed) {
+				return fmt.Errorf("sample/reward identity")
+			}
+			a, lp, value, e := p.Review(s.Observation, *s.Sample)
+			if e != nil {
+				return e
+			}
+			if !reflect.DeepEqual(a, s.Action) || math.Abs(lp-s.Sample.LogProbability) > 1e-8 || math.Abs(value-s.Sample.Value) > 1e-8 {
+				return fmt.Errorf("behavior sample altered")
+			}
+			features, e := policy.Features(s.Observation)
+			if e != nil {
+				return e
+			}
+			nv := 0.0
+			if !s.Terminal {
+				nv, e = p.Value(*s.Next)
+				if e != nil {
+					return e
+				}
+			} else {
+				terminals++
+			}
+			if e = enc.Encode(row{features, nv, *s.Sample, *reward.Score, s.Terminal, s.Truncated, r.Seed, s.Index, s.Observation.Identity.Frame, s.Next.Identity.Frame, s.Interventions}); e != nil {
+				return e
+			}
+			count++
+		}
+	}
+	if count == 0 {
+		return fmt.Errorf("no on-policy transitions")
+	}
+	for path, h := range receipts {
+		now, e := sha(path)
+		if e != nil || now != h {
+			return fmt.Errorf("input changed: %s", path)
+		}
+	}
+	if e = f.Sync(); e != nil {
+		return e
+	}
+	rolloutSHA, e := sha(filepath.Join(*out, "rollout.jsonl"))
+	if e != nil {
+		return e
+	}
+	data, _ := json.MarshalIndent(map[string]any{"version": "combat_ppo_rollout_v1", "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE, full world reset equivalence unproven"}, "", "  ")
+	fmt.Println(string(data[:min(len(data), 250)]))
+	return os.WriteFile(filepath.Join(*out, "report.json"), data, 0644)
+}
