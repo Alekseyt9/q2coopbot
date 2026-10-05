@@ -41,6 +41,48 @@ func TestEconomyWeapon(t *testing.T) {
 	}
 }
 
+func TestParasiteWeaponSupportsRetreatInsteadOfShotgunApproach(t *testing.T) {
+	for _, tc := range []struct {
+		name, want string
+		distance   float64
+		change     func(*quake.Snapshot)
+	}{
+		{"close shotgun", "Machinegun", 120, func(s *quake.Snapshot) {}},
+		{"distant shotgun", "Machinegun", 360, func(s *quake.Snapshot) {}},
+		{"critical health", "Machinegun", 120, func(s *quake.Snapshot) { s.Health = 20 }},
+		{"keep loaded machinegun", "", 360, func(s *quake.Snapshot) { s.Weapon = "models/weapons/v_machn/tris.md2" }},
+		{"empty bullets", "HyperBlaster", 360, func(s *quake.Snapshot) { s.Inventory[6].Count = 0 }},
+		{"only blaster and shotgun", "Blaster", 360, func(s *quake.Snapshot) { s.Inventory = s.Inventory[:3] }},
+		{"unknown inventory", "", 360, func(s *quake.Snapshot) { s.InventoryKnown = false }},
+		{"stale inventory", "", 360, func(s *quake.Snapshot) { s.InventoryAgeFrames = 21 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := economySnapshot()
+			s.Weapon = "models/weapons/v_shotg/tris.md2"
+			s.Enemies[0].Class = "monster_parasite"
+			s.Enemies[0].Origin[0] = tc.distance
+			tc.change(&s)
+			got, _ := economyWeapon(s)
+			if got != tc.want {
+				t.Fatalf("got %q want %q", got, tc.want)
+			}
+		})
+	}
+	s := economySnapshot()
+	s.Weapon = "models/weapons/v_shotg/tris.md2"
+	s.Enemies[0].Class = "monster_parasite"
+	profile := combatSpacing(s)
+	if !profile.NeedSpace || !profile.RangeConflict || profile.Minimum != 320 || profile.PreferredMax != 192 {
+		t.Fatal("shotgun conflict concealed", profile)
+	}
+	w := weaponSwitch{}
+	w.command(s)
+	s.Frame += 2
+	if got := w.command(s); got != "use Machinegun" || w.reason != "parasite_retreat_range" {
+		t.Fatal("bounded switch not issued", got, w)
+	}
+}
+
 func TestEconomySwitchStableBoundedAndEmptyPriority(t *testing.T) {
 	s := economySnapshot()
 	w := weaponSwitch{}

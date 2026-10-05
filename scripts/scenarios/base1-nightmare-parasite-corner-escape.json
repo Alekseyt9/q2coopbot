@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "name": "base1-nightmare-parasite-corner-escape",
+  "map": "base1",
+  "runner": "scripts/run_solo_tactical_retreat.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -CornerEscape -RecoverySkill 3 -Seed 5201 -Port 32350",
+  "bot_origin": [-40.375, -426, 24.125],
+  "initial_health": 65,
+  "skill": 3,
+  "setup_hold_frames": 10,
+  "target": {"class": "monster_parasite", "origin": [67.125, -316.875, 24]},
+  "scope": "Recorded fatal corner after the native 25HP kit: one-time placement/65HP before ordinary play, original base1 BSP/AAS/movers/items/barrels and one vulnerable native Parasite. No extra kit, god, forced model reply or mid-fight intervention. This isolates emergency movement; it does not replay the earlier healing sequence.",
+  "acceptance": [
+    "At least two combat_corner_escape frames preserve enemy aim, attack and a recorded movement waypoint",
+    "At least two consecutive authoritative positions show actual movement during escape commands",
+    "Native damage ledger confirms the bot kills Parasite",
+    "No death, teammate, map transition or extra gameplay intervention",
+    "Ordinary campaign route movement resumes after the native kill",
+    "Acknowledged distinct seeds, timescale 2, parallelism 2 and unchanged source fingerprint"
+  ],
+  "remaining_scope": "Other corners, mixed groups, explosives, coop with a real teammate, and remembered hidden healing items need separate validation."
+}
+

@@ -1,0 +1,65 @@
+{
+  "id": "base1-parasite-weapon-retreat",
+  "title": "Дробовик несовместим с дистанцией отхода от Parasite",
+  "map": "base1",
+  "kind": "combat_weapon_policy",
+  "status": "partial_native_validation",
+  "reproduction": "native_fixture",
+  "scenario": "scripts/scenarios/base1-parasite-weapon-retreat.json",
+  "observed": "Parasite was absent from economyWeapon. Shotgun spacing hid the range conflict by raising preferred_max above the weapon's useful short range.",
+  "implementation": "Parasite selects a stocked ranged weapon or Blaster while preserving retreat, fresh-inventory gates and bounded switching. Shotgun spacing exposes minimum320/preferred_max192 and weapon_range_conflict.",
+  "validation": {
+    "timescale": 2,
+    "parallelism": 2,
+    "skill": 1,
+    "total": 4,
+    "passed": 4,
+    "deaths": 0,
+    "source_provenance_valid": true,
+    "variants": [
+      {
+        "loadout": "stocked",
+        "evidence": "workspace/artifacts/solo-tactical-retreat-20261005-133746-428-13e2a0ac/report.json",
+        "seeds": [6101, 6102],
+        "selected": "Machinegun",
+        "request_frames": [20, 20],
+        "shells_at_request": [20, 20],
+        "actual_away_steps": [7, 7],
+        "retreat_firing_frames": [15, 15],
+        "native_selected_weapon_damage": [175, 175],
+        "native_selected_weapon_kills": [1, 1],
+        "minimum_health": [100, 87],
+        "received_health_damage": [0, 13],
+        "final_health": [104, 91],
+        "post_combat_route_frames": [211, 210]
+      },
+      {
+        "loadout": "blaster",
+        "evidence": "workspace/artifacts/solo-tactical-retreat-20261005-133746-612-7d0b8a18/report.json",
+        "seeds": [6201, 6202],
+        "selected": "Blaster",
+        "request_frames": [20, 20],
+        "shells_at_request": [20, 20],
+        "actual_away_steps": [32, 11],
+        "retreat_firing_frames": [62, 29],
+        "native_selected_weapon_damage": [175, 175],
+        "native_selected_weapon_kills": [1, 1],
+        "minimum_health": [62, 75],
+        "received_health_damage": [38, 25],
+        "final_health": [91, 79],
+        "post_combat_route_frames": [158, 170]
+      }
+    ],
+    "scope": "Prepared single Parasite on base1, loaded Shotgun with full20 shells when range-policy switch is requested. Actual native weapon damage/kill and backward firing movement are verified independently of System1 choice; no general group or campaign acceptance."
+  },
+  "earlier_evidence": [
+    "workspace/artifacts/solo-tactical-retreat-20261005-133545-067-01c6688d/report.json",
+    "workspace/artifacts/solo-tactical-retreat-20261005-133545-316-3da39129/report.json"
+  ],
+  "remaining_validation": [
+    "Native low-health switching without disrupting health recovery",
+    "HyperBlaster/Railgun selection and ammo conservation",
+    "Mixed groups where Parasite is not the highest-ranked economy target",
+    "Nightmare and other maps/corners"
+  ]
+}

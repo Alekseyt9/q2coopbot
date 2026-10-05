@@ -75,6 +75,8 @@ type Planner struct {
 	enemyMotion               map[int]enemyMotion
 	shotTeammateMotion        shotTeammateMotion
 	urgentRetreat             urgentRetreat
+	cornerEscape              *cornerEscape
+	cornerUrgency             urgentRetreat
 	resources                 map[int]*ResourceMemory
 	healthStarted             int
 	pickup                    *pickupTask

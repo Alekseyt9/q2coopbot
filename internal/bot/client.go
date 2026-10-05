@@ -566,6 +566,12 @@ func (c *Client) run(ctx context.Context) error {
 					setup = []string{"give Chaingun", "give Bullets 100", "use Chaingun"}
 				} else if c.testWeaponSwitchFixture == "economy_armed" {
 					setup = []string{"give Shotgun", "give Shells 20", "use Blaster"}
+				} else if c.testWeaponSwitchFixture == "parasite_stocked" || c.testWeaponSwitchFixture == "parasite_blaster" {
+					setup = []string{"give Shotgun", "give Shells 20"}
+					if c.testWeaponSwitchFixture == "parasite_stocked" {
+						setup = append(setup, "give Machinegun", "give Bullets 60")
+					}
+					setup = append(setup, "use Shotgun")
 				} else if strings.HasPrefix(c.testWeaponSwitchFixture, "economy_pair_") {
 					setup = []string{"give HyperBlaster", "give Cells 100", "give Railgun", "give Slugs 10", "give Shotgun", "give Shells 20", "use Blaster"}
 				} else if c.testWeaponSwitchFixture == "projectile_blaster" {

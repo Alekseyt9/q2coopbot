@@ -3,11 +3,11 @@
   "title": "Смерть от Parasite на nightmare после подбора аптечки",
   "map": "base1",
   "kind": "combat_survival",
-  "status": "open",
+  "status": "partial_native_validation",
   "reproduction": "observation_only",
   "scenario": "scripts/scenarios/base1-openjev-recovery-combat.json",
   "reproduction_command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -Recovery -RecoveryHealth 40 -RecoverySkill 3 -Seed 3901 -Port 32220",
-  "evidence": "workspace/artifacts/solo-tactical-retreat-20261005-124803-719-d9f235e6/report.json",
+  "evidence": "workspace/artifacts/solo-tactical-retreat-20261005-132137-309-f039c94f/report.json",
   "observed": {
     "initial_health": 40,
     "acceptance_passed": 0,
@@ -38,8 +38,97 @@
     "death_health": 0
   },
   "remaining_validation": [
-    "Determine why current retreat cannot escape the continuing drain near the wall",
-    "Bounded emergency escape/cover when the nearby kit is already consumed",
-    "Native regression on skill3 and normal skill without hiding these deaths"
+    "Finish the native Parasite fight on additional corner seeds5301/5302; do not hide rejected full reports",
+    "Recovery toward a remembered currently hidden kit under attack",
+    "Coop teammate constraints and other corners/monster classes need native acceptance"
+  ],
+  "original_evidence": "workspace/artifacts/solo-tactical-retreat-20261005-124803-719-d9f235e6/report.json",
+  "full_recovery_scenario": "scripts/scenarios/base1-openjev-recovery-combat.json",
+  "corner_escape_scenario": "scripts/scenarios/base1-nightmare-parasite-corner-escape.json",
+  "validation": {
+    "additional_corner": {
+      "escape_moving_steps": [
+        22,
+        22
+      ],
+      "total": 2,
+      "report": "workspace/artifacts/solo-tactical-retreat-20261005-132248-734-7897eb69/report.json",
+      "minimum_health": [
+        32,
+        30
+      ],
+      "scope": "Escape and survival observed; native fight incomplete within the run, full report rejected",
+      "deaths": 0,
+      "seeds": [
+        5301,
+        5302
+      ],
+      "kills": [
+        0,
+        0
+      ],
+      "full_acceptance_passed": 0,
+      "final_health": [
+        71,
+        89
+      ]
+    },
+    "full_recovery": {
+      "passed": 4,
+      "seeds": [
+        3901,
+        3902,
+        4901,
+        4902
+      ],
+      "deaths": 0,
+      "final_health": [
+        94,
+        94,
+        74,
+        79
+      ],
+      "scope": "Original full recovery fixture, same Go implementation; only seeds4901/4902 exercise corner escape in these reports",
+      "total": 4,
+      "reports": [
+        "workspace/artifacts/solo-tactical-retreat-20261005-131752-849-9f81f796/report.json",
+        "workspace/artifacts/solo-tactical-retreat-20261005-131921-963-d9d224a9/report.json"
+      ]
+    },
+    "implementation": "Bounded local walk after blocked retreat, rechecked every command; retain accelerated withdrawal until spacing is restored; no forced System1 answer",
+    "isolated_corner": {
+      "escape_moving_steps": [
+        13,
+        13
+      ],
+      "minimum_health": [
+        50,
+        28
+      ],
+      "seeds": [
+        5201,
+        5202
+      ],
+      "timescale": 2,
+      "passed": 2,
+      "deaths": 0,
+      "kills": [
+        1,
+        1
+      ],
+      "total": 2,
+      "source_provenance_valid": true,
+      "final_health": [
+        77,
+        87
+      ],
+      "report": "workspace/artifacts/solo-tactical-retreat-20261005-132137-309-f039c94f/report.json",
+      "parallelism": 2,
+      "initial_health": 65
+    }
+  },
+  "earlier_evidence": [
+    "workspace/artifacts/solo-tactical-retreat-20261005-130551-134-2c7ec953/report.json",
+    "workspace/artifacts/solo-tactical-retreat-20261005-130753-561-25e95318/report.json"
   ]
 }

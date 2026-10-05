@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "name": "base1-parasite-weapon-retreat",
+  "map": "base1",
+  "runner": "scripts/run_solo_tactical_retreat.ps1",
+  "bot_origin": [32, -224, 24],
+  "initial_health": 100,
+  "skill": 1,
+  "setup_hold_frames": 10,
+  "target": {"class": "monster_parasite", "origin": [200, -224, 24]},
+  "variants": [
+    {"loadout": "stocked", "weapons": ["Blaster", "Shotgun", "Machinegun"], "shells": 20, "bullets": 60, "expected": "Machinegun", "command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -ParasiteWeapon -ParasiteLoadout stocked -RecoverySkill 1 -Seed 6101 -Port 32440"},
+    {"loadout": "blaster", "weapons": ["Blaster", "Shotgun"], "shells": 20, "expected": "Blaster", "command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -ParasiteWeapon -ParasiteLoadout blaster -RecoverySkill 1 -Seed 6201 -Port 32450"}
+  ],
+  "scope": "Original base1 BSP/AAS and movers/items/barrels, original monsters removed, one vulnerable native Parasite. One-time loaded Shotgun/inventory setup before ordinary play. No forced model decision, god or later give/teleport.",
+  "acceptance": [
+    "Fresh authoritative inventory and loaded Shotgun when use Machinegun or use Blaster is requested for parasite_retreat_range",
+    "At least two selected-weapon firing retreat frames and two actual steps away from the observed Parasite",
+    "Native MOD_MACHINEGUN or MOD_BLASTER damage after selection and exactly one selected-weapon native Parasite kill",
+    "No death, teammate, map transition or additional gameplay intervention",
+    "Ordinary campaign movement after the kill, acknowledged distinct seeds, timescale 2, two isolated servers/clients and stable source fingerprint"
+  ],
+  "remaining_scope": "Low-health weapon switches, HyperBlaster/Railgun, mixed groups and other maps need separate native acceptance."
+}

@@ -22,7 +22,7 @@ func weaponModel(name string) string {
 // Class is a threat estimate, never an assertion about an enemy's remaining HP.
 // Explosives are deliberately not selected without splash-safety planning.
 func economyWeapon(s quake.Snapshot) (string, string) {
-	if !s.InventoryKnown || s.InventoryAgeFrames > 20 || s.Health < 45 {
+	if !s.InventoryKnown || s.InventoryAgeFrames > 20 || s.Health <= 0 {
 		return "", ""
 	}
 	var target *quake.Object
@@ -36,7 +36,7 @@ func economyWeapon(s quake.Snapshot) (string, string) {
 		switch e.Class {
 		case "monster_soldier":
 			threat = 1
-		case "monster_infantry", "monster_gunner", "monster_berserk":
+		case "monster_infantry", "monster_gunner", "monster_berserk", "monster_parasite":
 			threat = 2
 		case "monster_tank", "monster_supertank", "monster_gladiatr", "monster_boss2", "monster_boss3", "monster_jorg", "monster_makron":
 			threat = 3
@@ -55,6 +55,29 @@ func economyWeapon(s quake.Snapshot) (string, string) {
 	d := quake.Distance(s.Self, target.Origin)
 	available := func(name, ammo string, reserve int) bool {
 		return inventoryCount(s, name) > 0 && inventoryCount(s, ammo) >= reserve
+	}
+	if target.Class == "monster_parasite" {
+		// Retreat beyond the tongue rather than approaching for shotgun spread.
+		// A useful loaded ranged weapon stays selected while backing away.
+		if s.Ammo > 0 && (strings.Contains(s.Weapon, weaponModel("Machinegun")) || strings.Contains(s.Weapon, weaponModel("HyperBlaster")) || d >= 256 && isRailgun(s.Weapon)) {
+			return "", ""
+		}
+		if available("Machinegun", "Bullets", 1) {
+			return "Machinegun", "parasite_retreat_range"
+		}
+		if available("HyperBlaster", "Cells", 1) {
+			return "HyperBlaster", "parasite_retreat_range"
+		}
+		if d >= 256 && available("Railgun", "Slugs", 1) {
+			return "Railgun", "parasite_retreat_range"
+		}
+		if inventoryCount(s, "Blaster") > 0 {
+			return "Blaster", "parasite_retreat_range"
+		}
+		return "", ""
+	}
+	if s.Health < 45 {
+		return "", ""
 	}
 	if level == 1 {
 		if count != 1 || s.Health < 60 || d > 400 {

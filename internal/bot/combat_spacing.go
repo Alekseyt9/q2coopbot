@@ -29,6 +29,7 @@ type CombatSpacing struct {
 	PreferredMax   float64 `json:"preferred_max"`
 	VisibleThreats int     `json:"visible_threats"`
 	NeedSpace      bool    `json:"need_space"`
+	RangeConflict  bool    `json:"weapon_range_conflict,omitempty"`
 }
 
 func combatSpacing(s quake.Snapshot) *CombatSpacing {
@@ -42,6 +43,7 @@ func combatSpacing(s quake.Snapshot) *CombatSpacing {
 		low, high := combatDistanceBand(s.Weapon, e.Class)
 		d := quake.Distance(s.Self, e.Origin)
 		candidate := &CombatSpacing{Target: e.ID, Enemy: e.Class, Weapon: s.Weapon, Distance: d, Minimum: low, PreferredMax: high, NeedSpace: d < low}
+		candidate.RangeConflict = high < low
 		if chosen == nil || candidate.NeedSpace && (!chosen.NeedSpace || d/low < chosen.Distance/chosen.Minimum) || !candidate.NeedSpace && !chosen.NeedSpace && d < chosen.Distance {
 			chosen = candidate
 		}
@@ -73,6 +75,11 @@ func combatDistanceBand(weapon, class string) (float64, float64) {
 	case "monster_tank", "monster_supertank", "monster_boss2", "monster_jorg", "monster_makron":
 		low = math.Max(low, 384)
 	}
+	if (strings.Contains(weapon, "shotg") || strings.Contains(weapon, "shotgun")) && high < low {
+		// No overlap between effective shotgun range and this threat's spacing.
+		// Expose that conflict instead of inventing an effective distant range.
+		return low, high
+	}
 	return low, math.Max(high, low+96)
 }
 func (p *Planner) combatRetreat(cmd quake.UserCmd, profile *CombatSpacing) quake.UserCmd {
@@ -94,6 +101,9 @@ func (p *Planner) combatRetreat(cmd quake.UserCmd, profile *CombatSpacing) quake
 	if enemy == nil {
 		return cmd
 	}
+	if escaped, ok := p.continueCornerEscape(cmd, profile, *enemy); ok {
+		return escaped
+	}
 	if s.Teammate != nil {
 		if reposition := p.combatFiringPosition(cmd, profile, *enemy); p.World.Command.MoveSource == "combat_firing_position" {
 			return reposition
@@ -107,7 +117,7 @@ func (p *Planner) combatRetreat(cmd quake.UserCmd, profile *CombatSpacing) quake
 	dx /= d
 	dy /= d
 	speeds := []float64{80}
-	if p.urgentRetreat.target == enemy.ID && s.Frame <= p.urgentRetreat.until && d < parasiteFiringDistance {
+	if p.urgentRetreat.target == enemy.ID && s.Frame <= p.urgentRetreat.until && d < parasiteFiringDistance || p.cornerUrgency.target == enemy.ID && s.Frame <= p.cornerUrgency.until && d < profile.Minimum {
 		speeds = []float64{160, 80}
 		p.World.Command.RetreatUrgent = true
 	}
@@ -161,7 +171,7 @@ func (p *Planner) combatRetreat(cmd quake.UserCmd, profile *CombatSpacing) quake
 			return worldMove(cmd, s, x, y, speed, p.World.Command.AimSource == "enemy")
 		}
 	}
-	return cmd
+	return p.combatCornerEscape(cmd, profile, *enemy)
 }
 
 // A short local search can trade preferred spacing for a clear firing lane.
