@@ -94,7 +94,11 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 	}
 	sel.CandidateCommand, sel.GuardedCommand, sel.Interventions = &proposed, &guarded, changes
 	sel.ElapsedUS = time.Since(start).Microseconds()
-	if sel.ElapsedUS > 5000 {
+	budget := 5 * time.Millisecond
+	if remote, ok := b.provider.(*policy.Remote); ok && c.testSynchronous {
+		budget = remote.DecisionBudget()
+	}
+	if sel.ElapsedUS > budget.Microseconds() {
 		sel.Fallback = "inference_budget_exceeded"
 		return rules()
 	}

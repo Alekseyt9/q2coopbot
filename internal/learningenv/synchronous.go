@@ -36,6 +36,16 @@ var releasePattern = regexp.MustCompile(`^sv_test_combat spawncount=(-?\d+) serv
 // Preserve effect ordering, including immediate ClientThink damage emitted
 // before the world frame counter increments. These are effects, not shot credit.
 func ReadNativeSteps(r io.Reader, events []DamageEvent) (*NativeSteps, error) {
+	return readNativeSteps(r, events, true)
+}
+
+// ReadNativeWindow parses a completed live pulse. A release is optional here;
+// callers must retain and verify the actual earlier release independently.
+func ReadNativeWindow(r io.Reader, events []DamageEvent) (*NativeSteps, error) {
+	return readNativeSteps(r, events, false)
+}
+
+func readNativeSteps(r io.Reader, events []DamageEvent, requireRelease bool) (*NativeSteps, error) {
 	s := bufio.NewScanner(r)
 	s.Buffer(make([]byte, 4096), 1024*1024)
 	result := &NativeSteps{}
@@ -122,7 +132,7 @@ func ReadNativeSteps(r io.Reader, events []DamageEvent) (*NativeSteps, error) {
 	if err := s.Err(); err != nil {
 		return nil, err
 	}
-	if pending != nil || len(result.Steps) == 0 || result.Release == nil || eventIndex != len(events) {
+	if pending != nil || len(result.Steps) == 0 || requireRelease && result.Release == nil || eventIndex != len(events) {
 		return nil, fmt.Errorf("incomplete native steps/release/effects")
 	}
 	return result, nil

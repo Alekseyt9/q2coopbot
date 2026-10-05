@@ -147,12 +147,15 @@ func Run(ctx context.Context, cfg Config) error {
 			return fmt.Errorf("direct/shadow combat pilot requires isolated loopback placement, frame pacing, capture, probe and fixed Blaster without scripted command overrides")
 		}
 		var err error
-		combatProvider, err = policy.LoadProbe(cfg.CombatProviderFile)
+		combatProvider, err = policy.LoadProvider(cfg.CombatProviderFile, cfg.TestSynchronous)
 		if err != nil {
 			return fmt.Errorf("combat provider: %w", err)
 		}
 	} else if cfg.CombatProviderFile != "" {
 		return fmt.Errorf("rules mode does not load a combat provider")
+	}
+	if closer, ok := combatProvider.(interface{ Close() error }); ok {
+		defer closer.Close()
 	}
 	if cfg.CombatCapture && (!cfg.FramePaced || cfg.TracePath == "" || cfg.System1Model != "" || cfg.System2Model != "") {
 		return fmt.Errorf("rules combat capture requires frame-paced trace output and both LLM models disabled")

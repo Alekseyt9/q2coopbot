@@ -50,6 +50,11 @@ func LoadProbe(path string) (*Probe, error) {
 
 func (p *Probe) Version() string { return p.version }
 
+// NewSession preserves the loaded bytes/version but resets per-life progress.
+func (p *Probe) NewSession() *Probe {
+	return &Probe{version: p.version, steps: append([]Action(nil), p.steps...)}
+}
+
 func (p *Probe) Decide(o Observation) (Action, error) {
 	id := o.Identity
 	if !SameLife(p.start, id) || id.Frame < p.start.Frame || p.start.Frame == 0 {

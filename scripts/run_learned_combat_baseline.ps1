@@ -28,6 +28,9 @@ $OutputRoot=(Resolve-Path -LiteralPath $OutputRoot).Path
 if($CombatMode -ne 'rules' -and $Loadout -ne 'blaster'){throw 'Direct/shadow pilot requires -Loadout blaster'}
 if($CombatMode -ne 'rules' -and !$ProviderFile){$ProviderFile=Join-Path $PSScriptRoot 'scenarios/combat-control-probe.json'}
 if($ProviderFile){$ProviderFile=(Resolve-Path -LiteralPath $ProviderFile).Path}
+$remoteProvider=$false
+if($ProviderFile){$remoteProvider=((Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).kind -eq 'combat_remote_v1')}
+if($remoteProvider -and !$Synchronous){throw 'Remote policy requires -Synchronous'}
 if($RewardConfig){$RewardConfig=(Resolve-Path -LiteralPath $RewardConfig).Path}
 $rewardHash=$(if($RewardConfig){(Get-FileHash -LiteralPath $RewardConfig).Hash}else{''})
 $sources=Get-HarnessSourceRecords $repo
@@ -52,10 +55,19 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
     for($episode=0;$episode -lt $using:EpisodesPerWorker;$episode++){
         $index=$worker*$using:EpisodesPerWorker+$episode
         $out=Join-Path $using:OutputRoot "worker-$worker-episode-$episode"
+		$episodeProvider=$using:ProviderFile
+		if($using:remoteProvider){
+			$template=Get-Content -LiteralPath $using:ProviderFile -Raw|ConvertFrom-Json
+			$template.episode="worker-$worker-seed-$($using:Seed+$index)"
+			$template.seed=$using:Seed+$index
+			$episodeProvider=Join-Path $using:OutputRoot "provider-worker-$worker-episode-$episode.json"
+			$template|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $episodeProvider -Encoding utf8NoBOM
+		}
+		$episodeProviderHash=$(if($episodeProvider){(Get-FileHash -LiteralPath $episodeProvider).Hash}else{$null})
         $arguments=@('-NoProfile','-File',$using:runner,'-Worker','-Rules','-CombatCapture','-ParasiteWeapon',
             '-ParasiteLoadout',$using:Loadout,'-Seed',($using:Seed+$index),'-Port',($using:Port+$worker),
             '-Timescale',$using:Timescale,'-OutputRoot',$out,'-Client',$using:client)
-        $arguments+=@('-CombatMode',$using:CombatMode);if($using:ProviderFile){$arguments+=@('-ProviderFile',$using:ProviderFile)}
+        $arguments+=@('-CombatMode',$using:CombatMode);if($episodeProvider){$arguments+=@('-ProviderFile',$episodeProvider)}
         $arguments+=@('-GameFrames',$using:GameFrames)
         if($using:Synchronous){$arguments+='-Synchronous'}
         if($using:Mixed){$arguments+=@('-ParasiteMixed','-ParasiteMixedClass','monster_gunner')}
@@ -117,7 +129,8 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             [pscustomobject]@{
                 worker=$worker;episode=$episode;seed=($using:Seed+$index);port=($using:Port+$worker);seed_confirmed=$seedAck
                 harness_accepted=[bool]$report.accepted;harness_reason=$report.reason;worker_exit_code=$process.ExitCode
-                capture_valid=($captures.Count -eq $rows.Count -and $mismatches -eq 0 -and $field.decode_errors -eq 0 -and $field.game_frames -eq $using:GameFrames -and $seedAck -and $dispatchValid -and $datasetReport.command_proof.accepted -and $datasetReport.observed_reset_confirmed)
+                capture_valid=($captures.Count -eq $rows.Count -and $mismatches -eq 0 -and $field.decode_errors -eq 0 -and $field.game_frames -eq $using:GameFrames -and $seedAck -and $dispatchValid -and $datasetReport.command_proof.accepted -and $datasetReport.observed_reset_confirmed -and (!$episodeProvider -or $episodeProviderHash -eq (Get-FileHash -LiteralPath $episodeProvider).Hash))
+                provider_config_sha256=$episodeProviderHash
                 dispatch_valid=$dispatchValid;dataset=$datasetReport;dataset_bytes=(Get-Item -LiteralPath (Join-Path $dataset 'steps.jsonl')).Length
                 capture_mismatches=$mismatches
                 provider_controlled_frames=@($captures|Where-Object {$_.combat_policy.selection.owner -eq 'provider'}).Count
@@ -148,6 +161,7 @@ if($RewardConfig){$valid=$valid -and $rewardHash -eq (Get-FileHash -LiteralPath 
 $usable=@($results | Where-Object capture_valid)
 $manifest=[ordered]@{
     version=2;stage='R1 dispatch and R2 transition pilot';provider=$CombatMode;model_weights=$null;probe_sha256=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{$null})
+    remote_peer=[bool]$remoteProvider
     observation_version='combat_observation_v3';action_version='combat_action_v1';reward_version=$(if($RewardConfig){'combat_reward_v1'}else{$null});reward_config_sha256=$(if($RewardConfig){$rewardHash}else{$null});reward_config=$(if($RewardConfig){Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json}else{$null});server_outcome_version=$(if($Synchronous){'server_step_effects_v1'}else{'server_damage_window_v1'})
     timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;mixed=[bool]$Mixed;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous
     reset=$(if($Synchronous){'Cold native server restart per episode; first usable fixture and fresh inventory verified; single-client barrier confirms independent episode RNG seed. Full-world/AI equivalence remains unconfirmed.'}else{'Cold native server restart per episode, verified first usable observed fixture fields. Inventory/RNG/AI/full-world equivalence remain unconfirmed.'})
