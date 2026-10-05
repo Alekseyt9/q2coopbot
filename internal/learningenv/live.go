@@ -15,7 +15,7 @@ import (
 type AppendLog struct {
 	Offset  int64
 	Partial []byte
-	file os.FileInfo
+	file    os.FileInfo
 }
 
 func (r *AppendLog) Read(path string) ([]string, error) {
@@ -34,7 +34,10 @@ func (r *AppendLog) Read(path string) ([]string, error) {
 	if info.Size() < r.Offset {
 		return nil, fmt.Errorf("live log truncated")
 	}
-	if r.file!=nil&&!os.SameFile(r.file,info){return nil,fmt.Errorf("live log replaced")};r.file=info
+	if r.file != nil && !os.SameFile(r.file, info) {
+		return nil, fmt.Errorf("live log replaced")
+	}
+	r.file = info
 	if _, err = f.Seek(r.Offset, io.SeekStart); err != nil {
 		return nil, err
 	}
@@ -72,9 +75,9 @@ type liveKey struct {
 	Sequence   uint32
 }
 type livePulse struct {
-	Native  NativeStep
-	Events  []DamageEvent
-	Applied []harness.AppliedCommand
+	Native      NativeStep
+	Events      []DamageEvent
+	Applied     []harness.AppliedCommand
 	EventOffset int
 }
 type LiveTelemetry struct {
@@ -91,7 +94,9 @@ type LiveTelemetry struct {
 }
 
 func (l *LiveTelemetry) Push(line string) error {
-	if strings.HasPrefix(line,"sv_test_damage "){l.eventCount++}
+	if strings.HasPrefix(line, "sv_test_damage ") {
+		l.eventCount++
+	}
 	if line == l.ClientName+" connected" {
 		l.connection++
 	}
@@ -106,7 +111,7 @@ func (l *LiveTelemetry) Push(line string) error {
 			}
 			l.active = []string{line}
 			l.commands = nil
-			l.eventStart=l.eventCount
+			l.eventStart = l.eventCount
 			return nil
 		}
 		if l.active == nil {
@@ -144,7 +149,7 @@ func (l *LiveTelemetry) Push(line string) error {
 		if len(l.pulses) > 10000 {
 			return fmt.Errorf("live pulse cache too large")
 		}
-		l.pulses[liveKey{p.Spawncount, p.Sequence}] = livePulse{p, events, l.commands,l.eventStart}
+		l.pulses[liveKey{p.Spawncount, p.Sequence}] = livePulse{p, events, l.commands, l.eventStart}
 		l.last = &p
 		l.active = nil
 		l.commands = nil
@@ -186,7 +191,11 @@ func (l *LiveTelemetry) Enrich(s *Step) (ServerOutcome, bool, error) {
 		return ServerOutcome{}, false, fmt.Errorf("live exact dispatch proof failed")
 	}
 	j := DamageJoiner{Events: p.Events}
-	outcome:=j.JoinNative(s,matched)
-	indexes:=append([]int{},matched.DamageIndexes...);for i:=range indexes{indexes[i]+=p.EventOffset};matched.DamageIndexes=indexes
+	outcome := j.JoinNative(s, matched)
+	indexes := append([]int{}, matched.DamageIndexes...)
+	for i := range indexes {
+		indexes[i] += p.EventOffset
+	}
+	matched.DamageIndexes = indexes
 	return outcome, true, nil
 }

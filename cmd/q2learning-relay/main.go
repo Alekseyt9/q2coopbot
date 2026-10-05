@@ -3,9 +3,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -26,7 +28,19 @@ func readJSON(path string, dst any) error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(data, dst)
+	if len(data) > 16384 {
+		return fmt.Errorf("relay config too large")
+	}
+	d := json.NewDecoder(bytes.NewReader(data))
+	d.DisallowUnknownFields()
+	if err := d.Decode(dst); err != nil {
+		return err
+	}
+	var extra any
+	if err := d.Decode(&extra); err != io.EOF {
+		return fmt.Errorf("trailing relay config data")
+	}
+	return nil
 }
 
 func run() (resultErr error) {
@@ -39,6 +53,7 @@ func run() (resultErr error) {
 	stop := flag.String("stop-file", "", "Worker completion marker")
 	worker := flag.String("worker", "", "Worker identity")
 	episode := flag.String("episode", "", "Episode identity")
+	gameFrames := flag.Int("game-frames", 0, "Known harness frame limit; zero uses worker completion marker")
 	flag.Parse()
 	if *trace == "" || *server == "" || *provider == "" || *rewardPath == "" || *resetPath == "" || *out == "" || *stop == "" || *worker == "" || *episode == "" {
 		return fmt.Errorf("relay paths and identities required")
@@ -81,8 +96,12 @@ func run() (resultErr error) {
 		return fmt.Errorf("relay requires episode seed")
 	}
 	var remoteConfig policy.RemoteConfig
-	if err:=readJSON(*provider,&remoteConfig);err!=nil{return err}
-	if remoteConfig.Seed!=*expected.Seed||remoteConfig.Episode!=*worker+"-"+*episode{return fmt.Errorf("relay worker/episode/seed mismatch")}
+	if err := readJSON(*provider, &remoteConfig); err != nil {
+		return err
+	}
+	if remoteConfig.Seed != *expected.Seed || remoteConfig.Episode != *worker+"-"+*episode {
+		return fmt.Errorf("relay worker/episode/seed mismatch")
+	}
 	p, err := policy.LoadProvider(*provider, true)
 	if err != nil {
 		return err
@@ -132,9 +151,10 @@ func run() (resultErr error) {
 			}
 			for _, line := range lines {
 				var row struct {
-					Capture  *policy.Capture `json:"combat_policy"`
-					Sequence uint32          `json:"client_sequence"`
-					Command quake.UserCmd `json:"sent_command"`
+					Capture       *policy.Capture `json:"combat_policy"`
+					Sequence      uint32          `json:"client_sequence"`
+					Command       quake.UserCmd   `json:"sent_command"`
+					RelativeFrame int             `json:"relative_frame"`
 				}
 				if err := json.Unmarshal([]byte(line), &row); err != nil {
 					return err
@@ -145,7 +165,9 @@ func run() (resultErr error) {
 				if row.Capture.ClientSequence != row.Sequence {
 					return fmt.Errorf("live capture sequence mismatch")
 				}
-				if row.Capture.AppliedCommand!=row.Command{return fmt.Errorf("live sent command mismatch")}
+				if row.Capture.AppliedCommand != row.Command {
+					return fmt.Errorf("live sent command mismatch")
+				}
 				s, _, err := assembler.Push(*row.Capture)
 				if err != nil {
 					return err
@@ -159,6 +181,14 @@ func run() (resultErr error) {
 						closed = true
 						break
 					}
+				}
+				if *gameFrames > 0 && row.RelativeFrame >= *gameFrames {
+					s, _ := assembler.Close("game_frame_limit")
+					if s != nil {
+						queue = append(queue, s)
+					}
+					closed = true
+					break
 				}
 			}
 			if _, err := os.Stat(*stop); err == nil && !closed {

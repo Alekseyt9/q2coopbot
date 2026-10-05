@@ -1,0 +1,19 @@
+{
+  "version": "combat_dataset_spec_v1",
+  "selection_version": "teacher_candidates_v1",
+  "condition": { "map": "base1", "loadout": "blaster", "mixed": true, "health_kit": true, "synchronous": true },
+  "episodes": [
+    { "seed": 12300, "split": "train" },
+    { "seed": 12301, "split": "train" },
+    { "seed": 12302, "split": "train" },
+    { "seed": 12303, "split": "train" },
+    { "seed": 12304, "split": "train" },
+    { "seed": 12305, "split": "train" },
+    { "seed": 12306, "split": "train" },
+    { "seed": 12307, "split": "train" },
+    { "seed": 12308, "split": "validation" },
+    { "seed": 12309, "split": "validation" },
+    { "seed": 12310, "split": "test" },
+    { "seed": 12311, "split": "test" }
+  ]
+}

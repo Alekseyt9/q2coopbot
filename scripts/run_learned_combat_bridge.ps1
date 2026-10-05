@@ -10,6 +10,7 @@ param(
     [ValidateRange(0,1000)][int]$DelayFirstMS=250,
     [switch]$Mixed,
     [switch]$HealthKit,
+    [switch]$Feedback,
     [string]$OutputRoot=''
 )
 $ErrorActionPreference='Stop'
@@ -42,14 +43,17 @@ try{
         if($peer.HasExited -or (Get-Date)-gt $deadline){throw 'Bridge startup failed'}
     }while(!(Get-NetTCPConnection -State Listen -LocalPort $BridgePort -OwningProcess $peer.Id -ErrorAction SilentlyContinue))
     $baseline=Join-Path $OutputRoot 'baseline'
-    & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers $Workers -EpisodesPerWorker $EpisodesPerWorker -Timescale $Timescale -GameFrames $GameFrames -Loadout blaster -CombatMode learned -Synchronous -Mixed:$Mixed -HealthKit:$HealthKit -RewardConfig (Join-Path $PSScriptRoot 'scenarios/combat-reward-v1.json') -ProviderFile $config -Seed $Seed -Port $Port -OutputRoot $baseline
+    & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers $Workers -EpisodesPerWorker $EpisodesPerWorker -Timescale $Timescale -GameFrames $GameFrames -Loadout blaster -CombatMode learned -Synchronous -Mixed:$Mixed -HealthKit:$HealthKit -Feedback:$Feedback -RewardConfig (Join-Path $PSScriptRoot 'scenarios/combat-reward-v1.json') -ProviderFile $config -Seed $Seed -Port $Port -OutputRoot $baseline
     $r=Get-Content -LiteralPath (Join-Path $baseline 'report.json') -Raw|ConvertFrom-Json
     $messages=@(Get-Content -LiteralPath (Join-Path $OutputRoot 'bridge.jsonl')|ForEach-Object{ConvertFrom-Json $_}|Where-Object request)
+    $feedbackMessages=@($messages|Where-Object {$_.request.kind -eq 'feedback'})
+    $messages=@($messages|Where-Object {$_.request.kind -ne 'feedback'})
     $mismatches=@($messages|Where-Object{
         $_.request.request -ne $_.response.request -or $_.request.session -ne $_.response.session -or
         $_.request.policy_version -ne $_.response.policy_version -or
         ($_.request.observation.identity|ConvertTo-Json -Compress) -ne ($_.response.action.identity|ConvertTo-Json -Compress)
     }).Count
+    $feedbackMismatches=@($feedbackMessages|Where-Object {!$_.response.feedback_ack -or $_.request.request -ne $_.response.request -or $_.request.session -ne $_.response.session -or $_.request.policy_version -ne $_.response.policy_version}).Count
     $sessions=@($messages.request.session|Sort-Object -Unique)
     $expectedCommands=[int](($r.results|Measure-Object provider_controlled_frames -Sum).Sum)
     $valid=$fingerprint -eq (Get-HarnessFingerprint (Get-HarnessSourceRecords $repo)) -and $probeHash -eq (Get-FileHash -LiteralPath $probe).Hash
@@ -59,7 +63,8 @@ try{
         [pscustomobject]@{worker=$result.worker;seed=$result.seed;episode=$result.episode;messages=$transactions.Count;provider_frames=$result.provider_controlled_frames;matched=($transactions.Count -eq $result.provider_controlled_frames);reward_steps=$result.dataset.reward_steps;synchronous=$result.dataset.synchronous_confirmed;max_latency_us=$result.selection_max_us}
     })
     $accepted=$valid -and $r.capture_complete -and $mismatches -eq 0 -and $messages.Count -eq $expectedCommands -and $sessions.Count -eq $Workers*$EpisodesPerWorker -and @($episodes|Where-Object {!$_.matched -or !$_.synchronous}).Count -eq 0
-    @{version='combat_bridge_v1';transport_accepted=$accepted;provenance_valid=$valid;diagnostic_peer=$true;trained_weights=$null;workers=$Workers;timescale=$Timescale;delay_first_ms=$DelayFirstMS;messages=$messages.Count;reply_mismatches=$mismatches;sessions=$sessions.Count;episodes=$episodes;probe_sha256=$probeHash;peer_sha256=(Get-FileHash -LiteralPath $exe).Hash;source_fingerprint=$fingerprint;scope='Decision transport only; native execution and offline rewards are verified separately. No online reset/reward API or training acceptance.'}|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $OutputRoot 'bridge-report.json') -Encoding utf8NoBOM
+    if($Feedback){$expectedFeedback=[int](($r.results|ForEach-Object {$_.feedback.steps+1}|Measure-Object -Sum).Sum);$accepted=$accepted -and $feedbackMismatches -eq 0 -and $feedbackMessages.Count -eq $expectedFeedback -and @($r.results|Where-Object {!$_.feedback_audit.accepted}).Count -eq 0}
+    @{version='combat_bridge_v1';transport_accepted=$accepted;provenance_valid=$valid;diagnostic_peer=$true;trained_weights=$null;workers=$Workers;timescale=$Timescale;delay_first_ms=$DelayFirstMS;messages=$messages.Count;feedback_messages=$feedbackMessages.Count;feedback=[bool]$Feedback;reply_mismatches=$mismatches;sessions=$sessions.Count;episodes=$episodes;probe_sha256=$probeHash;peer_sha256=(Get-FileHash -LiteralPath $exe).Hash;source_fingerprint=$fingerprint;scope='Decision transport and optional asynchronous first-life feedback. No optimizer or training acceptance.'}|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $OutputRoot 'bridge-report.json') -Encoding utf8NoBOM
     "Bridge artifacts: $OutputRoot"
     if(!$accepted){throw 'Bridge transport rejected; inspect preserved reports'}
 }finally{

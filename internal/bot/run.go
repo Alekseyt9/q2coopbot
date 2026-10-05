@@ -190,8 +190,11 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.TestCombatBarrier && (!cfg.FramePaced || cfg.TestTeleport == "" || cfg.TestTeleportMap != "base1") {
 		return fmt.Errorf("combat barrier requires frame pacing and base1 teleport")
 	}
-	if cfg.TestSynchronous && (cfg.Host != "127.0.0.1" || !cfg.CombatCapture || !cfg.FramePaced || !cfg.TestCombatBarrier || cfg.TestWeaponSwitchFixture != "parasite_blaster") {
-		return fmt.Errorf("synchronous learning fixture requires loopback, capture, frame pacing, barrier and parasite_blaster")
+	if cfg.TestSynchronous && (cfg.Host != "127.0.0.1" || !cfg.CombatCapture || !cfg.FramePaced || !cfg.TestCombatBarrier || cfg.TestWeaponSwitchFixture != "parasite_blaster" && cfg.TestWeaponSwitchFixture != "parasite_shotgun") {
+		return fmt.Errorf("synchronous learning fixture requires loopback, capture, frame pacing, barrier and supported equipment")
+	}
+	if cfg.TestWeaponSwitchFixture == "parasite_shotgun" && (!cfg.TestSynchronous || cfg.CombatMode != "rules") {
+		return fmt.Errorf("fixed Shotgun teacher requires synchronous rules capture")
 	}
 	if cfg.TestLight != nil && (*cfg.TestLight < 0 || *cfg.TestLight > 255 || !cfg.TestCombatBarrier) {
 		return fmt.Errorf("test light requires combat barrier and a value in 0..255")
@@ -243,7 +246,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.TestInvulnerable && (!cfg.FramePaced || cfg.TestTeleport == "") {
 		return fmt.Errorf("test invulnerability requires frame pacing and teleport")
 	}
-	if cfg.TestWeaponSwitchFixture != "" && (cfg.TestWeaponSwitchFixture != "blaster" && cfg.TestWeaponSwitchFixture != "stocked" && cfg.TestWeaponSwitchFixture != "economy_weak" && cfg.TestWeaponSwitchFixture != "economy_armed" && cfg.TestWeaponSwitchFixture != "parasite_stocked" && cfg.TestWeaponSwitchFixture != "parasite_blaster" && cfg.TestWeaponSwitchFixture != "parasite_hyper" && cfg.TestWeaponSwitchFixture != "parasite_rail" && cfg.TestWeaponSwitchFixture != "parasite_scarce" && cfg.TestWeaponSwitchFixture != "economy_pair_weak" && cfg.TestWeaponSwitchFixture != "economy_pair_heavy" && cfg.TestWeaponSwitchFixture != "projectile_blaster" && cfg.TestWeaponSwitchFixture != "projectile_hyper" && cfg.TestWeaponSwitchFixture != "rail_precision" && cfg.TestWeaponSwitchFixture != "rail_friend_behind" && cfg.TestWeaponSwitchFixture != "hand_grenade_guard" && !handGrenadeArmFixture(cfg.TestWeaponSwitchFixture) && cfg.TestWeaponSwitchFixture != "hand_grenade_observe" && cfg.TestWeaponSwitchFixture != "hand_grenade_auto" || !cfg.FramePaced || cfg.TestTeleport == "") {
+	if cfg.TestWeaponSwitchFixture != "" && (cfg.TestWeaponSwitchFixture != "blaster" && cfg.TestWeaponSwitchFixture != "stocked" && cfg.TestWeaponSwitchFixture != "economy_weak" && cfg.TestWeaponSwitchFixture != "economy_armed" && cfg.TestWeaponSwitchFixture != "parasite_stocked" && cfg.TestWeaponSwitchFixture != "parasite_blaster" && cfg.TestWeaponSwitchFixture != "parasite_shotgun" && cfg.TestWeaponSwitchFixture != "parasite_hyper" && cfg.TestWeaponSwitchFixture != "parasite_rail" && cfg.TestWeaponSwitchFixture != "parasite_scarce" && cfg.TestWeaponSwitchFixture != "economy_pair_weak" && cfg.TestWeaponSwitchFixture != "economy_pair_heavy" && cfg.TestWeaponSwitchFixture != "projectile_blaster" && cfg.TestWeaponSwitchFixture != "projectile_hyper" && cfg.TestWeaponSwitchFixture != "rail_precision" && cfg.TestWeaponSwitchFixture != "rail_friend_behind" && cfg.TestWeaponSwitchFixture != "hand_grenade_guard" && !handGrenadeArmFixture(cfg.TestWeaponSwitchFixture) && cfg.TestWeaponSwitchFixture != "hand_grenade_observe" && cfg.TestWeaponSwitchFixture != "hand_grenade_auto" || !cfg.FramePaced || cfg.TestTeleport == "") {
 		return fmt.Errorf("weapon_switch_fixture requires a supported fixture, frame pacing and teleport")
 	}
 	if cfg.TestInitialHealth < 0 || cfg.TestInitialHealth > 100 || cfg.TestInitialHealth > 0 && (!cfg.FramePaced || cfg.TestTeleport == "") {

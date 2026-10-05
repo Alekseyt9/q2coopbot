@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Synchronous,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
+param([switch]$Synchronous,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
 function Measure-BarrelSafety($Rows,$Events) {
     $actor=$Rows[0].self_entity
@@ -22,7 +22,8 @@ if($CornerEscape -and ($Recovery -or $Group -or $GroupRetreat -or $Circle -or $C
 if($ParasiteWeapon -and ($Recovery -or $CornerEscape -or $Group -or $GroupRetreat -or $Circle -or $Cover)){throw 'ParasiteWeapon is a separate fixture'}
 if(($ParasiteMixed -or $ParasiteHealthKit) -and !$ParasiteWeapon){throw 'Parasite variants require ParasiteWeapon'}
 if($RequireMixedDetour -and (!$ParasiteMixed -or $ParasiteMixedClass -ne 'monster_gunner')){throw 'Required mixed detour needs observed Gunner/Parasite fixture'}
-if($Synchronous -and (!$Rules -or !$CombatCapture -or !$ParasiteWeapon -or $ParasiteLoadout -ne 'blaster')){throw 'Synchronous learning requires Rules, CombatCapture and ParasiteWeapon blaster'}
+if($Synchronous -and (!$Rules -or !$CombatCapture -or !$ParasiteWeapon -or $ParasiteLoadout -notin 'blaster','shotgun')){throw 'Synchronous learning requires Rules, CombatCapture and supported ParasiteWeapon equipment'}
+if($ParasiteLoadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){throw 'Fixed Shotgun exercise requires synchronous rules'}
 if(!$Worker){
     . "$PSScriptRoot/harness_manifest.ps1"
     $fingerprint=Get-HarnessFingerprint (Get-HarnessSourceRecords $repo)
@@ -124,7 +125,7 @@ try{
         $report.mixed_detour=@{frames=$detour.Count;actual_moving_steps=$moved;enemy_aim_attack_frames=@($detour|Where-Object {$_.arbitration.aim_source -eq 'enemy' -and ($_.sent_command.Buttons -band 1)}).Count;scope='Bounded risk tradeoff past observed threats; no grenade splash protection or permanent group survival guarantee'}
         if($RequireMixedDetour -and ($detour.Count -lt 2 -or $moved -lt 2)){throw 'Actual native mixed corner detour absent'}
     }
-    if($ParasiteWeapon){
+    if($ParasiteWeapon -and $ParasiteLoadout -ne 'shotgun'){
         $expected=switch($ParasiteLoadout){stocked{'Machinegun'};scarce{'Machinegun'};hyper{'HyperBlaster'};rail{'Railgun'};default{'Blaster'}}
         $expectedModel=switch($ParasiteLoadout){stocked{'*/v_machn/*'};scarce{'*/v_machn/*'};hyper{'*/v_hyperb/*'};rail{'*/v_rail/*'};default{'Blaster'}}
         $request=@($rows|Where-Object {$_.weapon_request -eq "use $expected" -and $_.weapon_reason -eq 'parasite_retreat_range' -and $_.weapon -like '*/v_shotg/*' -and $_.ammo -gt 0 -and $_.inventory_known -and $_.inventory_age_frames -le 20 -and @($_.enemies|Where-Object {$_.class -eq 'monster_parasite' -and $_.clear_shot}).Count}|Select-Object -First 1)
@@ -200,6 +201,12 @@ try{
         $report.weapon_selection.selected_weapon_health_damage=[int](($selectedDamage|Measure-Object live_health_damage -Sum).Sum)
         $report.weapon_selection.selected_weapon_kills=@($selectedDamage|Where-Object killed).Count
         if($ParasiteLoadout -ne 'scarce' -and ($report.weapon_selection.selected_weapon_health_damage -le 0 -or $report.weapon_selection.selected_weapon_kills -ne 1)){throw 'Native selected-weapon damage and kill absent'}
+    }
+    if($ParasiteWeapon -and $ParasiteLoadout -eq 'shotgun'){
+        $fire=@($rows|Where-Object {$_.weapon -like '*/v_shotg/*' -and $_.arbitration.aim_source -eq 'enemy' -and ($_.sent_command.Buttons -band 1)})
+        $hits=@($events|Where-Object {$_.attacker -eq $rows[0].self_entity -and $_.inflictor -eq $_.attacker -and $_.target_class -eq 'monster_parasite' -and $_.mod -eq 2 -and $_.live_health_damage -gt 0})
+        $report.teacher_exercise=@{weapon='Shotgun';fixed_weapon=$true;aim_fire_commands=$fire.Count;native_health_damage=[int](($hits|Measure-Object live_health_damage -Sum).Sum);scope='Test-only fixed equipment, rules aim/fire; no learned weapon choice or general combat acceptance'}
+        if(!$fire.Count -or !$hits.Count){throw 'Fixed Shotgun native aim/fire damage absent'}
     }
     if($CornerEscape){
         $escape=@($rows|Where-Object {$_.arbitration.move_source -eq 'combat_corner_escape' -and $_.arbitration.move_point -and $_.arbitration.aim_source -eq 'enemy' -and ($_.sent_command.Buttons -band 1)})
@@ -332,6 +339,7 @@ try{
     }
     if($Circle -and $report.circle_health_damage -le 0){throw 'Native damage from circle projectiles absent'}
     if($Cover -and $report.cover_window_health_damage -le 0){throw 'Native monster damage in cover firing window absent'};if($ParasiteWeapon){$report.scope="Prepared native Parasite and loaded Shotgun, automatic ranged-weapon selection from observed inventory, actual retreat/fire and native kill; no general group or campaign acceptance"}elseif($CornerEscape){$report.scope="Prepared native Parasite, skill $RecoverySkill at the recorded fatal corner, 65HP as after the used kit; Go bounded escape with actual movement/fire and native kill, no full recovery or general campaign acceptance"}elseif($Recovery){$report.scope="Prepared ${initialHealth}HP solo actor, skill $RecoverySkill vulnerable Parasite and native 25HP kit; Go recovery movement with attributed fire, item heal and resumed combat; no remembered hidden-item or general campaign acceptance"}elseif($GroupRetreat){$report.scope='Prepared two vulnerable infantry: close primary and rear flank, live retreat, actual spacing and attributed bolt damage; no mixed group or general campaign acceptance'}elseif(!$Cover -and !$Circle){$report.scope='Prepared single vulnerable native parasite, ordinary solo campaign commands; model-selected retreat plus shooting and observed movement, not general campaign acceptance'};$report.accepted=$true;$report.reason='accepted'
+    if($ParasiteWeapon -and $ParasiteLoadout -eq 'shotgun'){$report.scope='Prepared fixed Shotgun teacher exercise; observed rules aim/fire and native hitscan damage, no learned policy or weapon-choice acceptance'}
 }catch{
     $report.reason=$_.Exception.Message
     # Keep server ground truth even when gameplay acceptance fails early.

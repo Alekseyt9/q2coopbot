@@ -6,10 +6,11 @@ param(
     [ValidateRange(20,500)][int]$GameFrames=300,
     [int]$Seed=9300,
     [ValidateRange(1024,65530)][int]$Port=32940,
-    [ValidateSet('stocked','blaster','hyper','rail','scarce')][string]$Loadout='stocked',
+    [ValidateSet('stocked','blaster','shotgun','hyper','rail','scarce')][string]$Loadout='stocked',
     [switch]$Mixed,
     [switch]$HealthKit,
     [switch]$Synchronous,
+    [switch]$Feedback,
     [ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',
     [string]$ProviderFile='',
     [string]$RewardConfig='',
@@ -17,7 +18,8 @@ param(
 )
 $ErrorActionPreference='Stop'
 if($Seed -lt 0 -or [long]$Seed+$Workers*$EpisodesPerWorker-1 -gt 2147483647){throw 'Each independent episode needs its own valid 31-bit game seed'}
-if($Synchronous -and $Loadout -ne 'blaster'){throw 'Synchronous learning requires Blaster loadout'}
+if($Synchronous -and $Loadout -notin 'blaster','shotgun'){throw 'Synchronous learning requires Blaster or rules Shotgun exercise'}
+if($Loadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){throw 'Shotgun exercise requires synchronous rules'}
 if($RewardConfig -and !$Synchronous){throw 'Reward export requires -Synchronous'}
 $repo=Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/harness_manifest.ps1"
@@ -31,6 +33,7 @@ if($ProviderFile){$ProviderFile=(Resolve-Path -LiteralPath $ProviderFile).Path}
 $remoteProvider=$false
 if($ProviderFile){$remoteProvider=((Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).kind -eq 'combat_remote_v1')}
 if($remoteProvider -and !$Synchronous){throw 'Remote policy requires -Synchronous'}
+if($Feedback -and (!$remoteProvider -or !$RewardConfig)){throw 'Feedback requires remote provider, synchronous mode and reward config'}
 if($RewardConfig){$RewardConfig=(Resolve-Path -LiteralPath $RewardConfig).Path}
 $rewardHash=$(if($RewardConfig){(Get-FileHash -LiteralPath $RewardConfig).Hash}else{''})
 $sources=Get-HarnessSourceRecords $repo
@@ -45,9 +48,12 @@ Push-Location $repo
 try{go build -o $client ./cmd/q2coopbot;if($LASTEXITCODE){throw 'Client build failed'}}finally{Pop-Location}
 $exporter=Join-Path $OutputRoot 'q2combat-export.exe'
 Push-Location $repo;try{go build -o $exporter ./cmd/q2combat-export;if($LASTEXITCODE){throw 'Exporter build failed'}}finally{Pop-Location}
+$relay=Join-Path $OutputRoot 'q2learning-relay.exe'
+if($Feedback){Push-Location $repo;try{go build -o $relay ./cmd/q2learning-relay;if($LASTEXITCODE){throw 'Relay build failed'}}finally{Pop-Location}}
 $probeHash=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{''})
 $hostExe=(Get-Process -Id $PID).Path
 $runner=Join-Path $PSScriptRoot 'run_solo_tactical_retreat.ps1'
+$feedbackAudit=Join-Path $PSScriptRoot 'audit_learning_feedback.ps1'
 $clock=[Diagnostics.Stopwatch]::StartNew()
 $results=@(0..($Workers-1) | ForEach-Object -Parallel {
     $ErrorActionPreference='Stop'
@@ -64,6 +70,15 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
 			$template|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $episodeProvider -Encoding utf8NoBOM
 		}
 		$episodeProviderHash=$(if($episodeProvider){(Get-FileHash -LiteralPath $episodeProvider).Hash}else{$null})
+		$feedbackProcess=$null
+		$feedbackRoot=Join-Path $using:OutputRoot "feedback-worker-$worker-episode-$episode"
+		$feedbackStop="$feedbackRoot.stop"
+		if($using:Feedback){
+			$feedbackReset="$feedbackRoot.reset.json"
+			@{version='observed_fixture_reset_v1';map='base1';seed=$using:Seed+$index;position=@(32,-224,24);health=100;armor=0;weapon='Blaster';ammo=0;enemy_class='monster_parasite';enemy_position=@(200,-224,24)}|ConvertTo-Json|Set-Content -LiteralPath $feedbackReset -Encoding utf8NoBOM
+            $relayArguments=@('--trace',(Join-Path $out 'bot.jsonl'),'--server-log',(Join-Path $out 'server.log'),'--provider',$episodeProvider,'--reward-config',$using:RewardConfig,'--reset-expectation',$feedbackReset,'--out',$feedbackRoot,'--stop-file',$feedbackStop,'--worker',"worker-$worker",'--episode',"seed-$($using:Seed+$index)",'--game-frames',"$($using:GameFrames)")
+			$feedbackProcess=Start-Process $using:relay -ArgumentList @($relayArguments|ForEach-Object{'"'+$_+'"'}) -WindowStyle Hidden -PassThru -RedirectStandardOutput "$feedbackRoot.out" -RedirectStandardError "$feedbackRoot.err"
+		}
         $arguments=@('-NoProfile','-File',$using:runner,'-Worker','-Rules','-CombatCapture','-ParasiteWeapon',
             '-ParasiteLoadout',$using:Loadout,'-Seed',($using:Seed+$index),'-Port',($using:Port+$worker),
             '-Timescale',$using:Timescale,'-OutputRoot',$out,'-Client',$using:client)
@@ -73,10 +88,19 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
         if($using:Mixed){$arguments+=@('-ParasiteMixed','-ParasiteMixedClass','monster_gunner')}
         if($using:HealthKit){$arguments+='-ParasiteHealthKit'}
         $timer=[Diagnostics.Stopwatch]::StartNew()
-        $process=Start-Process $using:hostExe -ArgumentList @($arguments | ForEach-Object {'"'+$_+'"'}) -WindowStyle Hidden -PassThru -RedirectStandardOutput "$out.stdout.log" -RedirectStandardError "$out.stderr.log"
-        $process.WaitForExit()
+        try{
+            $process=Start-Process $using:hostExe -ArgumentList @($arguments | ForEach-Object {'"'+$_+'"'}) -WindowStyle Hidden -PassThru -RedirectStandardOutput "$out.stdout.log" -RedirectStandardError "$out.stderr.log"
+            $process.WaitForExit()
+        }finally{
+            if($feedbackProcess){
+                Set-Content -LiteralPath $feedbackStop -Value 'worker_complete' -Encoding ascii
+                if(!$feedbackProcess.WaitForExit(5000)){Stop-Process -Id $feedbackProcess.Id}
+            }
+        }
         $timer.Stop()
         try{
+            $feedbackReport=$null
+            if($using:Feedback){$feedbackReport=Get-Content -LiteralPath (Join-Path $feedbackRoot 'report.json') -Raw|ConvertFrom-Json;if(!$feedbackReport.accepted -or $feedbackProcess.ExitCode){throw 'Live feedback delivery failed'}}
             $report=Get-Content -LiteralPath (Join-Path $out 'report.json') -Raw | ConvertFrom-Json
             $rows=@(Get-Content -LiteralPath (Join-Path $out 'bot.jsonl') | ForEach-Object {$_ | ConvertFrom-Json})
             if(!$rows.Count){throw 'Empty command trace'}
@@ -105,7 +129,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             $resetExpectation=Join-Path $out 'reset-expectation.json'
             @{version='observed_fixture_reset_v1';map=$config.test.teleport_map;seed=$(if($using:Synchronous){$using:Seed+$index}else{$null})
                 position=@($config.test.teleport.Split(',')|ForEach-Object {[double]::Parse($_,[Globalization.CultureInfo]::InvariantCulture)})
-                health=$config.test.initial_health;armor=0;weapon=$(if($using:Synchronous){'Blaster'}else{'Shotgun'});ammo=$(if($using:Synchronous){0}else{20});enemy_class=$config.test.spawn_class
+                health=$config.test.initial_health;armor=0;weapon=$(if($using:Synchronous -and $using:Loadout -eq 'blaster'){'Blaster'}else{'Shotgun'});ammo=$(if($using:Synchronous -and $using:Loadout -eq 'blaster'){0}else{20});enemy_class=$config.test.spawn_class
                 enemy_position=@($config.test.spawn_soldier.Split(',')|ForEach-Object {[double]::Parse($_,[Globalization.CultureInfo]::InvariantCulture)})
             }|ConvertTo-Json|Set-Content -LiteralPath $resetExpectation -Encoding utf8NoBOM
             $exportArguments=@('--trace',(Join-Path $out 'bot.jsonl'),'--out',$dataset,'--worker',"worker-$worker",'--episode',"seed-$($using:Seed+$index)",'--end-reason','game_frame_limit','--server-log',(Join-Path $out 'server.log'),'--client-name','SoloRetreatBot','--require-execution','--reset-expectation',$resetExpectation)
@@ -114,6 +138,8 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             & $using:exporter @exportArguments
             if($LASTEXITCODE){throw 'Transition export failed'}
             $datasetReport=Get-Content -LiteralPath (Join-Path $dataset 'report.json') -Raw|ConvertFrom-Json
+            $feedbackAuditReport=$null
+            if($using:Feedback){$feedbackAuditReport=& $using:feedbackAudit -RunRoot $out -RelayRoot $feedbackRoot}
             $controlled=@($captures|Where-Object {$_.combat_policy.selection.owner -eq 'provider'}).Count
             $shadow=@($captures|Where-Object {$_.combat_policy.selection.mode -eq 'learned-shadow' -and $_.combat_policy.selection.candidate_command}).Count
             $changes=@(foreach($capture in $captures){foreach($change in @($capture.combat_policy.selection.interventions)){if($change -and $change.reason){$change}}})
@@ -131,6 +157,8 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 harness_accepted=[bool]$report.accepted;harness_reason=$report.reason;worker_exit_code=$process.ExitCode
                 capture_valid=($captures.Count -eq $rows.Count -and $mismatches -eq 0 -and $field.decode_errors -eq 0 -and $field.game_frames -eq $using:GameFrames -and $seedAck -and $dispatchValid -and $datasetReport.command_proof.accepted -and $datasetReport.observed_reset_confirmed -and (!$episodeProvider -or $episodeProviderHash -eq (Get-FileHash -LiteralPath $episodeProvider).Hash))
                 provider_config_sha256=$episodeProviderHash
+                feedback=$feedbackReport
+                feedback_audit=$feedbackAuditReport
                 dispatch_valid=$dispatchValid;dataset=$datasetReport;dataset_bytes=(Get-Item -LiteralPath (Join-Path $dataset 'steps.jsonl')).Length
                 capture_mismatches=$mismatches
                 provider_controlled_frames=@($captures|Where-Object {$_.combat_policy.selection.owner -eq 'provider'}).Count
@@ -162,6 +190,7 @@ $usable=@($results | Where-Object capture_valid)
 $manifest=[ordered]@{
     version=2;stage='R1 dispatch and R2 transition pilot';provider=$CombatMode;model_weights=$null;probe_sha256=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{$null})
     remote_peer=[bool]$remoteProvider
+    feedback=[bool]$Feedback;feedback_version=$(if($Feedback){'combat_feedback_v1'}else{$null});relay_sha256=$(if($Feedback){(Get-FileHash -LiteralPath $relay).Hash}else{$null})
     observation_version='combat_observation_v3';action_version='combat_action_v1';reward_version=$(if($RewardConfig){'combat_reward_v1'}else{$null});reward_config_sha256=$(if($RewardConfig){$rewardHash}else{$null});reward_config=$(if($RewardConfig){Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json}else{$null});server_outcome_version=$(if($Synchronous){'server_step_effects_v1'}else{'server_damage_window_v1'})
     timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;mixed=[bool]$Mixed;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous
     reset=$(if($Synchronous){'Cold native server restart per episode; first usable fixture and fresh inventory verified; single-client barrier confirms independent episode RNG seed. Full-world/AI equivalence remains unconfirmed.'}else{'Cold native server restart per episode, verified first usable observed fixture fields. Inventory/RNG/AI/full-world equivalence remain unconfirmed.'})

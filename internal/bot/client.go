@@ -601,6 +601,9 @@ func (c *Client) run(ctx context.Context) error {
 				var payload []byte
 				if c.testSynchronous {
 					setup = []string{"give Shotgun", "give Shells 20", "use Blaster"}
+					if c.testWeaponSwitchFixture == "parasite_shotgun" {
+						setup = []string{"give Shotgun", "give Shells 20", "use Shotgun"}
+					}
 				}
 				for _, command := range setup {
 					payload = append(payload, 4)
@@ -739,7 +742,7 @@ func (c *Client) run(ctx context.Context) error {
 				s := c.planner.World.Snapshot
 				weaponReady := !c.testProjectileComparison || projectileFixtureWeaponReady(c.testWeaponSwitchFixture, s.Weapon)
 				if c.testSynchronous {
-					weaponReady = s.Weapon == "Blaster" && s.InventoryKnown && s.InventoryAgeFrames >= 0 && s.InventoryAgeFrames <= 2 && s.Health == int16(c.testInitialHealth) && math.Abs(s.Self[2]-c.testTeleportPosition[2]) < 1
+					weaponReady = synchronousFixtureWeaponReady(c.testWeaponSwitchFixture, s) && s.Health == int16(c.testInitialHealth) && math.Abs(s.Self[2]-c.testTeleportPosition[2]) < 1
 				}
 				if s.OnGround && s.Health > 0 && math.Abs(s.Self[0]-c.testTeleportPosition[0]) < 1 && math.Abs(s.Self[1]-c.testTeleportPosition[1]) < 1 && weaponReady {
 					if err := c.command("test_combat_ready"); err != nil {
@@ -762,7 +765,7 @@ func (c *Client) run(ctx context.Context) error {
 			weaponRequest := ""
 			observeInventory := !c.idle || c.scenario != nil && c.scenario.Scenario.ActorInventory
 			if !safetyStop && observeInventory && (!c.planner.testSetupHold || c.testWalkThenPlan) && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
-				if !directCombat && !c.planner.testSetupHold && !c.idle && !pairSetup && !c.testProjectileComparison && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
+				if !directCombat && !c.planner.testSetupHold && !c.idle && !pairSetup && !c.testProjectileComparison && c.testWeaponSwitchFixture != "parasite_shotgun" && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
 					if !c.planner.grenadeThrowPending(c.planner.World.Snapshot) && !c.planner.grenadeSelectionPending(c.planner.World.Snapshot) {
 						buttonWeapon := c.planner.button != nil && c.planner.button.action == "shoot"
 						if buttonWeapon {

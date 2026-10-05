@@ -158,3 +158,51 @@ func TestRemoteReconnectCannotConsumeTimedOutReply(t *testing.T) {
 	}
 	<-done
 }
+
+func TestFeedbackRequiresMatchingAcknowledgement(t *testing.T) {
+	for _, name := range []string{"valid", "no_ack", "wrong_request"} {
+		t.Run(name, func(t *testing.T) {
+			listener, err := net.Listen("tcp4", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer listener.Close()
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				conn, err := listener.Accept()
+				if err != nil {
+					return
+				}
+				defer conn.Close()
+				var req BridgeRequest
+				if ReadBridgeMessage(bufio.NewReader(conn), &req) != nil || req.Kind != "feedback" || len(req.Feedback) == 0 {
+					return
+				}
+				reply := BridgeResponse{Version: BridgeVersion, Session: req.Session, Request: req.Request, PolicyVersion: req.PolicyVersion, FeedbackAck: true}
+				if name == "no_ack" {
+					reply.FeedbackAck = false
+				}
+				if name == "wrong_request" {
+					reply.Request++
+				}
+				WriteBridgeMessage(conn, reply)
+			}()
+			config := RemoteConfig{Kind: RemoteKind, Address: listener.Addr().String(), TimeoutMS: 200, PolicyVersion: "test", Episode: "seed-9", Seed: 9}
+			data, _ := json.Marshal(config)
+			path := filepath.Join(t.TempDir(), "remote.json")
+			os.WriteFile(path, data, 0600)
+			provider, err := LoadProvider(path, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			remote := provider.(*Remote)
+			defer remote.Close()
+			err = remote.Notify(map[string]any{"version": "combat_feedback_v1", "kind": "test"})
+			if name == "valid" && err != nil || name != "valid" && (err == nil || remote.conn != nil) {
+				t.Fatal(name, err)
+			}
+			<-done
+		})
+	}
+}
