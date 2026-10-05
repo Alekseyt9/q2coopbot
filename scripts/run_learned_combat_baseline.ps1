@@ -8,6 +8,7 @@ param(
     [ValidateRange(1024,65530)][int]$Port=32940,
     [ValidateSet('stocked','blaster','hyper','rail','scarce')][string]$Loadout='stocked',
     [switch]$Mixed,
+    [switch]$Synchronous,
     [ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',
     [string]$ProviderFile='',
     [string]$OutputRoot=''
@@ -36,6 +37,7 @@ $hostExe=(Get-Process -Id $PID).Path
 $runner=Join-Path $PSScriptRoot 'run_solo_tactical_retreat.ps1'
 $clock=[Diagnostics.Stopwatch]::StartNew()
 $results=@(0..($Workers-1) | ForEach-Object -Parallel {
+    $ErrorActionPreference='Stop'
     $worker=$_
     for($episode=0;$episode -lt $using:EpisodesPerWorker;$episode++){
         $index=$worker*$using:EpisodesPerWorker+$episode
@@ -45,6 +47,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             '-Timescale',$using:Timescale,'-OutputRoot',$out,'-Client',$using:client)
         $arguments+=@('-CombatMode',$using:CombatMode);if($using:ProviderFile){$arguments+=@('-ProviderFile',$using:ProviderFile)}
         $arguments+=@('-GameFrames',$using:GameFrames)
+        if($using:Synchronous){$arguments+='-Synchronous'}
         if($using:Mixed){$arguments+=@('-ParasiteMixed','-ParasiteMixedClass','monster_gunner')}
         $timer=[Diagnostics.Stopwatch]::StartNew()
         $process=Start-Process $using:hostExe -ArgumentList @($arguments | ForEach-Object {'"'+$_+'"'}) -WindowStyle Hidden -PassThru -RedirectStandardOutput "$out.stdout.log" -RedirectStandardError "$out.stderr.log"
@@ -79,7 +82,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             $resetExpectation=Join-Path $out 'reset-expectation.json'
             @{version='observed_fixture_reset_v1';map=$config.test.teleport_map
                 position=@($config.test.teleport.Split(',')|ForEach-Object {[double]::Parse($_,[Globalization.CultureInfo]::InvariantCulture)})
-                health=$config.test.initial_health;armor=0;weapon='Shotgun';ammo=20;enemy_class=$config.test.spawn_class
+                health=$config.test.initial_health;armor=0;weapon=$(if($using:Synchronous){'Blaster'}else{'Shotgun'});ammo=$(if($using:Synchronous){0}else{20});enemy_class=$config.test.spawn_class
                 enemy_position=@($config.test.spawn_soldier.Split(',')|ForEach-Object {[double]::Parse($_,[Globalization.CultureInfo]::InvariantCulture)})
             }|ConvertTo-Json|Set-Content -LiteralPath $resetExpectation -Encoding utf8NoBOM
             & $using:exporter --trace (Join-Path $out 'bot.jsonl') --out $dataset --worker "worker-$worker" --episode "seed-$($using:Seed+$index)" --end-reason game_frame_limit --server-log (Join-Path $out 'server.log') --client-name SoloRetreatBot --require-execution --reset-expectation $resetExpectation
@@ -129,7 +132,7 @@ $usable=@($results | Where-Object capture_valid)
 $manifest=[ordered]@{
     version=2;stage='R1 dispatch and R2 transition pilot';provider=$CombatMode;model_weights=$null;probe_sha256=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{$null})
     observation_version='combat_observation_v2';action_version='combat_action_v1';reward_version=$null;server_outcome_version='server_damage_window_v1'
-    timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;mixed=[bool]$Mixed
+    timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;mixed=[bool]$Mixed;synchronous=[bool]$Synchronous
     reset='Cold native server restart per episode, verified first usable observed fixture fields. Inventory/RNG/AI/full-world equivalence remain unconfirmed.'
     source_fingerprint=$fingerprint;provenance_valid=$valid;sources=$sources
     client_sha256=(Get-FileHash -LiteralPath $client).Hash

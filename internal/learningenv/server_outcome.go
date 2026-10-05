@@ -131,28 +131,53 @@ func (j *DamageJoiner) Join(s *Step) ServerOutcome {
 			continue
 		}
 		j.Used[i] = true
-		o.Events = append(o.Events, e)
-		damage := min(max(e.HealthBefore, 0), e.Take)
-		killed := e.HealthBefore > 0 && e.HealthAfter <= 0
-		if e.Target == id.Actor {
-			o.ReceivedHealthDamage += damage
+		o.add(e, id.Actor)
+	}
+	return o
+}
+
+func (o *ServerOutcome) add(e DamageEvent, actor int) {
+	o.Events = append(o.Events, e)
+	damage := min(max(e.HealthBefore, 0), e.Take)
+	killed := e.HealthBefore > 0 && e.HealthAfter <= 0
+	if e.Target == actor {
+		o.ReceivedHealthDamage += damage
+		if killed {
+			o.Deaths++
+		}
+	}
+	if e.Attacker == actor {
+		switch {
+		case e.Target == actor:
+			o.SelfHealthDamage += damage
+		case strings.HasPrefix(e.TargetClass, "monster_"):
+			o.MonsterHealthDamage += damage
 			if killed {
-				o.Deaths++
+				o.MonsterKills++
 			}
+		case e.TargetClass == "player":
+			o.TeammateHealthDamage += damage
 		}
-		if e.Attacker == id.Actor {
-			switch {
-			case e.Target == id.Actor:
-				o.SelfHealthDamage += damage
-			case strings.HasPrefix(e.TargetClass, "monster_"):
-				o.MonsterHealthDamage += damage
-				if killed {
-					o.MonsterKills++
-				}
-			case e.TargetClass == "player":
-				o.TeammateHealthDamage += damage
-			}
+	}
+}
+
+func (j *DamageJoiner) JoinNative(s *Step, p *NativeStep) ServerOutcome {
+	o := ServerOutcome{Version: "server_step_effects_v1", Worker: s.Worker, Episode: s.Episode, Step: s.Index, Events: []DamageEvent{}}
+	if s.Next == nil {
+		o.Reason = "no_next_observation"
+		return o
+	}
+	o.Available = true
+	if j.Used == nil {
+		j.Used = map[int]bool{}
+	}
+	for _, index := range p.DamageIndexes {
+		e := j.Events[index]
+		if e.Attacker != p.Actor && e.Target != p.Actor {
+			continue
 		}
+		j.Used[index] = true
+		o.add(e, p.Actor)
 	}
 	return o
 }

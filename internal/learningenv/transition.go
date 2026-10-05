@@ -14,6 +14,7 @@ const StepVersion = "combat_step_v1"
 const OutcomeVersion = "observed_outcome_v1"
 
 type Step struct {
+	Native         *NativeStep           `json:"native_step,omitempty"`
 	ClientSequence uint32                `json:"client_sequence"`
 	Execution      *Execution            `json:"server_execution"`
 	Version        string                `json:"version"`

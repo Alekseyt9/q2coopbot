@@ -39,6 +39,7 @@ type Client struct {
 	weaponSwitch                            weaponSwitch
 	testProjectileComparison                bool
 	testCombatBarrier, testCombatGo         bool
+	testSynchronous                         bool
 	testLight                               *int
 	testCombatGoFrame                       int
 	inventoryWatch                          inventoryWatch
@@ -376,6 +377,9 @@ func (c *Client) handle(packet []byte) {
 		c.seenCommands[request] = true
 		switch {
 		case request == "test_combat_go" && c.testCombatBarrier:
+			if c.testSynchronous {
+				c.combatControl.history = policy.History{}
+			}
 			c.testCombatGo = true
 			c.testCombatGoFrame = c.latestFrame
 		case request == "changing":
@@ -595,6 +599,9 @@ func (c *Client) run(ctx context.Context) error {
 					setup = []string{"give Railgun", "give Slugs 10", "use Railgun"}
 				}
 				var payload []byte
+				if c.testSynchronous {
+					setup = []string{"give Shotgun", "give Shells 20", "use Blaster"}
+				}
 				for _, command := range setup {
 					payload = append(payload, 4)
 					payload = append(payload, command...)
@@ -731,6 +738,9 @@ func (c *Client) run(ctx context.Context) error {
 			if c.testCombatBarrier && !c.testCombatGo && c.testTeleportSent {
 				s := c.planner.World.Snapshot
 				weaponReady := !c.testProjectileComparison || projectileFixtureWeaponReady(c.testWeaponSwitchFixture, s.Weapon)
+				if c.testSynchronous {
+					weaponReady = s.Weapon == "Blaster" && s.InventoryKnown && s.InventoryAgeFrames >= 0 && s.InventoryAgeFrames <= 2 && s.Health == int16(c.testInitialHealth) && math.Abs(s.Self[2]-c.testTeleportPosition[2]) < 1
+				}
 				if s.OnGround && s.Health > 0 && math.Abs(s.Self[0]-c.testTeleportPosition[0]) < 1 && math.Abs(s.Self[1]-c.testTeleportPosition[1]) < 1 && weaponReady {
 					if err := c.command("test_combat_ready"); err != nil {
 						return err
@@ -809,7 +819,7 @@ func (c *Client) run(ctx context.Context) error {
 				cmd.Forward, cmd.Side, cmd.Up, cmd.Buttons = 0, 0, 0, 0
 				c.planner.World.Command.LimitReason = "test_combat_barrier"
 			}
-			if c.testCombatBarrier && c.testCombatGo && c.latestFrame-c.testCombatGoFrame < 10 {
+			if c.testCombatBarrier && !c.testSynchronous && c.testCombatGo && c.latestFrame-c.testCombatGoFrame < 10 {
 				cmd.Buttons &^= 1
 				c.planner.World.Command.LimitReason = "test_combat_observe"
 			}

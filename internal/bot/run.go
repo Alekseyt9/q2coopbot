@@ -37,6 +37,7 @@ type Config struct {
 	TestDisableProjectileLead           bool
 	TestProjectileComparison            bool
 	TestCombatBarrier                   bool
+	TestSynchronous                     bool
 	TestLight                           *int
 	TestInvulnerable                    bool
 	TestInitialHealth                   int
@@ -142,7 +143,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	var combatProvider policy.Provider
 	if cfg.CombatMode != "rules" {
-		if cfg.Host != "127.0.0.1" || !cfg.FramePaced || !cfg.CombatCapture || cfg.CombatProviderFile == "" || cfg.TestTeleport == "" || cfg.Idle || cfg.TestScenario != "" || cfg.TestSession != "" || cfg.TestWalkTarget != "" || cfg.TestLineCross || cfg.TestCombatBarrier || cfg.TestHoldPosition || cfg.TestHoldPositionMap != "" || cfg.TestWeaponSwitchFixture != "" && cfg.TestWeaponSwitchFixture != "parasite_blaster" {
+		if cfg.Host != "127.0.0.1" || !cfg.FramePaced || !cfg.CombatCapture || cfg.CombatProviderFile == "" || cfg.TestTeleport == "" || cfg.Idle || cfg.TestScenario != "" || cfg.TestSession != "" || cfg.TestWalkTarget != "" || cfg.TestLineCross || cfg.TestCombatBarrier && !cfg.TestSynchronous || cfg.TestHoldPosition || cfg.TestHoldPositionMap != "" || cfg.TestWeaponSwitchFixture != "" && cfg.TestWeaponSwitchFixture != "parasite_blaster" {
 			return fmt.Errorf("direct/shadow combat pilot requires isolated loopback placement, frame pacing, capture, probe and fixed Blaster without scripted command overrides")
 		}
 		var err error
@@ -185,6 +186,9 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if cfg.TestCombatBarrier && (!cfg.FramePaced || cfg.TestTeleport == "" || cfg.TestTeleportMap != "base1") {
 		return fmt.Errorf("combat barrier requires frame pacing and base1 teleport")
+	}
+	if cfg.TestSynchronous && (cfg.Host != "127.0.0.1" || !cfg.CombatCapture || !cfg.FramePaced || !cfg.TestCombatBarrier || cfg.TestWeaponSwitchFixture != "parasite_blaster") {
+		return fmt.Errorf("synchronous learning fixture requires loopback, capture, frame pacing, barrier and parasite_blaster")
 	}
 	if cfg.TestLight != nil && (*cfg.TestLight < 0 || *cfg.TestLight > 255 || !cfg.TestCombatBarrier) {
 		return fmt.Errorf("test light requires combat barrier and a value in 0..255")
@@ -421,6 +425,7 @@ func Run(ctx context.Context, cfg Config) error {
 		testHoldPositionMap:      cfg.TestHoldPositionMap,
 		testProjectileComparison: cfg.TestProjectileComparison,
 		testCombatBarrier:        cfg.TestCombatBarrier,
+		testSynchronous:          cfg.TestSynchronous,
 		testLight:                cfg.TestLight,
 		testGroundEdgeProbe:      cfg.TestGroundEdgeProbe,
 		testDoorProbe:            cfg.TestDoorProbe,

@@ -58,7 +58,7 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		sel.Fallback = "dead_or_stale"
 		return rules()
 	}
-	if c.idle || c.planner.testSetupHold || c.testHoldPosition || c.testHoldPositionMap == o.Identity.Map || c.testTeleportSent && c.latestFrame-c.testTeleportSentFrame < 3 {
+	if c.idle || c.planner.testSetupHold || c.testCombatBarrier && !c.testCombatGo || c.testHoldPosition || c.testHoldPositionMap == o.Identity.Map || c.testTeleportSent && c.latestFrame-c.testTeleportSentFrame < 3 {
 		sel.Fallback = "setup_or_harness_override"
 		return rules()
 	}

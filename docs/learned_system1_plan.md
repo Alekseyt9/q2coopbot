@@ -1,6 +1,6 @@
 # Собственная System 1: иерархическая тактика, RL и MCTS
 
-Дата: 05.10.2026. Статус: **R0 измерен; R1 имеет прямой Provider/shadow и ограничения пилота; R2 имеет переходы по жизням, историю наблюдений v2 и отдельные серверные окна урона; обученных весов и PPO пока нет**. Измерения: [R0 baseline](testing/learned_combat_baseline.md), [R1/R2 dispatch и данные](testing/learned_combat_dispatch.md), [наблюдения v2 и урон](testing/learned_combat_observation_outcomes.md). Основной runner: 4 инстанса, x2, фиксированные игровые кадры.
+Дата: 05.10.2026. Статус: **R0 измерен; R1 имеет прямой Provider/shadow и ограничения пилота; R2 имеет переходы по жизням, историю v2, серверные окна урона, проверку dispatch usercmd и наблюдаемых полей старта; обученных весов и PPO пока нет**. Измерения: [R0 baseline](testing/learned_combat_baseline.md), [R1/R2 dispatch и данные](testing/learned_combat_dispatch.md), [наблюдения v2 и урон](testing/learned_combat_observation_outcomes.md), [исполнение и поля reset](testing/learned_combat_execution_reset.md). Основной runner: 4 инстанса, x2, фиксированные игровые кадры.
 
 Этот документ заменяет OpenJev как целевую архитектуру быстрой боевой System 1. Он дополняет [общий план бота](system2_strategy_tactics_plan.md). Старые отчёты OpenJev сохраняются как история и контрольные измерения; они не доказывают качество новой системы.
 
