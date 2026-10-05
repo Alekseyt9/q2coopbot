@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "name": "base1-openjev-recovery-combat",
+  "map": "base1",
+  "runner": "scripts/run_solo_tactical_retreat.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -Recovery -RecoveryHealth 55 -RecoverySkill 1 -Seed 4101 -Port 32240",
+  "bot_origin": [32, -224, 24],
+  "initial_health": 55,
+  "skill": 1,
+  "setup_hold_frames": 10,
+  "target": {"class": "monster_parasite", "origin": [200, -224, 24]},
+  "health_item": {"class": "item_health_large", "origin": [32, -352, 24], "native_amount": 25, "setup": "startup entity fixture"},
+  "scope": "Original base1 BSP/AAS and movers/items/barrels. Original monsters removed; one vulnerable Parasite and one ordinary health kit. No god, forced model answer or mid-fight teleport/give. Go owns recovery priority; System1 combat decisions are independently recorded.",
+  "acceptance": [
+    "Native enemy damage lowers health below 45 and causes recovery goal",
+    "At least two actual steps approach the kit while preserving enemy aim and attack",
+    "Native enemy health damage during the recovery interval is positive",
+    "The observed kit disappears near the actor as authoritative server playerstate health increases; simultaneous damage may reduce the net gain below 25",
+    "Recovery firing projectile spawn matches command frame/spawncount and deals shot-ID-linked native monster damage",
+    "Combat resumes after healing, Parasite is killed, and ordinary campaign route movement resumes after the kill",
+    "No death, map transition, teammate, god or extra gameplay intervention; acknowledged distinct seeds, 2x, parallelism 2, unchanged source fingerprint"
+  ],
+  "remaining_scope": "Hidden remembered kit, inaccessible treatment and nightmare survival require separate acceptance."
+}

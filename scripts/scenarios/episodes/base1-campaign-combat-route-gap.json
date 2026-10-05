@@ -1,0 +1,37 @@
+{
+  "id": "base1-campaign-combat-route-gap",
+  "title": "Бот уходит к выходу при видимом враге между ответами System1",
+  "map": "base1",
+  "kind": "combat_arbitration",
+  "status": "partial_native_validation",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/base1-openjev-group-circle.json",
+  "original_evidence": "workspace/artifacts/solo-tactical-retreat-20261004-001959-329/run-0/bot.jsonl",
+  "observed": "Route resumes with a visible infantry when tactic expires; later health recovery at 43HP is legitimate and must remain allowed",
+  "fix": "Current visible campaign threat interrupts exit travel; stale follow/recover cannot override it. Current health resource goal overrides older attack, allowing route movement with safe fire.",
+  "validation": {
+    "deaths": 0,
+    "group_acceptance_passed": 4,
+    "seeds": [
+      3001,
+      3002,
+      3201,
+      3202
+    ],
+    "total": 4,
+    "timescale": 2,
+    "parallelism": 2,
+    "reports": [
+      "workspace/artifacts/solo-tactical-retreat-20261005-114929-342-a4b926e9/report.json",
+      "workspace/artifacts/solo-tactical-retreat-20261005-115019-944-629a56f0/report.json"
+    ],
+    "scope": "Prepared vulnerable two-infantry fights, original BSP/AAS, real model; no general campaign claim",
+    "engage_route_violations": 0
+  },
+  "remaining_validation": [
+    "Recovery route with fire has asset-backed Go proof but no dedicated native acceptance",
+    "Hidden enemies are not pursued by this rule; no guaranteed combat completion",
+    "Emergency disengagement without a reachable health item remains future work",
+    "Other maps, monster groups and weapons need acceptance"
+  ]
+}

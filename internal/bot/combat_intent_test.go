@@ -81,7 +81,7 @@ func TestBase1CampaignCombatCommandGapAndRecovery(t *testing.T) {
 	}
 	// A health route must keep moving even if the old model chose attack;
 	// it may shoot the observed enemy without giving up the resource goal.
-	p := Planner{Campaign: true, World: w, hasGoal: true, goal: quake.Vec3{32, -184, 24.125}}
+	p := Planner{Campaign: true, World: w, hasGoal: true, goalPoint: quake.Vec3{32, -184, 24.125}}
 	p.World.Goal, p.World.Navigation = "recover_health", "direct_clear"
 	p.World.Tactic = &TacticalDecision{Action: "attack"}
 	cmd := p.commandAt(quake.UserCmd{}, now)

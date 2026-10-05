@@ -1,0 +1,45 @@
+{
+  "id": "base1-nightmare-parasite-recovery-death",
+  "title": "Смерть от Parasite на nightmare после подбора аптечки",
+  "map": "base1",
+  "kind": "combat_survival",
+  "status": "open",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/base1-openjev-recovery-combat.json",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -Recovery -RecoveryHealth 40 -RecoverySkill 3 -Seed 3901 -Port 32220",
+  "evidence": "workspace/artifacts/solo-tactical-retreat-20261005-124803-719-d9f235e6/report.json",
+  "observed": {
+    "initial_health": 40,
+    "acceptance_passed": 0,
+    "healed_health": 65,
+    "deaths": 2,
+    "native_mod": 0,
+    "death_frames": [
+      82,
+      83
+    ],
+    "seeds": [
+      3901,
+      3902
+    ],
+    "death_positions": [
+      [
+        -40.375,
+        -426,
+        24.125
+      ],
+      [
+        -40.25,
+        -426,
+        24.125
+      ]
+    ],
+    "native_attacker_class": "monster_parasite",
+    "death_health": 0
+  },
+  "remaining_validation": [
+    "Determine why current retreat cannot escape the continuing drain near the wall",
+    "Bounded emergency escape/cover when the nearby kit is already consumed",
+    "Native regression on skill3 and normal skill without hiding these deaths"
+  ]
+}

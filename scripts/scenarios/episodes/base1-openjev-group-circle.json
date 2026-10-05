@@ -66,7 +66,8 @@
     "Seed2401 leaves with zero kills; seed2502 leaves with one kill; both continue campaign route, but fail this full-fight acceptance",
     "Native close-range grouped retreat is not separately accepted; occluded flank safety has asset-backed Go coverage",
     "No mixed monster/weapon, teammate or general campaign safety claim",
-    "General episode dispatcher not bound"
+    "General episode dispatcher not bound",
+    "Health recovery during grouped combat remains legitimate, and needs dedicated native acceptance; earlier full-fight failures are preserved"
   ],
   "barrel_guard_validation": {
     "reports": [
@@ -84,5 +85,24 @@
     "deaths": 0,
     "barrel_self_health_damage": 0,
     "scope": "After Blaster barrel guard; preserve earlier failures as earlier-source evidence"
+  },
+  "campaign_intent_validation": {
+    "deaths": 0,
+    "group_acceptance_passed": 4,
+    "seeds": [
+      3001,
+      3002,
+      3201,
+      3202
+    ],
+    "total": 4,
+    "timescale": 2,
+    "parallelism": 2,
+    "reports": [
+      "workspace/artifacts/solo-tactical-retreat-20261005-114929-342-a4b926e9/report.json",
+      "workspace/artifacts/solo-tactical-retreat-20261005-115019-944-629a56f0/report.json"
+    ],
+    "scope": "Prepared vulnerable two-infantry fights, original BSP/AAS, real model; no general campaign claim",
+    "engage_route_violations": 0
   }
 }

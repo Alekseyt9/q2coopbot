@@ -1,0 +1,48 @@
+{
+  "id": "base1-openjev-recovery-combat",
+  "title": "Лечение после реального урона со стрельбой и возвратом к кампании",
+  "map": "base1",
+  "kind": "combat_recovery",
+  "status": "partial_native_validation",
+  "reproduction": "observation_only",
+  "scenario": "scripts/scenarios/base1-openjev-recovery-combat.json",
+  "evidence": "workspace/artifacts/solo-tactical-retreat-20261005-125158-882-a8120f55/report.json",
+  "earlier_pressure_evidence": "workspace/artifacts/solo-tactical-retreat-20261005-125003-658-10c1791e/report.json",
+  "validation": {
+    "native_kit_amount": 25,
+    "final_health": [
+      75,
+      86
+    ],
+    "scope": "Ordinary Go resource goal during native Parasite attacks, visible kit pickup, combat and route resume; not a hidden memory pickup proof",
+    "skill": 1,
+    "healing_net_gain": [
+      23,
+      23
+    ],
+    "full_acceptance_passed": 2,
+    "total": 2,
+    "initial_health": 55,
+    "recovery_projectile_damage": [
+      10,
+      10
+    ],
+    "seeds": [
+      4101,
+      4102
+    ],
+    "timescale": 2,
+    "parallelism": 2,
+    "source_provenance_valid": true,
+    "incoming_recovery_damage": [
+      6,
+      6
+    ]
+  },
+  "remaining_validation": [
+    "Remembered kit outside current network observations during enemy pressure",
+    "Inaccessible/no-health emergency escape and cover",
+    "Nightmare Parasite after consuming treatment: separate open episode base1-nightmare-parasite-recovery-death",
+    "More maps, groups and weapons; no guarantee of lower total damage"
+  ]
+}

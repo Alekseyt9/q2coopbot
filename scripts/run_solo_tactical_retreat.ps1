@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Worker,[switch]$Group,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
+param([switch]$Worker,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
 function Measure-BarrelSafety($Rows,$Events) {
     $actor=$Rows[0].self_entity
@@ -15,11 +15,13 @@ function Measure-BarrelSafety($Rows,$Events) {
 }
 if($CoverFight){$Cover=$true}
 if($Group){$Circle=$true}
+if($GroupRetreat -and ($Group -or $Circle -or $Cover)){throw 'GroupRetreat is a separate fixture'}
+if($Recovery -and ($Group -or $GroupRetreat -or $Circle -or $Cover)){throw 'Recovery is a separate fixture'}
 if($Circle -and $Cover){throw 'Circle and Cover are separate fixtures'}
 if(!$Worker){
     . "$PSScriptRoot/harness_manifest.ps1"
     $fingerprint=Get-HarnessFingerprint (Get-HarnessSourceRecords $repo)
-    $OutputRoot=Join-Path $repo ('workspace/artifacts/solo-tactical-retreat-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))
+    $OutputRoot=Join-Path $repo ('workspace/artifacts/solo-tactical-retreat-'+(Get-Date -Format yyyyMMdd-HHmmss-fff)+'-'+[guid]::NewGuid().ToString('N').Substring(0,8))
     New-Item -ItemType Directory $OutputRoot|Out-Null
     $Client=Join-Path $OutputRoot 'q2coopbot.exe'
     Push-Location $repo;try{go build -o $Client ./cmd/q2coopbot;if($LASTEXITCODE){throw 'Client build failed'}}finally{Pop-Location}
@@ -31,39 +33,47 @@ if(!$Worker){
         if($using:CoverFight){$args+='-CoverFight'}
         if($using:Circle){$args+='-Circle'}
         if($using:Group){$args+='-Group'}
+        if($using:GroupRetreat){$args+='-GroupRetreat'}
+        if($using:Recovery){$args+=@('-Recovery','-RecoverySkill',$using:RecoverySkill,'-RecoveryHealth',$using:RecoveryHealth)}
         $args+=@('-CoverTargetX',$using:CoverTargetX)
         $child=Start-Process $using:hostExe -ArgumentList @($args|ForEach-Object {'"'+$_+'"'}) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $using:OutputRoot "worker-$_.log") -RedirectStandardError (Join-Path $using:OutputRoot "worker-$_.err")
         $child.WaitForExit();$r=Get-Content (Join-Path $out 'report.json') -Raw|ConvertFrom-Json;if($child.ExitCode){$r.accepted=$false};$r
     } -ThrottleLimit 2)
     $valid=$fingerprint -eq (Get-HarnessFingerprint (Get-HarnessSourceRecords $repo))
     $accepted=$valid -and $results.Count -eq 2 -and @($results|Where-Object {!$_.accepted}).Count -eq 0
-    @{accepted=$accepted;provenance_valid=$valid;source_fingerprint=$fingerprint;group=[bool]$Group;circle=[bool]$Circle;cover=[bool]$Cover;cover_fight=[bool]$CoverFight;cover_target_x=$CoverTargetX;model=$System1;timescale=2;parallelism=2;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 12|Set-Content (Join-Path $OutputRoot 'report.json')
+    @{accepted=$accepted;provenance_valid=$valid;source_fingerprint=$fingerprint;recovery=[bool]$Recovery;group=[bool]$Group;group_retreat=[bool]$GroupRetreat;circle=[bool]$Circle;cover=[bool]$Cover;cover_fight=[bool]$CoverFight;cover_target_x=$CoverTargetX;model=$System1;timescale=2;parallelism=2;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 12|Set-Content (Join-Path $OutputRoot 'report.json')
     "Solo tactical retreat: $OutputRoot";if(!$accepted){throw 'Solo tactical retreat rejected'};return
 }
 if(Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue){throw 'Port occupied'}
 if(Test-Path $OutputRoot){throw 'Fresh output required'}
 New-Item -ItemType Directory $OutputRoot|Out-Null
 $runtime=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map base1 -RuntimeRoot (Join-Path $OutputRoot 'runtime')
-if($Group){
+if($Recovery){
+    # A genuine native 25HP item, introduced before server startup only.
+    [IO.File]::AppendAllText((Join-Path $runtime 'baseq2/maps/base1.ent'),"`n{`n`"classname`" `"item_health_large`"`n`"origin`" `"32 -352 24`"`n}`n",[Text.Encoding]::ASCII)
+}
+if($Group -or $GroupRetreat){
     # The second vulnerable native actor is a startup fixture, not a later
     # gameplay intervention. Original BSP/AAS and mover physics are unchanged.
     $entityPath=Join-Path $runtime 'baseq2/maps/base1.ent'
-    [IO.File]::AppendAllText($entityPath,"`n{`n`"classname`" `"monster_infantry`"`n`"origin`" `"200 -320 24`"`n}`n",[Text.Encoding]::ASCII)
+    $flankOrigin=if($GroupRetreat){'32 -352 24'}else{'200 -320 24'}
+    [IO.File]::AppendAllText($entityPath,"`n{`n`"classname`" `"monster_infantry`"`n`"origin`" `"$flankOrigin`"`n}`n",[Text.Encoding]::ASCII)
 }
 $server=$null;$bot=$null;$trace=Join-Path $OutputRoot 'bot.jsonl';$report=@{accepted=$false;reason='not_run';seed=$Seed}
 try{
     $env:Q2COOPBOT_TEST_RCON=[guid]::NewGuid().ToString('N')
     $args="-portable +set ip 127.0.0.1 +set noipx 1 +set dedicated 1 +set coop 1 +set deathmatch 0 +set cheats 1 +set maxclients 4 +set port $Port +set timescale 2 +set rcon_password $env:Q2COOPBOT_TEST_RCON +set sv_test_unlimited_loopback 1 +set g_test_damage 1 +set g_test_seed $Seed +map base1"
+    if($Recovery){$args=$args.Replace('+map base1',"+set skill $RecoverySkill +map base1");$report.skill=$RecoverySkill;$report.initial_health=$RecoveryHealth}
     $server=Start-Process (Join-Path $runtime 'q2ded.exe') -ArgumentList $args -WorkingDirectory $runtime -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'server.log') -RedirectStandardError (Join-Path $OutputRoot 'server.err')
     $deadline=(Get-Date).AddSeconds(15)
     do{Start-Sleep -Milliseconds 100;if($server.HasExited -or (Get-Date) -gt $deadline){throw 'Server startup failed'}}while(!(Get-NetUDPEndpoint -OwningProcess $server.Id -LocalPort $Port -ErrorAction SilentlyContinue))
     if(Get-NetUDPEndpoint -OwningProcess $server.Id|Where-Object LocalAddress -NotIn '127.0.0.1','::1'){throw 'Server not loopback'}
     $config=Join-Path $OutputRoot 'bot-config.json'
-    $placement=if($Cover){'240,-416,24.125'}else{'32,-224,24'}
-    $enemyClass=if($Cover -or $Circle){'monster_infantry'}else{'monster_parasite'}
-    $enemyOrigin=if($Cover){"$CoverTargetX,-224,24"}else{'200,-224,24'}
-    $initialHealth=if($Group){100}elseif($Cover -or $Circle){25}else{0}
-    @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};run=@{duration='15s';frame_paced=$true;mode='campaign';next_map='base2'};test=@{teleport_map='base1';teleport=$placement;spawn_map='base1';spawn_soldier=$enemyOrigin;spawn_class=$enemyClass;setup_hold_frames=$(if($Cover -or $Circle){10}else{0});initial_health=$initialHealth};output=@{trace_jsonl=$trace}}|ConvertTo-Json -Depth 6|Set-Content $config
+    $placement=if($Cover){'240,-416,24.125'}elseif($GroupRetreat){'128,-304,24'}else{'32,-224,24'}
+    $enemyClass=if($Cover -or $Circle -or $GroupRetreat){'monster_infantry'}else{'monster_parasite'}
+    $enemyOrigin=if($Cover){"$CoverTargetX,-224,24"}elseif($GroupRetreat){'192,-304,24'}else{'200,-224,24'}
+    $initialHealth=if($Recovery){$RecoveryHealth}elseif($Group -or $GroupRetreat){100}elseif($Cover -or $Circle){25}else{0}
+    @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};run=@{duration='15s';frame_paced=$true;mode='campaign';next_map='base2'};test=@{teleport_map='base1';teleport=$placement;spawn_map='base1';spawn_soldier=$enemyOrigin;spawn_class=$enemyClass;setup_hold_frames=$(if($Cover -or $Circle -or $GroupRetreat -or $Recovery){10}else{0});initial_health=$initialHealth};output=@{trace_jsonl=$trace}}|ConvertTo-Json -Depth 6|Set-Content $config
     $bot=Start-Process $Client -ArgumentList "--config `"$config`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
     $null=$bot.WaitForExit(25000);if(!$bot.HasExited){throw 'Bot timeout'};if($bot.ExitCode){throw 'Bot failed'}
     $rows=@(Get-Content $trace|ForEach-Object {$_|ConvertFrom-Json})
@@ -71,12 +81,56 @@ try{
     $events=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log'))
     $report.barrel_safety=Measure-BarrelSafety $rows $events
     if($report.barrel_safety.suppressed_attack_violations){throw 'Barrel guard retained attack'}
+    $report.campaign_engagement=@{
+        engage_frames=@($rows|Where-Object {$_.arbitration.combat_intent.action -eq 'engage'}).Count
+        pending_hold_frames=@($rows|Where-Object {$_.arbitration.move_limit_reason -eq 'campaign_combat_hold'}).Count
+        engage_route_violations=@($rows|Where-Object {$_.arbitration.combat_intent.action -eq 'engage' -and $_.arbitration.move_source -like 'route*'}).Count
+        recovery_firing_route_frames=@($rows|Where-Object {$_.arbitration.combat_intent.action -eq 'recover' -and $_.arbitration.move_source -like 'route*' -and ($_.sent_command.Buttons -band 1)}).Count
+        scope='Current observed campaign threat interrupts exit travel; recovery/objective travel remains allowed'
+    }
+    if($report.campaign_engagement.engage_route_violations){throw 'Campaign travel ignored current combat intent'}
     $selected=@($rows|Where-Object {$_.tactic.source -eq 'live' -and $_.tactic.action -eq 'retreat'})
     $steps=@($selected|Where-Object {$_.arbitration.move_source -eq 'combat_retreat' -and ($_.sent_command.Forward -ne 0 -or $_.sent_command.Side -ne 0) -and ($_.sent_command.Buttons -band 1) -and $_.arbitration.aim_source -eq 'enemy'})
     $byFrame=@{};foreach($r in $rows){$byFrame[[int]$r.frame]=$r}
     $away=0;foreach($r in $steps){$next=$byFrame[([int]$r.frame+1)];$enemy=@($r.enemies|Where-Object id -eq $r.tactic.target);if(!$next -or $enemy.Count -ne 1){continue};$before=0.;$after=0.;foreach($i in 0..1){$before+=($r.self[$i]-$enemy[0].origin[$i])*($r.self[$i]-$enemy[0].origin[$i]);$after+=($next.self[$i]-$enemy[0].origin[$i])*($next.self[$i]-$enemy[0].origin[$i])};if([math]::Sqrt($after)-[math]::Sqrt($before) -gt 2){$away++}}
     $report.live_retreat_decisions=@($selected.tactic|Sort-Object map,frame -Unique).Count;$report.retreat_firing_frames=$steps.Count;$report.observed_away_steps=$away
-    if(!$Cover -and !$Circle -and (!$selected.Count -or $steps.Count -lt 2 -or $away -lt 2)){throw 'Model-selected firing retreat not observed'}
+    if(!$Recovery -and !$Cover -and !$Circle -and (!$selected.Count -or $steps.Count -lt 2 -or $away -lt 2)){throw 'Model-selected firing retreat not observed'}
+    if($Recovery){
+        $fired=@($rows|Where-Object {$_.goal -eq 'recover_health' -and $_.arbitration.combat_intent.action -eq 'recover' -and $_.arbitration.move_source -like 'route*' -and $_.arbitration.aim_source -eq 'enemy' -and ($_.sent_command.Buttons -band 1) -and ($_.sent_command.Forward -ne 0 -or $_.sent_command.Side -ne 0)})
+        $heal=@();$approach=0
+        foreach($row in $rows){
+            $next=$byFrame[([int]$row.frame+1)];if(!$next){continue}
+            # Stock item pickup: server playerstate HP gain near the kit,
+            # with its observed entity disappearing in the same frame pair.
+            $kit=@($row.pickups|Where-Object {$_.class -eq 'item_health' -and [math]::Abs($_.origin[0]-32) -lt 1 -and [math]::Abs($_.origin[1]+352) -lt 1})
+            if($kit.Count -eq 1 -and $next.health -gt $row.health -and [math]::Abs($next.self[0]-32) -lt 48 -and [math]::Abs($next.self[1]+352) -lt 48 -and @($next.pickups|Where-Object id -eq $kit[0].id).Count -eq 0){$heal+=@{frame=$next.frame;before=$row.health;after=$next.health;item=$kit[0].id}}
+        }
+        foreach($row in $fired){$next=$byFrame[([int]$row.frame+1)];if(!$next){continue};$before=[math]::Sqrt([math]::Pow($row.self[0]-32,2)+[math]::Pow($row.self[1]+352,2));$after=[math]::Sqrt([math]::Pow($next.self[0]-32,2)+[math]::Pow($next.self[1]+352,2));if($before-$after -gt 2){$approach++}}
+        $resumed=@($rows|Where-Object {$heal.Count -gt 0 -and $_.frame -gt $heal[0].frame -and $_.goal -eq 'reach_level_exit' -and $_.arbitration.combat_intent.action -eq 'engage' -and $_.arbitration.aim_source -eq 'enemy' -and ($_.sent_command.Buttons -band 1)})
+        $report.recovery_firing_frames=$fired.Count;$report.recovery_approach_steps=$approach;$report.native_playerstate_heal=$heal;$report.post_heal_combat_frames=$resumed.Count
+        $report.recovery_incoming_health_damage=[int](($events|Where-Object {$_.target -eq $rows[0].self_entity -and $_.attacker_class -eq $enemyClass -and $_.frame -ge $fired[0].frame -and $heal.Count -gt 0 -and $_.frame -le $heal[0].frame}|Measure-Object live_health_damage -Sum).Sum)
+        $report.natural_recovery_triggered=@($fired|Where-Object {$_.health -lt 45}).Count -gt 0
+        if($fired.Count -lt 2 -or $approach -lt 2 -or !$heal.Count -or !$resumed.Count){throw 'Recovery movement/fire, native healing or return to combat absent'}
+        if($RecoveryHealth -ge 45 -and (!$report.natural_recovery_triggered -or $report.recovery_incoming_health_damage -le 0)){throw 'Natural recovery under native monster damage absent'}
+    }
+    if($GroupRetreat){
+        $groupSteps=@($steps|Where-Object {@($_.enemies|Where-Object clear_shot).Count -ge 2})
+        $observed=0;$safeAway=0;$unsafe=0
+        foreach($row in $groupSteps){
+            $next=$byFrame[([int]$row.frame+1)];if(!$next){continue}
+            $observed++;$primaryAway=$false;$stepUnsafe=$false
+            foreach($other in $row.enemies){
+                $before=0.;$after=0.
+                foreach($i in 0..1){$before+=($row.self[$i]-$other.origin[$i])*($row.self[$i]-$other.origin[$i]);$after+=($next.self[$i]-$other.origin[$i])*($next.self[$i]-$other.origin[$i])}
+                $delta=[math]::Sqrt($after)-[math]::Sqrt($before)
+                if($delta -lt -4){$unsafe++;$stepUnsafe=$true}
+                if($other.id -eq $row.arbitration.combat_spacing.target -and $delta -gt 2){$primaryAway=$true}
+            }
+            if($primaryAway -and !$stepUnsafe){$safeAway++}
+        }
+        $report.group_retreat_frames=$groupSteps.Count;$report.group_observed_steps=$observed;$report.group_safe_away_steps=$safeAway;$report.group_unsafe_steps=$unsafe
+        if($groupSteps.Count -lt 2 -or $safeAway -lt 2 -or $unsafe){throw 'Safe firing retreat from observed group absent'}
+    }
     if($Circle){
         $chosen=@($rows|Where-Object {$_.tactic.source -eq 'live' -and $_.tactic.action -eq 'circle'})
         $fired=@($chosen|Where-Object {$_.arbitration.move_source -eq 'combat_circle' -and ($_.sent_command.Buttons -band 1) -and ($_.sent_command.Forward -ne 0 -or $_.sent_command.Side -ne 0) -and $_.arbitration.aim_source -eq 'enemy'})
@@ -124,27 +178,40 @@ try{
     $events=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log'));$actor=$rows[0].self_entity
     $report.damage_summary=Measure-BotDamage $events $actor
     $report.final_health=$rows[-1].health;$report.trace=$trace
-    if($Cover -or $Circle){
+    if($Cover -or $Circle -or $GroupRetreat -or $Recovery){
         # Link the native projectile's spawn to the actual cover command, then
         # use its shot ID to attribute damage; do not count earlier attacks.
         . "$PSScriptRoot/read_projectile_ledger.ps1"
+        $firingWindow=if($GroupRetreat){$groupSteps}else{$fired}
         $coverShots=@(Read-ProjectileLedger (Join-Path $OutputRoot 'server.log') $events|Where-Object {
             $shot=$_
-            $shot.attacker -eq $actor -and @($fired|Where-Object {$_.spawncount -eq $shot.spawncount -and $_.frame -eq $shot.spawn_frame}).Count -gt 0
+            $shot.attacker -eq $actor -and @($firingWindow|Where-Object {$_.spawncount -eq $shot.spawncount -and $_.frame -eq $shot.spawn_frame}).Count -gt 0
         })
-        if($Circle){$report.circle_projectiles=Measure-ProjectileLedger $coverShots $actor}else{$report.cover_projectiles=Measure-ProjectileLedger $coverShots $actor}
+        if($Recovery){$report.recovery_projectiles=Measure-ProjectileLedger $coverShots $actor}elseif($GroupRetreat){$report.group_retreat_projectiles=Measure-ProjectileLedger $coverShots $actor}elseif($Circle){$report.circle_projectiles=Measure-ProjectileLedger $coverShots $actor}else{$report.cover_projectiles=Measure-ProjectileLedger $coverShots $actor}
         $coverDamage=@($coverShots.damage|Where-Object {$_.target_class -eq $enemyClass -and $_.live_health_damage -gt 0})
-        if($Circle){$report.circle_health_damage=[int](($coverDamage|Measure-Object live_health_damage -Sum).Sum)}else{$report.cover_window_health_damage=[int](($coverDamage|Measure-Object live_health_damage -Sum).Sum);$report.cover_window_damage_frames=@($coverDamage.frame)}
+        if($Recovery){$report.recovery_health_damage=[int](($coverDamage|Measure-Object live_health_damage -Sum).Sum)}elseif($GroupRetreat){$report.group_retreat_health_damage=[int](($coverDamage|Measure-Object live_health_damage -Sum).Sum)}elseif($Circle){$report.circle_health_damage=[int](($coverDamage|Measure-Object live_health_damage -Sum).Sum)}else{$report.cover_window_health_damage=[int](($coverDamage|Measure-Object live_health_damage -Sum).Sum);$report.cover_window_damage_frames=@($coverDamage.frame)}
     }
     $report.kills=@($events|Where-Object {$_.attacker -eq $actor -and $_.target_class -eq $enemyClass -and $_.killed}).Count
-    $expectedKills=if($Group){2}else{1}
-    if($report.kills -ne $expectedKills -and !$Cover){throw 'Native target kill absent'}
+    if($Recovery){
+        $killFrame=($events|Where-Object {$_.attacker -eq $actor -and $_.target_class -eq $enemyClass -and $_.killed}|Measure-Object frame -Maximum).Maximum
+        $report.post_combat_route_frames=@($rows|Where-Object {$null -ne $killFrame -and $_.frame -gt $killFrame -and $_.goal -eq 'reach_level_exit' -and $_.arbitration.move_source -like 'route*' -and ($_.sent_command.Forward -ne 0 -or $_.sent_command.Side -ne 0)}).Count
+        if(!$report.post_combat_route_frames){throw 'Campaign movement after recovered combat absent'}
+    }
+    $expectedKills=if($Group -or $GroupRetreat){2}else{1}
+    if($report.kills -ne $expectedKills -and !$Cover -and !$GroupRetreat){throw 'Native target kill absent'}
     if($CoverFight -and ($report.kills -ne 1 -or $report.cover_exposures -lt 2)){throw 'Repeated cover exposures and native kill absent'}
     if(@(Get-Content (Join-Path $OutputRoot 'server.log')|Where-Object {$_ -eq "g_test_seed ready version=1 seed=$Seed"}).Count -ne 1){throw 'Seed acknowledgement absent'}
     $commands=Get-Content (Join-Path $OutputRoot 'bot.err')
-    if(@($commands|Select-String 'client command: teleport ').Count -ne 1 -or @($commands|Select-String 'client command: spawnentity ').Count -ne 1 -or ($commands -match 'client command: (god|kill|map|gamemap) ') -or @($commands|Select-String 'client command: give '|Where-Object { (!$Cover -and !$Circle) -or $_.Line -notlike "*client command: give health $initialHealth" }).Count){throw 'Unexpected setup/gameplay command'}
+    if(@($commands|Select-String 'client command: teleport ').Count -ne 1 -or @($commands|Select-String 'client command: spawnentity ').Count -ne 1 -or ($commands -match 'client command: (god|kill|map|gamemap) ') -or @($commands|Select-String 'client command: give '|Where-Object { (!$Cover -and !$Circle -and !$GroupRetreat -and !$Recovery) -or $_.Line -notlike "*client command: give health $initialHealth" }).Count){throw 'Unexpected setup/gameplay command'}
+    if($Recovery -and $report.recovery_health_damage -le 0){throw 'Native monster damage from recovery firing window absent'}
+    if($GroupRetreat){
+        if($report.group_retreat_health_damage -le 0){throw 'Native damage from grouped retreat projectiles absent'}
+        $report.group_retreat_maneuver_accepted=$true
+        $report.group_fight_completed=$report.kills -eq 2
+        if(!$report.group_fight_completed){throw 'Grouped retreat maneuver passed, but full native fight incomplete'}
+    }
     if($Circle -and $report.circle_health_damage -le 0){throw 'Native damage from circle projectiles absent'}
-    if($Cover -and $report.cover_window_health_damage -le 0){throw 'Native monster damage in cover firing window absent'};if(!$Cover -and !$Circle){$report.scope='Prepared single vulnerable native parasite, ordinary solo campaign commands; model-selected retreat plus shooting and observed movement, not general campaign acceptance'};$report.accepted=$true;$report.reason='accepted'
+    if($Cover -and $report.cover_window_health_damage -le 0){throw 'Native monster damage in cover firing window absent'};if($Recovery){$report.scope="Prepared ${initialHealth}HP solo actor, skill $RecoverySkill vulnerable Parasite and native 25HP kit; Go recovery movement with attributed fire, item heal and resumed combat; no remembered hidden-item or general campaign acceptance"}elseif($GroupRetreat){$report.scope='Prepared two vulnerable infantry: close primary and rear flank, live retreat, actual spacing and attributed bolt damage; no mixed group or general campaign acceptance'}elseif(!$Cover -and !$Circle){$report.scope='Prepared single vulnerable native parasite, ordinary solo campaign commands; model-selected retreat plus shooting and observed movement, not general campaign acceptance'};$report.accepted=$true;$report.reason='accepted'
 }catch{
     $report.reason=$_.Exception.Message
     # Keep server ground truth even when gameplay acceptance fails early.
