@@ -5,6 +5,7 @@ package policy
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 
 	"q2coopbot/internal/quake"
@@ -24,6 +25,10 @@ type Identity struct {
 }
 
 type Enemy struct {
+	ModelPath       string      `json:"observed_model,omitempty"`
+	Skin            *uint32     `json:"observed_skin,omitempty"`
+	Animation       *int        `json:"observed_animation_frame,omitempty"`
+	Angles          *quake.Vec3 `json:"observed_angles,omitempty"`
 	Solid           *uint16     `json:"observed_solid,omitempty"`
 	Distance        float64     `json:"distance"`
 	MotionDirection *quake.Vec3 `json:"motion_direction"`
@@ -39,6 +44,7 @@ type Enemy struct {
 // Tracks describe uninterrupted visible observations, not server generations.
 // Client/BSP-derived features are separate from offline server reward telemetry.
 type Observation struct {
+	Composition        *[]MonsterCount        `json:"visible_monster_composition,omitempty"`
 	Geometry           *LocalGeometry         `json:"local_geometry"`
 	Projectiles        *[]Enemy               `json:"visible_projectiles"`
 	Pickups            *[]NearbyObject        `json:"visible_pickups"`
@@ -98,17 +104,38 @@ func Observe(s quake.Snapshot, id Identity, previous quake.UserCmd) Observation 
 		v := relative(*s.Teammate, s.Self)
 		o.Teammate = &v
 	}
-	for _, e := range s.Enemies {
+	counts := map[string]int{}
+	visible := append([]quake.Object(nil), s.Enemies...)
+	sort.SliceStable(visible, func(i, j int) bool {
+		return quake.Distance(visible[i].Origin, s.Self) < quake.Distance(visible[j].Origin, s.Self)
+	})
+	for _, e := range visible {
 		// PVS alone is not visibility. Do not expose positions behind a wall.
 		if e.ClearShot == nil || !*e.ClearShot {
 			continue
 		}
 		if len(o.Enemies) == 8 {
-			break
+			counts[MonsterType(e.Class, e.ModelPath)]++
+			continue
 		}
+		counts[MonsterType(e.Class, e.ModelPath)]++
 		solid := e.Solid
-		o.Enemies = append(o.Enemies, Enemy{Solid: &solid, ID: e.ID, Class: e.Class, Relative: relative(e.Origin, s.Self), Distance: quake.Distance(e.Origin, s.Self), ClearShot: e.ClearShot})
+		enemy := Enemy{ModelPath: e.ModelPath, Solid: &solid, ID: e.ID, Class: e.Class, Relative: relative(e.Origin, s.Self), Distance: quake.Distance(e.Origin, s.Self), ClearShot: e.ClearShot}
+		if e.ModelPath != "" {
+			skin, frame, angles := e.Skin, e.Frame, e.Angles
+			enemy.Skin = &skin
+			enemy.Animation = &frame
+			enemy.Angles = &angles
+		}
+		o.Enemies = append(o.Enemies, enemy)
 	}
+	composition := []MonsterCount{}
+	for _, kind := range monsterTypes {
+		if counts[kind] > 0 {
+			composition = append(composition, MonsterCount{kind, counts[kind]})
+		}
+	}
+	o.Composition = &composition
 	return o
 }
 

@@ -13,3 +13,18 @@ Objective fork `workspace/artifacts/combat-objective-maneuver-v4-fork-20261006`:
 Протокол до запуска: **8 fixed PPO updates**, каждый на четырёх fresh инстансах, x2, отдельные training seeds 15900–15931; HP60, 300 post-barrier game frames, release100/Blaster idle9/post-frame RNG reset. Это ограниченный пилот усиленного movement signal; budget задан до оценки результата. Paired eval parent/fixed eighth update на 175 HP, held-out seeds16000–16003; eval не обучает и не выбирает более выгодный промежуточный checkpoint. Root `workspace/artifacts/combat-ppo-maneuver-v4-20261006`. Full world reset не доказан; reward/critic/Adam изменены вместе, causal attribution ограничена. Пользовательский live не заменяется.
 
 Перед запуском прошли `go test ./...`, 17 Python checks, PowerShell parser; тестируются retreat/approach signs, range loops, terminal correction/config bounds, reward gamma pin, diagnostic distinction self/target movement, старые проверки objective и прицела.
+
+Опыт завершён: 32 training episodes, 8252 подтверждённых PPO перехода, 80 actor steps; final cumulative checkpoint counters 45 updates / 446 actor steps. На всех восьми batch CPU оказался быстрее RTX5070 CUDA для этой небольшой сети. Fixed eighth-update weights SHA `5c036d9064fca0039455f82b672fee7eafd79cbc9645a3879789496bf6467d53`; checkpoint SHA `ed68b7c780770363f6b041a301796f93c2aa5407107fc61233deb693fe195157`.
+
+| Held-out seed, 175 HP | Полученный урон до → после | Урон монстру до → после | Убийства до → после |
+|---|---:|---:|---:|
+|16000|100 → 13|20 → 20|0 → 0|
+|16001|100 → 18|20 → 20|0 → 0|
+|16002|100 → 10|20 → 20|0 → 0|
+|16003|100 → 25|20 → 20|0 → 0|
+
+Суммарный incoming 400→66, first-life deaths 4→0 в пределах ограниченного capture. Mean observed horizontal range 226.66→342.88, provider samples внутри288 607/607→184/1198; near stationary340→0, фактический self retreat160→239. Это свидетельство улучшившегося удержания дистанции в этом пилоте. Прицел/добивание остаются проблемой: outgoing80→80, ни одного training HP60 kill, ни одного eval HP175 kill. Reward prior специфичен для Parasite; результат не переносится автоматически на Gunner или группу.
+
+Ограничение attribution: у seed16003 после обучения было два коротких provider→rules handoff и два возвращения к provider (frames271/273/287/291). Поэтому 0 deaths нельзя целиком приписывать непрерывному learned управлению; три остальных after-eval без handoff. Diagnostic provider counters исключают rules, а server first-life damage охватывает весь первый observed life, включая подготовку и эти короткие handoff. Rules-oriented harness acceptance 0 не является критерием успеха этого Blaster опыта.
+
+Независимый offline audit `shaping-audit.json` проверил native provenance всех 40 training/eval episodes, aim/spacing компоненты всех available rewards и точный consumed score всех8252 PPO rows; max component error8.9e-16. Kill reward в training не встречался. Full engine reset/causal ablation не доказаны. Пользовательский live marker сохранён, экспериментальный checkpoint в него не назначен. Дальше добавлены [типизированные entity inputs v4](learned_combat_entity_types_v4.md); feature v4 и reward v4 — отдельные версии контрактов.

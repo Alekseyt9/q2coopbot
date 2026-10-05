@@ -78,7 +78,7 @@ func (h *History) enrichObjects(current, previous []Enemy, position, previousPos
 		e.Track, e.Velocity = nil, nil
 		e.MotionDirection = nil
 		for _, prev := range previous {
-			if prev.ID == e.ID && prev.Class == e.Class && prev.Track != nil {
+			if prev.ID == e.ID && prev.Class == e.Class && prev.ModelPath == e.ModelPath && prev.Track != nil {
 				track := *prev.Track
 				e.Track = &track
 				v := quake.Vec3{}
@@ -113,6 +113,18 @@ func cloneProjectiles(p *[]Enemy) *[]Enemy {
 func cloneEnemies(enemies []Enemy) []Enemy {
 	copy := append([]Enemy{}, enemies...)
 	for i := range copy {
+		if copy[i].Skin != nil {
+			v := *copy[i].Skin
+			copy[i].Skin = &v
+		}
+		if copy[i].Animation != nil {
+			v := *copy[i].Animation
+			copy[i].Animation = &v
+		}
+		if copy[i].Angles != nil {
+			v := *copy[i].Angles
+			copy[i].Angles = &v
+		}
 		if copy[i].Solid != nil {
 			v := *copy[i].Solid
 			copy[i].Solid = &v

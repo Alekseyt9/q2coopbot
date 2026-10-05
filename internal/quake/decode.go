@@ -66,6 +66,7 @@ func (r *reader) skip(n int) error { _, e := r.take(n); return e }
 
 type Entity struct {
 	Number, Model, Frame int
+	Skin                 uint32
 	RenderFX             int
 	Solid                uint16
 	Origin               Vec3
@@ -191,17 +192,23 @@ func parseEntity(r *reader, number int, b uint32, old Entity) (Entity, error) {
 		out.Frame = int(x)
 	}
 	if b&0x10000 != 0 && b&0x2000000 != 0 {
-		if e := r.skip(4); e != nil {
+		v, e := r.long()
+		if e != nil {
 			return out, e
 		}
+		out.Skin = uint32(v)
 	} else if b&0x10000 != 0 {
-		if e := r.skip(1); e != nil {
+		v, e := r.byte()
+		if e != nil {
 			return out, e
 		}
+		out.Skin = uint32(v)
 	} else if b&0x2000000 != 0 {
-		if e := r.skip(2); e != nil {
+		v, e := r.ushort()
+		if e != nil {
 			return out, e
 		}
+		out.Skin = uint32(v)
 	}
 	for _, pair := range [][2]uint32{{0x4000, 0x80000}, {0x1000, 0x40000}} {
 		n := 0
@@ -719,6 +726,9 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 }
 
 type Object struct {
+	ModelPath    string `json:"model_path,omitempty"`
+	Angles       Vec3   `json:"angles,omitempty"`
+	Skin         uint32 `json:"skin,omitempty"`
 	ID           int    `json:"id"`
 	Class        string `json:"class"`
 	Origin       Vec3   `json:"origin"`
@@ -872,7 +882,7 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 				s.Defeated = append(s.Defeated, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame})
 				continue
 			}
-			s.Enemies = append(s.Enemies, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame, Solid: entity.Solid})
+			s.Enemies = append(s.Enemies, Object{ModelPath: path, Angles: entity.Angles, Skin: entity.Skin, ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame, Solid: entity.Solid})
 		} else if kind := pickupModels[path]; kind != "" && Distance(entity.Origin, f.Origin) < 384 {
 			s.Pickups = append(s.Pickups, Object{ID: entity.Number, Class: kind, Origin: entity.Origin, Frame: entity.Frame})
 		} else if strings.Contains(path, "/items/") && Distance(entity.Origin, f.Origin) < 384 {

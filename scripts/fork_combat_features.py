@@ -10,10 +10,10 @@ from ppo_combat import network, torch, sha
 
 
 def extend(model, checkpoint):
-    migrations={'combat_features_v1':('combat_features_v2',386),'combat_features_v2':('combat_features_v3',426)}
+    migrations={'combat_features_v1':('combat_features_v2',386,40),'combat_features_v2':('combat_features_v3',426,40),'combat_features_v3':('combat_features_v4',466,344)}
     if model.get('feature_version') not in migrations:
-        raise ValueError('Only consecutive v1/v2 feature migrations supported')
-    version,inputs=migrations[model['feature_version']]
+        raise ValueError('Only consecutive v1/v2/v3 feature migrations supported')
+    version,inputs,added=migrations[model['feature_version']]
     # Validates all parent tensors/std. Both Adam resets are explicit because
     # parameter shapes change; history/objective/RNG/counters remain intact.
     child, state = fork(model, checkpoint, model['log_std'])
@@ -22,7 +22,7 @@ def extend(model, checkpoint):
         if any(len(row) != inputs for row in child[name][0]['weight']):
             raise ValueError('Unexpected parent input width')
         for row in child[name][0]['weight']:
-            row.extend([0.] * 40)
+            row.extend([0.] * added)
         state[name] = network(child[name]).state_dict()
     actor, value = network(child['actor']), network(child['value'])
     std = torch.nn.Parameter(torch.tensor(child['log_std']))
@@ -48,7 +48,8 @@ def main():
         raise ValueError('Nonempty probe required')
     x = torch.tensor([r['features'] for r in rows], dtype=torch.float32)
     # Nonzero arbitrary additions prove they cannot affect initial outputs.
-    extra = torch.linspace(-1,1,len(rows)*40).reshape(len(rows),40)
+    added=len(child['actor'][0]['weight'][0])-len(x[0])
+    extra = torch.linspace(-1,1,len(rows)*added).reshape(len(rows),added)
     errors = {}
     with torch.no_grad():
         for name in ('actor','value'):
@@ -64,7 +65,7 @@ def main():
         raise ValueError('Parent inputs changed')
     report = dict(version='combat_feature_fork_v1',source_sha256=inputs,
                   weights_sha256=sha(weights),max_output_error=errors,probe_rows=len(rows),
-                  inputs_before=len(x[0]),inputs_after=len(x[0])+40,
+                  inputs_before=len(x[0]),inputs_after=len(x[0])+added,
                   scope='Zero appended weights preserve initial actor/value; both Adam states reset. Objective/std/RNG/consumed history/counters preserved. Only fresh on-policy training; no live target correction.')
     (a.out/'report.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report,indent=2))

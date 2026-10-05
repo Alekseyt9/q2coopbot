@@ -201,6 +201,10 @@ PPO обучается на свежих rollout своей версии пол�
 
 06.10, [UDP bbox + aim potential v3](testing/learned_combat_aim_reward_v3.md): optional observed enemy solid, masked bbox-clamped aim features (466 inputs), reward `gamma*Phi(next)-Phi(current)` с gamma=0.99 и terminal/handoff zero potential. Старые features/rewards совместимы. 3704 свежих PPO перехода, независимый audit награды max error 2.3e-16; full-HP kills 0→0, outgoing 80→80, deaths 4→4, все eval без handoff. Runtime/reward pipeline проверен, gameplay улучшения нет. Перед дальнейшим общим PPO бюджетом — изолированная проверка обучаемости прицела и масштаба yaw/pitch. GRU/attention остаются отдельной будущей работой.
 
+06.10, [maneuver reward v4](testing/learned_combat_maneuver_reward_v4.md): по уточнению пользователя aim-only диагностика отложена, добавлен observed Parasite spacing potential. 8 fixed updates /8252 fresh transitions; четыре held-out full-HP eval incoming400→66, deaths4→0, mean range227→343, outgoing80→80/kills0→0. Один after-eval содержит короткие rules handoff; остальные три без handoff. Native provenance/reward audit пройден, улучшение добивания и перенос на группы не доказаны.
+
+06.10, [entity features v4](testing/learned_combat_entity_types_v4.md):810 inputs, отдельные type/motion/facing/skin/animation/bbox для8 ближайших врагов +counts всей видимой группы. Full model path различает Jorg/Makron; unknown masks сохранены, hidden server state не используется. Нулевая миграция с maneuver checkpoint,4 independent x2 mixed Parasite+Gunner captures,seeds16100–16103,353 fresh rows/первый PPO update; новые type/group weights ненулевые. Это integration/learning-data milestone, не успех тактики против группы. До обновления mixed deaths4/4; held-out оценка обновлённого model ещё нужна. GRU/attention остаются отдельной будущей работой.
+
 ## Следующие пять конкретных шагов
 
 1. R0: измерить пропускную способность текущего харнеса, reset и размер логов; сохранить baseline по первой жизни.

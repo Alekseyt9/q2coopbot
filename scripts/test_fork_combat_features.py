@@ -28,7 +28,11 @@ class FeatureForkTests(unittest.TestCase):
         self.assertEqual(grandchild['feature_version'],'combat_features_v3')
         for name in ('actor','value'):
             torch.testing.assert_close(network(child[name])(torch.cat((x,extra),1)),network(grandchild[name])(torch.cat((x,extra,extra),1)),rtol=1e-5,atol=1e-6)
-        with self.assertRaises(ValueError):extend(grandchild,newstate)
+        typed,typedstate=extend(grandchild,newstate)
+        self.assertEqual(typed['feature_version'],'combat_features_v4')
+        for name in ('actor','value'):
+            torch.testing.assert_close(network(grandchild[name])(torch.cat((x,extra,extra),1)),network(typed[name])(torch.cat((x,extra,extra,torch.randn(31,344)),1)),rtol=1e-5,atol=1e-6)
+        with self.assertRaises(ValueError):extend(typed,typedstate)
         bad=copy.deepcopy(state);bad['actor']['0.bias'][0]+=1
         with self.assertRaises(ValueError):extend(model,bad)
 

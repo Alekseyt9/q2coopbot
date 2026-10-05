@@ -11,6 +11,7 @@ import (
 const FeatureVersion = "combat_features_v1"
 const AimFeatureVersion = "combat_features_v2"
 const BBoxFeatureVersion = "combat_features_v3"
+const TypedFeatureVersion = "combat_features_v4"
 
 // ObservedAimDirection uses only observed protocol bbox and current eye.
 // Unknown/non-bbox solids are unavailable, without a guessed body height.
@@ -47,7 +48,7 @@ func ObservedAimDirection(o Observation, e Enemy) (quake.Vec3, bool, error) {
 // slots: valid mask, sin/cos yaw error, sin/cos pitch error to the observed
 // enemy origin from the current eye. This is geometry, not an action or teacher.
 func FeaturesForVersion(o Observation, version string) ([]float64, error) {
-	if version != FeatureVersion && version != AimFeatureVersion && version != BBoxFeatureVersion {
+	if version != FeatureVersion && version != AimFeatureVersion && version != BBoxFeatureVersion && version != TypedFeatureVersion {
 		return nil, fmt.Errorf("unsupported features %q", version)
 	}
 	v, err := Features(o)
@@ -79,7 +80,7 @@ func FeaturesForVersion(o Observation, version string) ([]float64, error) {
 		pitch := -math.Atan2(z, math.Hypot(r[0], r[1])) - degrees(o.ViewAngles[0])*math.Pi/180
 		v = append(v, 1, math.Sin(yaw), math.Cos(yaw), math.Sin(pitch), math.Cos(pitch))
 	}
-	if version == BBoxFeatureVersion {
+	if version == BBoxFeatureVersion || version == TypedFeatureVersion {
 		for i := 0; i < 8; i++ {
 			if i >= len(enemies) {
 				v = append(v, 0, 0, 0, 0, 0)
@@ -97,6 +98,13 @@ func FeaturesForVersion(o Observation, version string) ([]float64, error) {
 			pitch := -math.Atan2(r[2], math.Hypot(r[0], r[1])) - degrees(o.ViewAngles[0])*math.Pi/180
 			v = append(v, 1, math.Sin(yaw), math.Cos(yaw), math.Sin(pitch), math.Cos(pitch))
 		}
+	}
+	if version == TypedFeatureVersion {
+		extra, err := typedFeatures(o, enemies)
+		if err != nil {
+			return nil, err
+		}
+		v = append(v, extra...)
 	}
 	return v, nil
 }

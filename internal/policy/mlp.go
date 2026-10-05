@@ -46,7 +46,7 @@ func LoadMLP(path string) (*MLP, error) {
 	if err = d.Decode(new(any)); err != io.EOF {
 		return nil, fmt.Errorf("trailing model data")
 	}
-	if f.Kind != MLPKind || (f.Features != FeatureVersion && f.Features != AimFeatureVersion && f.Features != BBoxFeatureVersion) || len(f.Layers) != 3 {
+	if f.Kind != MLPKind || (f.Features != FeatureVersion && f.Features != AimFeatureVersion && f.Features != BBoxFeatureVersion && f.Features != TypedFeatureVersion) || len(f.Layers) != 3 {
 		return nil, fmt.Errorf("unsupported BC architecture")
 	}
 	if err := validateFeatureLayers(f.Layers, 8, f.Features); err != nil {
