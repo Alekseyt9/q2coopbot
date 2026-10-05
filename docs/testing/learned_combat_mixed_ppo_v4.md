@@ -17,3 +17,20 @@ Provider-only diagnostics первого eval: all253→296 Parasite range sampl
 Четыре дополнительных training updates завершены:16 independent episodes,1477 fresh transitions (360/299/390/428),36 accepted actor steps (10/6/10/10). Во втором batch KL guard отклонил следующий шаг и остановил actor после6 accepted steps; optimizer rollback включён, final KL0.00997. Остальные final KL0.00637/0.00958/0.00963 (точные значения сохранены в progress reports). Все training first lives завершились observed death, kills0; успешное обучение пайплайна не означает победу в fixture.
 
 Fixed final weights SHA `7bbd24cd1fb8e1697d7c8231088bb7dc4deed373d5ece65224ae4c9e44abb297`; cumulative50 updates/492 actor steps. CPU был быстрее CUDA на каждом batch. Checkpoint продолжает policy/value/optimizer/RNG/consumed history; исходные model/checkpoint сохранены.
+
+Final checkpoint SHA `09bd96924e371ba5fa805ee77c48339b9c9952135867116a12b8a2ffc839264c`, путь `workspace/artifacts/combat-ppo-mixed-types-v4-20261006/iteration-4/update/checkpoint.pt`.
+
+| Held-out seed16400–16403 | Outgoing до → после | Incoming до → после | Provider first-life frames до → после |
+|---|---:|---:|---:|
+|16400|30 → 20|100 → 100|62 → 77|
+|16401|30 → 20|100 → 100|95 → 74|
+|16402|30 → 20|100 → 100|80 → 60|
+|16403|30 → 20|100 → 100|85 → 59|
+
+Итог второго paired eval: deaths4→4/kills0→0, outgoing120→80, incoming400→400; все8 first lives без handoff. Summed provider frames322→270. Mean Parasite range170.48→236.96, но все322→270 observed samples всё ещё внутри288; bbox angular error>15° у310/322→207/215 attack samples. Увеличение дистанции не привело к победам и сопровождалось ухудшением нанесённого урона. Fixed final model не удовлетворяет Mixed criterion и не назначен для live.
+
+По native attacker class incoming от Parasite241→182, от Gunner159→218. Следовательно улучшение одного spacing prior в группе может сопровождаться большим воздействием другого противника; простого суммирования индивидуальной безопасной дистанции как готовой тактики этот опыт не подтверждает.
+
+Independent `paired-audit.json` подтверждает manifest matching/provenance/dispatch/seed pairs и0 first-life handoff. `shaping-audit.json` проверяет native provenance всех24 training/eval episodes, aim+spacing available reward components и точный consumed score всех1477 rows, max error8.9e-16; training kill rewards0. Нельзя считать положительный shaping победой или качество actor достаточным из-за ненулевых type weights.
+
+Практический следующий шаг: адресовать удержание прицела и sparse kill progress отдельным коротким упражнением/контрольным curriculum, затем вернуться к смешанным составам и отдельно проверить сохранение одиночного маневрирования. Повторение той же короткой Mixed серии пока не дало оснований ждать побед; больше ёмкости/GRU сами по себе этой проверкой не обоснованы. Веса/rollout сохранены для продолжения. PS parser и negative Mixed+HP guard прошли; runtime четыре training batch и два eval batch подтвердили передачу Mixed. Пользовательские live marker/config не изменены, порты33100–33103 после прогона свободны.

@@ -23,6 +23,43 @@ function Install-RuntimeAAS([string]$Source, [string]$Target) {
         if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }
     }
 }
+# NTFS permits only 1024 links per file. Shared immutable PAK shards avoid a
+# private 184MB copy per episode once the original archive reaches that limit.
+function Install-RuntimePak([string]$Source, [string]$Target, [string]$PoolRoot) {
+    try {
+        New-Item -ItemType HardLink -Path $Target -Target $Source -ErrorAction Stop | Out-Null
+        return
+    } catch {
+        if (Test-Path -LiteralPath $Target) { throw }
+    }
+    $digest = (Get-FileHash -LiteralPath $Source -Algorithm SHA256).Hash.ToLowerInvariant()
+    $pool = Join-Path $PoolRoot $digest
+    New-Item -ItemType Directory -Path $pool -Force | Out-Null
+    foreach ($index in 0..31) {
+        $anchor = Join-Path $pool "asset-$index.pak"
+        if (-not (Test-Path -LiteralPath $anchor)) {
+            $temporary = Join-Path $pool ([guid]::NewGuid().ToString('N') + '.tmp')
+            try {
+                Copy-Item -LiteralPath $Source -Destination $temporary
+                try { [IO.File]::Move($temporary, $anchor) } catch {
+                    if (-not (Test-Path -LiteralPath $anchor)) { throw }
+                }
+            } finally {
+                if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }
+            }
+        }
+        if ((Get-FileHash -LiteralPath $anchor -Algorithm SHA256).Hash.ToLowerInvariant() -ne $digest) {
+            throw "Immutable PAK pool differs from source: $anchor"
+        }
+        try {
+            New-Item -ItemType HardLink -Path $Target -Target $anchor -ErrorAction Stop | Out-Null
+            return
+        } catch {
+            if (Test-Path -LiteralPath $Target) { throw }
+        }
+    }
+    throw "Cannot link PAK from bounded shared pool: $Source"
+}
 foreach ($path in @($AssetsRoot, $ServerExe, $GameDll)) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Required input is missing: $path" }
 }
@@ -71,14 +108,8 @@ foreach ($name in @('pak0.pak', 'pak1.pak', 'pak2.pak')) {
     $target = Join-Path $baseq2 $name
     if (Test-Path -LiteralPath $target) { continue }
     if ([IO.Path]::GetPathRoot((Resolve-Path -LiteralPath $source).Path) -eq [IO.Path]::GetPathRoot((Resolve-Path -LiteralPath $RuntimeRoot).Path)) {
-        try {
-            New-Item -ItemType HardLink -Path $target -Target $source -ErrorAction Stop | Out-Null
-        } catch {
-            # Long-lived parallel suites can reach NTFS's per-file link limit.
-            # Keep the private runtime usable by copying the immutable asset.
-            if (Test-Path -LiteralPath $target) { throw }
-            Copy-Item -LiteralPath $source -Destination $target
-        }
+        $poolRoot = Join-Path (Split-Path -Parent $PSScriptRoot) 'workspace/build/runtime-paks'
+        Install-RuntimePak $source $target $poolRoot
     } else {
         Copy-Item -LiteralPath $source -Destination $target
     }
