@@ -20,11 +20,12 @@ import (
 )
 
 type Condition struct {
-	Map         string `json:"map"`
-	Loadout     string `json:"loadout"`
-	Mixed       bool   `json:"mixed"`
-	HealthKit   bool   `json:"health_kit"`
-	Synchronous bool   `json:"synchronous"`
+	Map             string `json:"map"`
+	Loadout         string `json:"loadout"`
+	Mixed           bool   `json:"mixed"`
+	HealthKit       bool   `json:"health_kit"`
+	Synchronous     bool   `json:"synchronous"`
+	TeacherVertical bool   `json:"teacher_vertical"`
 }
 type EpisodeSpec struct {
 	Seed  int    `json:"seed"`
@@ -38,8 +39,11 @@ type Spec struct {
 }
 
 func (s Spec) Validate() error {
-	if s.Version != "combat_dataset_spec_v1" || s.SelectionVersion != SelectionVersion || s.Condition.Map == "" || !s.Condition.Synchronous || len(s.Episodes) == 0 {
+	if s.Version != "combat_dataset_spec_v1" || s.SelectionVersion != SelectionVersion && s.SelectionVersion != ReleaseSelectionVersion && s.SelectionVersion != VerticalSelectionVersion || s.Condition.Map == "" || !s.Condition.Synchronous || len(s.Episodes) == 0 {
 		return fmt.Errorf("invalid dataset specification")
+	}
+	if (s.SelectionVersion == VerticalSelectionVersion) != s.Condition.TeacherVertical {
+		return fmt.Errorf("vertical selector requires explicit vertical condition")
 	}
 	seen := map[int]bool{}
 	splits := map[string]int{}
@@ -78,32 +82,41 @@ type Candidate struct {
 	Target      policy.Action      `json:"target_applied_action"`
 }
 type Counts struct {
-	Episodes   int            `json:"episodes"`
-	Steps      int            `json:"steps"`
-	Candidates int            `json:"candidates"`
-	Movement   int            `json:"movement"`
-	AimAttack  int            `json:"aim_attack"`
-	Reasons    map[string]int `json:"rejections"`
+	Episodes        int            `json:"episodes"`
+	Steps           int            `json:"steps"`
+	Candidates      int            `json:"candidates"`
+	Movement        int            `json:"movement"`
+	AimAttack       int            `json:"aim_attack"`
+	AttackPositive  int            `json:"attack_positive"`
+	AttackNegative  int            `json:"attack_negative"`
+	Jump            int            `json:"jump"`
+	Crouch          int            `json:"crouch"`
+	VerticalRelease int            `json:"vertical_release"`
+	Reasons         map[string]int `json:"rejections"`
 }
 type Report struct {
-	Version string             `json:"version"`
-	Ready   bool               `json:"candidate_dataset_ready"`
-	SpecSHA string             `json:"spec_sha256"`
-	Splits  map[string]*Counts `json:"splits"`
-	Sources []Source           `json:"sources"`
-	Scope   string             `json:"scope"`
+	Version          string             `json:"version"`
+	SelectionVersion string             `json:"selection_version"`
+	AttackReady      bool               `json:"attack_examples_present_in_all_splits"`
+	VerticalReady    bool               `json:"vertical_examples_present_in_all_splits"`
+	Ready            bool               `json:"candidate_dataset_ready"`
+	SpecSHA          string             `json:"spec_sha256"`
+	Splits           map[string]*Counts `json:"splits"`
+	Sources          []Source           `json:"sources"`
+	Scope            string             `json:"scope"`
 }
 
 type batchManifest struct {
-	Provenance  bool                      `json:"provenance_valid"`
-	Source      string                    `json:"source_fingerprint"`
-	Native      string                    `json:"native_source_fingerprint"`
-	Mode        string                    `json:"provider"`
-	Loadout     string                    `json:"loadout"`
-	Mixed       bool                      `json:"mixed"`
-	HealthKit   bool                      `json:"health_kit"`
-	Synchronous bool                      `json:"synchronous"`
-	Reward      *learningenv.RewardConfig `json:"reward_config"`
+	Provenance      bool                      `json:"provenance_valid"`
+	Source          string                    `json:"source_fingerprint"`
+	Native          string                    `json:"native_source_fingerprint"`
+	Mode            string                    `json:"provider"`
+	Loadout         string                    `json:"loadout"`
+	Mixed           bool                      `json:"mixed"`
+	HealthKit       bool                      `json:"health_kit"`
+	Synchronous     bool                      `json:"synchronous"`
+	TeacherVertical bool                      `json:"teacher_vertical"`
+	Reward          *learningenv.RewardConfig `json:"reward_config"`
 }
 type episodeResult struct {
 	Seed          int    `json:"seed"`
@@ -179,6 +192,7 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 	if err := spec.Validate(); err != nil {
 		return report, err
 	}
+	report.SelectionVersion = spec.SelectionVersion
 	hash := sha256.Sum256(data)
 	report.SpecSHA = hex.EncodeToString(hash[:])
 	inputs := map[int]inputEpisode{}
@@ -201,7 +215,7 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 		if err := manifest.Reward.Validate(); err != nil {
 			return report, err
 		}
-		if manifest.Loadout != spec.Condition.Loadout || manifest.Mixed != spec.Condition.Mixed || manifest.HealthKit != spec.Condition.HealthKit || manifest.Synchronous != spec.Condition.Synchronous {
+		if manifest.Loadout != spec.Condition.Loadout || manifest.Mixed != spec.Condition.Mixed || manifest.HealthKit != spec.Condition.HealthKit || manifest.Synchronous != spec.Condition.Synchronous || manifest.TeacherVertical != spec.Condition.TeacherVertical {
 			return report, fmt.Errorf("batch does not match frozen condition")
 		}
 		for _, result := range summary.Results {
@@ -252,6 +266,9 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 		if input.Manifest.Loadout == "shotgun" {
 			source.Assistance += "; test-only fixed Shotgun, automatic weapon selection disabled"
 		}
+		if input.Manifest.TeacherVertical {
+			source.Assistance += "; explicit scripted vertical_flat_v1 primitive, horizontal/fire hold for first 20 released frames"
+		}
 		paths := map[string]string{"manifest": filepath.Join(input.Batch, "manifest.json"), "report": filepath.Join(input.Batch, "report.json"), "config": filepath.Join(root, "bot-config.json"), "trace": filepath.Join(root, "bot.jsonl"), "server": filepath.Join(root, "server.log"), "steps": filepath.Join(root, "dataset/steps.jsonl"), "effects": filepath.Join(root, "dataset/server_outcomes.jsonl"), "rewards": filepath.Join(root, "dataset/rewards.jsonl"), "initial": filepath.Join(root, "dataset/episode_start.json"), "reset": filepath.Join(root, "reset-expectation.json")}
 		if len(input.Result.RuntimeFiles) == 0 {
 			return report, fmt.Errorf("native runtime hashes missing")
@@ -281,7 +298,7 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 		count := report.Splits[assignment.Split]
 		count.Episodes++
 		err := verifyEpisode(input, spec.Condition.Map, func(s learningenv.Step, effects learningenv.ServerOutcome, reward learningenv.Reward, c policy.Capture) error {
-			selection := Select(s, effects, c, input.Manifest.Mode)
+			selection := SelectVersion(s, effects, c, input.Manifest.Mode, spec.SelectionVersion)
 			count.Steps++
 			if selection.Quality != "rejected" {
 				candidate := Candidate{DatasetVersion, source, s.Index, s.Worker, s.Episode, selection, s.Observation, s.AppliedAction}
@@ -294,6 +311,23 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 				}
 				if selection.Heads.Aim {
 					count.AimAttack++
+				}
+				if selection.Heads.Attack {
+					if s.AppliedAction.Attack {
+						count.AttackPositive++
+					} else {
+						count.AttackNegative++
+					}
+				}
+				if selection.Heads.Vertical {
+					switch s.AppliedAction.Vertical {
+					case "jump":
+						count.Jump++
+					case "crouch":
+						count.Crouch++
+					case "release":
+						count.VerticalRelease++
+					}
 				}
 			} else {
 				count.Reasons[selection.Reason]++
@@ -328,10 +362,24 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 		return report, fmt.Errorf("spec changed during build")
 	}
 	report.Ready = true
+	report.AttackReady = true
+	report.VerticalReady = true
 	for _, name := range []string{"train", "validation", "test"} {
 		if report.Splits[name].Candidates == 0 {
 			report.Ready = false
 		}
+		if report.Splits[name].AttackPositive == 0 || report.Splits[name].AttackNegative == 0 {
+			report.AttackReady = false
+		}
+		if report.Splits[name].Jump == 0 || report.Splits[name].Crouch == 0 || report.Splits[name].VerticalRelease == 0 {
+			report.VerticalReady = false
+		}
+	}
+	if spec.SelectionVersion == ReleaseSelectionVersion && !report.AttackReady {
+		report.Ready = false
+	}
+	if spec.SelectionVersion == VerticalSelectionVersion && !report.VerticalReady {
+		report.Ready = false
 	}
 	sort.Slice(report.Sources, func(i, j int) bool { return report.Sources[i].Seed < report.Sources[j].Seed })
 	output, err := json.MarshalIndent(report, "", "  ")
@@ -342,7 +390,7 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 		return report, err
 	}
 	if !report.Ready {
-		return report, fmt.Errorf("empty candidate split; retain diagnostics, do not train")
+		return report, fmt.Errorf("empty candidate split or missing required head examples; retain diagnostics, do not train")
 	}
 	return report, nil
 }
@@ -403,14 +451,15 @@ func verifyEpisode(input inputEpisode, mapName string, emit func(learningenv.Ste
 			Mode string `json:"mode"`
 		} `json:"combat"`
 		Test struct {
-			Synchronous bool   `json:"synchronous"`
-			Fixture     string `json:"weapon_switch_fixture"`
+			TeacherVertical bool   `json:"teacher_vertical"`
+			Synchronous     bool   `json:"synchronous"`
+			Fixture         string `json:"weapon_switch_fixture"`
 		} `json:"test"`
 	}
 	if err := readJSON(filepath.Join(root, "bot-config.json"), &config); err != nil {
 		return err
 	}
-	if config.Combat.Mode != input.Manifest.Mode || config.Test.Synchronous != input.Manifest.Synchronous || config.Test.Fixture != "parasite_"+input.Manifest.Loadout {
+	if config.Combat.Mode != input.Manifest.Mode || config.Test.Synchronous != input.Manifest.Synchronous || config.Test.Fixture != "parasite_"+input.Manifest.Loadout || config.Test.TeacherVertical != input.Manifest.TeacherVertical {
 		return fmt.Errorf("teacher configuration differs from manifest")
 	}
 	switch input.Manifest.Loadout {

@@ -1,0 +1,61 @@
+{
+  "version": "combat_dataset_spec_v1",
+  "selection_version": "teacher_candidates_v2",
+  "condition": {
+    "map": "base1",
+    "loadout": "shotgun",
+    "mixed": false,
+    "health_kit": false,
+    "synchronous": true
+  },
+  "episodes": [
+    {
+      "seed": 12600,
+      "split": "train"
+    },
+    {
+      "seed": 12601,
+      "split": "train"
+    },
+    {
+      "seed": 12602,
+      "split": "train"
+    },
+    {
+      "seed": 12603,
+      "split": "train"
+    },
+    {
+      "seed": 12604,
+      "split": "train"
+    },
+    {
+      "seed": 12605,
+      "split": "train"
+    },
+    {
+      "seed": 12606,
+      "split": "train"
+    },
+    {
+      "seed": 12607,
+      "split": "train"
+    },
+    {
+      "seed": 12608,
+      "split": "validation"
+    },
+    {
+      "seed": 12609,
+      "split": "validation"
+    },
+    {
+      "seed": 12610,
+      "split": "test"
+    },
+    {
+      "seed": 12611,
+      "split": "test"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "version": "combat_dataset_spec_v1",
+  "selection_version": "teacher_vertical_candidates_v1",
+  "condition": {
+    "map": "base1",
+    "loadout": "shotgun",
+    "mixed": false,
+    "health_kit": false,
+    "synchronous": true,
+    "teacher_vertical": true
+  },
+  "episodes": [
+    {
+      "seed": 12700,
+      "split": "train"
+    },
+    {
+      "seed": 12701,
+      "split": "train"
+    },
+    {
+      "seed": 12702,
+      "split": "train"
+    },
+    {
+      "seed": 12703,
+      "split": "train"
+    },
+    {
+      "seed": 12704,
+      "split": "train"
+    },
+    {
+      "seed": 12705,
+      "split": "train"
+    },
+    {
+      "seed": 12706,
+      "split": "train"
+    },
+    {
+      "seed": 12707,
+      "split": "train"
+    },
+    {
+      "seed": 12708,
+      "split": "validation"
+    },
+    {
+      "seed": 12709,
+      "split": "validation"
+    },
+    {
+      "seed": 12710,
+      "split": "test"
+    },
+    {
+      "seed": 12711,
+      "split": "test"
+    }
+  ]
+}

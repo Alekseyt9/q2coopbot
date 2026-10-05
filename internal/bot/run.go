@@ -38,6 +38,7 @@ type Config struct {
 	TestProjectileComparison            bool
 	TestCombatBarrier                   bool
 	TestSynchronous                     bool
+	TestTeacherVertical                 bool
 	TestLight                           *int
 	TestInvulnerable                    bool
 	TestInitialHealth                   int
@@ -195,6 +196,9 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if cfg.TestWeaponSwitchFixture == "parasite_shotgun" && (!cfg.TestSynchronous || cfg.CombatMode != "rules") {
 		return fmt.Errorf("fixed Shotgun teacher requires synchronous rules capture")
+	}
+	if cfg.TestTeacherVertical && (!cfg.TestSynchronous || cfg.CombatMode != "rules" || cfg.TestWeaponSwitchFixture != "parasite_shotgun") {
+		return fmt.Errorf("vertical teacher requires synchronous fixed Shotgun rules capture")
 	}
 	if cfg.TestLight != nil && (*cfg.TestLight < 0 || *cfg.TestLight > 255 || !cfg.TestCombatBarrier) {
 		return fmt.Errorf("test light requires combat barrier and a value in 0..255")
@@ -432,6 +436,7 @@ func Run(ctx context.Context, cfg Config) error {
 		testProjectileComparison: cfg.TestProjectileComparison,
 		testCombatBarrier:        cfg.TestCombatBarrier,
 		testSynchronous:          cfg.TestSynchronous,
+		testTeacherVertical:      cfg.TestTeacherVertical,
 		testLight:                cfg.TestLight,
 		testGroundEdgeProbe:      cfg.TestGroundEdgeProbe,
 		testDoorProbe:            cfg.TestDoorProbe,

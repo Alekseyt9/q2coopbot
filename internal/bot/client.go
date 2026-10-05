@@ -40,6 +40,7 @@ type Client struct {
 	testProjectileComparison                bool
 	testCombatBarrier, testCombatGo         bool
 	testSynchronous                         bool
+	testTeacherVertical                     bool
 	testLight                               *int
 	testCombatGoFrame                       int
 	inventoryWatch                          inventoryWatch
@@ -949,6 +950,12 @@ func (c *Client) run(ctx context.Context) error {
 				cmd.Up = 400
 				c.planner.World.Command.MoveSource = "test_jump"
 			}
+			if c.testTeacherVertical && c.testCombatGo && !safetyStop {
+				if exercise, active := teacherVerticalCommand(cmd, c.latestFrame-c.testCombatGoFrame); active {
+					cmd = exercise
+					c.planner.World.Command = CommandDecision{MoveSource: "teacher_vertical_primitive", AimSource: "teacher_hold", LimitReason: "teacher_vertical_primitive"}
+				}
+			}
 			if c.framePaced {
 				cmd.Msec = 100
 				if safetyStop {
@@ -1012,6 +1019,10 @@ func (c *Client) run(ctx context.Context) error {
 						ProposedCommand: proposed, AppliedCommand: cmd, Changed: policy.ControlChanged(proposed, cmd),
 						LimitReason: c.planner.World.Command.LimitReason, MoveLimitReason: c.planner.World.Command.MoveLimitReason,
 						LabelQuality: "unreviewed_teacher; tactical guards already embedded; final guards and client overrides recorded"}
+					if c.testTeacherVertical && combat.LimitReason == "teacher_vertical_primitive" {
+						combat.TeacherPrimitive = "vertical_flat_v1"
+						combat.LabelQuality = "scripted primitive; not tactical movement or positive combat quality"
+					}
 					if directCombat {
 						combat.Provider = combatSelection.ProviderVersion
 						combat.Proposed = *combatSelection.Candidate

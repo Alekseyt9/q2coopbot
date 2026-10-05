@@ -18,7 +18,7 @@ $builder=Join-Path $OutputRoot 'q2combat-dataset.exe'
 $env:GOCACHE=Join-Path $repo 'workspace/build/gocache';$env:GOTOOLCHAIN='auto'
 Push-Location $repo;try{go build -o $builder ./cmd/q2combat-dataset;if($LASTEXITCODE){throw 'Dataset builder failed'}}finally{Pop-Location}
 $baseline=Join-Path $OutputRoot 'baseline'
-& "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker ($seeds.Count/4) -Timescale 2 -GameFrames $GameFrames -Loadout $plan.condition.loadout -CombatMode rules -Synchronous -Mixed:([bool]$plan.condition.mixed) -HealthKit:([bool]$plan.condition.health_kit) -RewardConfig (Join-Path $PSScriptRoot 'scenarios/combat-reward-v1.json') -Seed $seeds[0] -Port $Port -OutputRoot $baseline
+& "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker ($seeds.Count/4) -Timescale 2 -GameFrames $GameFrames -Loadout $plan.condition.loadout -CombatMode rules -Synchronous -TeacherVertical:([bool]$plan.condition.teacher_vertical) -Mixed:([bool]$plan.condition.mixed) -HealthKit:([bool]$plan.condition.health_kit) -RewardConfig (Join-Path $PSScriptRoot 'scenarios/combat-reward-v1.json') -Seed $seeds[0] -Port $Port -OutputRoot $baseline
 if($specHash -ne (Get-FileHash -LiteralPath $frozen).Hash){throw 'Frozen split specification changed'}
 & $builder --spec $frozen --batch $baseline --out (Join-Path $OutputRoot 'dataset')
 if($LASTEXITCODE){throw 'Dataset preparation rejected; inspect preserved diagnostics'}

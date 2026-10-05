@@ -185,19 +185,20 @@ func ControlChanged(a, b quake.UserCmd) bool {
 }
 
 type Capture struct {
-	ClientSequence  uint32        `json:"client_sequence"`
-	Selection       *Selection    `json:"selection,omitempty"`
-	CommandAtUnixNS int64         `json:"command_at_unix_ns"`
-	Provider        string        `json:"provider"`
-	Observation     Observation   `json:"observation"`
-	Proposed        Action        `json:"proposed"`
-	Applied         Action        `json:"applied"`
-	ProposedCommand quake.UserCmd `json:"proposed_command"`
-	AppliedCommand  quake.UserCmd `json:"applied_command"`
-	Changed         bool          `json:"command_changed"`
-	LimitReason     string        `json:"limit_reason,omitempty"`
-	MoveLimitReason string        `json:"move_limit_reason,omitempty"`
-	LabelQuality    string        `json:"label_quality"`
+	TeacherPrimitive string        `json:"teacher_primitive,omitempty"`
+	ClientSequence   uint32        `json:"client_sequence"`
+	Selection        *Selection    `json:"selection,omitempty"`
+	CommandAtUnixNS  int64         `json:"command_at_unix_ns"`
+	Provider         string        `json:"provider"`
+	Observation      Observation   `json:"observation"`
+	Proposed         Action        `json:"proposed"`
+	Applied          Action        `json:"applied"`
+	ProposedCommand  quake.UserCmd `json:"proposed_command"`
+	AppliedCommand   quake.UserCmd `json:"applied_command"`
+	Changed          bool          `json:"command_changed"`
+	LimitReason      string        `json:"limit_reason,omitempty"`
+	MoveLimitReason  string        `json:"move_limit_reason,omitempty"`
+	LabelQuality     string        `json:"label_quality"`
 }
 
 type Intervention struct {

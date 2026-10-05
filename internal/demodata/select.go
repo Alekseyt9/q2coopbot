@@ -11,6 +11,7 @@ import (
 )
 
 const SelectionVersion = "teacher_candidates_v1"
+const ReleaseSelectionVersion = "teacher_candidates_v2"
 const DatasetVersion = "combat_demonstrations_v1"
 
 type Heads struct {
@@ -30,7 +31,21 @@ type Selection struct {
 }
 
 func Select(s learningenv.Step, effects learningenv.ServerOutcome, capture policy.Capture, mode string) Selection {
-	r := Selection{Version: SelectionVersion, Quality: "rejected"}
+	return selectTeacher(s, effects, capture, mode, SelectionVersion)
+}
+
+func SelectVersion(s learningenv.Step, effects learningenv.ServerOutcome, capture policy.Capture, mode, version string) Selection {
+	if version == VerticalSelectionVersion {
+		return selectVertical(s, effects, capture, mode)
+	}
+	if version != SelectionVersion && version != ReleaseSelectionVersion {
+		return Selection{Version: version, Quality: "rejected", Reason: "unsupported_selection_version"}
+	}
+	return selectTeacher(s, effects, capture, mode, version)
+}
+
+func selectTeacher(s learningenv.Step, effects learningenv.ServerOutcome, capture policy.Capture, mode, version string) Selection {
+	r := Selection{Version: version, Quality: "rejected"}
 	deny := func(reason string) Selection { r.Reason = reason; return r }
 	if mode != "rules" || s.Owner != "rules" || s.Provider != "rules" || capture.Provider != "rules" || capture.Selection == nil || capture.Selection.Mode != "rules" || capture.Selection.Owner != "rules" || capture.Selection.Fallback != "" {
 		return deny("not_rules_teacher")
@@ -50,7 +65,7 @@ func Select(s learningenv.Step, effects learningenv.ServerOutcome, capture polic
 	if effects.Deaths != 0 || effects.SelfHealthDamage != 0 || effects.TeammateHealthDamage != 0 || effects.ReceivedHealthDamage != 0 {
 		return deny("damage_or_death_cost")
 	}
-	if s.Observation.Geometry == nil || len(s.Observation.Enemies) == 0 {
+	if s.Observation.Geometry == nil || len(s.Observation.Enemies) == 0 && version == SelectionVersion {
 		return deny("missing_combat_observation")
 	}
 	a := s.AppliedAction
@@ -59,6 +74,22 @@ func Select(s learningenv.Step, effects learningenv.ServerOutcome, capture polic
 	}
 	if _, err := policy.Command(s.Observation, a, [3]int16{}); err != nil {
 		return deny("action_outside_contract")
+	}
+	if len(s.Observation.Enemies) == 0 {
+		// Sparse, attack-only teacher convention. Do not label navigation, aim,
+		// cooldown, a guard correction, or unobserved targets as useful actions.
+		if len(s.Next.Enemies) != 0 || a.Attack || s.Action.Attack || capture.Proposed.Attack || s.Command.Buttons&1 != 0 || a.Weapon != "" || s.Observation.Weapon != s.Next.Weapon || effects.MonsterHealthDamage != 0 || s.Index%10 != 0 {
+			return deny("not_supported_targetless_release")
+		}
+		for _, event := range effects.Events {
+			if event.Attacker == s.Observation.Identity.Actor && event.Take > 0 {
+				return deny("outgoing_effect_during_release")
+			}
+		}
+		r.Heads.Attack = true
+		r.Quality = "auto_candidate; unreviewed; rules no-observed-target release convention"
+		r.Reason = "no_observed_target_attack_release"
+		return r
 	}
 	dx, dy := s.Next.Position[0]-s.Observation.Position[0], s.Next.Position[1]-s.Observation.Position[1]
 	r.HorizontalDisplacement = math.Hypot(dx, dy)

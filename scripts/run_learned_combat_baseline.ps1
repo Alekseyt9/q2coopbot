@@ -10,6 +10,7 @@ param(
     [switch]$Mixed,
     [switch]$HealthKit,
     [switch]$Synchronous,
+    [switch]$TeacherVertical,
     [switch]$Feedback,
     [ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',
     [string]$ProviderFile='',
@@ -20,6 +21,7 @@ $ErrorActionPreference='Stop'
 if($Seed -lt 0 -or [long]$Seed+$Workers*$EpisodesPerWorker-1 -gt 2147483647){throw 'Each independent episode needs its own valid 31-bit game seed'}
 if($Synchronous -and $Loadout -notin 'blaster','shotgun'){throw 'Synchronous learning requires Blaster or rules Shotgun exercise'}
 if($Loadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){throw 'Shotgun exercise requires synchronous rules'}
+if($TeacherVertical -and (!$Synchronous -or $CombatMode -ne 'rules' -or $Loadout -ne 'shotgun' -or $Feedback)){throw 'Vertical exercise requires synchronous fixed Shotgun rules without feedback'}
 if($RewardConfig -and !$Synchronous){throw 'Reward export requires -Synchronous'}
 $repo=Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/harness_manifest.ps1"
@@ -85,6 +87,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
         $arguments+=@('-CombatMode',$using:CombatMode);if($episodeProvider){$arguments+=@('-ProviderFile',$episodeProvider)}
         $arguments+=@('-GameFrames',$using:GameFrames)
         if($using:Synchronous){$arguments+='-Synchronous'}
+        if($using:TeacherVertical){$arguments+='-TeacherVertical'}
         if($using:Mixed){$arguments+=@('-ParasiteMixed','-ParasiteMixedClass','monster_gunner')}
         if($using:HealthKit){$arguments+='-ParasiteHealthKit'}
         $timer=[Diagnostics.Stopwatch]::StartNew()
@@ -192,7 +195,7 @@ $manifest=[ordered]@{
     remote_peer=[bool]$remoteProvider
     feedback=[bool]$Feedback;feedback_version=$(if($Feedback){'combat_feedback_v1'}else{$null});relay_sha256=$(if($Feedback){(Get-FileHash -LiteralPath $relay).Hash}else{$null})
     observation_version='combat_observation_v3';action_version='combat_action_v1';reward_version=$(if($RewardConfig){'combat_reward_v1'}else{$null});reward_config_sha256=$(if($RewardConfig){$rewardHash}else{$null});reward_config=$(if($RewardConfig){Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json}else{$null});server_outcome_version=$(if($Synchronous){'server_step_effects_v1'}else{'server_damage_window_v1'})
-    timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;mixed=[bool]$Mixed;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous
+    timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;mixed=[bool]$Mixed;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous;teacher_vertical=[bool]$TeacherVertical
     reset=$(if($Synchronous){'Cold native server restart per episode; first usable fixture and fresh inventory verified; single-client barrier confirms independent episode RNG seed. Full-world/AI equivalence remains unconfirmed.'}else{'Cold native server restart per episode, verified first usable observed fixture fields. Inventory/RNG/AI/full-world equivalence remain unconfirmed.'})
     source_fingerprint=$fingerprint;provenance_valid=$valid;sources=$sources
     native_source_fingerprint=$nativeFingerprint;native_sources=$nativeSources
