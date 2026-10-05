@@ -15,6 +15,7 @@ const ActionVersion = "combat_action_v1"
 
 // Identity prevents a delayed decision from crossing a frame or connection.
 type Identity struct {
+	Life       int    `json:"life"`
 	Map        string `json:"map"`
 	Connection int    `json:"connection"`
 	Spawncount int    `json:"spawncount"`
@@ -33,6 +34,7 @@ type Enemy struct {
 // Entity generations, obstacle probes and historical features remain unsupported
 // in this first capture schema; they must be added before learning uses them.
 type Observation struct {
+	AgeMS              int64                  `json:"observation_age_ms"`
 	Version            string                 `json:"version"`
 	Identity           Identity               `json:"identity"`
 	Health             int16                  `json:"health"`
@@ -86,7 +88,9 @@ func Observe(s quake.Snapshot, id Identity, previous quake.UserCmd) Observation 
 	}
 	for _, e := range s.Enemies {
 		// PVS alone is not visibility. Do not expose positions behind a wall.
-		if e.ClearShot == nil || !*e.ClearShot { continue }
+		if e.ClearShot == nil || !*e.ClearShot {
+			continue
+		}
 		if len(o.Enemies) == 8 {
 			break
 		}
@@ -118,7 +122,7 @@ func FromCommand(o Observation, cmd quake.UserCmd, deltaAngles [3]int16, weapon 
 // Collision, shot and freshness guards still belong to the caller. This adapter
 // alone is not approval to enable learned control in live gameplay.
 func Command(o Observation, a Action, deltaAngles [3]int16) (quake.UserCmd, error) {
-	if o.Version != ObservationVersion || a.Version != ActionVersion || a.Identity != o.Identity || o.Identity.Frame <= 0 || o.Health <= 0 {
+	if o.Version != ObservationVersion || a.Version != ActionVersion || a.Identity != o.Identity || o.Identity.Frame <= 0 || o.Health <= 0 || o.AgeMS < 0 || o.AgeMS > 300 {
 		return quake.UserCmd{}, fmt.Errorf("policy version, identity or life mismatch")
 	}
 	for _, v := range []float64{a.Forward, a.Side, a.YawDelta, a.PitchDelta} {
@@ -135,7 +139,7 @@ func Command(o Observation, a Action, deltaAngles [3]int16) (quake.UserCmd, erro
 	if a.Weapon != "" {
 		allowed := false
 		for _, name := range []string{"Blaster", "Shotgun", "Super Shotgun", "Machinegun", "Chaingun", "Grenade Launcher", "Rocket Launcher", "HyperBlaster", "Railgun", "BFG10K", "Grenades"} {
-			if a.Weapon == name && o.Inventory != nil && o.InventoryAgeFrames != nil && *o.InventoryAgeFrames <= 20 {
+			if a.Weapon == name && o.Inventory != nil && o.InventoryAgeFrames != nil && *o.InventoryAgeFrames >= 0 && *o.InventoryAgeFrames <= 20 {
 				for _, item := range *o.Inventory {
 					if item.Name == name && item.Count > 0 {
 						allowed = true
@@ -162,8 +166,16 @@ func Command(o Observation, a Action, deltaAngles [3]int16) (quake.UserCmd, erro
 	return cmd, nil
 }
 
+// ControlChanged excludes server timing/light metadata from control changes.
+func ControlChanged(a, b quake.UserCmd) bool {
+	return a.Pitch != b.Pitch || a.Yaw != b.Yaw || a.Roll != b.Roll ||
+		a.Forward != b.Forward || a.Side != b.Side || a.Up != b.Up ||
+		a.Buttons != b.Buttons || a.Impulse != b.Impulse
+}
+
 type Capture struct {
-	CommandAtUnixNS int64 `json:"command_at_unix_ns"`
+	Selection       *Selection    `json:"selection,omitempty"`
+	CommandAtUnixNS int64         `json:"command_at_unix_ns"`
 	Provider        string        `json:"provider"`
 	Observation     Observation   `json:"observation"`
 	Proposed        Action        `json:"proposed"`
@@ -174,4 +186,21 @@ type Capture struct {
 	LimitReason     string        `json:"limit_reason,omitempty"`
 	MoveLimitReason string        `json:"move_limit_reason,omitempty"`
 	LabelQuality    string        `json:"label_quality"`
+}
+
+type Intervention struct {
+	Component string `json:"component"`
+	Reason    string `json:"reason"`
+}
+
+type Selection struct {
+	Mode             string         `json:"mode"`
+	Owner            string         `json:"owner"`
+	ProviderVersion  string         `json:"provider_version,omitempty"`
+	Candidate        *Action        `json:"candidate,omitempty"`
+	CandidateCommand *quake.UserCmd `json:"candidate_command,omitempty"`
+	GuardedCommand   *quake.UserCmd `json:"guarded_command,omitempty"`
+	Interventions    []Intervention `json:"interventions,omitempty"`
+	Fallback         string         `json:"fallback,omitempty"`
+	ElapsedUS        int64          `json:"elapsed_us"`
 }

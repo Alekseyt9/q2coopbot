@@ -16,11 +16,13 @@ import (
 
 	"q2coopbot/internal/harness"
 	"q2coopbot/internal/harness/checkpoint"
+	"q2coopbot/internal/policy"
 	"q2coopbot/internal/quake"
 )
 
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
+	CombatMode, CombatProviderFile      string
 	CombatCapture                       bool
 	Campaign                            bool
 	CampaignNextMap                     string
@@ -132,6 +134,28 @@ func parseTestCampaignGoals(value string) ([]quake.Vec3, error) {
 }
 
 func Run(ctx context.Context, cfg Config) error {
+	if cfg.CombatMode == "" {
+		cfg.CombatMode = "rules"
+	}
+	if cfg.CombatMode != "rules" && cfg.CombatMode != "learned-shadow" && cfg.CombatMode != "learned" {
+		return fmt.Errorf("unknown combat mode")
+	}
+	var combatProvider policy.Provider
+	if cfg.CombatMode != "rules" {
+		if cfg.Host != "127.0.0.1" || !cfg.FramePaced || !cfg.CombatCapture || cfg.CombatProviderFile == "" || cfg.TestTeleport == "" || cfg.Idle || cfg.TestScenario != "" || cfg.TestSession != "" || cfg.TestWalkTarget != "" || cfg.TestLineCross || cfg.TestCombatBarrier || cfg.TestHoldPosition || cfg.TestHoldPositionMap != "" || cfg.TestWeaponSwitchFixture != "" && cfg.TestWeaponSwitchFixture != "parasite_blaster" {
+			return fmt.Errorf("direct/shadow combat pilot requires isolated loopback placement, frame pacing, capture, probe and fixed Blaster without scripted command overrides")
+		}
+		var err error
+		combatProvider, err = policy.LoadProbe(cfg.CombatProviderFile)
+		if err != nil {
+			return fmt.Errorf("combat provider: %w", err)
+		}
+	} else if cfg.CombatProviderFile != "" {
+		return fmt.Errorf("rules mode does not load a combat provider")
+	}
+	if cfg.CombatCapture && (!cfg.FramePaced || cfg.TracePath == "" || cfg.System1Model != "" || cfg.System2Model != "") {
+		return fmt.Errorf("rules combat capture requires frame-paced trace output and both LLM models disabled")
+	}
 	var testCampaignGoals []quake.Vec3
 	if cfg.TestCampaignGoal != "" {
 		if !cfg.Campaign || !cfg.FramePaced || cfg.Host != "127.0.0.1" || cfg.TestTeleportMap == "" || cfg.CheckpointRestore != "" || cfg.CheckpointControl != "" {
@@ -359,6 +383,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer conn.Close()
 	client := &Client{
+		combatControl:      combatControl{mode: cfg.CombatMode, provider: combatProvider},
 		combatCapture:      cfg.CombatCapture,
 		scenarioResultPath: cfg.TestScenarioResult, scenarioTailFrames: cfg.TestScenarioTailFrames,
 		scenario:                scenario,

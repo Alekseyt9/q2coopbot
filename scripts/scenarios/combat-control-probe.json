@@ -1,0 +1,11 @@
+{
+  "kind": "combat_control_probe_v1",
+  "steps": [
+    {"forward": 0.15, "side": 0.15, "yaw_delta_degrees": 1.0, "pitch_delta_degrees": 0, "attack": false, "vertical": "release"},
+    {"forward": 0.15, "side": 0.15, "yaw_delta_degrees": 1.0, "pitch_delta_degrees": 0, "attack": false, "vertical": "jump"},
+    {"forward": 0, "side": 0, "yaw_delta_degrees": 1.0, "pitch_delta_degrees": 0, "attack": false, "vertical": "release"},
+    {"forward": 0, "side": 0, "yaw_delta_degrees": -1.0, "pitch_delta_degrees": 0, "attack": true, "vertical": "crouch"},
+    {"forward": -0.15, "side": -0.15, "yaw_delta_degrees": -1.0, "pitch_delta_degrees": 0, "attack": false, "vertical": "release"},
+    {"forward": -0.15, "side": -0.15, "yaw_delta_degrees": -1.0, "pitch_delta_degrees": 0, "attack": false, "vertical": "release"}
+  ]
+}

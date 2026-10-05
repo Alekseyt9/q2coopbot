@@ -22,6 +22,7 @@ import (
 )
 
 type Client struct {
+	combatControl                           combatControl
 	combatCapture                           bool
 	planChat                                planChat
 	checkpointControl                       string
@@ -715,10 +716,11 @@ func (c *Client) run(ctx context.Context) error {
 			if c.testButtonProbe && c.testTeleportSent {
 				c.planner.setTestButtonGoal()
 			}
-			cmd := c.planner.command(c.previous)
+			combatObservation := c.combatObservation(now)
+			cmd, proposedCombatCommand, combatSelection, directCombat := c.combatCommand(combatObservation, now)
 			chatMessage := ""
 			holdPosition := c.testHoldPosition || c.testHoldPositionMap != "" && c.planner.World.Snapshot.Map == c.testHoldPositionMap
-			if !c.idle && !safetyStop && !holdPosition && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
+			if !directCombat && !c.idle && !safetyStop && !holdPosition && !c.planner.testSetupHold && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
 				chatMessage = c.planChat.command(c.planner, now)
 				if chatMessage != "" {
 					if err := c.command(chatMessage); err != nil {
@@ -750,7 +752,7 @@ func (c *Client) run(ctx context.Context) error {
 			weaponRequest := ""
 			observeInventory := !c.idle || c.scenario != nil && c.scenario.Scenario.ActorInventory
 			if !safetyStop && observeInventory && (!c.planner.testSetupHold || c.testWalkThenPlan) && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
-				if !c.planner.testSetupHold && !c.idle && !pairSetup && !c.testProjectileComparison && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
+				if !directCombat && !c.planner.testSetupHold && !c.idle && !pairSetup && !c.testProjectileComparison && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
 					if !c.planner.grenadeThrowPending(c.planner.World.Snapshot) && !c.planner.grenadeSelectionPending(c.planner.World.Snapshot) {
 						buttonWeapon := c.planner.button != nil && c.planner.button.action == "shoot"
 						if buttonWeapon {
@@ -769,6 +771,9 @@ func (c *Client) run(ctx context.Context) error {
 					if err := c.command(request); err != nil {
 						return err
 					}
+				}
+				if directCombat && combatSelection.Candidate.Weapon != "" {
+					weaponRequest = "use " + combatSelection.Candidate.Weapon
 				}
 				if weaponRequest != "" {
 					if err := c.command(weaponRequest); err != nil {
@@ -942,7 +947,7 @@ func (c *Client) run(ctx context.Context) error {
 					c.frameGaps += frame - c.lastMoveFrame - 1
 				}
 			}
-			if c.framePaced && !safetyStop && !c.idle && c.planner.elevator == nil && c.planner.button == nil && c.planner.jump == nil {
+			if !directCombat && c.framePaced && !safetyStop && !c.idle && c.planner.elevator == nil && c.planner.button == nil && c.planner.jump == nil {
 				if braked, ok := brakeGroundCoast(c.planner.World.Snapshot, cmd, c.planner.World.Geometry); ok {
 					input := cmd
 					c.planner.World.Command.BrakeInput = &input
@@ -984,14 +989,20 @@ func (c *Client) run(ctx context.Context) error {
 				var combat *policy.Capture
 				if c.combatCapture {
 					s := c.planner.World.Snapshot
-					o := policy.Observe(s, policy.Identity{Map: s.Map, Connection: c.connection, Spawncount: c.spawncount, Actor: c.decoder.PlayerNumber, Frame: s.Frame}, c.previous)
-					proposed := c.planner.World.Command.proposedCommand
+					o := combatObservation
+					proposed := proposedCombatCommand
 					combat = &policy.Capture{Provider: "rules", Observation: o,
+						Selection:       combatSelection,
 						CommandAtUnixNS: now.UnixNano(),
-						Proposed: policy.FromCommand(o, proposed, s.DeltaAngles, ""), Applied: policy.FromCommand(o, cmd, s.DeltaAngles, weaponRequest),
-						ProposedCommand: proposed, AppliedCommand: cmd, Changed: proposed != cmd,
+						Proposed:        policy.FromCommand(o, proposed, s.DeltaAngles, ""), Applied: policy.FromCommand(o, cmd, s.DeltaAngles, weaponRequest),
+						ProposedCommand: proposed, AppliedCommand: cmd, Changed: policy.ControlChanged(proposed, cmd),
 						LimitReason: c.planner.World.Command.LimitReason, MoveLimitReason: c.planner.World.Command.MoveLimitReason,
 						LabelQuality: "unreviewed_teacher; tactical guards already embedded; final guards and client overrides recorded"}
+					if directCombat {
+						combat.Provider = combatSelection.ProviderVersion
+						combat.Proposed = *combatSelection.Candidate
+						combat.LabelQuality = "diagnostic_probe; not learned weights or positive demonstration"
+					}
 				}
 				entry := struct {
 					Combat             *policy.Capture         `json:"combat_policy,omitempty"`

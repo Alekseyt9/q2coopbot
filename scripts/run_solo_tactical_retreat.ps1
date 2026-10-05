@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Worker,[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
+param([switch]$Worker,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
 function Measure-BarrelSafety($Rows,$Events) {
     $actor=$Rows[0].self_entity
@@ -34,6 +34,7 @@ if(!$Worker){
         $out=Join-Path $using:OutputRoot "run-$_"
         $args=@('-NoProfile','-File',$using:script,'-Worker','-Seed',($using:Seed+$_),'-Port',($using:Port+$_),'-OutputRoot',$out,'-Client',$using:Client,'-System1',$using:System1)
         $args+=@('-Timescale',$using:Timescale); if($using:Rules){$args+='-Rules'};if($using:CombatCapture){$args+='-CombatCapture'}
+        $args+=@('-CombatMode',$using:CombatMode);if($using:ProviderFile){$args+=@('-ProviderFile',$using:ProviderFile)}
         if($using:RequireMixedDetour){$args+='-RequireMixedDetour'}
         if($using:Cover){$args+='-Cover'}
         if($using:CoverFight){$args+='-CoverFight'}
@@ -56,6 +57,7 @@ if($Rules){$System1=''}
 if(Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue){throw 'Port occupied'}
 if(Test-Path $OutputRoot){throw 'Fresh output required'}
 New-Item -ItemType Directory $OutputRoot|Out-Null
+$resetClock=[Diagnostics.Stopwatch]::StartNew()
 $runtime=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map base1 -RuntimeRoot (Join-Path $OutputRoot 'runtime')
 if($Recovery){
     # A genuine native 25HP item, introduced before server startup only.
@@ -81,12 +83,14 @@ try{
     $deadline=(Get-Date).AddSeconds(15)
     do{Start-Sleep -Milliseconds 100;if($server.HasExited -or (Get-Date) -gt $deadline){throw 'Server startup failed'}}while(!(Get-NetUDPEndpoint -OwningProcess $server.Id -LocalPort $Port -ErrorAction SilentlyContinue))
     if(Get-NetUDPEndpoint -OwningProcess $server.Id|Where-Object LocalAddress -NotIn '127.0.0.1','::1'){throw 'Server not loopback'}
+    $report.reset_to_udp_ready_seconds=$resetClock.Elapsed.TotalSeconds
+    $report.reset_scope='Cold runtime preparation plus native server restart to UDP bind; protocol begin is measured separately by the client'
     $config=Join-Path $OutputRoot 'bot-config.json'
     $placement=if($ParasiteWeapon -and $ParasiteLoadout -eq 'rail'){'32,-352,24.125'}elseif($CornerEscape){'-40.375,-426,24.125'}elseif($Cover){'240,-416,24.125'}elseif($GroupRetreat){'128,-304,24'}else{'32,-224,24'}
     $enemyClass=if($Cover -or $Circle -or $GroupRetreat){'monster_infantry'}else{'monster_parasite'}
     $enemyOrigin=if($ParasiteWeapon -and $ParasiteLoadout -eq 'rail'){'240,-160,24'}elseif($CornerEscape){'67.125,-316.875,24'}elseif($Cover){"$CoverTargetX,-224,24"}elseif($GroupRetreat){'192,-304,24'}else{'200,-224,24'}
     $initialHealth=if($ParasiteWeapon){$ParasiteHealth}elseif($CornerEscape){65}elseif($Recovery){$RecoveryHealth}elseif($Group -or $GroupRetreat){100}elseif($Cover -or $Circle){25}else{0}
-    @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};run=@{duration='15s';frame_paced=$true;mode='campaign';next_map='base2'};test=@{teleport_map='base1';teleport=$placement;spawn_map='base1';spawn_soldier=$enemyOrigin;spawn_class=$enemyClass;setup_hold_frames=$(if($Cover -or $Circle -or $GroupRetreat -or $Recovery -or $CornerEscape -or $ParasiteWeapon){10}else{0});initial_health=$initialHealth;weapon_switch_fixture=$(if($ParasiteWeapon){"parasite_$ParasiteLoadout"}else{""})};output=@{trace_jsonl=$trace;combat_capture=[bool]$CombatCapture}}|ConvertTo-Json -Depth 6|Set-Content $config
+    @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};combat=@{mode=$CombatMode;provider_file=$ProviderFile};run=@{duration='15s';frame_paced=$true;mode='campaign';next_map='base2'};test=@{teleport_map='base1';teleport=$placement;spawn_map='base1';spawn_soldier=$enemyOrigin;spawn_class=$enemyClass;setup_hold_frames=$(if($Cover -or $Circle -or $GroupRetreat -or $Recovery -or $CornerEscape -or $ParasiteWeapon){10}else{0});initial_health=$initialHealth;weapon_switch_fixture=$(if($ParasiteWeapon){"parasite_$ParasiteLoadout"}else{""})};output=@{trace_jsonl=$trace;combat_capture=[bool]$CombatCapture}}|ConvertTo-Json -Depth 6|Set-Content $config
     $bot=Start-Process $Client -ArgumentList "--config `"$config`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
     $null=$bot.WaitForExit(25000);if(!$bot.HasExited){throw 'Bot timeout'};if($bot.ExitCode){throw 'Bot failed'}
     $rows=@(Get-Content $trace|ForEach-Object {$_|ConvertFrom-Json})
