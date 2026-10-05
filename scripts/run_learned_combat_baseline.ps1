@@ -33,7 +33,8 @@ if($CombatMode -ne 'rules' -and $Loadout -ne 'blaster'){throw 'Direct/shadow pil
 if($CombatMode -ne 'rules' -and !$ProviderFile){$ProviderFile=Join-Path $PSScriptRoot 'scenarios/combat-control-probe.json'}
 if($ProviderFile){$ProviderFile=(Resolve-Path -LiteralPath $ProviderFile).Path}
 $remoteProvider=$false
-if($ProviderFile){$remoteProvider=((Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).kind -eq 'combat_remote_v1')}
+$providerKind=$null
+if($ProviderFile){$providerKind=(Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).kind;$remoteProvider=($providerKind -eq 'combat_remote_v1')}
 if($remoteProvider -and !$Synchronous){throw 'Remote policy requires -Synchronous'}
 if($Feedback -and (!$remoteProvider -or !$RewardConfig)){throw 'Feedback requires remote provider, synchronous mode and reward config'}
 if($RewardConfig){$RewardConfig=(Resolve-Path -LiteralPath $RewardConfig).Path}
@@ -191,7 +192,7 @@ if($ProviderFile){$valid=$valid -and $probeHash -eq (Get-FileHash -LiteralPath $
 if($RewardConfig){$valid=$valid -and $rewardHash -eq (Get-FileHash -LiteralPath $RewardConfig).Hash}
 $usable=@($results | Where-Object capture_valid)
 $manifest=[ordered]@{
-    version=2;stage='R1 dispatch and R2 transition pilot';provider=$CombatMode;model_weights=$null;probe_sha256=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{$null})
+    version=2;stage=$(if($providerKind -eq 'combat_bc_mlp_v1'){'R4a BC control pilot'}else{'R1 dispatch and R2 transition pilot'});provider=$CombatMode;provider_kind=$providerKind;model_weights=$(if($providerKind -eq 'combat_bc_mlp_v1'){$ProviderFile}else{$null});model_weights_sha256=$(if($providerKind -eq 'combat_bc_mlp_v1'){$probeHash}else{$null});probe_sha256=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{$null})
     remote_peer=[bool]$remoteProvider
     feedback=[bool]$Feedback;feedback_version=$(if($Feedback){'combat_feedback_v1'}else{$null});relay_sha256=$(if($Feedback){(Get-FileHash -LiteralPath $relay).Hash}else{$null})
     observation_version='combat_observation_v3';action_version='combat_action_v1';reward_version=$(if($RewardConfig){'combat_reward_v1'}else{$null});reward_config_sha256=$(if($RewardConfig){$rewardHash}else{$null});reward_config=$(if($RewardConfig){Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json}else{$null});server_outcome_version=$(if($Synchronous){'server_step_effects_v1'}else{'server_damage_window_v1'})
@@ -205,7 +206,7 @@ $manifest=[ordered]@{
     seeds=@($results.seed);physics=$(if($Synchronous){'Stock native PMove and tick; world pauses between synchronous actions, AI frozen during fixture preparation. Live params remain in worker config, without RCON.'}else{'Stock native physics; only timescale and loopback rate differ. Live params remain in worker config, without RCON.'})
     seed_assignments=@($results|Select-Object worker,episode,seed,port)
     stop='Fixed game-frame limit per client; 60s wall watchdog; first-life diagnostics and per-life transitions remain separate.'
-    dataset_scope=$(if($RewardConfig){'Separate observations, execution proof, native effects and explicit experimental first-life rewards. No positive demonstration labels or victory inference. Provider probe is not trained.'}else{'Separate observed steps, exact native command dispatch proof and damage effect windows; effects are not shot accuracy or delayed causal credit. No scalar reward or positive demonstration labels. Provider probe is not trained.'})
+    dataset_scope=$(if($RewardConfig){'Separate observations, execution proof, native effects and explicit experimental first-life rewards. No positive demonstration labels or victory inference.'}else{'Separate observed steps, exact native command dispatch proof and damage effect windows; effects are not shot accuracy or delayed causal credit. No scalar reward or positive demonstration labels.'})
 }
 $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $OutputRoot 'manifest.json') -Encoding utf8
 $report=[ordered]@{

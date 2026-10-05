@@ -1027,6 +1027,9 @@ func (c *Client) run(ctx context.Context) error {
 						combat.Provider = combatSelection.ProviderVersion
 						combat.Proposed = *combatSelection.Candidate
 						combat.LabelQuality = "diagnostic_probe; not learned weights or positive demonstration"
+						if strings.HasPrefix(combat.Provider, "bc_mlp:") {
+							combat.LabelQuality = "trained BC candidate; unaccepted gameplay; not positive teacher demonstration"
+						}
 					}
 				}
 				entry := struct {

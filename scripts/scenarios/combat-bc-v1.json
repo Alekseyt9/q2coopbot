@@ -1,0 +1,1 @@
+{"version":"combat_bc_training_v1","seed":20261005,"epochs":300,"learning_rate":0.001,"hidden":[64,64],"checkpoint":"fixed_final_epoch","heads":["movement","aim","attack","vertical"],"weapon_head":false}

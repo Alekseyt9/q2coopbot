@@ -139,7 +139,7 @@ func LoadProvider(path string, synchronous bool) (Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(data) > 65536 {
+	if len(data) > MaxModelBytes {
 		return nil, fmt.Errorf("provider config too large")
 	}
 	var header struct {
@@ -147,6 +147,12 @@ func LoadProvider(path string, synchronous bool) (Provider, error) {
 	}
 	if err := json.Unmarshal(data, &header); err != nil {
 		return nil, err
+	}
+	if header.Kind == MLPKind {
+		return LoadMLP(path)
+	}
+	if len(data) > 65536 {
+		return nil, fmt.Errorf("provider config too large")
 	}
 	if header.Kind != RemoteKind {
 		return LoadProbe(path)
