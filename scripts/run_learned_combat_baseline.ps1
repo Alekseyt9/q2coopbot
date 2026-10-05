@@ -8,12 +8,17 @@ param(
     [ValidateRange(1024,65530)][int]$Port=32940,
     [ValidateSet('stocked','blaster','hyper','rail','scarce')][string]$Loadout='stocked',
     [switch]$Mixed,
+    [switch]$HealthKit,
     [switch]$Synchronous,
     [ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',
     [string]$ProviderFile='',
+    [string]$RewardConfig='',
     [string]$OutputRoot=''
 )
 $ErrorActionPreference='Stop'
+if($Seed -lt 0 -or [long]$Seed+$Workers*$EpisodesPerWorker-1 -gt 2147483647){throw 'Each independent episode needs its own valid 31-bit game seed'}
+if($Synchronous -and $Loadout -ne 'blaster'){throw 'Synchronous learning requires Blaster loadout'}
+if($RewardConfig -and !$Synchronous){throw 'Reward export requires -Synchronous'}
 $repo=Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/harness_manifest.ps1"
 if(!$OutputRoot){$OutputRoot=Join-Path $repo ('workspace/artifacts/learned-combat-baseline-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))}
@@ -23,8 +28,13 @@ $OutputRoot=(Resolve-Path -LiteralPath $OutputRoot).Path
 if($CombatMode -ne 'rules' -and $Loadout -ne 'blaster'){throw 'Direct/shadow pilot requires -Loadout blaster'}
 if($CombatMode -ne 'rules' -and !$ProviderFile){$ProviderFile=Join-Path $PSScriptRoot 'scenarios/combat-control-probe.json'}
 if($ProviderFile){$ProviderFile=(Resolve-Path -LiteralPath $ProviderFile).Path}
+if($RewardConfig){$RewardConfig=(Resolve-Path -LiteralPath $RewardConfig).Path}
+$rewardHash=$(if($RewardConfig){(Get-FileHash -LiteralPath $RewardConfig).Hash}else{''})
 $sources=Get-HarnessSourceRecords $repo
 $fingerprint=Get-HarnessFingerprint $sources
+$nativeRepo=Join-Path (Split-Path $repo -Parent) 'yquake2'
+$nativeSources=Get-HarnessNativeSourceRecords $nativeRepo
+$nativeFingerprint=Get-HarnessFingerprint $nativeSources
 $client=Join-Path $OutputRoot 'q2coopbot.exe'
 $env:GOCACHE=Join-Path $repo 'workspace/build/gocache'
 $env:GOTOOLCHAIN='auto'
@@ -49,6 +59,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
         $arguments+=@('-GameFrames',$using:GameFrames)
         if($using:Synchronous){$arguments+='-Synchronous'}
         if($using:Mixed){$arguments+=@('-ParasiteMixed','-ParasiteMixedClass','monster_gunner')}
+        if($using:HealthKit){$arguments+='-ParasiteHealthKit'}
         $timer=[Diagnostics.Stopwatch]::StartNew()
         $process=Start-Process $using:hostExe -ArgumentList @($arguments | ForEach-Object {'"'+$_+'"'}) -WindowStyle Hidden -PassThru -RedirectStandardOutput "$out.stdout.log" -RedirectStandardError "$out.stderr.log"
         $process.WaitForExit()
@@ -60,7 +71,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             $captures=@($rows | Where-Object combat_policy)
             $mismatches=@($rows | Where-Object {
                 !$_.combat_policy -or ($_.combat_policy.provider -ne 'rules' -and $_.combat_policy.selection.owner -ne 'provider') -or
-                $_.combat_policy.observation.version -ne 'combat_observation_v2' -or
+                $_.combat_policy.observation.version -ne 'combat_observation_v3' -or
                 $_.combat_policy.applied.version -ne 'combat_action_v1' -or
                 $_.combat_policy.observation.identity.frame -ne $_.observation_frame -or
                 $_.combat_policy.observation.identity.connection -ne $_.connection -or
@@ -80,12 +91,15 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             $dataset=Join-Path $out 'dataset'
             $config=Get-Content -LiteralPath (Join-Path $out 'bot-config.json') -Raw|ConvertFrom-Json
             $resetExpectation=Join-Path $out 'reset-expectation.json'
-            @{version='observed_fixture_reset_v1';map=$config.test.teleport_map
+            @{version='observed_fixture_reset_v1';map=$config.test.teleport_map;seed=$(if($using:Synchronous){$using:Seed+$index}else{$null})
                 position=@($config.test.teleport.Split(',')|ForEach-Object {[double]::Parse($_,[Globalization.CultureInfo]::InvariantCulture)})
                 health=$config.test.initial_health;armor=0;weapon=$(if($using:Synchronous){'Blaster'}else{'Shotgun'});ammo=$(if($using:Synchronous){0}else{20});enemy_class=$config.test.spawn_class
                 enemy_position=@($config.test.spawn_soldier.Split(',')|ForEach-Object {[double]::Parse($_,[Globalization.CultureInfo]::InvariantCulture)})
             }|ConvertTo-Json|Set-Content -LiteralPath $resetExpectation -Encoding utf8NoBOM
-            & $using:exporter --trace (Join-Path $out 'bot.jsonl') --out $dataset --worker "worker-$worker" --episode "seed-$($using:Seed+$index)" --end-reason game_frame_limit --server-log (Join-Path $out 'server.log') --client-name SoloRetreatBot --require-execution --reset-expectation $resetExpectation
+            $exportArguments=@('--trace',(Join-Path $out 'bot.jsonl'),'--out',$dataset,'--worker',"worker-$worker",'--episode',"seed-$($using:Seed+$index)",'--end-reason','game_frame_limit','--server-log',(Join-Path $out 'server.log'),'--client-name','SoloRetreatBot','--require-execution','--reset-expectation',$resetExpectation)
+            if($using:Synchronous){$exportArguments+='--synchronous'}
+            if($using:RewardConfig){$exportArguments+=@('--reward-config',$using:RewardConfig)}
+            & $using:exporter @exportArguments
             if($LASTEXITCODE){throw 'Transition export failed'}
             $datasetReport=Get-Content -LiteralPath (Join-Path $dataset 'report.json') -Raw|ConvertFrom-Json
             $controlled=@($captures|Where-Object {$_.combat_policy.selection.owner -eq 'provider'}).Count
@@ -126,21 +140,26 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
     }
 } -ThrottleLimit $Workers)
 $clock.Stop()
+$results=@($results|Sort-Object worker,episode)
 $valid=($fingerprint -eq (Get-HarnessFingerprint (Get-HarnessSourceRecords $repo)))
+$valid=$valid -and $nativeFingerprint -eq (Get-HarnessFingerprint (Get-HarnessNativeSourceRecords $nativeRepo))
 if($ProviderFile){$valid=$valid -and $probeHash -eq (Get-FileHash -LiteralPath $ProviderFile).Hash}
+if($RewardConfig){$valid=$valid -and $rewardHash -eq (Get-FileHash -LiteralPath $RewardConfig).Hash}
 $usable=@($results | Where-Object capture_valid)
 $manifest=[ordered]@{
     version=2;stage='R1 dispatch and R2 transition pilot';provider=$CombatMode;model_weights=$null;probe_sha256=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{$null})
-    observation_version='combat_observation_v2';action_version='combat_action_v1';reward_version=$null;server_outcome_version='server_damage_window_v1'
-    timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;mixed=[bool]$Mixed;synchronous=[bool]$Synchronous
-    reset='Cold native server restart per episode, verified first usable observed fixture fields. Inventory/RNG/AI/full-world equivalence remain unconfirmed.'
+    observation_version='combat_observation_v3';action_version='combat_action_v1';reward_version=$(if($RewardConfig){'combat_reward_v1'}else{$null});reward_config_sha256=$(if($RewardConfig){$rewardHash}else{$null});reward_config=$(if($RewardConfig){Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json}else{$null});server_outcome_version=$(if($Synchronous){'server_step_effects_v1'}else{'server_damage_window_v1'})
+    timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;mixed=[bool]$Mixed;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous
+    reset=$(if($Synchronous){'Cold native server restart per episode; first usable fixture and fresh inventory verified; single-client barrier confirms independent episode RNG seed. Full-world/AI equivalence remains unconfirmed.'}else{'Cold native server restart per episode, verified first usable observed fixture fields. Inventory/RNG/AI/full-world equivalence remain unconfirmed.'})
     source_fingerprint=$fingerprint;provenance_valid=$valid;sources=$sources
+    native_source_fingerprint=$nativeFingerprint;native_sources=$nativeSources
     client_sha256=(Get-FileHash -LiteralPath $client).Hash
     plan_sha256=(Get-FileHash -LiteralPath (Join-Path $repo 'docs/learned_system1_plan.md')).Hash
     bsp_assets=@(Get-HarnessFileRecords -Root (Join-Path (Split-Path $repo -Parent) 'assets/baseq2') -Paths @((Join-Path (Split-Path $repo -Parent) 'assets/baseq2/pak0.pak')))
-    seeds=@($results.seed);physics='Stock native physics; only timescale and loopback rate differ. Live params remain in worker config, without RCON.'
+    seeds=@($results.seed);physics=$(if($Synchronous){'Stock native PMove and tick; world pauses between synchronous actions, AI frozen during fixture preparation. Live params remain in worker config, without RCON.'}else{'Stock native physics; only timescale and loopback rate differ. Live params remain in worker config, without RCON.'})
+    seed_assignments=@($results|Select-Object worker,episode,seed,port)
     stop='Fixed game-frame limit per client; 60s wall watchdog; first-life diagnostics and per-life transitions remain separate.'
-    dataset_scope='Separate observed steps, exact native command dispatch proof and damage effect windows; effects are not shot accuracy or delayed causal credit. No scalar reward or positive demonstration labels. Provider probe is not trained.'
+    dataset_scope=$(if($RewardConfig){'Separate observations, execution proof, native effects and explicit experimental first-life rewards. No positive demonstration labels or victory inference. Provider probe is not trained.'}else{'Separate observed steps, exact native command dispatch proof and damage effect windows; effects are not shot accuracy or delayed causal credit. No scalar reward or positive demonstration labels. Provider probe is not trained.'})
 }
 $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $OutputRoot 'manifest.json') -Encoding utf8
 $report=[ordered]@{

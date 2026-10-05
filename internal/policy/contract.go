@@ -10,7 +10,7 @@ import (
 	"q2coopbot/internal/quake"
 )
 
-const ObservationVersion = "combat_observation_v2"
+const ObservationVersion = "combat_observation_v3"
 const ActionVersion = "combat_action_v1"
 
 // Identity prevents a delayed decision from crossing a frame or connection.
@@ -24,18 +24,26 @@ type Identity struct {
 }
 
 type Enemy struct {
-	Track     *int        `json:"observed_track"`
-	Velocity  *quake.Vec3 `json:"observed_velocity"`
-	ID        int         `json:"id"`
-	Class     string      `json:"class"`
-	Relative  quake.Vec3  `json:"relative"`
-	ClearShot *bool       `json:"clear_shot"`
+	Distance        float64     `json:"distance"`
+	MotionDirection *quake.Vec3 `json:"motion_direction"`
+	Track           *int        `json:"observed_track"`
+	Velocity        *quake.Vec3 `json:"observed_velocity"`
+	ID              int         `json:"id"`
+	Class           string      `json:"class"`
+	Relative        quake.Vec3  `json:"relative"`
+	ClearShot       *bool       `json:"clear_shot"`
 }
 
 // Nil masks distinguish unavailable information from an observed zero.
 // Tracks describe uninterrupted visible observations, not server generations.
-// Obstacle probes and visible projectile features remain unsupported.
+// Client/BSP-derived features are separate from offline server reward telemetry.
 type Observation struct {
+	Geometry           *LocalGeometry         `json:"local_geometry"`
+	Projectiles        *[]Enemy               `json:"visible_projectiles"`
+	Pickups            *[]NearbyObject        `json:"visible_pickups"`
+	Props              *[]NearbyObject        `json:"visible_props"`
+	Movers             *[]NearbyMover         `json:"visible_movers"`
+	Beams              *[]NearbyBeam          `json:"visible_beams"`
 	History            []HistoryFrame         `json:"history"`
 	AgeMS              int64                  `json:"observation_age_ms"`
 	Version            string                 `json:"version"`
@@ -97,7 +105,7 @@ func Observe(s quake.Snapshot, id Identity, previous quake.UserCmd) Observation 
 		if len(o.Enemies) == 8 {
 			break
 		}
-		o.Enemies = append(o.Enemies, Enemy{ID: e.ID, Class: e.Class, Relative: relative(e.Origin, s.Self), ClearShot: e.ClearShot})
+		o.Enemies = append(o.Enemies, Enemy{ID: e.ID, Class: e.Class, Relative: relative(e.Origin, s.Self), Distance: quake.Distance(e.Origin, s.Self), ClearShot: e.ClearShot})
 	}
 	return o
 }

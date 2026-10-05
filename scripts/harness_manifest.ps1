@@ -28,3 +28,10 @@ function Get-HarnessFingerprint {
     try { ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical)))).Replace('-','').ToLowerInvariant() }
     finally {$sha.Dispose()}
 }
+
+function Get-HarnessNativeSourceRecords {
+    param([string]$Repository)
+    $paths=@(Get-ChildItem -LiteralPath (Join-Path $Repository 'src') -Recurse -File | Where-Object {$_.Extension -in '.c','.h'} | ForEach-Object FullName)
+    $paths+=Join-Path $Repository 'CMakeLists.txt'
+    @(Get-HarnessFileRecords -Root $Repository -Paths $paths)
+}

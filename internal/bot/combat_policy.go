@@ -33,6 +33,7 @@ func (c *Client) combatObservation(now time.Time) policy.Observation {
 	b.last, b.lastHealth = id, s.Health
 	o := policy.Observe(s, id, c.previous)
 	o.AgeMS = now.Sub(c.planner.World.Updated).Milliseconds()
+	policy.EnrichEnvironment(&o, s, c.planner.World.Geometry)
 	b.history.Enrich(&o)
 	return o
 }

@@ -1,12 +1,16 @@
 package policy
 
-import "q2coopbot/internal/quake"
+import (
+	"math"
+	"q2coopbot/internal/quake"
+)
 
 const HistoryFrames = 4
 
 // History contains only past client observations and the last sent command.
 // Velocities use game time (10 Hz), independent of wall-clock timescale.
 type HistoryFrame struct {
+	Projectiles     *[]Enemy      `json:"visible_projectiles"`
 	Identity        Identity      `json:"identity"`
 	Position        quake.Vec3    `json:"position"`
 	Velocity        quake.Vec3    `json:"velocity"`
@@ -42,21 +46,52 @@ func (h *History) Enrich(o *Observation) {
 	if len(h.frames) > 0 {
 		last = &h.frames[len(h.frames)-1]
 	}
-	for i := range o.Enemies {
-		e := &o.Enemies[i]
+	var enemies, projectiles []Enemy
+	var previousPosition quake.Vec3
+	if last != nil {
+		enemies = last.Enemies
+		previousPosition = last.Position
+		if last.Projectiles != nil {
+			projectiles = *last.Projectiles
+		}
+	}
+	h.enrichObjects(o.Enemies, enemies, o.Position, previousPosition)
+	if o.Projectiles != nil {
+		h.enrichObjects(*o.Projectiles, projectiles, o.Position, previousPosition)
+	}
+	for _, f := range h.frames {
+		f.Enemies = cloneEnemies(f.Enemies)
+		f.Projectiles = cloneProjectiles(f.Projectiles)
+		o.History = append(o.History, f)
+	}
+	f := HistoryFrame{Identity: o.Identity, Position: o.Position, Velocity: o.Velocity, Health: o.Health, Armor: o.Armor,
+		OnGround: o.OnGround, Ducked: o.Ducked, ViewAngles: o.ViewAngles, PreviousCommand: o.PreviousCommand, Enemies: cloneEnemies(o.Enemies), Projectiles: cloneProjectiles(o.Projectiles)}
+	h.frames = append(h.frames, f)
+	if len(h.frames) > HistoryFrames {
+		h.frames = h.frames[1:]
+	}
+}
+
+func (h *History) enrichObjects(current, previous []Enemy, position, previousPosition quake.Vec3) {
+	for i := range current {
+		e := &current[i]
 		e.Track, e.Velocity = nil, nil
-		if last != nil {
-			for _, prev := range last.Enemies {
-				if prev.ID == e.ID && prev.Class == e.Class && prev.Track != nil {
-					track := *prev.Track
-					e.Track = &track
-					v := quake.Vec3{}
-					for axis := range v {
-						v[axis] = (e.Relative[axis] + o.Position[axis] - prev.Relative[axis] - last.Position[axis]) * 10
-					}
-					e.Velocity = &v
-					break
+		e.MotionDirection = nil
+		for _, prev := range previous {
+			if prev.ID == e.ID && prev.Class == e.Class && prev.Track != nil {
+				track := *prev.Track
+				e.Track = &track
+				v := quake.Vec3{}
+				for axis := range v {
+					v[axis] = (e.Relative[axis] + position[axis] - prev.Relative[axis] - previousPosition[axis]) * 10
 				}
+				e.Velocity = &v
+				speed := math.Sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
+				if speed > 1e-6 {
+					direction := quake.Vec3{v[0] / speed, v[1] / speed, v[2] / speed}
+					e.MotionDirection = &direction
+				}
+				break
 			}
 		}
 		if e.Track == nil {
@@ -65,16 +100,14 @@ func (h *History) Enrich(o *Observation) {
 			e.Track = &track
 		}
 	}
-	for _, f := range h.frames {
-		f.Enemies = cloneEnemies(f.Enemies)
-		o.History = append(o.History, f)
+}
+
+func cloneProjectiles(p *[]Enemy) *[]Enemy {
+	if p == nil {
+		return nil
 	}
-	f := HistoryFrame{Identity: o.Identity, Position: o.Position, Velocity: o.Velocity, Health: o.Health, Armor: o.Armor,
-		OnGround: o.OnGround, Ducked: o.Ducked, ViewAngles: o.ViewAngles, PreviousCommand: o.PreviousCommand, Enemies: cloneEnemies(o.Enemies)}
-	h.frames = append(h.frames, f)
-	if len(h.frames) > HistoryFrames {
-		h.frames = h.frames[1:]
-	}
+	copy := cloneEnemies(*p)
+	return &copy
 }
 
 func cloneEnemies(enemies []Enemy) []Enemy {
@@ -87,6 +120,10 @@ func cloneEnemies(enemies []Enemy) []Enemy {
 		if copy[i].Velocity != nil {
 			v := *copy[i].Velocity
 			copy[i].Velocity = &v
+		}
+		if copy[i].MotionDirection != nil {
+			v := *copy[i].MotionDirection
+			copy[i].MotionDirection = &v
 		}
 		if copy[i].ClearShot != nil {
 			v := *copy[i].ClearShot

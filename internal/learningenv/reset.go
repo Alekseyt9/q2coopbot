@@ -12,6 +12,7 @@ const ResetVersion = "observed_fixture_reset_v1"
 // This verifies the exposed starting fields, not inventory/RNG/monster AI or
 // complete server reset equivalence. The expectation is an offline fixture.
 type ResetExpectation struct {
+	Seed          *int       `json:"seed,omitempty"`
 	Version       string     `json:"version"`
 	Map           string     `json:"map"`
 	Position      quake.Vec3 `json:"position"`
@@ -24,6 +25,7 @@ type ResetExpectation struct {
 }
 
 type ResetProof struct {
+	NativeBarrier            *CombatRelease   `json:"native_barrier,omitempty"`
 	Version                  string           `json:"version"`
 	ObservedFieldsConfirmed  bool             `json:"observed_fields_confirmed"`
 	FullServerResetConfirmed bool             `json:"full_server_reset_confirmed"`

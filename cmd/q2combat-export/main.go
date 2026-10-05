@@ -33,6 +33,8 @@ func run() error {
 	clientName := flag.String("client-name", "GoCoopMate", "Name selected by native sv_test_trace_client")
 	requireExecution := flag.Bool("require-execution", false, "Reject export without exact server dispatch for every sent command")
 	resetFile := flag.String("reset-expectation", "", "Optional fixture JSON; reject mismatched first usable observation")
+	synchronous := flag.Bool("synchronous", false, "Require native one-command/one-tick phases and seeded single-client barrier")
+	rewardFile := flag.String("reward-config", "", "Optional explicit experimental reward JSON; requires synchronous proof")
 	flag.Parse()
 	if *input == "" || *out == "" || *worker == "" || *episode == "" {
 		return fmt.Errorf("trace, out, worker and episode required")
@@ -41,6 +43,33 @@ func run() error {
 	var executions *learningenv.ExecutionIndex
 	var applied []harness.AppliedCommand
 	var resetExpectation *learningenv.ResetExpectation
+	var native *learningenv.NativeSteps
+	var rewardConfig *learningenv.RewardConfig
+	if *rewardFile != "" {
+		if !*synchronous {
+			return fmt.Errorf("reward export requires synchronous native proof")
+		}
+		data, err := os.ReadFile(*rewardFile)
+		if err != nil {
+			return err
+		}
+		if len(data) > 16384 {
+			return fmt.Errorf("reward config too large")
+		}
+		d := json.NewDecoder(bytes.NewReader(data))
+		d.DisallowUnknownFields()
+		rewardConfig = &learningenv.RewardConfig{}
+		if err := d.Decode(rewardConfig); err != nil {
+			return err
+		}
+		var extra any
+		if err := d.Decode(&extra); err != io.EOF {
+			return fmt.Errorf("trailing reward config data")
+		}
+		if err := rewardConfig.Validate(); err != nil {
+			return err
+		}
+	}
 	if *resetFile != "" {
 		data, err := os.ReadFile(*resetFile)
 		if err != nil {
@@ -63,6 +92,9 @@ func run() error {
 	if *requireExecution && *serverLog == "" {
 		return fmt.Errorf("server-log required for execution proof")
 	}
+	if *synchronous && (!*requireExecution || resetExpectation == nil || resetExpectation.Seed == nil) {
+		return fmt.Errorf("synchronous export requires execution proof and reset expectation with per-episode seed")
+	}
 	if *serverLog != "" {
 		f, err := os.Open(*serverLog)
 		if err != nil {
@@ -80,6 +112,17 @@ func run() error {
 		}
 		if len(applied) > 0 {
 			executions = learningenv.NewExecutionIndex(applied)
+		}
+		if *synchronous {
+			f, err := os.Open(*serverLog)
+			if err != nil {
+				return err
+			}
+			native, err = learningenv.ReadNativeSteps(f, events)
+			f.Close()
+			if err != nil {
+				return err
+			}
 		}
 	}
 	if err := os.Mkdir(*out, 0755); err != nil {
@@ -114,6 +157,27 @@ func run() error {
 		serverEncoder = json.NewEncoder(serverWriter)
 	}
 	a := learningenv.Assembler{Worker: *worker, Episode: *episode}
+	var rewardWriter *bufio.Writer
+	var rewardEncoder *json.Encoder
+	if rewardConfig != nil {
+		f, err := os.Create(filepath.Join(*out, "rewards.jsonl"))
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		rewardWriter = bufio.NewWriter(f)
+		rewardEncoder = json.NewEncoder(rewardWriter)
+		data, err := json.MarshalIndent(rewardConfig, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(*out, "reward-config.json"), data, 0644); err != nil {
+			return err
+		}
+	}
+	rewardSteps := 0
+	rewardSum := 0.0
+	rewardMasks := map[string]int{}
 	count, terminals, truncated := 0, 0, 0
 	serverWindows := 0
 	exclusiveWindows := 0
@@ -133,6 +197,15 @@ func run() error {
 				if err := p.Error(); err != nil {
 					return err
 				}
+				if native != nil {
+					if native.Release.Spawncount != copy.Identity.Spawncount || native.Release.Frame != copy.Identity.Frame || native.Release.Seed != *resetExpectation.Seed {
+						return fmt.Errorf("native reset release does not match first observation or episode seed")
+					}
+					if copy.Inventory == nil || copy.InventoryAgeFrames == nil || *copy.InventoryAgeFrames < 0 || *copy.InventoryAgeFrames > 2 {
+						return fmt.Errorf("native reset inventory observation unavailable/stale")
+					}
+					resetProof.NativeBarrier = native.Release
+				}
 			}
 		}
 		if executions != nil {
@@ -142,6 +215,16 @@ func run() error {
 				exclusiveWindows++
 			}
 		}
+		if native != nil {
+			p, err := native.Match(s)
+			if err != nil {
+				return err
+			}
+			s.Native = p
+			if !s.Execution.Matched || s.Next != nil && !s.Execution.WindowExclusive {
+				return fmt.Errorf("native step dispatch not exclusive/aligned")
+			}
+		}
 		if err := se.Encode(s); err != nil {
 			return err
 		}
@@ -149,12 +232,29 @@ func run() error {
 			return err
 		}
 		if joiner != nil {
-			outcome := joiner.Join(s)
+			var outcome learningenv.ServerOutcome
+			if native != nil {
+				outcome = joiner.JoinNative(s, s.Native)
+			} else {
+				outcome = joiner.Join(s)
+			}
 			if outcome.Available {
 				serverWindows++
 			}
 			if err := serverEncoder.Encode(outcome); err != nil {
 				return err
+			}
+			if rewardConfig != nil {
+				r := rewardConfig.Evaluate(s, outcome)
+				if r.Available {
+					rewardSteps++
+					rewardSum += *r.Score
+				} else {
+					rewardMasks[r.Reason]++
+				}
+				if err := rewardEncoder.Encode(r); err != nil {
+					return err
+				}
 			}
 		}
 		count++
@@ -200,6 +300,9 @@ func run() error {
 		return err
 	}
 	proof := harness.VerifyAppliedCommands(sent, applied)
+	if native != nil && len(native.Steps) != len(sent) {
+		return fmt.Errorf("native pulse count differs from full sent trace")
+	}
 	if *requireExecution && !proof.Accepted {
 		return fmt.Errorf("server execution proof failed: %s generation=%d sequence=%d", proof.Reason, proof.Generation, proof.Sequence)
 	}
@@ -221,6 +324,11 @@ func run() error {
 	if count == 0 {
 		return fmt.Errorf("no usable steps")
 	}
+	if rewardWriter != nil {
+		if err := rewardWriter.Flush(); err != nil {
+			return err
+		}
+	}
 	start := struct {
 		Version        string                  `json:"version"`
 		Observation    *policy.Observation     `json:"first_usable_observation"`
@@ -236,22 +344,39 @@ func run() error {
 		return err
 	}
 	summary := struct {
-		Version                string               `json:"version"`
-		Steps                  int                  `json:"steps"`
-		Terminals              int                  `json:"terminals"`
-		Truncated              int                  `json:"truncated"`
-		Scope                  string               `json:"scope"`
-		ServerWindows          int                  `json:"server_windows"`
-		ServerEvents           int                  `json:"server_events"`
-		JoinedEvents           int                  `json:"joined_server_events"`
-		UnassignedEvents       int                  `json:"unassigned_server_events"`
-		CommandProof           harness.CommandProof `json:"command_proof"`
-		ExclusiveWindows       int                  `json:"exclusive_execution_windows"`
-		ObservedResetConfirmed bool                 `json:"observed_reset_confirmed"`
+		Version                string                    `json:"version"`
+		Steps                  int                       `json:"steps"`
+		Terminals              int                       `json:"terminals"`
+		Truncated              int                       `json:"truncated"`
+		Scope                  string                    `json:"scope"`
+		ServerWindows          int                       `json:"server_windows"`
+		ServerEvents           int                       `json:"server_events"`
+		JoinedEvents           int                       `json:"joined_server_events"`
+		UnassignedEvents       int                       `json:"unassigned_server_events"`
+		CommandProof           harness.CommandProof      `json:"command_proof"`
+		ExclusiveWindows       int                       `json:"exclusive_execution_windows"`
+		ObservedResetConfirmed bool                      `json:"observed_reset_confirmed"`
+		NativeSteps            int                       `json:"native_steps"`
+		SynchronousConfirmed   bool                      `json:"synchronous_confirmed"`
+		RewardConfig           *learningenv.RewardConfig `json:"reward_config,omitempty"`
+		RewardSteps            int                       `json:"reward_steps,omitempty"`
+		RewardSum              *float64                  `json:"reward_sum,omitempty"`
+		RewardMasks            map[string]int            `json:"reward_masks,omitempty"`
 	}{Version: learningenv.StepVersion, Steps: count, Terminals: terminals, Truncated: truncated,
 		Scope: "Observed transitions with optional exact native dispatch proof; server damage windows describe effects, not shot accuracy or delayed causal credit. No victory or scalar reward inferred.", ServerWindows: serverWindows, CommandProof: proof, ExclusiveWindows: exclusiveWindows}
 	if resetProof != nil {
 		summary.ObservedResetConfirmed = resetProof.ObservedFieldsConfirmed
+	}
+	if rewardConfig != nil {
+		summary.RewardConfig = rewardConfig
+		summary.RewardSteps = rewardSteps
+		summary.RewardSum = &rewardSum
+		summary.RewardMasks = rewardMasks
+		summary.Scope = "Observed transitions, exact native execution and experimental first-life reward from phased server effects. No victory, shot accuracy or demonstration quality inferred."
+	}
+	if native != nil {
+		summary.NativeSteps = len(native.Steps)
+		summary.SynchronousConfirmed = true
 	}
 	if joiner != nil {
 		summary.ServerEvents = len(joiner.Events)
