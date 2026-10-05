@@ -7,19 +7,26 @@ param(
     [ValidateRange(20,500)][int]$GameFrames=300,
     [ValidateRange(1024,65530)][int]$Port=33100,
     [string]$Python='F:/src/strat/.venv-gpu/Scripts/python.exe',
-    [string]$Config='',[string]$OutputRoot=''
+    [string]$Config='',[string]$RewardConfig='',[string]$OutputRoot=''
 )
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 if(!$Config){$Config=Join-Path $PSScriptRoot 'scenarios/combat-ppo-v1.json'}
+if(!$RewardConfig){$RewardConfig=Join-Path $PSScriptRoot 'scenarios/combat-reward-v1.json'}
+$RewardConfig=(Resolve-Path -LiteralPath $RewardConfig).Path
 $Model=(Resolve-Path -LiteralPath $Model).Path;$Checkpoint=(Resolve-Path -LiteralPath $Checkpoint).Path
 $Python=(Resolve-Path -LiteralPath $Python).Path;$Config=(Resolve-Path -LiteralPath $Config).Path
+$trainingObjective=(Get-Content -LiteralPath $Config -Raw|ConvertFrom-Json).objective_reward_sha256
+$rewardVersion=(Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json).version
+if(($rewardVersion -eq 'combat_reward_v2' -and !$trainingObjective) -or ($trainingObjective -and $trainingObjective -ne (Get-FileHash -LiteralPath $RewardConfig).Hash)){throw 'Training objective must match reward config before collection'}
 if($Seed -lt 0 -or [long]$Seed+4*$Iterations-1 -gt 2147483647 -or $EvalSeed -lt 0 -or [long]$EvalSeed+3 -gt 2147483647){throw 'Valid independent seeds required'}
 if($EvalSeed -le $Seed+4*$Iterations-1 -and $EvalSeed+3 -ge $Seed){throw 'Evaluation seeds overlap training'}
 if(!$OutputRoot){$OutputRoot=Join-Path $repo ('workspace/artifacts/combat-ppo-cycle-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))}
 if(Test-Path -LiteralPath $OutputRoot){throw 'Fresh output required'}
 New-Item -ItemType Directory -Path $OutputRoot|Out-Null;$OutputRoot=(Resolve-Path -LiteralPath $OutputRoot).Path
 $frozen=Join-Path $OutputRoot 'config.json';Copy-Item -LiteralPath $Config -Destination $frozen
+$frozenReward=Join-Path $OutputRoot 'reward-config.json';Copy-Item -LiteralPath $RewardConfig -Destination $frozenReward
+$rewardSHA=(Get-FileHash -LiteralPath $frozenReward).Hash
 $configSHA=(Get-FileHash -LiteralPath $frozen).Hash;$trainer=Join-Path $PSScriptRoot 'ppo_combat.py';$trainerSHA=(Get-FileHash -LiteralPath $trainer).Hash
 Copy-Item -LiteralPath $trainer -Destination (Join-Path $OutputRoot 'trainer.py')
 $diagnoser=Join-Path $PSScriptRoot 'diagnose_combat.py';$diagnoserSHA=(Get-FileHash -LiteralPath $diagnoser).Hash
@@ -31,10 +38,10 @@ try{
     go build -o $dataTool ./cmd/q2ppo-data;if($LASTEXITCODE){throw 'PPO data tool build failed'}
     $initialModel=$Model;$initialCheckpoint=$Checkpoint;$steps=@()
     for($iteration=1;$iteration -le $Iterations;$iteration++){
-        if((Get-FileHash $frozen).Hash -ne $configSHA -or (Get-FileHash $trainer).Hash -ne $trainerSHA){throw 'Frozen training inputs changed'}
+        if((Get-FileHash $frozen).Hash -ne $configSHA -or (Get-FileHash $trainer).Hash -ne $trainerSHA -or (Get-FileHash $frozenReward).Hash -ne $rewardSHA){throw 'Frozen training inputs changed'}
         $dir=Join-Path $OutputRoot "iteration-$iteration";New-Item -ItemType Directory -Path $dir|Out-Null
         $batch=Join-Path $dir 'batch';$data=Join-Path $dir 'rollout';$update=Join-Path $dir 'update'
-        & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker 1 -Timescale 2 -GameFrames $GameFrames -Loadout blaster -CombatMode learned -ProviderFile $Model -Synchronous -RewardConfig "$PSScriptRoot/scenarios/combat-reward-v1.json" -Seed ($Seed+4*($iteration-1)) -Port $Port -OutputRoot $batch
+        & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker 1 -Timescale 2 -GameFrames $GameFrames -Loadout blaster -CombatMode learned -ProviderFile $Model -Synchronous -RewardConfig $frozenReward -Seed ($Seed+4*($iteration-1)) -Port $Port -OutputRoot $batch
         & $dataTool --batch $batch --model $Model --out $data;if($LASTEXITCODE){throw "Iteration $iteration native replay rejected"}
         & $Python $trainer --model $Model --resume $Checkpoint --data $data --config $frozen --out $update
         if($LASTEXITCODE){throw "Iteration $iteration PPO update failed"}
@@ -45,10 +52,11 @@ try{
         $steps|ConvertTo-Json -Depth 12|Set-Content -LiteralPath (Join-Path $OutputRoot 'progress.json') -Encoding utf8NoBOM
     }
     foreach($name in @('before','after')){
+        if((Get-FileHash $frozenReward).Hash -ne $rewardSHA){throw 'Frozen reward changed'}
         $inputModel=if($name -eq 'before'){$initialModel}else{$Model}
         $evalModel=Join-Path $OutputRoot "$name.json";$m=Get-Content $inputModel -Raw|ConvertFrom-Json;$m.deterministic=$true
         $m|ConvertTo-Json -Depth 10|Set-Content -LiteralPath $evalModel -Encoding utf8NoBOM
-        & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker 1 -Timescale 2 -GameFrames $GameFrames -Loadout blaster -CombatMode learned -ProviderFile $evalModel -Synchronous -RewardConfig "$PSScriptRoot/scenarios/combat-reward-v1.json" -Seed $EvalSeed -Port $Port -OutputRoot (Join-Path $OutputRoot "evaluation-$name")
+        & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker 1 -Timescale 2 -GameFrames $GameFrames -Loadout blaster -CombatMode learned -ProviderFile $evalModel -Synchronous -RewardConfig $frozenReward -Seed $EvalSeed -Port $Port -OutputRoot (Join-Path $OutputRoot "evaluation-$name")
     }
     $reports=@('before','after'|ForEach-Object{Get-Content (Join-Path $OutputRoot "evaluation-$_/report.json") -Raw|ConvertFrom-Json})
     $manifests=@('before','after'|ForEach-Object{Get-Content (Join-Path $OutputRoot "evaluation-$_/manifest.json") -Raw|ConvertFrom-Json})

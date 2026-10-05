@@ -51,6 +51,12 @@ def restore_checkpoint(path,model_path,config,actor,value,std,rollout_sha):
     assert torch.equal(std.detach().cpu(),checkpoint['log_std'].cpu()), 'Checkpoint standard deviation differs'
     return checkpoint,consumed,updates,steps
 
+def validate_objective(config,meta):
+    expected=config.get('objective_reward_sha256')
+    assert meta.get('reward_version')!='combat_reward_v2' or expected, 'Kill objective must be pinned in training config'
+    if expected:
+        assert expected.lower()==meta.get('reward_config_sha256','').lower(), 'Rollout reward differs from checkpoint objective'
+
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--init-bc');ap.add_argument('--model');ap.add_argument('--data');ap.add_argument('--resume');ap.add_argument('--config',required=True);ap.add_argument('--out',required=True);a=ap.parse_args()
     out=pathlib.Path(a.out);out.mkdir(exist_ok=False);config=json.loads(pathlib.Path(a.config).read_text(encoding='utf-8-sig'))
@@ -64,6 +70,7 @@ def main():
         (out/'report.json').write_text(json.dumps({'scope':'BC initialized stochastic actor, zero value; no PPO update yet','bc_sha256':sha(pathlib.Path(a.init_bc)),'config_sha256':sha(pathlib.Path(a.config))},indent=2));return
     assert a.model and a.data
     model_path=pathlib.Path(a.model);root=pathlib.Path(a.data);model=json.loads(model_path.read_text());meta=json.loads((root/'report.json').read_text())
+    validate_objective(config,meta)
     assert model['kind']=='combat_ppo_v1' and not model['deterministic'] and meta['version']=='combat_ppo_rollout_v1' and sha(model_path)==meta['model_sha256']
     assert sha(root/'rollout.jsonl')==meta['rollout_sha256']
     for path,digest in meta['source_sha256'].items():assert sha(pathlib.Path(path))==digest, f'Changed rollout input {path}'

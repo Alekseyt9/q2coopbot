@@ -1,5 +1,5 @@
 import unittest, tempfile, pathlib, copy
-from ppo_combat import advantages, restore_checkpoint, torch, nn, sha
+from ppo_combat import advantages, restore_checkpoint, validate_objective, torch, nn, sha
 
 def row(seed,index,reward,value,next_value,terminal=False,truncated=False):
     return {'seed':seed,'index':index,'frame':index,'next_frame':index+1,'reward':reward,'sample':{'value':value},'next_value':next_value,'terminal':terminal,'truncated':truncated}
@@ -19,6 +19,11 @@ class GAETest(unittest.TestCase):
         self.assertAlmostEqual(a[0],2.44)
 
 class ResumeTest(unittest.TestCase):
+    def test_objective_pin_rejects_wrong_or_unpinned_kill_reward(self):
+        validate_objective({}, {})
+        validate_objective({'objective_reward_sha256':'abc'}, {'reward_config_sha256':'ABC','reward_version':'combat_reward_v2'})
+        with self.assertRaisesRegex(AssertionError,'must be pinned'):validate_objective({}, {'reward_version':'combat_reward_v2'})
+        with self.assertRaisesRegex(AssertionError,'reward differs'):validate_objective({'objective_reward_sha256':'abc'}, {'reward_config_sha256':'other'})
     def test_resume_and_reject_reused_rollout_or_other_weights(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=pathlib.Path(tmp);model=root/'weights.json';model.write_text('{}')

@@ -98,3 +98,86 @@ func TestRewardConfigRejectsInvalidObjective(t *testing.T) {
 		}
 	}
 }
+
+func TestKillRewardV2LethalEvidenceAndDelayedProjectile(t *testing.T) {
+	c, s, o := rewardFixture()
+	c.Version, c.MonsterKill = KillRewardVersion, 5
+	e := DamageEvent{Map: "base1", Spawncount: 42, Attacker: 1, Target: 67, Inflictor: 84, TargetClass: "monster_parasite", HealthBefore: 10, HealthAfter: 0, Take: 10}
+	o.Events, o.MonsterKills = []DamageEvent{e}, 1
+	// Current action need not fire: the projectile can have been launched earlier.
+	r := c.Evaluate(&s, o)
+	if !r.Available || r.Version != KillRewardVersion || r.Components["monster_kill"] != 5 || math.Abs(*r.Score-4.899) > 1e-10 {
+		t.Fatal(r)
+	}
+	s.Truncated, s.Reason = true, "control_handoff"
+	if r = c.Evaluate(&s, o); !r.Available || r.Components["monster_kill"] != 5 {
+		t.Fatal("lost last verified kill at handoff", r)
+	}
+	s.Reason = "harness_override"
+	if c.Evaluate(&s, o).Available {
+		t.Fatal("accepted harness truncation")
+	}
+	s.Truncated, s.Reason = false, ""
+	// Corpses do not earn another bonus.
+	o.MonsterKills = 0
+	o.Events[0].HealthBefore, o.Events[0].HealthAfter = 0, -10
+	r = c.Evaluate(&s, o)
+	if !r.Available || r.Components["monster_kill"] != 0 {
+		t.Fatal(r)
+	}
+	// v1 remains byte-compatible in components, even when native effects show kills.
+	c.Version, c.MonsterKill = RewardVersion, 0
+	o.MonsterKills = 1
+	r = c.Evaluate(&s, o)
+	if _, exists := r.Components["monster_kill"]; !r.Available || exists || r.Version != RewardVersion {
+		t.Fatal(r)
+	}
+}
+
+func TestKillRewardRejectsUnprovenOrDuplicateKills(t *testing.T) {
+	for _, name := range []string{"missing", "other_attacker", "player", "nonlethal", "duplicate", "negative", "world", "bad_health"} {
+		t.Run(name, func(t *testing.T) {
+			c, s, o := rewardFixture()
+			c.Version, c.MonsterKill = KillRewardVersion, 5
+			e := DamageEvent{Map: "base1", Spawncount: 42, Attacker: 1, Target: 67, TargetClass: "monster_parasite", HealthBefore: 10, HealthAfter: 0, Take: 10}
+			o.Events, o.MonsterKills = []DamageEvent{e}, 1
+			switch name {
+			case "missing":
+				o.Events = nil
+			case "other_attacker":
+				o.Events[0].Attacker = 2
+			case "player":
+				o.Events[0].TargetClass = "player"
+			case "nonlethal":
+				o.Events[0].HealthBefore, o.Events[0].HealthAfter = 20, 10
+			case "duplicate":
+				o.Events = append(o.Events, e)
+				o.MonsterKills = 2
+			case "negative":
+				o.MonsterKills = -1
+			case "world":
+				o.Events[0].Spawncount++
+			case "bad_health":
+				o.Events[0].Take = 9
+			}
+			if r := c.Evaluate(&s, o); r.Available || r.Score != nil {
+				t.Fatal(r)
+			}
+		})
+	}
+}
+
+func TestKillRewardConfigVersionAndFiniteBonus(t *testing.T) {
+	for _, bonus := range []float64{0, -1, math.NaN(), math.Inf(1)} {
+		c, _, _ := rewardFixture()
+		c.Version, c.MonsterKill = KillRewardVersion, bonus
+		if c.Validate() == nil {
+			t.Fatal(bonus)
+		}
+	}
+	c, _, _ := rewardFixture()
+	c.MonsterKill = 5
+	if c.Validate() == nil {
+		t.Fatal("v1 silently changed objective")
+	}
+}

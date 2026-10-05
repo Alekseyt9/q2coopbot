@@ -65,7 +65,10 @@ func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
 	if s.Observation.Identity.Life != 1 {
 		return deny("after_first_life")
 	}
-	if s.Truncated || s.Next == nil || !sameWorld(s) || s.Next.Identity.Frame != s.Observation.Identity.Frame+1 || s.Observation.Health <= 0 || s.Observation.AgeMS < 0 || s.Observation.AgeMS > 300 || s.Next.AgeMS < 0 || s.Next.AgeMS > 300 {
+	// A control handoff ends the learned segment after its final command has
+	// already executed. Keep its verified effect window in v2, including kills.
+	completeHandoff := c.Version == KillRewardVersion && s.Truncated && s.Reason == "control_handoff"
+	if s.Truncated && !completeHandoff || s.Next == nil || !sameWorld(s) || s.Next.Identity.Frame != s.Observation.Identity.Frame+1 || s.Observation.Health <= 0 || s.Observation.AgeMS < 0 || s.Observation.AgeMS > 300 || s.Next.AgeMS < 0 || s.Next.AgeMS > 300 {
 		return deny("incomplete_transition")
 	}
 	if s.Action.Identity != s.Observation.Identity || s.AppliedAction.Identity != s.Observation.Identity || s.Action.Version != policy.ActionVersion || s.AppliedAction.Version != policy.ActionVersion {
