@@ -70,3 +70,15 @@ func TestAppliedLogCountsConnectionsNotHandshakeRetries(t *testing.T) {
 		t.Fatal(rows, err)
 	}
 }
+
+func TestAppliedLogUsesConfiguredSoloClientName(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "server.log")
+	text := "Other connected\nSoloRetreatBot connected\nsv_test_applied_cmd spawncount=7 frame=42 seq=12 kind=new pitch=0 yaw=0 roll=0 forward=0 side=0 up=0 buttons=0 impulse=0 msec=100 light=0\n"
+	if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := ReadAppliedCommandsForClient(path, "SoloRetreatBot")
+	if err != nil || len(rows) != 1 || rows[0].Connection != 1 {
+		t.Fatal(rows, err)
+	}
+}

@@ -10,7 +10,7 @@ import (
 	"q2coopbot/internal/quake"
 )
 
-const ObservationVersion = "combat_observation_v1"
+const ObservationVersion = "combat_observation_v2"
 const ActionVersion = "combat_action_v1"
 
 // Identity prevents a delayed decision from crossing a frame or connection.
@@ -24,16 +24,19 @@ type Identity struct {
 }
 
 type Enemy struct {
-	ID        int        `json:"id"`
-	Class     string     `json:"class"`
-	Relative  quake.Vec3 `json:"relative"`
-	ClearShot *bool      `json:"clear_shot"`
+	Track     *int        `json:"observed_track"`
+	Velocity  *quake.Vec3 `json:"observed_velocity"`
+	ID        int         `json:"id"`
+	Class     string      `json:"class"`
+	Relative  quake.Vec3  `json:"relative"`
+	ClearShot *bool       `json:"clear_shot"`
 }
 
 // Nil masks distinguish unavailable information from an observed zero.
-// Entity generations, obstacle probes and historical features remain unsupported
-// in this first capture schema; they must be added before learning uses them.
+// Tracks describe uninterrupted visible observations, not server generations.
+// Obstacle probes and visible projectile features remain unsupported.
 type Observation struct {
+	History            []HistoryFrame         `json:"history"`
 	AgeMS              int64                  `json:"observation_age_ms"`
 	Version            string                 `json:"version"`
 	Identity           Identity               `json:"identity"`
@@ -174,6 +177,7 @@ func ControlChanged(a, b quake.UserCmd) bool {
 }
 
 type Capture struct {
+	ClientSequence  uint32        `json:"client_sequence"`
 	Selection       *Selection    `json:"selection,omitempty"`
 	CommandAtUnixNS int64         `json:"command_at_unix_ns"`
 	Provider        string        `json:"provider"`

@@ -4,6 +4,10 @@
 [плана](../learned_system1_plan.md). Обученных весов, PPO, learned-shadow и
 применения learned-политики пока нет. Обычный запуск бота не переключён.
 
+Это исходный отчёт R0. Последующая реализация Provider/shadow и экспорта
+переходов описана в [R1/R2 dispatch](learned_combat_dispatch.md); текущий runner
+по умолчанию использует 4 workers и 300 игровых кадров на x2.
+
 ## Реализация
 
 - `internal/policy` содержит версии observation/action, интерфейс Provider и

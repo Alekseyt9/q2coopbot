@@ -992,6 +992,7 @@ func (c *Client) run(ctx context.Context) error {
 					o := combatObservation
 					proposed := proposedCombatCommand
 					combat = &policy.Capture{Provider: "rules", Observation: o,
+						ClientSequence:  clientSequence,
 						Selection:       combatSelection,
 						CommandAtUnixNS: now.UnixNano(),
 						Proposed:        policy.FromCommand(o, proposed, s.DeltaAngles, ""), Applied: policy.FromCommand(o, cmd, s.DeltaAngles, weaponRequest),

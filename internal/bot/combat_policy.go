@@ -10,6 +10,7 @@ import (
 )
 
 type combatControl struct {
+	history    policy.History
 	mode       string
 	provider   policy.Provider
 	last       policy.Identity
@@ -32,6 +33,7 @@ func (c *Client) combatObservation(now time.Time) policy.Observation {
 	b.last, b.lastHealth = id, s.Health
 	o := policy.Observe(s, id, c.previous)
 	o.AgeMS = now.Sub(c.planner.World.Updated).Milliseconds()
+	b.history.Enrich(&o)
 	return o
 }
 
@@ -64,7 +66,10 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		sel.Fallback = "system2_noncombat"
 		return rules()
 	}
-	if o.Weapon!="Blaster" {sel.Fallback="pilot_equip_not_ready";return rules()}
+	if o.Weapon != "Blaster" {
+		sel.Fallback = "pilot_equip_not_ready"
+		return rules()
+	}
 	if c.planner.World.Geometry == nil || c.planner.World.GeometryStatus != "ready" && c.planner.World.GeometryStatus != "available" {
 		sel.Fallback = "geometry_unavailable"
 		return rules()
@@ -82,6 +87,10 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		return rules()
 	}
 	guarded, changes := c.planner.guardDirectCombat(c.planner.World.Snapshot, proposed)
+	converted := policy.FromCommand(o, proposed, c.planner.World.Snapshot.DeltaAngles, "")
+	if math.Abs(converted.PitchDelta-a.PitchDelta) > .01 {
+		changes = append(changes, policy.Intervention{Component: "pitch", Reason: "protocol_pitch_limit"})
+	}
 	sel.CandidateCommand, sel.GuardedCommand, sel.Interventions = &proposed, &guarded, changes
 	sel.ElapsedUS = time.Since(start).Microseconds()
 	if sel.ElapsedUS > 5000 {
@@ -169,19 +178,13 @@ func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.
 			to[0] += 1024 * math.Cos(pitch) * math.Cos(yaw)
 			to[1] += 1024 * math.Cos(pitch) * math.Sin(yaw)
 			to[2] -= 1024 * math.Sin(pitch)
-			if s.Teammate != nil && teammateBlocksShot(from, to, *s.Teammate) || p.teammateEntersProjectile(s, from, to) {
+			trace := g.TraceProjectile(from, to)
+			if trace.Valid {
+				to = trace.End
+			}
+			recentPartner := s.LastTeammate != nil && s.TeammateAgeFrames != nil && *s.TeammateAgeFrames <= 10 && teammateBlocksShot(from, to, *s.LastTeammate)
+			if s.Teammate != nil && teammateBlocksShot(from, to, *s.Teammate) || recentPartner || p.teammateEntersProjectile(s, from, to) {
 				stopFire("friendly_line_of_fire")
-			} else {
-				hit := false
-				for _, e := range s.Enemies {
-					if e.ClearShot != nil && *e.ClearShot && barrelRay(from, to, e.Origin) && g.ClearShot(from, e.Origin) {
-						hit = true
-						break
-					}
-				}
-				if !hit {
-					stopFire("no_observed_target_on_policy_ray")
-				}
 			}
 			before := cmd
 			saved := p.World.Command

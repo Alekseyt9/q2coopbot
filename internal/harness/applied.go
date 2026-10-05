@@ -19,6 +19,14 @@ type AppliedCommand struct {
 }
 
 func ReadAppliedCommands(path string) ([]AppliedCommand, error) {
+	return ReadAppliedCommandsForClient(path, "GoCoopMate")
+}
+
+// The log must trace this one named client, as selected by sv_test_trace_client.
+func ReadAppliedCommandsForClient(path, clientName string) ([]AppliedCommand, error) {
+	if clientName == "" || strings.ContainsAny(clientName, "\r\n") {
+		return nil, fmt.Errorf("invalid traced client name")
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -34,7 +42,7 @@ func ReadAppliedCommands(path string) ([]AppliedCommand, error) {
 		text := scanner.Text()
 		// The harness traces this named client only. A successful server-side
 		// connection, not a repeated handshake command, starts a new stream.
-		if text == "GoCoopMate connected" {
+		if text == clientName+" connected" {
 			connection++
 		}
 		if !strings.HasPrefix(text, "sv_test_applied_cmd") {
