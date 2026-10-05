@@ -1,0 +1,10 @@
+{
+  "version": "combat_reward_v2",
+  "monster_damage": 0.01,
+  "monster_kill": 5.0,
+  "received_damage": -0.02,
+  "self_damage_extra": -0.02,
+  "friendly_damage": -0.10,
+  "death": -5.0,
+  "tick": -0.001
+}

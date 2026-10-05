@@ -3,11 +3,13 @@ package learningenv
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"q2coopbot/internal/policy"
 )
 
 const RewardVersion = "combat_reward_v1"
+const KillRewardVersion = "combat_reward_v2"
 
 // RewardConfig is an explicit experimental objective, not a measured success
 // metric. Server effects never enter the policy observation.
@@ -19,16 +21,20 @@ type RewardConfig struct {
 	FriendlyDamage float64 `json:"friendly_damage"`
 	Death          float64 `json:"death"`
 	Tick           float64 `json:"tick"`
+	MonsterKill    float64 `json:"monster_kill,omitempty"`
 }
 
 func (c RewardConfig) Validate() error {
-	if c.Version != RewardVersion {
+	if c.Version != RewardVersion && c.Version != KillRewardVersion {
 		return fmt.Errorf("unsupported reward version")
 	}
-	for _, v := range []float64{c.MonsterDamage, c.ReceivedDamage, c.SelfDamage, c.FriendlyDamage, c.Death, c.Tick} {
+	for _, v := range []float64{c.MonsterDamage, c.ReceivedDamage, c.SelfDamage, c.FriendlyDamage, c.Death, c.Tick, c.MonsterKill} {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
 			return fmt.Errorf("nonfinite reward coefficient")
 		}
+	}
+	if c.Version == RewardVersion && c.MonsterKill != 0 || c.Version == KillRewardVersion && c.MonsterKill <= 0 {
+		return fmt.Errorf("v1 forbids kill bonus; v2 requires positive kill bonus")
 	}
 	if c.MonsterDamage <= 0 || c.ReceivedDamage >= 0 || c.SelfDamage > 0 || c.FriendlyDamage >= 0 || c.Death >= 0 || c.Tick >= 0 {
 		return fmt.Errorf("reward requires positive useful damage and negative damage/death/time costs")
@@ -48,7 +54,7 @@ type Reward struct {
 }
 
 func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
-	r := Reward{Version: RewardVersion, Worker: s.Worker, Episode: s.Episode, Step: s.Index}
+	r := Reward{Version: c.Version, Worker: s.Worker, Episode: s.Episode, Step: s.Index}
 	deny := func(reason string) Reward { r.Reason = reason; return r }
 	if err := c.Validate(); err != nil {
 		return deny("invalid_reward_config")
@@ -77,6 +83,22 @@ func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
 	if s.Terminal != (s.Next.Health <= 0) || (s.Terminal && o.Deaths != 1) || (!s.Terminal && o.Deaths != 0) {
 		return deny("death_evidence_mismatch")
 	}
+	if c.Version == KillRewardVersion {
+		// Count lethal native effects caused by this actor, including delayed
+		// projectiles. A disappearing entity or damage to a corpse is no kill.
+		killed := map[int]bool{}
+		for _, e := range o.Events {
+			if e.Attacker == s.Observation.Identity.Actor && e.Target != e.Attacker && strings.HasPrefix(e.TargetClass, "monster_") && e.HealthBefore > 0 && e.HealthAfter <= 0 {
+				if e.Target <= 0 || e.Map != s.Observation.Identity.Map || e.Spawncount != s.Observation.Identity.Spawncount || e.Take <= 0 || e.HealthBefore-e.Take != e.HealthAfter || killed[e.Target] {
+					return deny("invalid_monster_kill_evidence")
+				}
+				killed[e.Target] = true
+			}
+		}
+		if o.MonsterKills < 0 || len(killed) != o.MonsterKills {
+			return deny("monster_kill_evidence_mismatch")
+		}
+	}
 	r.Components = map[string]float64{
 		"monster_damage":    float64(o.MonsterHealthDamage) * c.MonsterDamage,
 		"received_damage":   float64(o.ReceivedHealthDamage) * c.ReceivedDamage,
@@ -84,10 +106,16 @@ func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
 		"friendly_damage":   float64(o.TeammateHealthDamage) * c.FriendlyDamage,
 		"death":             float64(o.Deaths) * c.Death, "tick": c.Tick,
 	}
+	if c.Version == KillRewardVersion {
+		r.Components["monster_kill"] = float64(o.MonsterKills) * c.MonsterKill
+	}
 	score := 0.0
 	// Fixed order ensures byte-stable floating-point totals across exports.
 	for _, name := range []string{"monster_damage", "received_damage", "self_damage_extra", "friendly_damage", "death", "tick"} {
 		score += r.Components[name]
+	}
+	if c.Version == KillRewardVersion {
+		score += r.Components["monster_kill"]
 	}
 	if math.IsNaN(score) || math.IsInf(score, 0) {
 		r.Components = nil

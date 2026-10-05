@@ -1,0 +1,14 @@
+{
+  "version": "combat_exploration_experiment_v1",
+  "parent_model_sha256": "7de6c1c7620ca0f2ca2542871128da4836c669977f4d86757b892b541e5b0308",
+  "log_std": [-1.2, -1.2, -3.9, -3.9],
+  "iterations": 4,
+  "workers": 4,
+  "timescale": 2,
+  "game_frames": 300,
+  "training_seeds": [14000, 14015],
+  "evaluation_seeds": [14100, 14103],
+  "optimizer_fork": "Reset actor Adam; retain value Adam, RNG and consumed history. Actor/value weights unchanged. Fresh on-policy batches only.",
+  "selection": "Fixed fourth update; no checkpoint selection or hyperparameter tuning by evaluation.",
+  "objective": "Existing combat_reward_v1 unchanged; diagnose movement and horizontal aim separately. No claim of exploration solving blocked motion."
+}

@@ -1035,7 +1035,7 @@ func (c *Client) run(ctx context.Context) error {
 							combat.LabelQuality = "trained BC candidate; unaccepted gameplay; not positive teacher demonstration"
 						}
 						if strings.HasPrefix(combat.Provider, "ppo:") {
-							combat.LabelQuality = "stochastic PPO rollout; not teacher demonstration or accepted combat"
+							combat.LabelQuality = "PPO policy candidate; not teacher demonstration or accepted combat"
 						}
 					}
 				}

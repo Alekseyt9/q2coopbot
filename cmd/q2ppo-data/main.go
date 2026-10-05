@@ -78,12 +78,13 @@ func run() error {
 	model := flag.String("model", "", "frozen original PPO model")
 	flag.Parse()
 	var manifest struct {
-		Provider    string `json:"provider"`
-		Kind        string `json:"provider_kind"`
-		Synchronous bool   `json:"synchronous"`
-		RewardSHA   string `json:"reward_config_sha256"`
-		ExporterSHA string `json:"exporter_sha256"`
-		ModelSHA    string `json:"model_weights_sha256"`
+		Provider    string                   `json:"provider"`
+		Kind        string                   `json:"provider_kind"`
+		Synchronous bool                     `json:"synchronous"`
+		RewardSHA   string                   `json:"reward_config_sha256"`
+		ExporterSHA string                   `json:"exporter_sha256"`
+		ModelSHA    string                   `json:"model_weights_sha256"`
+		Reward      learningenv.RewardConfig `json:"reward_config"`
 	}
 	if e := read(filepath.Join(*batch, "manifest.json"), &manifest); e != nil {
 		return e
@@ -186,11 +187,11 @@ func run() error {
 			return fmt.Errorf("episode weight version or sampling seed differs")
 		}
 		rewardPath := filepath.Join(r.Root, "dataset", "reward-config.json")
-		h, e = sha(rewardPath)
-		if e != nil {
+		var rewardConfig learningenv.RewardConfig
+		if e = read(rewardPath, &rewardConfig); e != nil {
 			return e
 		}
-		if !strings.EqualFold(h, manifest.RewardSHA) {
+		if !reflect.DeepEqual(rewardConfig, manifest.Reward) {
 			return fmt.Errorf("reward changed")
 		}
 		paths := []string{filepath.Join(r.Root, "bot.jsonl"), filepath.Join(r.Root, "server.log"), filepath.Join(r.Root, "reset-expectation.json"), filepath.Join(r.Root, "bot-config.json"), cfg.Combat.File, rewardPath}
@@ -234,6 +235,9 @@ func run() error {
 		}
 		for j, s := range steps {
 			reward := rewards[j]
+			if s.Observation.Identity.Life == 1 && s.Owner == "provider" && (s.Provider != p.Version() || s.Sample == nil) {
+				return fmt.Errorf("missing or foreign on-policy sample")
+			}
 			if s.Observation.Identity.Life != 1 || s.Owner != "provider" || s.Provider != p.Version() || s.Sample == nil || s.Next == nil || !reward.Available || reward.Score == nil {
 				skipped++
 				continue
@@ -284,6 +288,6 @@ func run() error {
 		return e
 	}
 	data, _ := json.MarshalIndent(map[string]any{"version": "combat_ppo_rollout_v1", "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE, full world reset equivalence unproven"}, "", "  ")
-	fmt.Println(string(data[:min(len(data), 250)]))
+	fmt.Printf("PPO rollout verified: rows=%d terminal=%d policy=%s\n", count, terminals, behavior.Version())
 	return os.WriteFile(filepath.Join(*out, "report.json"), data, 0644)
 }
