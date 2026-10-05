@@ -335,5 +335,12 @@ try{
         }catch{$report.diagnostic_error=$_.Exception.Message}
     }
 }
-finally{foreach($process in @($bot,$server)){if($process -and !$process.HasExited){Stop-Process -Id $process.Id;$null=$process.WaitForExit(5000)}};$report|ConvertTo-Json -Depth 8|Set-Content (Join-Path $OutputRoot 'report.json')}
+finally{
+    foreach($process in @($bot,$server)){if($process -and !$process.HasExited){Stop-Process -Id $process.Id;$null=$process.WaitForExit(5000)}}
+    if((Test-Path $trace) -and (Test-Path (Join-Path $OutputRoot 'server.log'))){
+        try{$report.first_life_diagnostic=& "$PSScriptRoot/analyze_combat_first_life.ps1" -RunRoot $OutputRoot}
+        catch{$report.first_life_diagnostic_error=$_.Exception.Message}
+    }
+    $report|ConvertTo-Json -Depth 8|Set-Content (Join-Path $OutputRoot 'report.json')
+}
 if(!$report.accepted){throw $report.reason}

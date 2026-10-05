@@ -901,5 +901,63 @@
     "regression_accepted": 4,
     "regression_total": 4,
     "next": "Checked escape/cover during equip under Gunner grenade pressure; retain native death gates"
+  },
+  "grenade_evade_validation": {
+    "status": "partial",
+    "survival_episode_closed": false,
+    "observation": "Current grenade/tris.md2 entities now reported separately from hand_grenade",
+    "scope": "Local current-position clearance, no owner, fuse or ballistic prediction",
+    "timescale": 2,
+    "parallelism": 2,
+    "accepted": 2,
+    "total": 4,
+    "reports": [
+      "workspace/artifacts/solo-tactical-retreat-20261005-151003-584-6bc6cfc7/report.json",
+      "workspace/artifacts/solo-tactical-retreat-20261005-151054-621-fc6eec6a/report.json"
+    ],
+    "motion_reports": [
+      "workspace/artifacts/solo-tactical-retreat-20261005-151003-584-6bc6cfc7/grenade-evade-motion.json",
+      "workspace/artifacts/solo-tactical-retreat-20261005-151054-621-fc6eec6a/grenade-evade-motion.json"
+    ],
+    "success_minimum_health": [
+      5,
+      4
+    ],
+    "old_seed_first_death_frames": [
+      169,
+      51
+    ],
+    "next": "Earlier geometry-valid escape and cover during equip; distinguish no current grenade observation from failed evade"
+  },
+  "first_life_diagnostic_development": {
+    "status": "open",
+    "gameplay_changes_retained": false,
+    "tool": "scripts/analyze_combat_first_life.ps1",
+    "automatic_runner": "scripts/run_solo_tactical_retreat.ps1",
+    "rejected_motion_reports": [
+      "workspace/artifacts/solo-tactical-retreat-20261005-151904-891-7fd11758/report.json",
+      "workspace/artifacts/solo-tactical-retreat-20261005-151926-757-177b4a17/report.json"
+    ],
+    "rejected_equip_speed_reports": [
+      "workspace/artifacts/solo-tactical-retreat-20261005-152311-317-733479d9/report.json",
+      "workspace/artifacts/solo-tactical-retreat-20261005-152311-503-a14fdb81/report.json"
+    ],
+    "rejected_total": 8,
+    "rejected_accepted": 0,
+    "rolled_back": [
+      "one-frame grenade extrapolation",
+      "mixed weapon raising/empty fast retreat240"
+    ],
+    "first_life_failure_audit": "workspace/artifacts/solo-tactical-retreat-20261005-151054-621-fc6eec6a/run-1/combat-first-life.json",
+    "first_death_frame": 51,
+    "first_life_incoming": {
+      "monster_parasite": 46,
+      "monster_gunner": 54
+    },
+    "first_life_monster_kills": 0,
+    "final_regression_report": "workspace/artifacts/solo-tactical-retreat-20261005-152634-808-bfe15d21/report.json",
+    "final_accepted": 2,
+    "final_total": 2,
+    "next": "Compare current target priority under scarce ammo using first-life context; no post-respawn kills as survival evidence"
   }
 }
