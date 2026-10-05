@@ -113,6 +113,10 @@ func cloneProjectiles(p *[]Enemy) *[]Enemy {
 func cloneEnemies(enemies []Enemy) []Enemy {
 	copy := append([]Enemy{}, enemies...)
 	for i := range copy {
+		if copy[i].Solid != nil {
+			v := *copy[i].Solid
+			copy[i].Solid = &v
+		}
 		if copy[i].Track != nil {
 			v := *copy[i].Track
 			copy[i].Track = &v

@@ -24,6 +24,7 @@ type Identity struct {
 }
 
 type Enemy struct {
+	Solid           *uint16     `json:"observed_solid,omitempty"`
 	Distance        float64     `json:"distance"`
 	MotionDirection *quake.Vec3 `json:"motion_direction"`
 	Track           *int        `json:"observed_track"`
@@ -105,7 +106,8 @@ func Observe(s quake.Snapshot, id Identity, previous quake.UserCmd) Observation 
 		if len(o.Enemies) == 8 {
 			break
 		}
-		o.Enemies = append(o.Enemies, Enemy{ID: e.ID, Class: e.Class, Relative: relative(e.Origin, s.Self), Distance: quake.Distance(e.Origin, s.Self), ClearShot: e.ClearShot})
+		solid := e.Solid
+		o.Enemies = append(o.Enemies, Enemy{Solid: &solid, ID: e.ID, Class: e.Class, Relative: relative(e.Origin, s.Self), Distance: quake.Distance(e.Origin, s.Self), ClearShot: e.ClearShot})
 	}
 	return o
 }

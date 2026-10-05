@@ -3,11 +3,103 @@ package policy
 import (
 	"fmt"
 	"math"
+	"q2coopbot/internal/quake"
 	"sort"
 	"strings"
 )
 
 const FeatureVersion = "combat_features_v1"
+const AimFeatureVersion = "combat_features_v2"
+const BBoxFeatureVersion = "combat_features_v3"
+
+// ObservedAimDirection uses only observed protocol bbox and current eye.
+// Unknown/non-bbox solids are unavailable, without a guessed body height.
+func ObservedAimDirection(o Observation, e Enemy) (quake.Vec3, bool, error) {
+	if e.ClearShot == nil || !*e.ClearShot || e.Solid == nil {
+		return quake.Vec3{}, false, nil
+	}
+	s := *e.Solid
+	bottom := -float64((s>>5)&31) * 8
+	top := float64((s>>10)&63)*8 - 32
+	if s == 0 || s == 31 || s&31 == 0 || top <= bottom {
+		return quake.Vec3{}, false, nil
+	}
+	p := (quake.Object{Origin: e.Relative, Solid: s}).AimPoint()
+	if o.Ducked {
+		p[2] += 2
+	} else {
+		p[2] -= 22
+	}
+	n := math.Hypot(math.Hypot(p[0], p[1]), p[2])
+	if math.IsNaN(n) || math.IsInf(n, 0) {
+		return quake.Vec3{}, false, fmt.Errorf("nonfinite observed aim point")
+	}
+	if n < 1e-9 {
+		return quake.Vec3{}, false, nil
+	}
+	for i := range p {
+		p[i] /= n
+	}
+	return p, true, nil
+}
+
+// FeaturesForVersion preserves v1 exactly. V2 appends eight distance-sorted
+// slots: valid mask, sin/cos yaw error, sin/cos pitch error to the observed
+// enemy origin from the current eye. This is geometry, not an action or teacher.
+func FeaturesForVersion(o Observation, version string) ([]float64, error) {
+	if version != FeatureVersion && version != AimFeatureVersion && version != BBoxFeatureVersion {
+		return nil, fmt.Errorf("unsupported features %q", version)
+	}
+	v, err := Features(o)
+	if err != nil || version == FeatureVersion {
+		return v, err
+	}
+	enemies := append([]Enemy(nil), o.Enemies...)
+	sort.SliceStable(enemies, func(i, j int) bool { return enemies[i].Distance < enemies[j].Distance })
+	eye := 22.0
+	if o.Ducked {
+		eye = -2
+	}
+	for i := 0; i < 8; i++ {
+		if i >= len(enemies) || enemies[i].ClearShot == nil || !*enemies[i].ClearShot {
+			v = append(v, 0, 0, 0, 0, 0)
+			continue
+		}
+		r := enemies[i].Relative
+		z := r[2] - eye
+		length := math.Hypot(math.Hypot(r[0], r[1]), z)
+		if math.IsNaN(length) || math.IsInf(length, 0) {
+			return nil, fmt.Errorf("nonfinite aim feature")
+		}
+		if length < 1e-9 {
+			v = append(v, 0, 0, 0, 0, 0)
+			continue
+		}
+		yaw := math.Atan2(r[1], r[0]) - degrees(o.ViewAngles[1])*math.Pi/180
+		pitch := -math.Atan2(z, math.Hypot(r[0], r[1])) - degrees(o.ViewAngles[0])*math.Pi/180
+		v = append(v, 1, math.Sin(yaw), math.Cos(yaw), math.Sin(pitch), math.Cos(pitch))
+	}
+	if version == BBoxFeatureVersion {
+		for i := 0; i < 8; i++ {
+			if i >= len(enemies) {
+				v = append(v, 0, 0, 0, 0, 0)
+				continue
+			}
+			r, valid, err := ObservedAimDirection(o, enemies[i])
+			if err != nil {
+				return nil, err
+			}
+			if !valid {
+				v = append(v, 0, 0, 0, 0, 0)
+				continue
+			}
+			yaw := math.Atan2(r[1], r[0]) - degrees(o.ViewAngles[1])*math.Pi/180
+			pitch := -math.Atan2(r[2], math.Hypot(r[0], r[1])) - degrees(o.ViewAngles[0])*math.Pi/180
+			v = append(v, 1, math.Sin(yaw), math.Cos(yaw), math.Sin(pitch), math.Cos(pitch))
+		}
+	}
+	return v, nil
+}
 
 // Features uses only client observations. No seed, frame/actor ID, server
 // reward or future state enters the vector. Nil masks remain explicit.

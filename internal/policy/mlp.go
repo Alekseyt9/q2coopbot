@@ -46,20 +46,26 @@ func LoadMLP(path string) (*MLP, error) {
 	if err = d.Decode(new(any)); err != io.EOF {
 		return nil, fmt.Errorf("trailing model data")
 	}
-	if f.Kind != MLPKind || f.Features != FeatureVersion || len(f.Layers) != 3 {
+	if f.Kind != MLPKind || (f.Features != FeatureVersion && f.Features != AimFeatureVersion && f.Features != BBoxFeatureVersion) || len(f.Layers) != 3 {
 		return nil, fmt.Errorf("unsupported BC architecture")
 	}
-	if err := validateLayers(f.Layers, 8); err != nil {
+	if err := validateFeatureLayers(f.Layers, 8, f.Features); err != nil {
 		return nil, err
 	}
 	h := sha256.Sum256(data)
 	return &MLP{f, "bc_mlp:" + hex.EncodeToString(h[:])}, nil
 }
 func validateLayers(layers []DenseLayer, outputs int) error {
+	return validateFeatureLayers(layers, outputs, FeatureVersion)
+}
+func validateFeatureLayers(layers []DenseLayer, outputs int, version string) error {
 	if len(layers) != 3 {
 		return fmt.Errorf("three dense layers required")
 	}
-	x, _ := Features(Observation{})
+	x, err := FeaturesForVersion(Observation{}, version)
+	if err != nil {
+		return err
+	}
 	n := len(x)
 	for i, l := range layers {
 		if len(l.Weight) != len(l.Bias) || len(l.Bias) == 0 || len(l.Bias) > MaxHiddenWidth || i == 2 && len(l.Bias) != outputs {
@@ -81,7 +87,11 @@ func validateLayers(layers []DenseLayer, outputs int) error {
 }
 func (p *MLP) Version() string { return p.version }
 func (p *MLP) Raw(o Observation) ([]float64, error) {
-	x, err := Features(o)
+	version := p.file.Features
+	if version == "" {
+		version = FeatureVersion
+	} // package-local legacy fixtures
+	x, err := FeaturesForVersion(o, version)
 	if err != nil {
 		return nil, err
 	}

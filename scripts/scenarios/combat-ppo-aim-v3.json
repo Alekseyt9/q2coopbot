@@ -1,0 +1,21 @@
+{
+  "version": "combat_ppo_training_v1",
+  "seed": 20261005,
+  "gamma": 0.99,
+  "lambda": 0.95,
+  "clip": 0.2,
+  "actor_lr": 0.0003,
+  "value_lr": 0.001,
+  "actor_steps": 10,
+  "value_steps": 40,
+  "target_kl": 0.01,
+  "entropy": 0.001,
+  "max_grad_norm": 0.5,
+  "log_std": [
+    -2.3,
+    -2.3,
+    -5.3,
+    -5.3
+  ],
+  "objective_reward_sha256": "b39507018fe9a8075b6cfeda85239a5d3c0497cf0761094abd98f4bf9265a90e"
+}

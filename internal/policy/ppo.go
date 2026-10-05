@@ -60,13 +60,13 @@ func LoadPPO(path string) (*PPO, error) {
 	if d.Decode(new(any)) != io.EOF {
 		return nil, fmt.Errorf("trailing PPO data")
 	}
-	if f.Kind != PPOKind || f.Features != FeatureVersion || f.SamplingSeed < 0 {
+	if f.Kind != PPOKind || (f.Features != FeatureVersion && f.Features != AimFeatureVersion && f.Features != BBoxFeatureVersion) || f.SamplingSeed < 0 {
 		return nil, fmt.Errorf("invalid PPO header")
 	}
-	if e = validateLayers(f.Actor, 8); e != nil {
+	if e = validateFeatureLayers(f.Actor, 8, f.Features); e != nil {
 		return nil, e
 	}
-	if e = validateLayers(f.Value, 1); e != nil {
+	if e = validateFeatureLayers(f.Value, 1, f.Features); e != nil {
 		return nil, e
 	}
 	for _, s := range f.LogStd {
@@ -80,14 +80,15 @@ func LoadPPO(path string) (*PPO, error) {
 	data, _ := json.Marshal(canonical)
 	h := sha256.Sum256(data)
 	p := &PPO{file: f, version: "ppo:" + hex.EncodeToString(h[:]), rng: rand.New(rand.NewSource(f.SamplingSeed))}
-	p.actor = &MLP{file: MLPFile{Layers: f.Actor}}
-	p.critic = &MLP{file: MLPFile{Layers: f.Value}}
+	p.actor = &MLP{file: MLPFile{Features: f.Features, Layers: f.Actor}}
+	p.critic = &MLP{file: MLPFile{Features: f.Features, Layers: f.Value}}
 	return p, nil
 }
-func (p *PPO) Version() string     { return p.version }
-func (p *PPO) SamplingSeed() int64 { return p.file.SamplingSeed }
-func (p *PPO) IsStochastic() bool  { return !p.file.Deterministic }
-func (p *PPO) LastSample() *Sample { return p.last }
+func (p *PPO) Version() string        { return p.version }
+func (p *PPO) FeatureVersion() string { return p.file.Features }
+func (p *PPO) SamplingSeed() int64    { return p.file.SamplingSeed }
+func (p *PPO) IsStochastic() bool     { return !p.file.Deterministic }
+func (p *PPO) LastSample() *Sample    { return p.last }
 func (p *PPO) Value(o Observation) (float64, error) {
 	x, e := p.critic.Raw(o)
 	if e != nil {

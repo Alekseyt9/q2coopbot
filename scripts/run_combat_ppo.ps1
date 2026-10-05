@@ -20,7 +20,8 @@ $Model=(Resolve-Path -LiteralPath $Model).Path;$Checkpoint=(Resolve-Path -Litera
 $Python=(Resolve-Path -LiteralPath $Python).Path;$Config=(Resolve-Path -LiteralPath $Config).Path
 $trainingObjective=(Get-Content -LiteralPath $Config -Raw|ConvertFrom-Json).objective_reward_sha256
 $rewardVersion=(Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json).version
-if(($rewardVersion -eq 'combat_reward_v2' -and !$trainingObjective) -or ($trainingObjective -and $trainingObjective -ne (Get-FileHash -LiteralPath $RewardConfig).Hash)){throw 'Training objective must match reward config before collection'}
+if(($rewardVersion -in @('combat_reward_v2','combat_reward_v3','combat_reward_v4') -and !$trainingObjective) -or ($trainingObjective -and $trainingObjective -ne (Get-FileHash -LiteralPath $RewardConfig).Hash)){throw 'Training objective must match reward config before collection'}
+if($rewardVersion -in @('combat_reward_v3','combat_reward_v4') -and (Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json).aim_gamma -ne (Get-Content -LiteralPath $Config -Raw|ConvertFrom-Json).gamma){throw 'Shaping gamma must match PPO before collection'}
 if($Seed -lt 0 -or [long]$Seed+4*$Iterations-1 -gt 2147483647 -or $EvalSeed -lt 0 -or [long]$EvalSeed+3 -gt 2147483647){throw 'Valid independent seeds required'}
 if($EvalSeed -le $Seed+4*$Iterations-1 -and $EvalSeed+3 -ge $Seed){throw 'Evaluation seeds overlap training'}
 if(!$OutputRoot){$OutputRoot=Join-Path $repo ('workspace/artifacts/combat-ppo-cycle-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))}

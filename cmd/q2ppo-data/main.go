@@ -298,12 +298,12 @@ func run() error {
 			if !reflect.DeepEqual(a, s.Action) || math.Abs(lp-s.Sample.LogProbability) > 1e-8 || math.Abs(value-s.Sample.Value) > 1e-8 {
 				return fmt.Errorf("behavior sample altered")
 			}
-			features, e := policy.Features(s.Observation)
+			features, e := policy.FeaturesForVersion(s.Observation, p.FeatureVersion())
 			if e != nil {
 				return e
 			}
 			nv := 0.0
-			if !s.Terminal && !(manifest.Reward.Version == learningenv.KillRewardVersion && s.Truncated && s.Reason == "control_handoff") {
+			if !s.Terminal && !(manifest.Reward.HasKillReward() && s.Truncated && s.Reason == "control_handoff") {
 				nv, e = p.Value(*s.Next)
 				if e != nil {
 					return e
@@ -334,7 +334,7 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	data, _ := json.MarshalIndent(map[string]any{"version": "combat_ppo_rollout_v1", "reward_config_sha256": strings.ToLower(manifest.RewardSHA), "reward_version": manifest.Reward.Version, "training_monster_health": manifest.TrainingHealth, "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE; v2 verified control handoff retains reward with zero segment bootstrap; full world reset equivalence unproven"}, "", "  ")
+	data, _ := json.MarshalIndent(map[string]any{"version": "combat_ppo_rollout_v1", "feature_version": behavior.FeatureVersion(), "reward_config_sha256": strings.ToLower(manifest.RewardSHA), "reward_version": manifest.Reward.Version, "aim_gamma": manifest.Reward.AimGamma, "training_monster_health": manifest.TrainingHealth, "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE; v2 verified control handoff retains reward with zero segment bootstrap; full world reset equivalence unproven"}, "", "  ")
 	fmt.Printf("PPO rollout verified: rows=%d terminal=%d policy=%s\n", count, terminals, behavior.Version())
 	return os.WriteFile(filepath.Join(*out, "report.json"), data, 0644)
 }

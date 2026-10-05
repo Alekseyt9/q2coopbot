@@ -53,7 +53,9 @@ def restore_checkpoint(path,model_path,config,actor,value,std,rollout_sha):
 
 def validate_objective(config,meta):
     expected=config.get('objective_reward_sha256')
-    assert meta.get('reward_version')!='combat_reward_v2' or expected, 'Kill objective must be pinned in training config'
+    assert meta.get('reward_version') not in ('combat_reward_v2','combat_reward_v3','combat_reward_v4') or expected, 'Kill objective must be pinned in training config'
+    if meta.get('reward_version') in ('combat_reward_v3','combat_reward_v4'):
+        assert meta.get('aim_gamma')==config['gamma'], 'Aim shaping discount differs from PPO gamma'
     if expected:
         assert expected.lower()==meta.get('reward_config_sha256','').lower(), 'Rollout reward differs from checkpoint objective'
 
@@ -72,6 +74,7 @@ def main():
     model_path=pathlib.Path(a.model);root=pathlib.Path(a.data);model=json.loads(model_path.read_text());meta=json.loads((root/'report.json').read_text())
     validate_objective(config,meta)
     assert model['kind']=='combat_ppo_v1' and not model['deterministic'] and meta['version']=='combat_ppo_rollout_v1' and sha(model_path)==meta['model_sha256']
+    assert meta.get('feature_version','combat_features_v1')==model['feature_version'], 'Rollout feature version differs'
     assert sha(root/'rollout.jsonl')==meta['rollout_sha256']
     for path,digest in meta['source_sha256'].items():assert sha(pathlib.Path(path))==digest, f'Changed rollout input {path}'
     rows=[json.loads(s) for s in (root/'rollout.jsonl').read_text().splitlines()];assert len(rows)==meta['rows'] and len(rows)>1

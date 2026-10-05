@@ -23,6 +23,11 @@ class ResumeTest(unittest.TestCase):
         validate_objective({}, {})
         validate_objective({'objective_reward_sha256':'abc'}, {'reward_config_sha256':'ABC','reward_version':'combat_reward_v2'})
         with self.assertRaisesRegex(AssertionError,'must be pinned'):validate_objective({}, {'reward_version':'combat_reward_v2'})
+        validate_objective({'objective_reward_sha256':'abc','gamma':.99},{'reward_version':'combat_reward_v3','reward_config_sha256':'abc','aim_gamma':.99})
+        validate_objective({'objective_reward_sha256':'abc','gamma':.99},{'reward_version':'combat_reward_v4','reward_config_sha256':'abc','aim_gamma':.99})
+        with self.assertRaisesRegex(AssertionError,'must be pinned'):validate_objective({}, {'reward_version':'combat_reward_v4'})
+        with self.assertRaisesRegex(AssertionError,'discount differs'):
+            validate_objective({'objective_reward_sha256':'abc','gamma':.98},{'reward_version':'combat_reward_v3','reward_config_sha256':'abc','aim_gamma':.99})
         with self.assertRaisesRegex(AssertionError,'reward differs'):validate_objective({'objective_reward_sha256':'abc'}, {'reward_config_sha256':'other'})
     def test_resume_and_reject_reused_rollout_or_other_weights(self):
         with tempfile.TemporaryDirectory() as tmp:
