@@ -78,13 +78,14 @@ func run() error {
 	model := flag.String("model", "", "frozen original PPO model")
 	flag.Parse()
 	var manifest struct {
-		Provider    string                   `json:"provider"`
-		Kind        string                   `json:"provider_kind"`
-		Synchronous bool                     `json:"synchronous"`
-		RewardSHA   string                   `json:"reward_config_sha256"`
-		ExporterSHA string                   `json:"exporter_sha256"`
-		ModelSHA    string                   `json:"model_weights_sha256"`
-		Reward      learningenv.RewardConfig `json:"reward_config"`
+		Provider       string                   `json:"provider"`
+		Kind           string                   `json:"provider_kind"`
+		Synchronous    bool                     `json:"synchronous"`
+		RewardSHA      string                   `json:"reward_config_sha256"`
+		ExporterSHA    string                   `json:"exporter_sha256"`
+		ModelSHA       string                   `json:"model_weights_sha256"`
+		Reward         learningenv.RewardConfig `json:"reward_config"`
+		TrainingHealth int                      `json:"training_monster_health"`
 	}
 	if e := read(filepath.Join(*batch, "manifest.json"), &manifest); e != nil {
 		return e
@@ -226,6 +227,28 @@ func run() error {
 		if e != nil {
 			return e
 		}
+		logFile, e := os.Open(filepath.Join(r.Root, "server.log"))
+		if e != nil {
+			return e
+		}
+		target, proofErr := learningenv.VerifyCurriculum(logFile, manifest.TrainingHealth, r.Seed)
+		logFile.Close()
+		if proofErr != nil {
+			return proofErr
+		}
+		if target != 0 {
+			found := false
+			if len(steps) > 0 {
+				for _, enemy := range steps[0].Observation.Enemies {
+					if enemy.ID == target && enemy.Class == "monster_parasite" {
+						found = true
+					}
+				}
+			}
+			if !found {
+				return fmt.Errorf("curriculum target not in initial observation")
+			}
+		}
 		rewards, e := rows[learningenv.Reward](filepath.Join(replay, "rewards.jsonl"))
 		if e != nil {
 			return e
@@ -288,7 +311,7 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	data, _ := json.MarshalIndent(map[string]any{"version": "combat_ppo_rollout_v1", "reward_config_sha256": strings.ToLower(manifest.RewardSHA), "reward_version": manifest.Reward.Version, "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE; v2 verified control handoff retains reward with zero segment bootstrap; full world reset equivalence unproven"}, "", "  ")
+	data, _ := json.MarshalIndent(map[string]any{"version": "combat_ppo_rollout_v1", "reward_config_sha256": strings.ToLower(manifest.RewardSHA), "reward_version": manifest.Reward.Version, "training_monster_health": manifest.TrainingHealth, "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE; v2 verified control handoff retains reward with zero segment bootstrap; full world reset equivalence unproven"}, "", "  ")
 	fmt.Printf("PPO rollout verified: rows=%d terminal=%d policy=%s\n", count, terminals, behavior.Version())
 	return os.WriteFile(filepath.Join(*out, "report.json"), data, 0644)
 }

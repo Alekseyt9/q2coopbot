@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory)][string]$Checkpoint,
     [ValidateRange(1,20)][int]$Iterations=4,
     [int]$Seed=13600,[int]$EvalSeed=13700,
+    [ValidateSet(0,10,20,30)][int]$TrainingMonsterHealth=0,
     [ValidateRange(20,500)][int]$GameFrames=300,
     [ValidateRange(1024,65530)][int]$Port=33100,
     [string]$Python='F:/src/strat/.venv-gpu/Scripts/python.exe',
@@ -41,7 +42,7 @@ try{
         if((Get-FileHash $frozen).Hash -ne $configSHA -or (Get-FileHash $trainer).Hash -ne $trainerSHA -or (Get-FileHash $frozenReward).Hash -ne $rewardSHA){throw 'Frozen training inputs changed'}
         $dir=Join-Path $OutputRoot "iteration-$iteration";New-Item -ItemType Directory -Path $dir|Out-Null
         $batch=Join-Path $dir 'batch';$data=Join-Path $dir 'rollout';$update=Join-Path $dir 'update'
-        & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker 1 -Timescale 2 -GameFrames $GameFrames -Loadout blaster -CombatMode learned -ProviderFile $Model -Synchronous -RewardConfig $frozenReward -Seed ($Seed+4*($iteration-1)) -Port $Port -OutputRoot $batch
+        & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker 1 -Timescale 2 -GameFrames $GameFrames -Loadout blaster -CombatMode learned -ProviderFile $Model -Synchronous -RewardConfig $frozenReward -TrainingMonsterHealth $TrainingMonsterHealth -Seed ($Seed+4*($iteration-1)) -Port $Port -OutputRoot $batch
         & $dataTool --batch $batch --model $Model --out $data;if($LASTEXITCODE){throw "Iteration $iteration native replay rejected"}
         & $Python $trainer --model $Model --resume $Checkpoint --data $data --config $frozen --out $update
         if($LASTEXITCODE){throw "Iteration $iteration PPO update failed"}
@@ -77,7 +78,7 @@ try{
     $diagnostics=Join-Path $OutputRoot 'diagnostics.json'
     & $Python $diagnoser --batch (Join-Path $OutputRoot 'evaluation-before') --batch (Join-Path $OutputRoot 'evaluation-after') --out $diagnostics
     if($LASTEXITCODE){throw 'Evaluation diagnostics failed'}
-    $summary=@{version='combat_ppo_cycle_v1';iterations=$Iterations;initial_model=$initialModel;initial_checkpoint=$initialCheckpoint;final_model=$Model;final_checkpoint=$Checkpoint;config_sha256=$configSHA;trainer_sha256=$trainerSHA;diagnoser_sha256=$diagnoserSHA;diagnostics=$diagnostics;steps=$steps;evaluation=$pairs;fixture_promotion_eligible=$eligible;fixture_criterion='All four paired after captures valid; native first-life kill >=1 and no observed death. gameplay_accepted is the legacy rules-specific harness metric, not learned-policy acceptance.';scope='Fresh on-policy batches with optimizer/RNG resume; paired deterministic evaluation only, no live promotion or statistical generalization claim'}
+    $summary=@{version='combat_ppo_cycle_v1';training_monster_health=$TrainingMonsterHealth;evaluation_monster_health=175;iterations=$Iterations;initial_model=$initialModel;initial_checkpoint=$initialCheckpoint;final_model=$Model;final_checkpoint=$Checkpoint;config_sha256=$configSHA;trainer_sha256=$trainerSHA;diagnoser_sha256=$diagnoserSHA;diagnostics=$diagnostics;steps=$steps;evaluation=$pairs;fixture_promotion_eligible=$eligible;fixture_criterion='All four paired after captures valid; native first-life kill >=1 and no observed death. gameplay_accepted is the legacy rules-specific harness metric, not learned-policy acceptance.';scope='Fresh on-policy batches with optimizer/RNG resume; paired deterministic evaluation only, no live promotion or statistical generalization claim'}
     $summary|ConvertTo-Json -Depth 16|Set-Content -LiteralPath (Join-Path $OutputRoot 'report.json') -Encoding utf8NoBOM
     "PPO cycle: $OutputRoot"
 }finally{Pop-Location}

@@ -60,3 +60,55 @@ func TestPPOReproducibleSamplesAndReview(t *testing.T) {
 		t.Fatal("independent seeds reused RNG")
 	}
 }
+
+func TestPPOCapacityWidthsAndBounds(t *testing.T) {
+	for _, width := range []int{64, 128, 256, 257} {
+		makeLayers := func(outputs int) []DenseLayer {
+			n := 386
+			var ls []DenseLayer
+			for _, size := range []int{width, width, outputs} {
+				l := DenseLayer{Bias: make([]float64, size), Weight: make([][]float64, size)}
+				for i := range l.Weight {
+					l.Weight[i] = make([]float64, n)
+					for j := range l.Weight[i] {
+						l.Weight[i][j] = math.Pi / 1000
+					}
+				}
+				ls = append(ls, l)
+				n = size
+			}
+			return ls
+		}
+		f := PPOFile{Kind: PPOKind, Features: FeatureVersion, Actor: makeLayers(8), Value: makeLayers(1), LogStd: [4]float64{-2, -2, -5, -5}}
+		b, err := json.Marshal(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if width == 256 && len(b) <= 2*1024*1024 {
+			t.Fatal("fixture must exercise former size limit")
+		}
+		path := filepath.Join(t.TempDir(), "capacity.json")
+		if err := os.WriteFile(path, b, 0600); err != nil {
+			t.Fatal(err)
+		}
+		p, err := LoadPPO(path)
+		if width == 257 {
+			if err == nil {
+				t.Fatal("accepted over-width model")
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("width %d: %v", width, err)
+		}
+		o := testObservation()
+		a, err := p.Decide(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, lp, v, err := p.Review(o, *p.LastSample())
+		if err != nil || r != a || math.IsNaN(lp) || math.IsInf(lp, 0) || math.IsNaN(v) || math.IsInf(v, 0) {
+			t.Fatal("wide sample review failed")
+		}
+	}
+}

@@ -12,7 +12,8 @@ import (
 )
 
 const MLPKind = "combat_bc_mlp_v1"
-const MaxModelBytes = 2 * 1024 * 1024
+const MaxModelBytes = 16 * 1024 * 1024
+const MaxHiddenWidth = 256
 
 type DenseLayer struct {
 	Weight [][]float64 `json:"weight"`
@@ -61,7 +62,7 @@ func validateLayers(layers []DenseLayer, outputs int) error {
 	x, _ := Features(Observation{})
 	n := len(x)
 	for i, l := range layers {
-		if len(l.Weight) != len(l.Bias) || len(l.Bias) == 0 || len(l.Bias) > 128 || i == 2 && len(l.Bias) != outputs {
+		if len(l.Weight) != len(l.Bias) || len(l.Bias) == 0 || len(l.Bias) > MaxHiddenWidth || i == 2 && len(l.Bias) != outputs {
 			return fmt.Errorf("bad layer width")
 		}
 		for r, row := range l.Weight {

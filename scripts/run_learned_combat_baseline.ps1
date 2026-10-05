@@ -5,6 +5,7 @@ param(
     [ValidateSet(1,2)][int]$Timescale=2,
     [ValidateRange(20,500)][int]$GameFrames=300,
     [int]$Seed=9300,
+    [ValidateSet(0,10,20,30)][int]$TrainingMonsterHealth=0,
     [ValidateRange(1024,65530)][int]$Port=32940,
     [ValidateSet('stocked','blaster','shotgun','hyper','rail','scarce')][string]$Loadout='stocked',
     [switch]$Mixed,
@@ -23,6 +24,7 @@ if($Synchronous -and $Loadout -notin 'blaster','shotgun'){throw 'Synchronous lea
 if($Loadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){throw 'Shotgun exercise requires synchronous rules'}
 if($TeacherVertical -and (!$Synchronous -or $CombatMode -ne 'rules' -or $Loadout -ne 'shotgun' -or $Feedback)){throw 'Vertical exercise requires synchronous fixed Shotgun rules without feedback'}
 if($RewardConfig -and !$Synchronous){throw 'Reward export requires -Synchronous'}
+if($TrainingMonsterHealth -and (!$Synchronous -or $Loadout -ne 'blaster' -or $Mixed -or $HealthKit -or $Feedback)){throw 'Curriculum requires isolated synchronous Blaster fixture'}
 $repo=Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/harness_manifest.ps1"
 if(!$OutputRoot){$OutputRoot=Join-Path $repo ('workspace/artifacts/learned-combat-baseline-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))}
@@ -90,6 +92,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             '-Timescale',$using:Timescale,'-OutputRoot',$out,'-Client',$using:client)
         $arguments+=@('-CombatMode',$using:CombatMode);if($episodeProvider){$arguments+=@('-ProviderFile',$episodeProvider)}
         $arguments+=@('-GameFrames',$using:GameFrames)
+        $arguments+=@('-TrainingMonsterHealth',$using:TrainingMonsterHealth)
         if($using:Synchronous){$arguments+='-Synchronous'}
         if($using:TeacherVertical){$arguments+='-TeacherVertical'}
         if($using:Mixed){$arguments+=@('-ParasiteMixed','-ParasiteMixedClass','monster_gunner')}
@@ -145,6 +148,14 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             & $using:exporter @exportArguments
             if($LASTEXITCODE){throw 'Transition export failed'}
             $datasetReport=Get-Content -LiteralPath (Join-Path $dataset 'report.json') -Raw|ConvertFrom-Json
+            $curriculumProof=$null
+            if($using:TrainingMonsterHealth){
+                $nativeLog=Get-Content -LiteralPath (Join-Path $out 'server.log')
+                $init=@($nativeLog|Select-String '^g_test_curriculum monster_health map=base1 game_frame=(\d+) entity=(\d+) class=monster_parasite before=175 after=(\d+)$')
+                $release=@($nativeLog|Select-String 'g_test_combat_start game_frame=(\d+) ready=1 seed=\d+$')
+                if($init.Count -ne 1 -or $release.Count -ne 1 -or [int]$init[0].Matches[0].Groups[3].Value -ne $using:TrainingMonsterHealth -or $init[0].Matches[0].Groups[1].Value -ne $release[0].Matches[0].Groups[1].Value){throw 'Native curriculum initialization not confirmed'}
+                $curriculumProof=@{enemy_health=$using:TrainingMonsterHealth;entity=[int]$init[0].Matches[0].Groups[2].Value;game_frame=[int]$init[0].Matches[0].Groups[1].Value;scope='Native test-only initialization at barrier release, not a policy feature'}
+            }
             $feedbackAuditReport=$null
             if($using:Feedback){$feedbackAuditReport=& $using:feedbackAudit -RunRoot $out -RelayRoot $feedbackRoot}
             $controlled=@($captures|Where-Object {$_.combat_policy.selection.owner -eq 'provider'}).Count
@@ -161,6 +172,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             }
             [pscustomobject]@{
                 worker=$worker;episode=$episode;seed=($using:Seed+$index);port=($using:Port+$worker);seed_confirmed=$seedAck
+                curriculum_init=$curriculumProof
                 harness_accepted=[bool]$report.accepted;harness_reason=$report.reason;worker_exit_code=$process.ExitCode
                 capture_valid=($captures.Count -eq $rows.Count -and $mismatches -eq 0 -and $field.decode_errors -eq 0 -and $field.game_frames -eq $using:GameFrames -and $seedAck -and $dispatchValid -and $datasetReport.command_proof.accepted -and $datasetReport.observed_reset_confirmed -and (!$episodeProvider -or $episodeProviderHash -eq (Get-FileHash -LiteralPath $episodeProvider).Hash))
                 provider_config_sha256=$episodeProviderHash
@@ -198,6 +210,7 @@ $manifest=[ordered]@{
     version=2;stage=$(if($ppoProvider){'R4b PPO rollout pilot'}elseif($trainedProvider){'R4a BC control pilot'}else{'R1 dispatch and R2 transition pilot'});provider=$CombatMode;provider_kind=$providerKind;model_weights=$(if($trainedProvider){$ProviderFile}else{$null});model_weights_sha256=$(if($trainedProvider){$probeHash}else{$null});probe_sha256=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{$null});exporter_sha256=(Get-FileHash -LiteralPath $exporter).Hash
     remote_peer=[bool]$remoteProvider
     feedback=[bool]$Feedback;feedback_version=$(if($Feedback){'combat_feedback_v1'}else{$null});relay_sha256=$(if($Feedback){(Get-FileHash -LiteralPath $relay).Hash}else{$null})
+    training_monster_health=$TrainingMonsterHealth
     observation_version='combat_observation_v3';action_version='combat_action_v1';reward_version=$(if($RewardConfig){(Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json).version}else{$null});reward_config_sha256=$(if($RewardConfig){$rewardHash}else{$null});reward_config=$(if($RewardConfig){Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json}else{$null});server_outcome_version=$(if($Synchronous){'server_step_effects_v1'}else{'server_damage_window_v1'})
     timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;mixed=[bool]$Mixed;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous;teacher_vertical=[bool]$TeacherVertical
     reset=$(if($Synchronous){'Cold native server restart per episode; first usable fixture and fresh inventory verified; single-client barrier confirms independent episode RNG seed. Full-world/AI equivalence remains unconfirmed.'}else{'Cold native server restart per episode, verified first usable observed fixture fields. Inventory/RNG/AI/full-world equivalence remain unconfirmed.'})
