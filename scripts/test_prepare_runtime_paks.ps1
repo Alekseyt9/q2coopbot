@@ -35,3 +35,20 @@ try{Install-RuntimePak $source $corruptTarget $corruptPool;throw 'Corrupt cache 
 if(Test-Path $corruptTarget){throw 'Corrupt cache created runtime asset'}
 if(@(Get-ChildItem $testRoot -Recurse -Filter '*.tmp').Count){throw 'Pool temporary copy leaked'}
 'PASS: direct link, saturated source, saturated shard rollover, corrupt pool rejection, temporary cleanup'
+Remove-Item Function:New-Item
+$definition=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Install-RuntimeImmutable'},$true)
+. ([scriptblock]::Create($definition.Extent.Text))
+$mutable=Join-Path $testRoot 'build-output.bin'
+[IO.File]::WriteAllText($mutable,'build version '+[guid]::NewGuid().ToString('N'))
+$oldBytes=[IO.File]::ReadAllText($mutable)
+$first=Join-Path $testRoot 'runtime-one.bin';$second=Join-Path $testRoot 'runtime-two.bin'
+$immutablePool=Join-Path $testRoot 'immutable-pool'
+Install-RuntimeImmutable $mutable $first $immutablePool
+Install-RuntimeImmutable $mutable $second $immutablePool
+if(@(fsutil hardlink list $first).Count -lt 3){throw 'Immutable snapshots are not shared'}
+[IO.File]::WriteAllText($mutable,'rebuilt '+[guid]::NewGuid().ToString('N'))
+if([IO.File]::ReadAllText($first) -ne $oldBytes){throw 'Source rebuild changed captured runtime'}
+Install-RuntimeImmutable $mutable $first $immutablePool
+if([IO.File]::ReadAllText($second) -ne $oldBytes){throw 'Runtime replacement modified another runtime'}
+if([IO.File]::ReadAllText($first) -ne [IO.File]::ReadAllText($mutable)){throw 'Runtime replacement did not install new bytes'}
+'PASS: shared immutable snapshots, source rebuild isolation, atomic runtime replacement'

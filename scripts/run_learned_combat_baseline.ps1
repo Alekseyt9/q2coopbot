@@ -12,6 +12,7 @@ param(
     [switch]$Mixed,
     [switch]$HealthKit,
     [switch]$Synchronous,
+    [switch]$KeepRuntimeAssets,
     [switch]$TeacherVertical,
     [switch]$Feedback,
     [ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',
@@ -253,4 +254,12 @@ $report=[ordered]@{
 }
 $report | ConvertTo-Json -Depth 18 | Set-Content -LiteralPath (Join-Path $OutputRoot 'report.json') -Encoding utf8
 "Baseline: $OutputRoot"
+if(!$KeepRuntimeAssets){
+    $artifactBoundary=[IO.Path]::GetFullPath((Join-Path $repo 'workspace/artifacts')).TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
+    foreach($result in $results){
+        if([IO.Path]::GetFullPath($result.root).StartsWith($artifactBoundary,[StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath (Join-Path $result.root 'runtime/.q2go-prepared-runtime'))){
+            & "$PSScriptRoot/cleanup_completed_runtime_paks.ps1" -RuntimeRoot (Join-Path $result.root 'runtime')
+        }
+    }
+}
 if(!$report.capture_complete){throw 'Baseline capture/provenance incomplete; inspect preserved reports'}

@@ -64,7 +64,7 @@ if($Continue){
     $secondRuntime=Join-Path $repo ('workspace/runtime/q2go-elevator-cycle-base2'+$(if($Combat){'-combat'}else{''}))
     foreach($ext in @('aas','ent')){Copy-Item -LiteralPath (Join-Path $secondRuntime "baseq2/maps/base2.$ext") -Destination (Join-Path $runtime "baseq2/maps/base2.$ext") -Force}
 }
-if($Chain){Copy-Item -LiteralPath (Join-Path $repo 'workspace/runtime/q2go/baseq2/maps/base3.aas') -Destination (Join-Path $runtime 'baseq2/maps/base3.aas') -Force}
+if($Chain){& { param($runtimeSource,$runtimeTarget) . "$PSScriptRoot/prepare_runtime.ps1" -FunctionsOnly; Install-RuntimeImmutable $runtimeSource $runtimeTarget } (Join-Path $repo 'workspace/runtime/q2go/baseq2/maps/base3.aas') (Join-Path $runtime 'baseq2/maps/base3.aas')}
 if($Prepare){
     $entPath=Join-Path $runtime 'baseq2/maps/base1.ent'
     $blocks=@([regex]::Matches((Get-Content $entPath -Raw),'(?s)\{[^{}]*\}')|ForEach-Object Value)

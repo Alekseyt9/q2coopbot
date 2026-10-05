@@ -10,7 +10,8 @@ if($SideWalls){
 if($RuntimeRoot){$runtime=$RuntimeRoot}
 if($KeepMonsters -and !$RuntimeRoot){$runtime+='-combat'}
 & "$PSScriptRoot/prepare_runtime.ps1" -RuntimeRoot $runtime | Out-Null
-Copy-Item -LiteralPath (Join-Path $repo "workspace/runtime/q2go/baseq2/maps/$Map.aas") -Destination (Join-Path $runtime "baseq2/maps/$Map.aas") -Force
+. "$PSScriptRoot/prepare_runtime.ps1" -FunctionsOnly
+Install-RuntimeImmutable (Join-Path $repo "workspace/runtime/q2go/baseq2/maps/$Map.aas") (Join-Path $runtime "baseq2/maps/$Map.aas")
 # Extract only the entity lump. The BSP, collision and native mover physics stay unchanged.
 $stream=[IO.File]::OpenRead((Join-Path $runtime 'baseq2/pak0.pak'))
 $reader=[IO.BinaryReader]::new($stream)

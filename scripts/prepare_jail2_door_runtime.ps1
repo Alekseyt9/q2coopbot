@@ -4,7 +4,7 @@ $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 $runtime=Join-Path $repo 'workspace/runtime/q2go-jail2-door'
 & "$PSScriptRoot/prepare_runtime.ps1" -RuntimeRoot $runtime | Out-Null
-Copy-Item -LiteralPath (Join-Path $repo 'workspace/runtime/q2go/baseq2/maps/jail2.aas') -Destination (Join-Path $runtime 'baseq2/maps/jail2.aas') -Force
+& { param($runtimeSource,$runtimeTarget) . "$PSScriptRoot/prepare_runtime.ps1" -FunctionsOnly; Install-RuntimeImmutable $runtimeSource $runtimeTarget } (Join-Path $repo 'workspace/runtime/q2go/baseq2/maps/jail2.aas') (Join-Path $runtime 'baseq2/maps/jail2.aas')
 # Keep native brushes, door speed, wait and linked targets. Only remove enemies
 # and add a one-shot activation volume around the synchronized actor placement.
 $stream=[IO.File]::OpenRead((Join-Path $runtime 'baseq2/pak0.pak'))

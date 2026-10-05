@@ -21,7 +21,7 @@ try {
         $blocks=@([regex]::Matches($ent,'(?s)\{[^{}]*\}')|ForEach-Object Value)
         $filtered=@($blocks | Where-Object {$_ -notmatch '"classname"\s+"(monster_|item_|weapon_|ammo_)'})
         [IO.File]::WriteAllText((Join-Path $runtime "baseq2/maps/$map.ent"),($filtered -join "`n"),[Text.Encoding]::ASCII)
-        Copy-Item -LiteralPath (Join-Path $repo "workspace/runtime/q2go/baseq2/maps/$map.aas") -Destination (Join-Path $runtime "baseq2/maps/$map.aas") -Force
+        & { param($runtimeSource,$runtimeTarget) . "$PSScriptRoot/prepare_runtime.ps1" -FunctionsOnly; Install-RuntimeImmutable $runtimeSource $runtimeTarget } (Join-Path $repo "workspace/runtime/q2go/baseq2/maps/$map.aas") (Join-Path $runtime "baseq2/maps/$map.aas")
     }
 } finally {$r.Dispose()}
 $runtime
