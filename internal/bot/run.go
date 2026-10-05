@@ -21,6 +21,7 @@ import (
 
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
+	CombatCapture                       bool
 	Campaign                            bool
 	CampaignNextMap                     string
 	CampaignRoute                       []string
@@ -358,6 +359,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer conn.Close()
 	client := &Client{
+		combatCapture:      cfg.CombatCapture,
 		scenarioResultPath: cfg.TestScenarioResult, scenarioTailFrames: cfg.TestScenarioTailFrames,
 		scenario:                scenario,
 		sessionDefinition:       sessionDefinition,

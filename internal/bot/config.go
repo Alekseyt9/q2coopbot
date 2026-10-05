@@ -38,9 +38,10 @@ type ConfigFile struct {
 		System2 string `json:"system2"`
 	} `json:"models"`
 	Output struct {
-		WorldJSON  string `json:"world_json"`
-		TraceJSONL string `json:"trace_jsonl"`
-		StopFile   string `json:"stop_file"`
+		CombatCapture bool   `json:"combat_capture"`
+		WorldJSON     string `json:"world_json"`
+		TraceJSONL    string `json:"trace_jsonl"`
+		StopFile      string `json:"stop_file"`
 	} `json:"output"`
 	Test struct {
 		CheckpointControl            string `json:"checkpoint_control"`
@@ -194,6 +195,7 @@ func LoadConfig(path string) (Config, error) {
 		}
 	}
 	cfg.System1Model, cfg.System2Model = file.Models.System1, file.Models.System2
+	cfg.CombatCapture = file.Output.CombatCapture
 	cfg.Idle, cfg.ExitOnReconnect = file.Test.Idle, file.Test.ExitOnReconnect
 	cfg.TestChangeMap, cfg.TestChangeAfter = file.Test.ChangeMap, file.Test.ChangeAfterFrames
 	if cfg.TestChangeAfter == 0 {

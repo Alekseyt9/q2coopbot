@@ -1,5 +1,13 @@
 # Documentation index
 
+## Действующие планы Go UDP-бота
+
+- [Собственная System 1: RL, иерархическая тактика и MCTS](learned_system1_plan.md) — принятое направление с 05.10.2026.
+- [Общий план и журнал развития бота](system2_strategy_tactics_plan.md).
+
+Описания реконструкции Gladiator ниже относятся к историческим материалам; активный продукт — Go UDP-клиент и харнес.
+
+
 **Текущий проект — Go UDP-бот.** Начните с [README](../README.md) и [плана Go-бота](system2_strategy_tactics_plan.md). Большинство остальных документов ниже относятся к удалённой реконструкции Gladiator и сохранены как исторические материалы; пути к её исходникам и командам сборки теперь не действуют.
 
 Documentation for the **Q2 Gladiator Bot Botlib Reconstruction**.

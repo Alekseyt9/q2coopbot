@@ -959,5 +959,22 @@
     "final_accepted": 2,
     "final_total": 2,
     "next": "Compare current target priority under scarce ammo using first-life context; no post-respawn kills as survival evidence"
+  },
+  "target_priority_experiments": {
+    "status": "rejected_and_rolled_back",
+    "accepted": 1,
+    "total": 12,
+    "without_observed_death": 2,
+    "retained": "nearest confirmed visible enemy",
+    "comparison": "workspace/artifacts/target-priority-experiment-comparison.json",
+    "diagnostic_fields": [
+      "aim_by_class",
+      "outgoing_by_target_class",
+      "last_frames.aim_entity"
+    ],
+    "control_report": "workspace/artifacts/solo-tactical-retreat-20261005-153938-266-c4026fca/report.json",
+    "control_accepted": 1,
+    "control_total": 2,
+    "remaining": "Target continuity, shot attribution and barrel safety; no generic forced class priority accepted"
   }
 }

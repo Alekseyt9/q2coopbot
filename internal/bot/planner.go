@@ -720,6 +720,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	p.World.Jump = nil
 	s := p.World.Snapshot
 	defer func() {
+		p.World.Command.proposedCommand = result
 		result = p.guardBarrelShot(s, p.guardHandGrenade(s, p.limitMachinegunBurst(s, p.limitLaserMovement(s, result))))
 	}()
 	if !isRailgun(s.Weapon) || s.Health <= 0 {

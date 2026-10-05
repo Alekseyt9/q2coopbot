@@ -17,10 +17,12 @@ import (
 
 	"q2coopbot/internal/harness"
 	"q2coopbot/internal/harness/checkpoint"
+	"q2coopbot/internal/policy"
 	"q2coopbot/internal/quake"
 )
 
 type Client struct {
+	combatCapture                           bool
 	planChat                                planChat
 	checkpointControl                       string
 	checkpointCapturedID                    string
@@ -979,7 +981,20 @@ func (c *Client) run(ctx context.Context) error {
 				return err
 			}
 			if c.traceFile != nil && c.framePaced {
+				var combat *policy.Capture
+				if c.combatCapture {
+					s := c.planner.World.Snapshot
+					o := policy.Observe(s, policy.Identity{Map: s.Map, Connection: c.connection, Spawncount: c.spawncount, Actor: c.decoder.PlayerNumber, Frame: s.Frame}, c.previous)
+					proposed := c.planner.World.Command.proposedCommand
+					combat = &policy.Capture{Provider: "rules", Observation: o,
+						CommandAtUnixNS: now.UnixNano(),
+						Proposed: policy.FromCommand(o, proposed, s.DeltaAngles, ""), Applied: policy.FromCommand(o, cmd, s.DeltaAngles, weaponRequest),
+						ProposedCommand: proposed, AppliedCommand: cmd, Changed: proposed != cmd,
+						LimitReason: c.planner.World.Command.LimitReason, MoveLimitReason: c.planner.World.Command.MoveLimitReason,
+						LabelQuality: "unreviewed_teacher; tactical guards already embedded; final guards and client overrides recorded"}
+				}
 				entry := struct {
+					Combat             *policy.Capture         `json:"combat_policy,omitempty"`
 					LightSource        string                  `json:"light_source"`
 					Connection         int                     `json:"connection"`
 					ObserverKill       bool                    `json:"test_observer_kill,omitempty"`
@@ -1060,6 +1075,7 @@ func (c *Client) run(ctx context.Context) error {
 					Command            quake.UserCmd           `json:"sent_command"`
 				}{
 					Connection:   c.connection,
+					Combat:       combat,
 					ObserverKill: observerKill, ObserverRespawn: observerRespawn,
 					SessionStartFrame: c.sessionStartFrame,
 					Session:           c.sessionStatus(),

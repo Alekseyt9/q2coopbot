@@ -68,5 +68,21 @@
     "group_full_acceptance": 2,
     "group_runs": 4,
     "scope": "Observed stock barrels with Blaster; recorded command geometry regression and native suppression, not deterministic replay"
+  },
+  "scarce_ammo_recurrence": {
+    "seed": 8802,
+    "status": "open",
+    "trace": "workspace/artifacts/solo-tactical-retreat-20261005-153938-266-c4026fca/run-1/bot.jsonl",
+    "audit": "workspace/artifacts/solo-tactical-retreat-20261005-153938-266-c4026fca/run-1/combat-first-life.json",
+    "shot_weapon": "Blaster",
+    "barrel": 307,
+    "initiating_frame": 183,
+    "death_frame": 185,
+    "native_mod": 26,
+    "health_before": 16,
+    "health_after": -32,
+    "parasite_kill_same_frame": true,
+    "chain_barrel": 306,
+    "scope": "Observed recurrence despite Blaster guard; source shot/event attribution still required"
   }
 }
