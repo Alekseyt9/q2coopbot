@@ -52,6 +52,11 @@ func TestParasiteWeaponSupportsRetreatInsteadOfShotgunApproach(t *testing.T) {
 		{"critical health", "Machinegun", 120, func(s *quake.Snapshot) { s.Health = 20 }},
 		{"keep loaded machinegun", "", 360, func(s *quake.Snapshot) { s.Weapon = "models/weapons/v_machn/tris.md2" }},
 		{"empty bullets", "HyperBlaster", 360, func(s *quake.Snapshot) { s.Inventory[6].Count = 0 }},
+		{"rail at retreat range", "Railgun", 261, func(s *quake.Snapshot) { s.Inventory[6].Count = 0; s.Inventory[8].Count = 0 }},
+		{"rail too close", "Blaster", 255, func(s *quake.Snapshot) { s.Inventory[6].Count = 0; s.Inventory[8].Count = 0 }},
+		{"keep loaded rail at range", "", 261, func(s *quake.Snapshot) { s.Weapon = "models/weapons/v_rail/tris.md2" }},
+		{"close loaded rail switch", "Machinegun", 255, func(s *quake.Snapshot) { s.Weapon = "models/weapons/v_rail/tris.md2" }},
+		{"keep loaded hyper", "", 168, func(s *quake.Snapshot) { s.Weapon = "models/weapons/v_hyperb/tris.md2" }},
 		{"only blaster and shotgun", "Blaster", 360, func(s *quake.Snapshot) { s.Inventory = s.Inventory[:3] }},
 		{"unknown inventory", "", 360, func(s *quake.Snapshot) { s.InventoryKnown = false }},
 		{"stale inventory", "", 360, func(s *quake.Snapshot) { s.InventoryAgeFrames = 21 }},
@@ -80,6 +85,31 @@ func TestParasiteWeaponSupportsRetreatInsteadOfShotgunApproach(t *testing.T) {
 	s.Frame += 2
 	if got := w.command(s); got != "use Machinegun" || w.reason != "parasite_retreat_range" {
 		t.Fatal("bounded switch not issued", got, w)
+	}
+}
+
+func TestParasiteConstrainsWeaponInObservedMixedGroup(t *testing.T) {
+	for _, tc := range []struct {
+		name, class, want string
+		parasiteDistance  float64
+		visible           bool
+	}{
+		{"nearer infantry", "monster_infantry", "Machinegun", 168, true},
+		{"higher ranked tank", "monster_tank", "Machinegun", 168, true},
+		{"far parasite leaves close weapon choice", "monster_infantry", "Shotgun", 500, true},
+		{"hidden parasite is not a weapon constraint", "monster_infantry", "Shotgun", 168, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := economySnapshot()
+			s.Weapon = "Blaster"
+			s.Enemies[0].Class = tc.class
+			s.Enemies[0].Origin = quake.Vec3{64, 0, 24}
+			s.Enemies = append(s.Enemies, quake.Object{ID: 2, Class: "monster_parasite", Origin: quake.Vec3{tc.parasiteDistance, 0, 24}, ClearShot: &tc.visible})
+			got, _ := economyWeapon(s)
+			if got != tc.want {
+				t.Fatalf("got %q want %q", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -118,5 +148,78 @@ func TestEconomySwitchStableBoundedAndEmptyPriority(t *testing.T) {
 	s.Frame = 3
 	if w.command(s) != "use Shotgun" {
 		t.Fatal("respawn/frame reset retained cooldown")
+	}
+}
+
+func TestParasiteDepletionPreservesRangeDespiteFreshStaleAmmoCount(t *testing.T) {
+	for _, tc := range []struct {
+		weapon, want   string
+		bullets, cells int
+	}{
+		{"models/weapons/v_machn/tris.md2", "use HyperBlaster", 5, 8},
+		{"models/weapons/v_hyperb/tris.md2", "use Blaster", 0, 8},
+	} {
+		s := economySnapshot()
+		s.Enemies[0].Class = "monster_parasite"
+		s.Enemies[0].Origin[0] = 168
+		s.Weapon = tc.weapon
+		s.Ammo = 0
+		s.Inventory[6].Count = tc.bullets
+		s.Inventory[8].Count = tc.cells
+		w := weaponSwitch{economyAt: 9}
+		for frame := 10; frame <= 12; frame++ {
+			s.Frame = frame
+			got := w.command(s)
+			if frame == 12 && (got != tc.want || w.reason != "empty_weapon") {
+				t.Fatalf("%s: %q (%s), want %q", tc.weapon, got, w.reason, tc.want)
+			}
+		}
+		s.InventoryAgeFrames = 21
+		s.Frame = 30
+		if name, _ := economyWeapon(s); name != "" {
+			t.Fatal("stale inventory used for range selection")
+		}
+	}
+}
+
+func TestParasiteEmptyFallbackDuringBriefOcclusion(t *testing.T) {
+	s := economySnapshot()
+	s.Enemies[0].Class = "monster_parasite"
+	s.Enemies[0].Origin[0] = 168
+	s.Weapon = "models/weapons/v_hyperb/tris.md2"
+	s.Ammo = 1
+	s.Inventory[6].Count = 0
+	s.Inventory[8].Count = 8
+	w := weaponSwitch{}
+	s.Frame = 10
+	w.command(s)
+	s.Enemies = nil
+	s.Ammo = 0
+	for frame := 11; frame <= 13; frame++ {
+		s.Frame = frame
+		got := w.command(s)
+		if frame == 13 && got != "use Blaster" {
+			t.Fatal("brief loss of LOS restored shotgun", got)
+		}
+	}
+	// No indefinite hidden-enemy constraint or state across maps/death.
+	s.Inventory[3].Count = 0
+	s.Frame = 40
+	w = weaponSwitch{parasiteSeenAt: 10, mapName: s.Map, lastFrame: 39, emptyAt: 37}
+	if got := w.command(s); got != "use Shotgun" {
+		t.Fatal("expired constraint retained", got)
+	}
+	s.Map = "base2"
+	s.Frame = 41
+	w.command(s)
+	if w.parasiteSeenAt != 0 {
+		t.Fatal("constraint survived map change")
+	}
+	s.Health = 0
+	s.Frame = 42
+	w.parasiteSeenAt = 40
+	w.command(s)
+	if w.parasiteSeenAt != 0 {
+		t.Fatal("constraint survived death")
 	}
 }

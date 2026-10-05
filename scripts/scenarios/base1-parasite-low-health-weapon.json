@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "base1-parasite-low-health-weapon",
+  "map": "base1",
+  "runner": "scripts/run_solo_tactical_retreat.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -ParasiteWeapon -ParasiteHealth 40 -ParasiteHealthKit -ParasiteLoadout stocked -RecoverySkill 1 -Seed 6601 -Port 32490",
+  "bot_origin": [32, -224, 24],
+  "initial_health": 40,
+  "skill": 1,
+  "target": {"class": "monster_parasite", "origin": [200, -224, 24]},
+  "health_item": {"class": "item_health_large", "origin": [32, -424, 24], "amount": 25, "setup": "startup entity fixture"},
+  "loadout": {"initial_weapon": "Shotgun", "shells": 20, "bullets": 60, "weapons": ["Blaster", "Shotgun", "Machinegun"]},
+  "acceptance": [
+    "Fresh-inventory request switches loaded Shotgun to Machinegun while authoritative health is below45",
+    "After the request, at least two recovery route commands retain enemy aim/attack and two actual steps approach the observed kit",
+    "Observed kit disappears near the actor as server playerstate health rises, after the weapon request",
+    "Selected Machinegun is observed firing/moving and the native damage ledger confirms positive Parasite damage and its kill",
+    "No death or additional gameplay intervention; ordinary campaign movement resumes after the kill",
+    "Distinct acknowledged seeds, timescale 2, two isolated servers/clients and stable source fingerprint"
+  ],
+  "scope": "Prepared low starting health, visible ordinary health kit and one native Parasite. Recovery attack commands can occur during weapon animation; they are not proof that Machinegun fired during recovery. Native chosen-weapon damage is checked separately. No incoming-damage, hidden remembered kit or general campaign acceptance."
+}

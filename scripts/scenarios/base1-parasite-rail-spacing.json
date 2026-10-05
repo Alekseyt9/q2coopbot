@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "name": "base1-parasite-rail-spacing",
+  "map": "base1",
+  "runner": "scripts/run_solo_tactical_retreat.ps1",
+  "command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -ParasiteWeapon -ParasiteLoadout rail -RecoverySkill 1 -Seed 7001 -Port 32530",
+  "bot_origin": [
+    32,
+    -352,
+    24.125
+  ],
+  "initial_health": 100,
+  "skill": 1,
+  "target": {
+    "origin": [
+      240,
+      -160,
+      24
+    ],
+    "class": "monster_parasite"
+  },
+  "loadout": {
+    "count": 10,
+    "additional_weapon": "Railgun",
+    "ammo": "Slugs",
+    "shells": 20,
+    "initial_weapon": "Shotgun"
+  },
+  "scope": "Prepared single Parasite; retreat before acquisition, settle then Railgun damage at >=320. No simultaneous retreat shot or long-range moving-target acceptance.",
+  "acceptance": [
+    "Loaded Shotgun and fresh inventory at automatic Railgun request",
+    "At least two actual away steps during needed retreat before Railgun aim settles",
+    "Attack suppressed during aim settling, then at least two firing command frames at >=320 distance and <=0.5 degree command error",
+    "Positive native MOD_RAILGUN damage and exactly one selected-weapon kill",
+    "No death or later give/teleport; campaign travel resumes after kill",
+    "Timescale2, independent parallel servers/clients, distinct acknowledged seeds and unchanged source fingerprint"
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "title": "Близкий infantry не отменяет дистанцию отхода от Parasite",
+  "kind": "combat_weapon_policy",
+  "evidence": "workspace/artifacts/solo-tactical-retreat-20261005-135604-762-df8e9706/report.json",
+  "status": "partial_native_validation",
+  "remaining_validation": [
+    "HyperBlaster/Railgun and different ammo availability",
+    "Other mixed groups, heavy/unknown/hidden enemies",
+    "Nightmare, other maps and inaccessible/remembered healing"
+  ],
+  "id": "base1-parasite-mixed-weapon",
+  "reproduction": "native_fixture",
+  "scenario": "scripts/scenarios/base1-parasite-mixed-weapon.json",
+  "earlier_rejected_evidence": [
+    "workspace/artifacts/solo-tactical-retreat-20261005-135130-288-c3ab9a7e/report.json"
+  ],
+  "validation": {
+    "metrics": {
+      "received_health_damage": [
+        7,
+        7
+      ],
+      "actual_away_steps": [
+        15,
+        15
+      ],
+      "final_health": [
+        97,
+        97
+      ],
+      "post_combat_route_frames": [
+        185,
+        187
+      ],
+      "request_frames": [
+        24,
+        24
+      ],
+      "kills": [
+        2,
+        2
+      ],
+      "mixed_firing_frames": [
+        15,
+        15
+      ],
+      "minimum_health": [
+        93,
+        93
+      ]
+    },
+    "scope": "Prepared currently visible Parasite/infantry group; Machinegun switch from loaded Shotgun and both native kills",
+    "deaths": 0,
+    "source_provenance_valid": true,
+    "seeds": [
+      6501,
+      6502
+    ],
+    "parallelism": 2,
+    "skill": 1,
+    "total": 2,
+    "passed": 2,
+    "timescale": 2
+  },
+  "map": "base1"
+}

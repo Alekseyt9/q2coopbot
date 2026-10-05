@@ -26,6 +26,7 @@ func economyWeapon(s quake.Snapshot) (string, string) {
 		return "", ""
 	}
 	var target *quake.Object
+	var parasite *quake.Object
 	level, count := 0, 0
 	for i := range s.Enemies {
 		e := &s.Enemies[i]
@@ -44,6 +45,9 @@ func economyWeapon(s quake.Snapshot) (string, string) {
 			return "", ""
 		}
 		count++
+		if e.Class == "monster_parasite" && (parasite == nil || quake.Distance(s.Self, e.Origin) < quake.Distance(s.Self, parasite.Origin)) {
+			parasite = e
+		}
 		if threat > level || threat == level && target != nil && quake.Distance(s.Self, e.Origin) < quake.Distance(s.Self, target.Origin) {
 			target = e
 			level = threat
@@ -54,9 +58,18 @@ func economyWeapon(s quake.Snapshot) (string, string) {
 	}
 	d := quake.Distance(s.Self, target.Origin)
 	available := func(name, ammo string, reserve int) bool {
+		// Playerstate ammo wins over an inventory reply sampled before the last shot.
+		if s.Ammo <= 0 && strings.Contains(s.Weapon, weaponModel(name)) {
+			return false
+		}
 		return inventoryCount(s, name) > 0 && inventoryCount(s, ammo) >= reserve
 	}
-	if target.Class == "monster_parasite" {
+	if target.Class == "monster_parasite" || parasite != nil && quake.Distance(s.Self, parasite.Origin) <= 352 {
+		// A nearer infantry or a higher-ranked tank must not make us choose
+		// shotgun range while a nearby observed Parasite constrains retreat.
+		if parasite != nil {
+			d = quake.Distance(s.Self, parasite.Origin)
+		}
 		// Retreat beyond the tongue rather than approaching for shotgun spread.
 		// A useful loaded ranged weapon stays selected while backing away.
 		if s.Ammo > 0 && (strings.Contains(s.Weapon, weaponModel("Machinegun")) || strings.Contains(s.Weapon, weaponModel("HyperBlaster")) || d >= 256 && isRailgun(s.Weapon)) {

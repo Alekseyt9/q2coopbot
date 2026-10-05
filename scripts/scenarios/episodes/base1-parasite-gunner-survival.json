@@ -1,0 +1,109 @@
+{
+  "id": "base1-parasite-gunner-survival",
+  "title": "Смерть в группе Gunner и Parasite при отходе",
+  "kind": "combat_survival",
+  "status": "open",
+  "map": "base1",
+  "reproduction": "native_fixture",
+  "scenario": "scripts/scenarios/base1-parasite-gunner-survival.json",
+  "evidence": "workspace/artifacts/solo-tactical-retreat-20261005-142302-132-273bdf57/report.json",
+  "earlier_rejected_evidence": [
+    "workspace/artifacts/solo-tactical-retreat-20261005-141939-772-d72092af/report.json",
+    "workspace/artifacts/solo-tactical-retreat-20261005-141939-970-d7b85454/report.json"
+  ],
+  "observed": {
+    "unsafe_shotgun_requests_while_parasite_visible": 0,
+    "first_death_frames": [
+      74,
+      111
+    ],
+    "timescale": 2,
+    "total": 2,
+    "parallelism": 2,
+    "weapon_fallback_chain_passed": 2,
+    "seeds": [
+      7501,
+      7502
+    ],
+    "accepted": 0,
+    "damage_before_first_death": [
+      {
+        "gunner_health_damage": 30,
+        "seed": 7501,
+        "parasite_health_damage": 70
+      },
+      {
+        "gunner_grenade_health_damage": 70,
+        "seed": 7502,
+        "gunner_direct_health_damage": 30
+      }
+    ],
+    "source_provenance_valid": true,
+    "results": [
+      {
+        "seed": 7501,
+        "reason": "Unexpected map/teammate/death",
+        "weapon_selection": {
+          "mixed_firing_frames": 8,
+          "expected": "Machinegun",
+          "minimum_health": -5.0,
+          "request_frames": [
+            20
+          ],
+          "actual_away_steps": 8,
+          "shells_at_request": 20,
+          "retreat_firing_frames": 8,
+          "selected_weapon_kills": 0,
+          "mixed_request_visible": 2,
+          "depletion": {
+            "scope": "Authoritative empty ammo triggers ranged fallback in prepared mixed fight; not general resource optimization",
+            "hyper_health_damage": 135,
+            "blaster_request_frame": 60,
+            "hyper_request_frame": 38,
+            "initial_bullets": 5,
+            "machinegun_health_damage": 40,
+            "initial_cells": 8,
+            "unsafe_shotgun_requests": 0,
+            "blaster_health_damage": 175
+          },
+          "selected_weapon_health_damage": 0
+        }
+      },
+      {
+        "seed": 7502,
+        "reason": "Unexpected map/teammate/death",
+        "weapon_selection": {
+          "actual_away_steps": 6,
+          "shells_at_request": 20,
+          "expected": "Machinegun",
+          "retreat_firing_frames": 8,
+          "mixed_firing_frames": 8,
+          "mixed_request_visible": 2,
+          "minimum_health": -1.0,
+          "depletion": {
+            "blaster_health_damage": 56,
+            "scope": "Authoritative empty ammo triggers ranged fallback in prepared mixed fight; not general resource optimization",
+            "hyper_request_frame": 38,
+            "blaster_request_frame": 60,
+            "hyper_health_damage": 136,
+            "initial_cells": 8,
+            "machinegun_health_damage": 24,
+            "initial_bullets": 5,
+            "unsafe_shotgun_requests": 0
+          },
+          "selected_weapon_health_damage": 24,
+          "request_frames": [
+            20
+          ],
+          "selected_weapon_kills": 0
+        }
+      }
+    ]
+  },
+  "remaining_work": [
+    "Avoid tongue exposure while choosing retreat from the whole group",
+    "Reduce Gunner direct/grenade damage through cover or safe lateral movement",
+    "Validate survival at100HP without god/heals/forced model decisions; native kills after respawn do not count as survival",
+    "Check stocked and scarce loadouts separately; preserve failed evidence"
+  ]
+}

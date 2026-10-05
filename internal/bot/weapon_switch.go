@@ -1,10 +1,14 @@
 package bot
 
-import "q2coopbot/internal/quake"
+import (
+	"q2coopbot/internal/quake"
+	"strings"
+)
 
 // Server frames bound retries independently of wall-clock acceleration.
 // weapnext delegates inventory/ammo validation to the authoritative server.
 type weaponSwitch struct {
+	parasiteSeenAt                           int
 	economyCandidate, reason                 string
 	economySince, economyAt, economyAttempts int
 	mapName                                  string
@@ -22,6 +26,11 @@ func (w *weaponSwitch) command(s quake.Snapshot) string {
 	w.lastFrame = s.Frame
 	if s.Health <= 0 || s.Map == "" || s.Weapon == "" {
 		return ""
+	}
+	for _, e := range s.Enemies {
+		if e.Class == "monster_parasite" && e.ClearShot != nil && *e.ClearShot && quake.Distance(s.Self, e.Origin) <= 352 {
+			w.parasiteSeenAt = s.Frame
+		}
 	}
 	if isHandGrenade(s.Weapon) {
 		if s.GunFrame >= 1 && s.GunFrame <= 15 {
@@ -49,6 +58,19 @@ func (w *weaponSwitch) command(s quake.Snapshot) string {
 	w.reason = "empty_weapon"
 	w.attempts++
 	if w.attempts == 1 {
+		if name, reason := economyWeapon(s); reason == "parasite_retreat_range" {
+			return "use " + name
+		}
+		// Brief occlusion must not undo the distance constraint on depletion.
+		// This retains a weapon constraint, not a fabricated visible target.
+		if w.parasiteSeenAt > 0 && s.Frame-w.parasiteSeenAt <= 20 && s.InventoryKnown && s.InventoryAgeFrames <= 20 {
+			for _, choice := range []struct{ name, ammo string }{{"Machinegun", "Bullets"}, {"HyperBlaster", "Cells"}} {
+				if !strings.Contains(strings.ToLower(s.Weapon), weaponModel(choice.name)) && inventoryCount(s, choice.name) > 0 && inventoryCount(s, choice.ammo) > 0 {
+					return "use " + choice.name
+				}
+			}
+			return "use Blaster"
+		}
 		return stockedWeapon(s)
 	}
 	return "use Blaster"

@@ -20,34 +20,100 @@
       {
         "loadout": "stocked",
         "evidence": "workspace/artifacts/solo-tactical-retreat-20261005-133746-428-13e2a0ac/report.json",
-        "seeds": [6101, 6102],
+        "seeds": [
+          6101,
+          6102
+        ],
         "selected": "Machinegun",
-        "request_frames": [20, 20],
-        "shells_at_request": [20, 20],
-        "actual_away_steps": [7, 7],
-        "retreat_firing_frames": [15, 15],
-        "native_selected_weapon_damage": [175, 175],
-        "native_selected_weapon_kills": [1, 1],
-        "minimum_health": [100, 87],
-        "received_health_damage": [0, 13],
-        "final_health": [104, 91],
-        "post_combat_route_frames": [211, 210]
+        "request_frames": [
+          20,
+          20
+        ],
+        "shells_at_request": [
+          20,
+          20
+        ],
+        "actual_away_steps": [
+          7,
+          7
+        ],
+        "retreat_firing_frames": [
+          15,
+          15
+        ],
+        "native_selected_weapon_damage": [
+          175,
+          175
+        ],
+        "native_selected_weapon_kills": [
+          1,
+          1
+        ],
+        "minimum_health": [
+          100,
+          87
+        ],
+        "received_health_damage": [
+          0,
+          13
+        ],
+        "final_health": [
+          104,
+          91
+        ],
+        "post_combat_route_frames": [
+          211,
+          210
+        ]
       },
       {
         "loadout": "blaster",
         "evidence": "workspace/artifacts/solo-tactical-retreat-20261005-133746-612-7d0b8a18/report.json",
-        "seeds": [6201, 6202],
+        "seeds": [
+          6201,
+          6202
+        ],
         "selected": "Blaster",
-        "request_frames": [20, 20],
-        "shells_at_request": [20, 20],
-        "actual_away_steps": [32, 11],
-        "retreat_firing_frames": [62, 29],
-        "native_selected_weapon_damage": [175, 175],
-        "native_selected_weapon_kills": [1, 1],
-        "minimum_health": [62, 75],
-        "received_health_damage": [38, 25],
-        "final_health": [91, 79],
-        "post_combat_route_frames": [158, 170]
+        "request_frames": [
+          20,
+          20
+        ],
+        "shells_at_request": [
+          20,
+          20
+        ],
+        "actual_away_steps": [
+          32,
+          11
+        ],
+        "retreat_firing_frames": [
+          62,
+          29
+        ],
+        "native_selected_weapon_damage": [
+          175,
+          175
+        ],
+        "native_selected_weapon_kills": [
+          1,
+          1
+        ],
+        "minimum_health": [
+          62,
+          75
+        ],
+        "received_health_damage": [
+          38,
+          25
+        ],
+        "final_health": [
+          91,
+          79
+        ],
+        "post_combat_route_frames": [
+          158,
+          170
+        ]
       }
     ],
     "scope": "Prepared single Parasite on base1, loaded Shotgun with full20 shells when range-policy switch is requested. Actual native weapon damage/kill and backward firing movement are verified independently of System1 choice; no general group or campaign acceptance."
@@ -57,9 +123,16 @@
     "workspace/artifacts/solo-tactical-retreat-20261005-133545-316-3da39129/report.json"
   ],
   "remaining_validation": [
-    "Native low-health switching without disrupting health recovery",
-    "HyperBlaster/Railgun selection and ammo conservation",
-    "Mixed groups where Parasite is not the highest-ranked economy target",
+    "Moving-target HyperBlaster/Railgun accuracy and scarce-ammo economy",
+    "Native higher-ranked tank or more varied mixed groups",
     "Nightmare and other maps/corners"
+  ],
+  "additional_validation": [
+    "scripts/scenarios/episodes/base1-parasite-mixed-weapon.json",
+    "scripts/scenarios/episodes/base1-parasite-low-health-weapon.json",
+    "scripts/scenarios/episodes/base1-parasite-hyper-retreat.json",
+    "scripts/scenarios/episodes/base1-parasite-rail-spacing.json",
+    "scripts/scenarios/episodes/base1-parasite-mixed-scarce-ammo.json",
+    "scripts/scenarios/episodes/base1-parasite-gunner-survival.json"
   ]
 }

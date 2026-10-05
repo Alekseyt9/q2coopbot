@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "name": "base1-parasite-mixed-weapon",
+  "map": "base1",
+  "runner": "scripts/run_solo_tactical_retreat.ps1",
+  "reproduction_command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -ParasiteWeapon -ParasiteMixed -ParasiteLoadout stocked -RecoverySkill 1 -Seed 6501 -Port 32480",
+  "bot_origin": [32, -224, 24],
+  "initial_health": 100,
+  "skill": 1,
+  "targets": [
+    {"class": "monster_parasite", "origin": [200, -224, 24], "setup": "client initial spawn"},
+    {"class": "monster_infantry", "origin": [96, -200, 24], "setup": "startup entity fixture"}
+  ],
+  "loadout": {"initial_weapon": "Shotgun", "shells": 20, "bullets": 60, "weapons": ["Blaster", "Shotgun", "Machinegun"]},
+  "acceptance": [
+    "Switch a loaded Shotgun to Machinegun for parasite_retreat_range with both threats currently visible",
+    "At least two selected-weapon firing movement frames with both threats visible and two actual steps away from the current aim target",
+    "Native Machinegun damage and kill of Parasite, plus native kill of infantry",
+    "No death, map transition, teammate or additional gameplay intervention; campaign route resumes after both kills",
+    "Distinct acknowledged seeds, timescale 2, two isolated servers/clients and unchanged source fingerprint"
+  ],
+  "scope": "Prepared two-monster group on original base1 BSP/AAS, not general mixed-group survival, unseen threats or heavy-target acceptance."
+}

@@ -1,0 +1,67 @@
+{
+  "id": "base1-parasite-hyper-retreat",
+  "title": "Гипербластер: смена дробовика и стрельба при отходе от Parasite",
+  "kind": "combat_weapon_policy",
+  "status": "partial_native_validation",
+  "map": "base1",
+  "reproduction": "native_fixture",
+  "scenario": "scripts/scenarios/base1-parasite-hyper-retreat.json",
+  "evidence": "workspace/artifacts/solo-tactical-retreat-20261005-141324-867-4c9a00a2/report.json",
+  "validation": {
+    "seeds": [
+      7101,
+      7102
+    ],
+    "results": [
+      {
+        "weapon_selection": {
+          "actual_away_steps": 6,
+          "selected_weapon_health_damage": 175,
+          "selected_weapon_kills": 1,
+          "expected": "HyperBlaster",
+          "minimum_health": 100.0,
+          "shells_at_request": 20,
+          "request_frames": [
+            20
+          ],
+          "retreat_firing_frames": 17
+        },
+        "received_health_damage": 0,
+        "post_combat_route_frames": 237,
+        "seed": 7101,
+        "self_health_damage": 0,
+        "final_health": 104
+      },
+      {
+        "weapon_selection": {
+          "shells_at_request": 20,
+          "expected": "HyperBlaster",
+          "minimum_health": 100.0,
+          "request_frames": [
+            20
+          ],
+          "actual_away_steps": 6,
+          "selected_weapon_health_damage": 175,
+          "retreat_firing_frames": 17,
+          "selected_weapon_kills": 1
+        },
+        "received_health_damage": 0,
+        "post_combat_route_frames": 237,
+        "seed": 7102,
+        "self_health_damage": 0,
+        "final_health": 104
+      }
+    ],
+    "parallelism": 2,
+    "source_provenance_valid": true,
+    "passed": 2,
+    "timescale": 2,
+    "total": 2,
+    "scope": "Prepared single Parasite; selected HyperBlaster damage and actual firing retreat. Moving-target lead accuracy and ammo economy remain unproven."
+  },
+  "remaining_validation": [
+    "Moving targets and lead/aim accuracy",
+    "Higher-ranked mixed groups, scarce ammo and healing under attack",
+    "Nightmare and other maps/corners"
+  ]
+}

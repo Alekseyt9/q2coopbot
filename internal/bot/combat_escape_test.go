@@ -68,3 +68,53 @@ func TestCornerEscapeRejectsMonsterInsideEdge(t *testing.T) {
 		t.Fatal("escape approached second monster")
 	}
 }
+
+func TestParasiteMixedAndRecoveryFixtureGeometry(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires base1 BSP")
+	}
+	g, err := quake.LoadMap(root, "base1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	self := quake.Vec3{32, -224, 24.125}
+	for _, at := range []quake.Vec3{{96, -200, 24.125}, {32, -424, 24.125}} {
+		if !g.PlayerMoveClear(at, at) {
+			t.Fatal("fixture inside BSP", at)
+		}
+		if drop, ok := g.GroundDrop(at, 4); !ok || drop > 1 {
+			t.Fatal("fixture floor missing", at, drop, ok)
+		}
+		if !g.ClearShot((quake.Snapshot{Self: self}).EyePoint(), at) {
+			t.Fatal("fixture wall hides target", at)
+		}
+	}
+}
+
+func TestParasiteRailFixtureGeometry(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires base1 BSP")
+	}
+	g, err := quake.LoadMap(root, "base1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	self, enemy := quake.Vec3{32, -352, 24.125}, quake.Vec3{240, -160, 24.125}
+	for _, at := range []quake.Vec3{self, enemy} {
+		if !g.PlayerMoveClear(at, at) {
+			t.Fatal("fixture inside BSP", at)
+		}
+		if drop, ok := g.GroundDrop(at, 4); !ok || drop > 1 {
+			t.Fatal("fixture floor missing", at, drop, ok)
+		}
+	}
+	if !g.ClearShot((quake.Snapshot{Self: self}).EyePoint(), enemy) {
+		t.Fatal("fixture hides parasite")
+	}
+	d := quake.Distance(self, enemy)
+	if d < 256 || d >= 320 {
+		t.Fatal("rail fixture must need retreat while permitting rail", d)
+	}
+}
