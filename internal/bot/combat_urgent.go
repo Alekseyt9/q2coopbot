@@ -6,13 +6,14 @@ type urgentRetreat struct {
 	target, until int
 }
 
-// Latch a short escape after observed fast approach, not every nearby enemy.
+// Latch a short escape after fast approach or damage in an observed mixed fight.
 // Clear on discontinuity or escape so ordinary spacing keeps its slow control.
 func (p *Planner) observeUrgentRetreat(s quake.Snapshot) {
 	old := p.World.Snapshot
 	if old.Map != s.Map || old.Frame+1 != s.Frame || old.Health <= 0 || s.Health <= 0 || !s.OnGround {
 		p.urgentRetreat = urgentRetreat{}
 		p.cornerEscape = nil
+		p.cornerDetourRetry = 0
 		p.cornerUrgency = urgentRetreat{}
 		return
 	}
@@ -31,7 +32,16 @@ func (p *Planner) observeUrgentRetreat(s quake.Snapshot) {
 			active = true
 		}
 		approach := quake.Horizontal(old.Self, e.Origin) - d
-		if d < 128 && approach >= 20 && quake.Distance(old.Self, s.Self) <= 40 {
+		// In an observed mixed fight, taking damage inside tongue reach needs
+		// prompt spacing even if the monster has not made a fast approach.
+		rangedGroup := false
+		for _, other := range s.Enemies {
+			if other.ID != e.ID && other.Class == "monster_gunner" && other.ClearShot != nil && *other.ClearShot && quake.Distance(s.Self, other.Origin) <= 650 {
+				rangedGroup = true
+			}
+		}
+		pressured := rangedGroup && s.Health < old.Health && d < parasiteFiringDistance
+		if (d < 128 && approach >= 20 || pressured) && quake.Distance(old.Self, s.Self) <= 40 {
 			p.urgentRetreat = urgentRetreat{target: e.ID, until: s.Frame + 40}
 			active = true
 		}

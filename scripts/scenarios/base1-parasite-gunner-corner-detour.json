@@ -1,0 +1,29 @@
+{
+  "basis": "scripts/scenarios/base1-parasite-gunner-survival.json",
+  "acceptance": [
+    "At least2 commands and2 actual observed moving steps from combat_corner_detour",
+    "Original mixed weapon selection/native damage gates; scarce requires observed depletion chain",
+    "No death, both native kills and campaign movement after last kill",
+    "Two isolated servers/clients at timescale2 with distinct acknowledged seeds and stable fingerprint"
+  ],
+  "version": 1,
+  "name": "base1-parasite-gunner-corner-detour",
+  "map": "base1",
+  "scope": "Prepared base1 Gunner/Parasite detour tradeoff. Movement gate does not establish whole-path completion, splash protection or general group survival.",
+  "episode": "scripts/scenarios/episodes/base1-parasite-gunner-survival.json",
+  "variants": [
+    {
+      "command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -ParasiteWeapon -ParasiteMixed -ParasiteMixedClass monster_gunner -RequireMixedDetour -ParasiteLoadout stocked -Seed 7201 -Port 32700",
+      "loadout": "stocked"
+    },
+    {
+      "command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -ParasiteWeapon -ParasiteMixed -ParasiteMixedClass monster_gunner -RequireMixedDetour -ParasiteLoadout scarce -Seed 7701 -Port 32710",
+      "loadout": "scarce"
+    },
+    {
+      "command": "pwsh -NoProfile -File scripts/run_solo_tactical_retreat.ps1 -ParasiteWeapon -ParasiteMixed -ParasiteMixedClass monster_gunner -RequireMixedDetour -ParasiteLoadout scarce -Seed 7801 -Port 32720",
+      "loadout": "scarce_new_seeds"
+    }
+  ],
+  "runner": "scripts/run_solo_tactical_retreat.ps1"
+}

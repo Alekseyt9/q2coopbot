@@ -847,6 +847,9 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 		if path == "models/objects/grenade2/tris.md2" {
 			s.Projectiles = append(s.Projectiles, Object{ID: entity.Number, Class: "hand_grenade", Origin: entity.Origin})
 		}
+		if path == "models/objects/grenade/tris.md2" {
+			s.Projectiles = append(s.Projectiles, Object{ID: entity.Number, Class: "grenade", Origin: entity.Origin})
+		}
 		if strings.HasPrefix(path, "*") {
 			if model, err := strconv.Atoi(strings.TrimPrefix(path, "*")); err == nil {
 				s.Movers = append(s.Movers, Mover{ID: entity.Number, Model: model, Origin: entity.Origin, Angles: entity.Angles})

@@ -43,6 +43,7 @@ type World struct {
 	Updated           time.Time          `json:"updated"`
 }
 type Planner struct {
+	cornerDetourRetry         int
 	cover                     *coverCycle
 	coverRetry                int
 	circleTarget              int
@@ -836,10 +837,28 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 		return yield
 	}
 	profile := combatSpacing(s)
+	if evaded, ok := p.combatGrenadeEvade(cmd, profile); ok {
+		return evaded
+	}
 	if covered, ok := p.combatCoverCommand(s, cmd, tactic); ok {
 		return covered
 	}
 	p.World.Command.CombatSpacing = profile
+	if p.cornerEscape != nil && p.cornerEscape.threatFloors != nil && p.jump == nil && p.elevator == nil && p.button == nil {
+		found := false
+		for _, observed := range s.Enemies {
+			if observed.ID == p.cornerEscape.target && observed.Class == "monster_parasite" && observed.ClearShot != nil && *observed.ClearShot {
+				found = true
+				if escaped, ok := p.continueCornerEscape(cmd, profile, observed); ok {
+					return escaped
+				}
+				break
+			}
+		}
+		if !found {
+			p.cornerEscape = nil
+		}
+	}
 	if tactic == "circle" {
 		return p.combatCircle(cmd)
 	}

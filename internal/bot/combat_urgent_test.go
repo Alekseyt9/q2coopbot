@@ -116,3 +116,45 @@ func TestUrgentRetreatExpiresOrClearsAfterEscape(t *testing.T) {
 		}
 	}
 }
+
+func TestMixedGunnerDamageInsideTongueReachLatchesUrgency(t *testing.T) {
+	clear, hidden := true, false
+	old := quake.Snapshot{Map: "base1", Frame: 10, Health: 100, OnGround: true, Self: quake.Vec3{0, 0, 24}}
+	now := old
+	now.Frame++
+	now.Health = 95
+	now.Enemies = []quake.Object{{ID: 57, Class: "monster_parasite", Origin: quake.Vec3{280, 0, 24}, ClearShot: &clear}, {ID: 58, Class: "monster_gunner", Origin: quake.Vec3{150, 100, 24}, ClearShot: &clear}}
+	p := Planner{World: World{Snapshot: old}}
+	p.observeUrgentRetreat(now)
+	if p.urgentRetreat.target != 57 {
+		t.Fatal("damage pressure did not accelerate retreat")
+	}
+	for _, kind := range []string{"safe_band", "hidden_gunner", "far_gunner", "single", "outside_tongue", "hidden_parasite", "gap", "dead"} {
+		s := now
+		s.Enemies = append([]quake.Object(nil), now.Enemies...)
+		switch kind {
+		case "safe_band":
+			s.Health = 100
+			s.Enemies[0].Origin[0] = 280
+		case "hidden_gunner":
+			s.Enemies[1].ClearShot = &hidden
+		case "far_gunner":
+			s.Enemies[1].Origin[0] = 700
+		case "single":
+			s.Enemies = s.Enemies[:1]
+		case "outside_tongue":
+			s.Enemies[0].Origin[0] = 300
+		case "hidden_parasite":
+			s.Enemies[0].ClearShot = &hidden
+		case "gap":
+			s.Frame++
+		case "dead":
+			s.Health = 0
+		}
+		p.urgentRetreat = urgentRetreat{}
+		p.observeUrgentRetreat(s)
+		if p.urgentRetreat.target != 0 {
+			t.Fatal("unobserved pressure", kind)
+		}
+	}
+}

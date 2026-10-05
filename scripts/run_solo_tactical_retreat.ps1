@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Worker,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
+param([switch]$Worker,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
 function Measure-BarrelSafety($Rows,$Events) {
     $actor=$Rows[0].self_entity
@@ -21,6 +21,7 @@ if($Circle -and $Cover){throw 'Circle and Cover are separate fixtures'}
 if($CornerEscape -and ($Recovery -or $Group -or $GroupRetreat -or $Circle -or $Cover)){throw 'CornerEscape is a separate fixture'}
 if($ParasiteWeapon -and ($Recovery -or $CornerEscape -or $Group -or $GroupRetreat -or $Circle -or $Cover)){throw 'ParasiteWeapon is a separate fixture'}
 if(($ParasiteMixed -or $ParasiteHealthKit) -and !$ParasiteWeapon){throw 'Parasite variants require ParasiteWeapon'}
+if($RequireMixedDetour -and (!$ParasiteMixed -or $ParasiteMixedClass -ne 'monster_gunner')){throw 'Required mixed detour needs observed Gunner/Parasite fixture'}
 if(!$Worker){
     . "$PSScriptRoot/harness_manifest.ps1"
     $fingerprint=Get-HarnessFingerprint (Get-HarnessSourceRecords $repo)
@@ -32,6 +33,7 @@ if(!$Worker){
     $results=@(0..1|ForEach-Object -Parallel {
         $out=Join-Path $using:OutputRoot "run-$_"
         $args=@('-NoProfile','-File',$using:script,'-Worker','-Seed',($using:Seed+$_),'-Port',($using:Port+$_),'-OutputRoot',$out,'-Client',$using:Client,'-System1',$using:System1)
+        if($using:RequireMixedDetour){$args+='-RequireMixedDetour'}
         if($using:Cover){$args+='-Cover'}
         if($using:CoverFight){$args+='-CoverFight'}
         if($using:Circle){$args+='-Circle'}
@@ -46,7 +48,7 @@ if(!$Worker){
     } -ThrottleLimit 2)
     $valid=$fingerprint -eq (Get-HarnessFingerprint (Get-HarnessSourceRecords $repo))
     $accepted=$valid -and $results.Count -eq 2 -and @($results|Where-Object {!$_.accepted}).Count -eq 0
-    @{accepted=$accepted;provenance_valid=$valid;source_fingerprint=$fingerprint;parasite_weapon=[bool]$ParasiteWeapon;parasite_mixed=[bool]$ParasiteMixed;parasite_mixed_class=$ParasiteMixedClass;parasite_health=$ParasiteHealth;parasite_health_kit=[bool]$ParasiteHealthKit;parasite_loadout=$ParasiteLoadout;corner_escape=[bool]$CornerEscape;recovery=[bool]$Recovery;group=[bool]$Group;group_retreat=[bool]$GroupRetreat;circle=[bool]$Circle;cover=[bool]$Cover;cover_fight=[bool]$CoverFight;cover_target_x=$CoverTargetX;model=$System1;timescale=2;parallelism=2;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 12|Set-Content (Join-Path $OutputRoot 'report.json')
+    @{accepted=$accepted;provenance_valid=$valid;source_fingerprint=$fingerprint;parasite_weapon=[bool]$ParasiteWeapon;parasite_mixed=[bool]$ParasiteMixed;require_mixed_detour=[bool]$RequireMixedDetour;parasite_mixed_class=$ParasiteMixedClass;parasite_health=$ParasiteHealth;parasite_health_kit=[bool]$ParasiteHealthKit;parasite_loadout=$ParasiteLoadout;corner_escape=[bool]$CornerEscape;recovery=[bool]$Recovery;group=[bool]$Group;group_retreat=[bool]$GroupRetreat;circle=[bool]$Circle;cover=[bool]$Cover;cover_fight=[bool]$CoverFight;cover_target_x=$CoverTargetX;model=$System1;timescale=2;parallelism=2;seeds=@($Seed,($Seed+1));results=$results}|ConvertTo-Json -Depth 12|Set-Content (Join-Path $OutputRoot 'report.json')
     "Solo tactical retreat: $OutputRoot";if(!$accepted){throw 'Solo tactical retreat rejected'};return
 }
 if(Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue){throw 'Port occupied'}
@@ -101,11 +103,18 @@ try{
     $selected=@($rows|Where-Object {$_.tactic.source -eq 'live' -and $_.tactic.action -eq 'retreat'})
     $steps=@($selected|Where-Object {$_.arbitration.move_source -eq 'combat_retreat' -and ($_.sent_command.Forward -ne 0 -or $_.sent_command.Side -ne 0) -and ($_.sent_command.Buttons -band 1) -and $_.arbitration.aim_source -eq 'enemy'})
     $byFrame=@{};foreach($r in $rows){$byFrame[[int]$r.frame]=$r}
+    if($ParasiteMixed){
+        $detour=@($rows|Where-Object {$_.arbitration.move_source -eq 'combat_corner_detour' -and $_.arbitration.move_point})
+        $moved=0
+        foreach($row in $detour){$next=$byFrame[([int]$row.frame+1)];if(!$next){continue};if([math]::Sqrt([math]::Pow($next.self[0]-$row.self[0],2)+[math]::Pow($next.self[1]-$row.self[1],2)) -gt 2){$moved++}}
+        $report.mixed_detour=@{frames=$detour.Count;actual_moving_steps=$moved;enemy_aim_attack_frames=@($detour|Where-Object {$_.arbitration.aim_source -eq 'enemy' -and ($_.sent_command.Buttons -band 1)}).Count;scope='Bounded risk tradeoff past observed threats; no grenade splash protection or permanent group survival guarantee'}
+        if($RequireMixedDetour -and ($detour.Count -lt 2 -or $moved -lt 2)){throw 'Actual native mixed corner detour absent'}
+    }
     if($ParasiteWeapon){
         $expected=switch($ParasiteLoadout){stocked{'Machinegun'};scarce{'Machinegun'};hyper{'HyperBlaster'};rail{'Railgun'};default{'Blaster'}}
         $expectedModel=switch($ParasiteLoadout){stocked{'*/v_machn/*'};scarce{'*/v_machn/*'};hyper{'*/v_hyperb/*'};rail{'*/v_rail/*'};default{'Blaster'}}
         $request=@($rows|Where-Object {$_.weapon_request -eq "use $expected" -and $_.weapon_reason -eq 'parasite_retreat_range' -and $_.weapon -like '*/v_shotg/*' -and $_.ammo -gt 0 -and $_.inventory_known -and $_.inventory_age_frames -le 20 -and @($_.enemies|Where-Object {$_.class -eq 'monster_parasite' -and $_.clear_shot}).Count}|Select-Object -First 1)
-        $fire=@($rows|Where-Object {$request.Count -and $_.frame -gt $request[0].frame -and ($_.sent_command.Buttons -band 1) -and $_.arbitration.aim_source -eq 'enemy' -and ($_.arbitration.move_source -eq 'combat_retreat' -or $_.arbitration.move_source -eq 'combat_corner_escape' -or ($ParasiteHealthKit -and $_.goal -eq 'recover_health' -and $_.arbitration.move_source -like 'route*')) -and ($_.weapon -like $expectedModel -and ($expected -eq 'Blaster' -or $_.ammo -gt 0))})
+        $fire=@($rows|Where-Object {$request.Count -and $_.frame -gt $request[0].frame -and ($_.sent_command.Buttons -band 1) -and $_.arbitration.aim_source -eq 'enemy' -and ($_.arbitration.move_source -eq 'combat_retreat' -or $_.arbitration.move_source -eq 'combat_corner_escape' -or $_.arbitration.move_source -eq 'combat_corner_detour' -or ($ParasiteHealthKit -and $_.goal -eq 'recover_health' -and $_.arbitration.move_source -like 'route*')) -and ($_.weapon -like $expectedModel -and ($expected -eq 'Blaster' -or $_.ammo -gt 0))})
         $movingAway=0
         foreach($row in $fire){
             $next=$byFrame[([int]$row.frame+1)];$target=@($row.enemies|Where-Object id -eq $row.arbitration.aim_entity)

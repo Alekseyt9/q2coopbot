@@ -9,6 +9,24 @@ import (
 // health model rests nine units below the standing player's center.
 func healthStand(p quake.Vec3) quake.Vec3 { p[2] += 9.125; return p }
 
+// A two-HP stimpack is useful on the way, but does not justify leaving a
+// fight for a distant recovery target. Larger and unknown kits retain the
+// existing recovery policy, including at critical health.
+func healthRecoveryUseful(s quake.Snapshot, item quake.Object) bool {
+	if !usefulHealth(s, item) {
+		return false
+	}
+	if item.HealthAmount != 2 || quake.Distance(s.Self, healthStand(item.Origin)) <= 96 {
+		return true
+	}
+	for _, enemy := range s.Enemies {
+		if enemy.ClearShot != nil && *enemy.ClearShot && quake.Distance(s.Self, enemy.Origin) <= 650 {
+			return false
+		}
+	}
+	return true
+}
+
 func (p *Planner) healthAllowed(at quake.Vec3, frame int) bool {
 	return frame >= p.healthBanned[at]
 }
@@ -47,14 +65,14 @@ func (p *Planner) healthGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	}
 	if p.healthActive {
 		for _, item := range s.Pickups {
-			if item.Class == "item_health" && usefulHealth(s, item) && healthStand(item.Origin) == p.healthTarget && p.healthAllowed(item.Origin, s.Frame) && p.exitHealthAllowed(s, item, false) {
+			if item.Class == "item_health" && healthRecoveryUseful(s, item) && healthStand(item.Origin) == p.healthTarget && p.healthAllowed(item.Origin, s.Frame) && p.exitHealthAllowed(s, item, false) {
 				return p.healthTarget, true
 			}
 		}
 	}
 	if p.healthActive {
 		for _, r := range p.resources {
-			if r.State == "unknown" && r.Item.Class == "item_health" && healthStand(r.Item.Origin) == p.healthTarget && usefulHealth(s, r.Item) && p.healthAllowed(r.Item.Origin, s.Frame) && p.exitHealthAllowed(s, r.Item, true) {
+			if r.State == "unknown" && r.Item.Class == "item_health" && healthStand(r.Item.Origin) == p.healthTarget && healthRecoveryUseful(s, r.Item) && p.healthAllowed(r.Item.Origin, s.Frame) && p.exitHealthAllowed(s, r.Item, true) {
 				r.Attempted = true
 				return p.healthTarget, true
 			}
@@ -63,7 +81,7 @@ func (p *Planner) healthGoal(s quake.Snapshot) (quake.Vec3, bool) {
 	localAlternative := false
 	if p.Nav != nil && p.World.Geometry.HasCollision() {
 		for _, item := range s.Pickups {
-			if item.Class == "item_health" && usefulHealth(s, item) && p.healthAllowed(item.Origin, s.Frame) && quake.Horizontal(s.Self, item.Origin) < 300 && math.Abs(healthStand(item.Origin)[2]-s.Self[2]) <= 64 {
+			if item.Class == "item_health" && healthRecoveryUseful(s, item) && p.healthAllowed(item.Origin, s.Frame) && quake.Horizontal(s.Self, item.Origin) < 300 && math.Abs(healthStand(item.Origin)[2]-s.Self[2]) <= 64 {
 				if _, ok := p.resourceWalkingRoute(s.Self, healthStand(item.Origin)); ok {
 					localAlternative = true
 					break
@@ -72,7 +90,7 @@ func (p *Planner) healthGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		}
 	}
 	for _, item := range s.Pickups {
-		if item.Class == "item_health" && usefulHealth(s, item) && quake.Horizontal(s.Self, item.Origin) < 300 && p.healthAllowed(item.Origin, s.Frame) && p.exitHealthAllowed(s, item, false) {
+		if item.Class == "item_health" && healthRecoveryUseful(s, item) && quake.Horizontal(s.Self, item.Origin) < 300 && p.healthAllowed(item.Origin, s.Frame) && p.exitHealthAllowed(s, item, false) {
 			// A nearby kit far above us may actually require a long detour.
 			// Keep existing stair/drop recovery; the walking-only pickup budget
 			// must not reject those established health routes.
@@ -85,7 +103,7 @@ func (p *Planner) healthGoal(s quake.Snapshot) (quake.Vec3, bool) {
 		}
 	}
 	for _, item := range p.rememberedCandidates(s) {
-		if item.Class == "item_health" && usefulHealth(s, item) && p.healthAllowed(item.Origin, s.Frame) && p.exitHealthAllowed(s, item, true) {
+		if item.Class == "item_health" && healthRecoveryUseful(s, item) && p.healthAllowed(item.Origin, s.Frame) && p.exitHealthAllowed(s, item, true) {
 			at := healthStand(item.Origin)
 			p.markResourceVisit(at)
 			return at, true
