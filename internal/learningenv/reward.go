@@ -26,6 +26,7 @@ type RewardConfig struct {
 	MonsterKill      float64 `json:"monster_kill,omitempty"`
 	AimPotential     float64 `json:"aim_potential,omitempty"`
 	AimGamma         float64 `json:"aim_gamma,omitempty"`
+	AimKickAngles    bool    `json:"aim_kick_angles,omitempty"`
 	SpacingPotential float64 `json:"spacing_potential,omitempty"`
 	ParasiteRange    float64 `json:"parasite_range,omitempty"`
 }
@@ -53,7 +54,7 @@ func (c RewardConfig) Validate() error {
 		if c.AimPotential <= 0 || c.AimPotential > 1 || c.AimGamma <= 0 || c.AimGamma >= 1 {
 			return fmt.Errorf("v3 requires bounded positive aim potential and discount in (0,1)")
 		}
-	} else if c.AimPotential != 0 || c.AimGamma != 0 {
+	} else if c.AimPotential != 0 || c.AimGamma != 0 || c.AimKickAngles {
 		return fmt.Errorf("aim shaping requires reward v3")
 	}
 	if c.Version == ManeuverRewardVersion {
@@ -148,14 +149,14 @@ func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
 		score += r.Components["monster_kill"]
 	}
 	if c.HasPotentialReward() {
-		before, err := aimPotential(s.Observation, c.AimPotential)
+		before, err := aimPotentialWithKick(s.Observation, c.AimPotential, c.AimKickAngles)
 		if err != nil {
 			r.Components = nil
 			return deny("invalid_aim_observation")
 		}
 		after := 0.0
 		if !s.Terminal && !completeHandoff {
-			after, err = aimPotential(*s.Next, c.AimPotential)
+			after, err = aimPotentialWithKick(*s.Next, c.AimPotential, c.AimKickAngles)
 			if err != nil {
 				r.Components = nil
 				return deny("invalid_aim_observation")
@@ -211,10 +212,28 @@ func spacingPotential(o policy.Observation, scale, preferred float64) (float64, 
 // Each complete segment sums to -Phi(start)+gamma^T Phi(end). Death/handoff
 // has Phi(end)=0; arbitrary truncations retain normal critic bootstrap.
 func aimPotential(o policy.Observation, scale float64) (float64, error) {
+	return aimPotentialWithKick(o, scale, false)
+}
+
+// UDP camera punch includes weapon recoil and damage/fall shake. It is an
+// observed aim proxy, not hidden weapon state or exact bullet direction.
+func aimPotentialWithKick(o policy.Observation, scale float64, useKick bool) (float64, error) {
 	best := math.Inf(1)
 	result := 0.0
 	yaw := float64(o.ViewAngles[1]) * 2 * math.Pi / 65536
 	pitch := float64(o.ViewAngles[0]) * 2 * math.Pi / 65536
+	if useKick {
+		if o.KickAngles == nil {
+			return 0, fmt.Errorf("observed kick angles unavailable")
+		}
+		for _, angle := range *o.KickAngles {
+			if math.IsNaN(angle) || math.IsInf(angle, 0) {
+				return 0, fmt.Errorf("nonfinite observed kick angle")
+			}
+		}
+		yaw += (*o.KickAngles)[1] * math.Pi / 180
+		pitch += (*o.KickAngles)[0] * math.Pi / 180
+	}
 	for _, e := range o.Enemies {
 		if math.IsNaN(e.Distance) || math.IsInf(e.Distance, 0) || e.Distance < 0 {
 			return 0, fmt.Errorf("invalid aim distance")

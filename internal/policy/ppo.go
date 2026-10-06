@@ -66,7 +66,7 @@ func LoadPPO(path string) (*PPO, error) {
 	if d.Decode(new(any)) != io.EOF {
 		return nil, fmt.Errorf("trailing PPO data")
 	}
-	if f.Kind != PPOKind || (f.Features != FeatureVersion && f.Features != AimFeatureVersion && f.Features != BBoxFeatureVersion && f.Features != TypedFeatureVersion) || f.SamplingSeed < 0 {
+	if f.Kind != PPOKind || (f.Features != FeatureVersion && f.Features != AimFeatureVersion && f.Features != BBoxFeatureVersion && f.Features != TypedFeatureVersion && f.Features != RecoilFeatureVersion) || f.SamplingSeed < 0 {
 		return nil, fmt.Errorf("invalid PPO header")
 	}
 	if e = validateFeatureLayers(f.Actor, 8, f.Features); e != nil {

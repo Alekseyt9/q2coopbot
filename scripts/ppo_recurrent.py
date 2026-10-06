@@ -143,22 +143,26 @@ def main():
         lp,_=probabilities(raw,std,z,attack,vertical)
         log_error=float((lp-old).abs().max());value_error=float((v[:,0]-torch.tensor([r['sample']['value'] for r in rows],device=device)).abs().max())
         assert log_error<.003 and value_error<1e-4 and max(actor_state_error,value_state_error)<2e-5,(log_error,value_error,actor_state_error,value_state_error)
-    anchor=read(args.anchor_model);assert not anchor.get('memory') and anchor['feature_version']==model['feature_version']
-    anchor_net=network(anchor['actor']).to(device);teacher_std=torch.tensor(anchor['log_std'],device=device)
-    with torch.no_grad():teacher=anchor_net(x)
-    bank=read_bank(args.retention_bank);validate_bank(bank,sha(args.anchor_model),model['feature_version'],x.shape[1],{r['seed'] for r in rows})
     bank_tensors={}
-    with torch.no_grad():
-        for split in ('train','validation'):
-            bx=torch.tensor([r['features'] for r in bank[split]],dtype=torch.float32,device=device);bw=torch.tensor([r['weight'] for r in bank[split]],device=device)
-            bank_tensors[split]=(bx,bw,anchor_net(bx))
-    del anchor_net
+    if args.retention_weight or args.bank_weight:
+        anchor=read(args.anchor_model);assert not anchor.get('memory') and anchor['feature_version']==model['feature_version']
+        anchor_net=network(anchor['actor']).to(device);teacher_std=torch.tensor(anchor['log_std'],device=device)
+        with torch.no_grad():
+            if args.retention_weight:teacher=anchor_net(x)
+            if args.bank_weight:
+                bank=read_bank(args.retention_bank);validate_bank(bank,sha(args.anchor_model),model['feature_version'],x.shape[1],{r['seed'] for r in rows})
+                for split in ('train','validation'):
+                    bx=torch.tensor([r['features'] for r in bank[split]],dtype=torch.float32,device=device);bw=torch.tensor([r['weight'] for r in bank[split]],device=device)
+                    bank_tensors[split]=(bx,bw,anchor_net(bx))
+        del anchor_net
     def bank_loss(split='train'):
         bx,bw,bt=bank_tensors[split];return anchor_kl(actor.single(bx),std,bt,teacher_std,bw)
     def objective():
         raw,_=compute(actor);lp,entropy=probabilities(raw,std,z,attack,vertical);ratio=(lp-old).exp()
         loss=-torch.minimum(ratio*ad,ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*entropy.mean()
-        return loss+args.retention_weight*anchor_kl(raw,std,teacher,teacher_std)+args.bank_weight*bank_loss(),((ratio-1)-(lp-old)).mean()
+        if args.retention_weight:loss=loss+args.retention_weight*anchor_kl(raw,std,teacher,teacher_std)
+        if args.bank_weight:loss=loss+args.bank_weight*bank_loss()
+        return loss,((ratio-1)-(lp-old)).mean()
     actor_opt=torch.optim.Adam(list(actor.parameters())+[std],lr=config['actor_lr']);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
     consumed=[];updates=0;total=0
     if args.resume:

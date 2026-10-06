@@ -1091,6 +1091,8 @@ func (c *Client) run(ctx context.Context) error {
 					Projectiles        []quake.Object          `json:"projectiles,omitempty"`
 					Barrels            []quake.Object          `json:"barrels,omitempty"`
 					ViewAngles         [3]int16                `json:"view_angles"`
+					KickAngles         quake.Vec3              `json:"kick_angles_degrees"`
+					KickAnglesKnown    bool                    `json:"kick_angles_known"`
 					GroundPrediction   *GroundPrediction       `json:"ground_prediction,omitempty"`
 					GroundSurface      string                  `json:"ground_surface"`
 					GroundDynamicModel int                     `json:"ground_dynamic_model,omitempty"`
@@ -1160,6 +1162,7 @@ func (c *Client) run(ctx context.Context) error {
 					Campaign: c.planner.World.Campaign,
 					Tactic:   c.planner.World.Tactic,
 					Route:    c.planner.World.Route, Jump: c.planner.World.Jump, Gravity: c.planner.World.Snapshot.Gravity, GunFrame: c.planner.World.Snapshot.GunFrame, ViewAngles: c.planner.World.Snapshot.ViewAngles, Pickups: c.planner.World.Snapshot.Pickups,
+					KickAngles: c.planner.World.Snapshot.KickAngles, KickAnglesKnown: c.planner.World.Snapshot.KickAnglesKnown,
 					Beams:            c.planner.World.Snapshot.Beams,
 					RemovedEntities:  c.planner.World.Snapshot.RemovedEntities,
 					DeltaFrame:       c.planner.World.Snapshot.DeltaFrame,

@@ -62,6 +62,7 @@ type Observation struct {
 	OnGround           bool                   `json:"on_ground"`
 	Ducked             bool                   `json:"ducked"`
 	ViewAngles         [3]int16               `json:"view_angles"`
+	KickAngles         *quake.Vec3            `json:"kick_angles_degrees,omitempty"`
 	Weapon             string                 `json:"weapon"`
 	Ammo               int16                  `json:"ammo"`
 	GunFrame           int                    `json:"gun_frame"`
@@ -96,6 +97,10 @@ func Observe(s quake.Snapshot, id Identity, previous quake.UserCmd) Observation 
 		Position: s.Self, Velocity: s.SelfVelocity, OnGround: s.OnGround, Ducked: s.Ducked,
 		ViewAngles: s.ViewAngles, Weapon: s.Weapon, Ammo: s.Ammo, GunFrame: s.GunFrame,
 		PreviousCommand: previous, Enemies: []Enemy{}}
+	if s.KickAnglesKnown {
+		kick := s.KickAngles
+		o.KickAngles = &kick
+	}
 	if s.InventoryKnown {
 		items := append([]quake.InventoryItem{}, s.Inventory...)
 		o.Inventory, o.InventoryAgeFrames = &items, &s.InventoryAgeFrames

@@ -88,6 +88,8 @@ type Frame struct {
 	Gun             int
 	GunFrame        int
 	ViewAngles      [3]int16
+	KickAngles      Vec3
+	KickAnglesKnown bool
 	DeltaAngles     [3]int16
 	Entities        map[int]Entity
 }
@@ -371,6 +373,17 @@ func (d *Decoder) playerstate(r *reader, old Frame) (Frame, error) {
 				}
 				continue
 			}
+			if p[0] == 512 {
+				for axis := range f.KickAngles {
+					v, err := r.byte()
+					if err != nil {
+						return f, err
+					}
+					f.KickAngles[axis] = float64(int8(v)) / 4
+				}
+				f.KickAnglesKnown = true
+				continue
+			}
 			if e = skip(p[1]); e != nil {
 				return f, e
 			}
@@ -436,7 +449,7 @@ func (d *Decoder) frame(r *reader) (Frame, error) {
 	if e != nil {
 		return Frame{}, e
 	}
-	old := Frame{Entities: map[int]Entity{}}
+	old := Frame{Entities: map[int]Entity{}, KickAnglesKnown: true}
 	if delta > 0 {
 		v, ok := d.Frames[int(delta)]
 		if !ok {
@@ -819,6 +832,8 @@ type Snapshot struct {
 	Weapon             string            `json:"weapon"`
 	GunFrame           int               `json:"gun_frame"`
 	ViewAngles         [3]int16          `json:"view_angles"`
+	KickAngles         Vec3              `json:"kick_angles_degrees"`
+	KickAnglesKnown    bool              `json:"kick_angles_known"`
 	DeltaAngles        [3]int16          `json:"delta_angles"`
 	Enemies            []Object          `json:"enemies"`
 	Projectiles        []Object          `json:"projectiles,omitempty"`
@@ -845,6 +860,7 @@ func (d *Decoder) ResetTeammateHistory() {
 func (d *Decoder) Snapshot(f Frame) Snapshot {
 	s := Snapshot{Map: d.Map, Frame: f.Number, DeltaFrame: f.DeltaFrame, Self: f.Origin, SelfVelocity: f.Velocity, Gravity: f.Gravity, Ducked: f.PMFlags&1 != 0, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles, RemovedEntities: append([]int(nil), f.RemovedEntities...), Suppressed: f.Suppressed}
 	s.GunFrame, s.ViewAngles = f.GunFrame, f.ViewAngles
+	s.KickAngles, s.KickAnglesKnown = f.KickAngles, f.KickAnglesKnown
 	s.InventoryKnown, s.InventoryOpen = d.InventoryKnown, f.Stats[13]&2 != 0
 	if d.InventoryKnown {
 		s.InventoryAgeFrames = max(0, f.Number-d.InventoryFrame)
