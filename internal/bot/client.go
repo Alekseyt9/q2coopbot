@@ -100,6 +100,8 @@ type Client struct {
 	attacks                                 int
 	worldFile                               string
 	traceFile                               *os.File
+	demo                                    *quake.DemoRecorder
+	demoErr                                 error
 	stopFile                                string
 	name                                    string
 	idle                                    bool
@@ -211,6 +213,7 @@ func (c *Client) reconnect() error {
 	c.serverReliable = 0
 	c.previous = quake.UserCmd{}
 	c.decoder = quake.NewDecoder()
+	c.resetDemoConnection()
 	c.pendingSounds = nil
 	c.pendingExplosions = nil
 	c.seenCommands = map[string]bool{}
@@ -233,6 +236,7 @@ func (c *Client) resumeMapSignon() error {
 	c.firstMoveFrame, c.lastMoveFrame = -1, -1
 	c.previous = quake.UserCmd{}
 	c.decoder = quake.NewDecoder()
+	c.resetDemoConnection()
 	c.pendingSounds = nil
 	c.pendingExplosions = nil
 	c.seenCommands = map[string]bool{}
@@ -282,6 +286,13 @@ func (c *Client) handle(packet []byte) {
 	}
 	payload := packet[8:]
 	frames, e := c.decoder.Parse(payload)
+	if c.demo != nil {
+		if e != nil {
+			c.demoErr = fmt.Errorf("decode demo packet: %w", e)
+		} else if err := c.demo.Packet(c.decoder, frames); err != nil {
+			c.demoErr = fmt.Errorf("record demo: %w", err)
+		}
+	}
 	if e != nil {
 		c.decoder.Errors++
 		c.decoder.LastError = e.Error()
@@ -462,6 +473,9 @@ func (c *Client) run(ctx context.Context) error {
 		}
 		if c.checkpointRestoreErr != nil {
 			return c.checkpointRestoreErr
+		}
+		if c.demoErr != nil {
+			return c.demoErr
 		}
 		now := time.Now()
 		if c.begun && c.strategist != nil {

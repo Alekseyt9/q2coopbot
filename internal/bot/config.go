@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -45,6 +46,8 @@ type ConfigFile struct {
 		CombatCapture bool   `json:"combat_capture"`
 		WorldJSON     string `json:"world_json"`
 		TraceJSONL    string `json:"trace_jsonl"`
+		DemoDM2       string `json:"demo_dm2"`
+		RecordDemo    *bool  `json:"record_demo"`
 		StopFile      string `json:"stop_file"`
 	} `json:"output"`
 	Test struct {
@@ -161,6 +164,13 @@ func LoadConfig(path string) (Config, error) {
 		return cfg, fmt.Errorf("client.memory_file requires a server-lifetime memory_session")
 	}
 	cfg.WorldFile, cfg.TracePath, cfg.StopFile = resolve(file.Output.WorldJSON), resolve(file.Output.TraceJSONL), resolve(file.Output.StopFile)
+	cfg.DemoPath = resolve(file.Output.DemoDM2)
+	if cfg.DemoPath == "" && cfg.TracePath != "" && (file.Output.RecordDemo == nil || *file.Output.RecordDemo) {
+		cfg.DemoPath = strings.TrimSuffix(cfg.TracePath, filepath.Ext(cfg.TracePath)) + ".dm2"
+	}
+	if file.Output.RecordDemo != nil && !*file.Output.RecordDemo {
+		cfg.DemoPath = ""
+	}
 	cfg.CheckpointControl = resolve(file.Test.CheckpointControl)
 	cfg.CheckpointRestore, cfg.CheckpointMode = resolve(file.Test.CheckpointRestore), file.Test.CheckpointMode
 	cfg.FramePaced, cfg.GameFrames = file.Run.FramePaced, file.Run.GameFrames

@@ -104,6 +104,8 @@ type ExplosionEvent struct {
 
 const playerSkinsConfigBase = 32 + 5*256 // CS_PLAYERSKINS in protocol 34.
 type Decoder struct {
+	CaptureDemo        bool
+	DemoPayload        []byte
 	Inventory          [256]int16
 	InventoryKnown     bool
 	InventoryFrame     int
@@ -488,12 +490,14 @@ func (d *Decoder) frame(r *reader) (Frame, error) {
 }
 func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 	r := reader{data: data}
+	d.DemoPayload = d.DemoPayload[:0]
 	d.Commands = nil
 	d.Sounds = nil
 	d.Explosions = nil
 	d.ServerdataSeen = false
 	var frames []Frame
 	for r.pos < len(data) {
+		start := r.pos
 		op, e := r.byte()
 		if e != nil {
 			return frames, e
@@ -720,6 +724,16 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 			}
 		default:
 			return frames, fmt.Errorf("unsupported opcode %d at %d", op, r.pos-1)
+		}
+		// Live console and download commands must not execute during playback.
+		if d.CaptureDemo && op != 11 && op != 8 && op != 16 {
+			at := len(d.DemoPayload)
+			d.DemoPayload = append(d.DemoPayload, data[start:r.pos]...)
+			if op == 12 {
+				d.DemoPayload[at+9] = 1 // attractloop, as in Yamagi CL_Record_f
+				count := binary.LittleEndian.Uint32(d.DemoPayload[at+5:])
+				binary.LittleEndian.PutUint32(d.DemoPayload[at+5:], count+0x10000)
+			}
 		}
 	}
 	return frames, nil

@@ -61,6 +61,7 @@ type Config struct {
 	TestRunInSpeed                      int
 	Host, Name, GameDir, AASDir         string
 	WorldFile, TracePath, StopFile      string
+	DemoPath                            string
 	System1Model, System2Model          string
 	TestChangeMap, TestRCONPassword     string
 	TestTeleportMap, TestTeleport       string
@@ -135,7 +136,7 @@ func parseTestCampaignGoals(value string) ([]quake.Vec3, error) {
 	return points, nil
 }
 
-func Run(ctx context.Context, cfg Config) error {
+func Run(ctx context.Context, cfg Config) (runErr error) {
 	if cfg.CombatMode == "" {
 		cfg.CombatMode = "rules"
 	}
@@ -454,6 +455,15 @@ func Run(ctx context.Context, cfg Config) error {
 			return err
 		}
 		defer client.traceFile.Close()
+	}
+	if cfg.DemoPath != "" {
+		client.demo = &quake.DemoRecorder{Path: cfg.DemoPath}
+		client.decoder.CaptureDemo = true
+		defer func() {
+			if err := client.demo.Close(); err != nil && runErr == nil {
+				runErr = fmt.Errorf("close demo: %w", err)
+			}
+		}()
 	}
 	if cfg.System2Model != "" {
 		client.strategist = NewStrategist(cfg.System2Model)
