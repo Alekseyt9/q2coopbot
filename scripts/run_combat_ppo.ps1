@@ -8,6 +8,10 @@ param(
     [ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,
     [ValidateSet(0,100)][int]$ReleaseGameFrame=0,
     [switch]$Mixed,
+    [ValidateSet('blaster','machinegun')][string]$Loadout='blaster',
+    [ValidateRange(0,3)][int]$Skill=1,
+    [ValidateSet('uniform','mixed-solo-mixed')][string]$TrainingPattern='uniform',
+    [ValidateSet('standard','remaining-far')][string]$TrainingSoloFixture='standard',
     [ValidateRange(20,500)][int]$GameFrames=300,
     [ValidateRange(1024,65530)][int]$Port=33100,
     [string]$Python='F:/src/strat/.venv-gpu/Scripts/python.exe',
@@ -20,6 +24,9 @@ param(
 $ErrorActionPreference='Stop'
 if($RetentionMode -eq 'constant' -and !$AnchorModel){throw 'Constant retention requires an anchor before collection'}
 if($Mixed -and $TrainingMonsterHealth -ne 0){throw 'Mixed training requires stock monster health'}
+if($TrainingPattern -ne 'uniform' -and (!$Mixed -or $EpisodesPerWorker -ne 3 -or $TrainingMonsterHealth)){throw 'Mixed/Solo training requires Mixed and three episodes per worker without health overrides'}
+if($TrainingSoloFixture -ne 'standard' -and ($TrainingMonsterHealth -or ($Mixed -and $TrainingPattern -eq 'uniform'))){throw 'Remaining-Parasite training requires Solo episodes without health overrides'}
+if($Loadout -eq 'machinegun' -and ($TrainingMonsterHealth -or $TrainingPattern -ne 'uniform' -or $TrainingSoloFixture -ne 'standard')){throw 'Machinegun experiment keeps stock health and uniform fixtures'}
 $repo=Split-Path $PSScriptRoot -Parent
 if(!$Config){$Config=Join-Path $PSScriptRoot 'scenarios/combat-ppo-v1.json'}
 if(!$RewardConfig){$RewardConfig=Join-Path $PSScriptRoot 'scenarios/combat-reward-v1.json'}
@@ -45,7 +52,13 @@ if($InitialBatch){
     $initialManifestPath=Join-Path $InitialBatch 'manifest.json';$initialReportPath=Join-Path $InitialBatch 'report.json'
     $initialManifest=Get-Content -LiteralPath $initialManifestPath -Raw|ConvertFrom-Json
     $initialReport=Get-Content -LiteralPath $initialReportPath -Raw|ConvertFrom-Json
-    $expected=@{model_weights_sha256=(Get-FileHash $Model).Hash;reward_config_sha256=(Get-FileHash $RewardConfig).Hash;training_monster_health=$TrainingMonsterHealth;release_game_frame=$ReleaseGameFrame;timescale=2;game_frames=$GameFrames;workers=4;episodes_per_worker=$EpisodesPerWorker;loadout='blaster';mixed=[bool]$Mixed;synchronous=$true;remote_peer=$false;feedback=$false;health_kit=$false}
+    $expected=@{model_weights_sha256=(Get-FileHash $Model).Hash;reward_config_sha256=(Get-FileHash $RewardConfig).Hash;training_monster_health=$TrainingMonsterHealth;release_game_frame=$ReleaseGameFrame;timescale=2;game_frames=$GameFrames;workers=4;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;mixed=[bool]$Mixed;synchronous=$true;remote_peer=$false;feedback=$false;health_kit=$false}
+    if(!$initialManifest.episode_pattern){$initialPattern='uniform'}else{$initialPattern=$initialManifest.episode_pattern}
+    $initialSkill=if($null -ne $initialManifest.skill){$initialManifest.skill}else{1}
+    if($initialSkill -ne $Skill){throw 'Initial batch mismatch: skill'}
+    if($initialPattern -ne $TrainingPattern){throw 'Initial batch mismatch: episode_pattern'}
+    $initialFixture=if($initialManifest.solo_fixture){$initialManifest.solo_fixture}else{'standard'}
+    if($initialFixture -ne $TrainingSoloFixture){throw 'Initial batch mismatch: solo_fixture'}
     foreach($field in $expected.Keys){if($initialManifest.$field -ne $expected[$field]){throw "Initial batch mismatch: $field"}}
     if(!$initialReport.capture_complete -or !$initialReport.provenance_valid -or $initialReport.completed_episodes -ne $batchEpisodes){throw 'Initial batch incomplete'}
     $actualSeeds=@($initialReport.results|Sort-Object seed|ForEach-Object{if(!$_.seed_confirmed -or !$_.dispatch_valid){throw 'Initial batch seed/dispatch invalid'};[int]$_.seed})
@@ -80,7 +93,7 @@ try{
             $batch=$InitialBatch
             @{batch=$batch;manifest_sha256=$initialManifestSHA;report_sha256=$initialReportSHA;scope='Shared first on-policy batch only; later batches collected from each own resumed policy'}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $dir 'reused-batch.json') -Encoding utf8NoBOM
         }else{
-            & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker $EpisodesPerWorker -Timescale 2 -GameFrames $GameFrames -ReleaseGameFrame $ReleaseGameFrame -Mixed:$Mixed -Loadout blaster -CombatMode learned -ProviderFile $Model -Synchronous -RewardConfig $frozenReward -TrainingMonsterHealth $TrainingMonsterHealth -Seed ($Seed+$batchEpisodes*($iteration-1)) -Port $Port -OutputRoot $batch
+            & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker $EpisodesPerWorker -Timescale 2 -GameFrames $GameFrames -ReleaseGameFrame $ReleaseGameFrame -Mixed:$Mixed -EpisodePattern $TrainingPattern -SoloFixture $TrainingSoloFixture -Loadout $Loadout -Skill $Skill -CombatMode learned -ProviderFile $Model -Synchronous -RewardConfig $frozenReward -TrainingMonsterHealth $TrainingMonsterHealth -Seed ($Seed+$batchEpisodes*($iteration-1)) -Port $Port -OutputRoot $batch
         }
         & $dataTool --batch $batch --model $Model --out $data;if($LASTEXITCODE){throw "Iteration $iteration native replay rejected"}
         $updateArgs=@($trainer,'--model',$Model,'--resume',$Checkpoint,'--data',$data,'--config',$frozen,'--out',$update)
@@ -99,11 +112,11 @@ try{
         $inputModel=if($name -eq 'before'){$initialModel}else{$Model}
         $evalModel=Join-Path $OutputRoot "$name.json";$m=Get-Content $inputModel -Raw|ConvertFrom-Json;$m.deterministic=$true
         $m|ConvertTo-Json -Depth 10|Set-Content -LiteralPath $evalModel -Encoding utf8NoBOM
-        & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker 1 -Timescale 2 -GameFrames $GameFrames -ReleaseGameFrame $ReleaseGameFrame -Mixed:$Mixed -Loadout blaster -CombatMode learned -ProviderFile $evalModel -Synchronous -RewardConfig $frozenReward -Seed $EvalSeed -Port $Port -OutputRoot (Join-Path $OutputRoot "evaluation-$name")
+        & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker 1 -Timescale 2 -GameFrames $GameFrames -ReleaseGameFrame $ReleaseGameFrame -Mixed:$Mixed -Loadout $Loadout -Skill $Skill -CombatMode learned -ProviderFile $evalModel -Synchronous -RewardConfig $frozenReward -Seed $EvalSeed -Port $Port -OutputRoot (Join-Path $OutputRoot "evaluation-$name")
     }
     $reports=@('before','after'|ForEach-Object{Get-Content (Join-Path $OutputRoot "evaluation-$_/report.json") -Raw|ConvertFrom-Json})
     $manifests=@('before','after'|ForEach-Object{Get-Content (Join-Path $OutputRoot "evaluation-$_/manifest.json") -Raw|ConvertFrom-Json})
-    foreach($field in @('release_game_frame','post_frame_rng_reset','source_fingerprint','native_source_fingerprint','game_frames','timescale','loadout','mixed','health_kit','synchronous','reward_config_sha256')){if($manifests[0].$field -ne $manifests[1].$field){throw "Evaluation mismatch $field"}}
+    foreach($field in @('release_game_frame','post_frame_rng_reset','source_fingerprint','native_source_fingerprint','game_frames','timescale','loadout','skill','mixed','health_kit','synchronous','reward_config_sha256')){if($manifests[0].$field -ne $manifests[1].$field){throw "Evaluation mismatch $field"}}
     $pairs=@(foreach($s in $EvalSeed..($EvalSeed+3)){
         $metrics=@(foreach($r in $reports){if(!$r.capture_complete -or !$r.provenance_valid){throw 'Invalid evaluation'}
             $episode=@($r.results|Where-Object seed -eq $s);if($episode.Count -ne 1 -or !$episode[0].dispatch_valid -or !$episode[0].seed_confirmed){throw 'Invalid seed pair'}
@@ -122,7 +135,7 @@ try{
     $diagnostics=Join-Path $OutputRoot 'diagnostics.json'
     & $Python $diagnoser --batch (Join-Path $OutputRoot 'evaluation-before') --batch (Join-Path $OutputRoot 'evaluation-after') --out $diagnostics
     if($LASTEXITCODE){throw 'Evaluation diagnostics failed'}
-    $summary=@{version='combat_ppo_cycle_v1';episodes_per_worker=$EpisodesPerWorker;training_episodes_per_batch=$batchEpisodes;mixed=[bool]$Mixed;release_game_frame=$ReleaseGameFrame;training_monster_health=$TrainingMonsterHealth;evaluation_monster_health=175;iterations=$Iterations;initial_model=$initialModel;initial_checkpoint=$initialCheckpoint;final_model=$Model;final_checkpoint=$Checkpoint;config_sha256=$configSHA;trainer_sha256=$trainerSHA;diagnoser_sha256=$diagnoserSHA;diagnostics=$diagnostics;steps=$steps;evaluation=$pairs;fixture_promotion_eligible=$eligible;fixture_criterion='All four paired after captures valid; native first-life kill >=1 and no observed death; Mixed additionally requires a kill of both Parasite and Gunner in each episode. gameplay_accepted is the legacy rules-specific harness metric, not learned-policy acceptance.';scope='Fresh on-policy batches with optimizer/RNG resume; paired deterministic evaluation only, no live promotion or statistical generalization claim'}
+    $summary=@{version='combat_ppo_cycle_v1';episodes_per_worker=$EpisodesPerWorker;training_pattern=$TrainingPattern;training_solo_fixture=$TrainingSoloFixture;loadout=$Loadout;skill=$Skill;training_episodes_per_batch=$batchEpisodes;mixed=[bool]$Mixed;release_game_frame=$ReleaseGameFrame;training_monster_health=$TrainingMonsterHealth;evaluation_monster_health=175;iterations=$Iterations;initial_model=$initialModel;initial_checkpoint=$initialCheckpoint;final_model=$Model;final_checkpoint=$Checkpoint;config_sha256=$configSHA;trainer_sha256=$trainerSHA;diagnoser_sha256=$diagnoserSHA;diagnostics=$diagnostics;steps=$steps;evaluation=$pairs;fixture_promotion_eligible=$eligible;fixture_criterion='All four paired after captures valid; native first-life kill >=1 and no observed death; Mixed additionally requires a kill of both Parasite and Gunner in each episode. gameplay_accepted is the legacy rules-specific harness metric, not learned-policy acceptance.';scope='Fresh on-policy batches with optimizer/RNG resume; paired deterministic evaluation only, no live promotion or statistical generalization claim'}
     $summary|ConvertTo-Json -Depth 16|Set-Content -LiteralPath (Join-Path $OutputRoot 'report.json') -Encoding utf8NoBOM
     "PPO cycle: $OutputRoot"
 }finally{Pop-Location}

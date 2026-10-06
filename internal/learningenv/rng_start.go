@@ -10,11 +10,24 @@ import (
 )
 
 var rngStartPattern = regexp.MustCompile(`^g_test_rng_start game_frame=(\d+) phase=post_frame seed=(\d+) cursor_before=(\d+) cursor_after=256$`)
-var weaponStartPattern = regexp.MustCompile(`^g_test_weapon_start game_frame=(\d+) actor=1 weapon=Blaster gunframe_before=(\d+) gunframe_after=9$`)
+var weaponStartPattern = regexp.MustCompile(`^g_test_weapon_start game_frame=(\d+) actor=1 weapon=(Blaster|Machinegun) gunframe_before=(\d+) gunframe_after=(\d+)$`)
 
 // VerifyPostFrameRNG verifies the native post-frame seeding receipt. The cursor
 // is a diagnostic, not proof of complete RNG/world snapshot equivalence.
-func VerifyPostFrameRNG(r io.Reader, seed, expectedFrame int) error {
+func VerifyPostFrameRNG(r io.Reader, seed, expectedFrame int, expectedWeapon ...string) error {
+	weapon := "Blaster"
+	if len(expectedWeapon) > 1 {
+		return fmt.Errorf("one fixed weapon expected")
+	}
+	if len(expectedWeapon) == 1 {
+		weapon = expectedWeapon[0]
+	}
+	minFrame, maxFrame := 9, 52
+	if weapon == "Machinegun" {
+		minFrame, maxFrame = 6, 45
+	} else if weapon != "Blaster" {
+		return fmt.Errorf("unsupported fixed weapon")
+	}
 	s := bufio.NewScanner(r)
 	count, releases, frame, releaseFrame := 0, 0, 0, 0
 	weapons := 0
@@ -29,11 +42,15 @@ func VerifyPostFrameRNG(r io.Reader, seed, expectedFrame int) error {
 			if err != nil {
 				return err
 			}
-			g, err := strconv.Atoi(m[2])
+			g, err := strconv.Atoi(m[3])
 			if err != nil {
 				return err
 			}
-			if expectedFrame == 0 || f != expectedFrame || g < 9 || g > 52 {
+			after, err := strconv.Atoi(m[4])
+			if err != nil {
+				return err
+			}
+			if expectedFrame == 0 || f != expectedFrame || m[2] != weapon || g < minFrame || g > maxFrame || after != minFrame {
 				return fmt.Errorf("weapon start differs")
 			}
 			weapons++

@@ -88,6 +88,7 @@ func run() error {
 		TrainingHealth int                      `json:"training_monster_health"`
 		PostFrameRNG   bool                     `json:"post_frame_rng_reset"`
 		ReleaseFrame   int                      `json:"release_game_frame"`
+		Loadout        string                   `json:"loadout"`
 	}
 	if e := read(filepath.Join(*batch, "manifest.json"), &manifest); e != nil {
 		return e
@@ -243,7 +244,11 @@ func run() error {
 			if e != nil {
 				return e
 			}
-			proofErr = learningenv.VerifyPostFrameRNG(logFile, r.Seed, manifest.ReleaseFrame)
+			weapon := "Blaster"
+			if manifest.Loadout == "machinegun" {
+				weapon = "Machinegun"
+			}
+			proofErr = learningenv.VerifyPostFrameRNG(logFile, r.Seed, manifest.ReleaseFrame, weapon)
 			logFile.Close()
 			if proofErr != nil {
 				return proofErr

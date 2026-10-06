@@ -42,3 +42,21 @@ func TestResetVerifiesObservedFieldsAndKeepsHiddenStateUnconfirmed(t *testing.T)
 		t.Fatal("invalid expectation accepted")
 	}
 }
+
+func TestMachinegunResetRejectsWrongAmmo(t *testing.T) {
+	o := damageStep(10).Observation
+	o.Version = policy.ObservationVersion
+	o.Health, o.Ammo, o.OnGround = 100, 100, true
+	o.Weapon = "models/weapons/v_machn/tris.md2"
+	o.Position = quake.Vec3{32, -224, 24.125}
+	visible := true
+	o.Enemies = []policy.Enemy{{Class: "monster_parasite", Relative: quake.Vec3{168, 0, -.125}, ClearShot: &visible}}
+	expected := ResetExpectation{Version: ResetVersion, Map: "base1", Position: quake.Vec3{32, -224, 24}, Health: 100, Ammo: 100, Weapon: "Machinegun", EnemyClass: "monster_parasite", EnemyPosition: quake.Vec3{200, -224, 24}}
+	if r := VerifyReset(o, expected); !r.ObservedFieldsConfirmed || r.FullServerResetConfirmed {
+		t.Fatal(r)
+	}
+	o.Ammo = 99
+	if r := VerifyReset(o, expected); r.ObservedFieldsConfirmed || r.Reason != "reset_resources_mismatch" {
+		t.Fatal("wrong bullet count accepted", r)
+	}
+}

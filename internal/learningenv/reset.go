@@ -36,7 +36,7 @@ type ResetProof struct {
 
 func VerifyReset(o policy.Observation, expected ResetExpectation) ResetProof {
 	r := ResetProof{Version: ResetVersion, Expectation: expected, Unverified: []string{"inventory", "server_rng", "monster_ai_state", "entity_generation", "complete_world_reset"}}
-	if expected.Version != ResetVersion || expected.Map == "" || expected.Health <= 0 || expected.EnemyClass == "" || expected.Weapon != "Shotgun" && expected.Weapon != "Blaster" {
+	if expected.Version != ResetVersion || expected.Map == "" || expected.Health <= 0 || expected.EnemyClass == "" || expected.Weapon != "Shotgun" && expected.Weapon != "Blaster" && expected.Weapon != "Machinegun" {
 		r.Reason = "invalid_or_unsupported_reset_expectation"
 		return r
 	}
@@ -58,7 +58,7 @@ func VerifyReset(o policy.Observation, expected ResetExpectation) ResetProof {
 		r.Reason = "reset_resources_mismatch"
 	case !o.OnGround || o.Ducked || !near(o.Position, expected.Position):
 		r.Reason = "reset_pose_mismatch"
-	case o.Weapon != expected.Weapon && !(expected.Weapon == "Shotgun" && o.Weapon == "models/weapons/v_shotg/tris.md2"):
+	case o.Weapon != expected.Weapon && !(expected.Weapon == "Shotgun" && o.Weapon == "models/weapons/v_shotg/tris.md2") && !(expected.Weapon == "Machinegun" && o.Weapon == "models/weapons/v_machn/tris.md2"):
 		r.Reason = "reset_weapon_mismatch"
 	}
 	if r.Reason != "" {

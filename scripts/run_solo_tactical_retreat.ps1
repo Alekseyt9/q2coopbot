@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet(0,100)][int]$ReleaseGameFrame=0,[ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$Synchronous,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
+param([ValidateSet('standard','remaining-far')][string]$ParasiteFixture='standard',[ValidateSet(0,100)][int]$ReleaseGameFrame=0,[ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$Synchronous,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','machinegun','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
 function Measure-BarrelSafety($Rows,$Events) {
     $actor=$Rows[0].self_entity
@@ -22,8 +22,10 @@ if($CornerEscape -and ($Recovery -or $Group -or $GroupRetreat -or $Circle -or $C
 if($ParasiteWeapon -and ($Recovery -or $CornerEscape -or $Group -or $GroupRetreat -or $Circle -or $Cover)){throw 'ParasiteWeapon is a separate fixture'}
 if(($ParasiteMixed -or $ParasiteHealthKit) -and !$ParasiteWeapon){throw 'Parasite variants require ParasiteWeapon'}
 if($RequireMixedDetour -and (!$ParasiteMixed -or $ParasiteMixedClass -ne 'monster_gunner')){throw 'Required mixed detour needs observed Gunner/Parasite fixture'}
-if($Synchronous -and (!$Rules -or !$CombatCapture -or !$ParasiteWeapon -or $ParasiteLoadout -notin 'blaster','shotgun')){throw 'Synchronous learning requires Rules, CombatCapture and supported ParasiteWeapon equipment'}
+if($Synchronous -and (!$Rules -or !$CombatCapture -or !$ParasiteWeapon -or $ParasiteLoadout -notin 'blaster','machinegun','shotgun')){throw 'Synchronous learning requires Rules, CombatCapture and supported ParasiteWeapon equipment'}
+if($ParasiteLoadout -eq 'machinegun' -and (!$Synchronous -or $CombatMode -eq 'rules' -or $TrainingMonsterHealth)){throw 'Fixed Machinegun requires synchronous learned capture without health override'}
 if($ParasiteLoadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){throw 'Fixed Shotgun exercise requires synchronous rules'}
+if($ParasiteFixture -ne 'standard' -and (!$Synchronous -or !$ParasiteWeapon -or $ParasiteMixed -or $ParasiteHealthKit -or $ParasiteHealth -ne 100 -or $TrainingMonsterHealth -or $ParasiteLoadout -ne 'blaster' -or $CombatMode -ne 'learned')){throw 'Remaining-Parasite fixture requires stock isolated direct synchronous Blaster'}
 if(!$Worker){
     . "$PSScriptRoot/harness_manifest.ps1"
     $fingerprint=Get-HarnessFingerprint (Get-HarnessSourceRecords $repo)
@@ -38,6 +40,7 @@ if(!$Worker){
         $args+=@('-Timescale',$using:Timescale); if($using:Rules){$args+='-Rules'};if($using:CombatCapture){$args+='-CombatCapture'}
         $args+=@('-CombatMode',$using:CombatMode);if($using:ProviderFile){$args+=@('-ProviderFile',$using:ProviderFile)}
         $args+=@('-GameFrames',$using:GameFrames)
+        $args+=@('-ParasiteFixture',$using:ParasiteFixture)
         $args+=@('-TrainingMonsterHealth',$using:TrainingMonsterHealth);$args+=@('-ReleaseGameFrame',$using:ReleaseGameFrame)
         if($using:Synchronous){$args+='-Synchronous'}
         if($using:RequireMixedDetour){$args+='-RequireMixedDetour'}
@@ -100,6 +103,8 @@ try{
     $placement=if($ParasiteWeapon -and $ParasiteLoadout -eq 'rail'){'32,-352,24.125'}elseif($CornerEscape){'-40.375,-426,24.125'}elseif($Cover){'240,-416,24.125'}elseif($GroupRetreat){'128,-304,24'}else{'32,-224,24'}
     $enemyClass=if($Cover -or $Circle -or $GroupRetreat){'monster_infantry'}else{'monster_parasite'}
     $enemyOrigin=if($ParasiteWeapon -and $ParasiteLoadout -eq 'rail'){'240,-160,24'}elseif($CornerEscape){'67.125,-316.875,24'}elseif($Cover){"$CoverTargetX,-224,24"}elseif($GroupRetreat){'192,-304,24'}else{'200,-224,24'}
+    if($ParasiteFixture -eq 'remaining-far'){$placement='-48,16,24';$enemyOrigin='200,-224,24'}
+    $report.parasite_fixture=$ParasiteFixture
     $initialHealth=if($ParasiteWeapon){$ParasiteHealth}elseif($CornerEscape){65}elseif($Recovery){$RecoveryHealth}elseif($Group -or $GroupRetreat){100}elseif($Cover -or $Circle){25}else{0}
     @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};combat=@{mode=$CombatMode;provider_file=$ProviderFile};run=@{duration=$(if($GameFrames){'60s'}else{'15s'});game_frames=$GameFrames;frame_paced=$true;mode='campaign';next_map='base2'};test=@{teleport_map='base1';teleport=$placement;spawn_map='base1';spawn_soldier=$enemyOrigin;spawn_class=$enemyClass;teacher_vertical=[bool]$TeacherVertical;synchronous=[bool]$Synchronous;combat_barrier=[bool]$Synchronous;setup_hold_frames=$(if($Cover -or $Circle -or $GroupRetreat -or $Recovery -or $CornerEscape -or $ParasiteWeapon){10}else{0});initial_health=$initialHealth;weapon_switch_fixture=$(if($ParasiteWeapon){"parasite_$ParasiteLoadout"}else{""})};output=@{trace_jsonl=$trace;combat_capture=[bool]$CombatCapture}}|ConvertTo-Json -Depth 6|Set-Content $config
     $bot=Start-Process $Client -ArgumentList "--config `"$config`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
@@ -127,7 +132,7 @@ try{
         $report.mixed_detour=@{frames=$detour.Count;actual_moving_steps=$moved;enemy_aim_attack_frames=@($detour|Where-Object {$_.arbitration.aim_source -eq 'enemy' -and ($_.sent_command.Buttons -band 1)}).Count;scope='Bounded risk tradeoff past observed threats; no grenade splash protection or permanent group survival guarantee'}
         if($RequireMixedDetour -and ($detour.Count -lt 2 -or $moved -lt 2)){throw 'Actual native mixed corner detour absent'}
     }
-    if($ParasiteWeapon -and $ParasiteLoadout -ne 'shotgun'){
+    if($ParasiteWeapon -and $ParasiteLoadout -notin 'shotgun','machinegun'){
         $expected=switch($ParasiteLoadout){stocked{'Machinegun'};scarce{'Machinegun'};hyper{'HyperBlaster'};rail{'Railgun'};default{'Blaster'}}
         $expectedModel=switch($ParasiteLoadout){stocked{'*/v_machn/*'};scarce{'*/v_machn/*'};hyper{'*/v_hyperb/*'};rail{'*/v_rail/*'};default{'Blaster'}}
         $request=@($rows|Where-Object {$_.weapon_request -eq "use $expected" -and $_.weapon_reason -eq 'parasite_retreat_range' -and $_.weapon -like '*/v_shotg/*' -and $_.ammo -gt 0 -and $_.inventory_known -and $_.inventory_age_frames -le 20 -and @($_.enemies|Where-Object {$_.class -eq 'monster_parasite' -and $_.clear_shot}).Count}|Select-Object -First 1)
@@ -342,6 +347,7 @@ try{
     if($Circle -and $report.circle_health_damage -le 0){throw 'Native damage from circle projectiles absent'}
     if($Cover -and $report.cover_window_health_damage -le 0){throw 'Native monster damage in cover firing window absent'};if($ParasiteWeapon){$report.scope="Prepared native Parasite and loaded Shotgun, automatic ranged-weapon selection from observed inventory, actual retreat/fire and native kill; no general group or campaign acceptance"}elseif($CornerEscape){$report.scope="Prepared native Parasite, skill $RecoverySkill at the recorded fatal corner, 65HP as after the used kit; Go bounded escape with actual movement/fire and native kill, no full recovery or general campaign acceptance"}elseif($Recovery){$report.scope="Prepared ${initialHealth}HP solo actor, skill $RecoverySkill vulnerable Parasite and native 25HP kit; Go recovery movement with attributed fire, item heal and resumed combat; no remembered hidden-item or general campaign acceptance"}elseif($GroupRetreat){$report.scope='Prepared two vulnerable infantry: close primary and rear flank, live retreat, actual spacing and attributed bolt damage; no mixed group or general campaign acceptance'}elseif(!$Cover -and !$Circle){$report.scope='Prepared single vulnerable native parasite, ordinary solo campaign commands; model-selected retreat plus shooting and observed movement, not general campaign acceptance'};$report.accepted=$true;$report.reason='accepted'
     if($ParasiteWeapon -and $ParasiteLoadout -eq 'shotgun'){$report.scope='Prepared fixed Shotgun teacher exercise; observed rules aim/fire and native hitscan damage, no learned policy or weapon-choice acceptance'}
+    if($ParasiteWeapon -and $ParasiteLoadout -eq 'machinegun'){$report.scope='Prepared fixed Machinegun with 100 bullets, stock recoil/spread and native ammo depletion; learned movement/aim/fire, no learned weapon-choice acceptance'}
 }catch{
     $report.reason=$_.Exception.Message
     # Keep server ground truth even when gameplay acceptance fails early.

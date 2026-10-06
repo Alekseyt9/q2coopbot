@@ -11,6 +11,8 @@ func synchronousFixtureWeaponReady(fixture string, s quake.Snapshot) bool {
 	switch fixture {
 	case "parasite_blaster":
 		return s.Weapon == "Blaster"
+	case "parasite_machinegun":
+		return machinegunWeapon(s.Weapon) && s.Ammo == 100 && inventoryCount(s, "Bullets") == 100
 	case "parasite_shotgun":
 		return (s.Weapon == "Shotgun" || s.Weapon == "models/weapons/v_shotg/tris.md2") && s.Ammo == 20 && inventoryCount(s, "Shells") == 20
 	default:

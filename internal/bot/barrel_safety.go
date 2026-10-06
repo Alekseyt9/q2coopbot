@@ -10,7 +10,7 @@ import (
 // not assumed to protect from splash. Custom damage and unseen barrels remain
 // outside this observed-state check.
 func (p *Planner) guardBarrelShot(s quake.Snapshot, cmd quake.UserCmd) quake.UserCmd {
-	if s.Health <= 0 || s.Weapon != "Blaster" || cmd.Buttons&1 == 0 {
+	if s.Health <= 0 || (s.Weapon != "Blaster" && !machinegunWeapon(s.Weapon)) || cmd.Buttons&1 == 0 {
 		return cmd
 	}
 	yaw := float64(int16(uint16(cmd.Yaw)+uint16(s.DeltaAngles[1]))) * 2 * math.Pi / 65536
@@ -19,18 +19,28 @@ func (p *Planner) guardBarrelShot(s quake.Snapshot, cmd quake.UserCmd) quake.Use
 	start := s.Self
 	start[2] += s.EyePoint()[2] - s.Self[2] - 8
 	end := start
-	for i := range start {
-		start[i] += 24 * f[i]
-		end[i] = start[i] + 1000*f[i] // Include overshoot if the enemy dodges.
+	rangeLimit := 1000.0
+	if machinegunWeapon(s.Weapon) {
+		rangeLimit = 8192
 	}
-	if p.World.Geometry != nil {
+	for i := range start {
+		if !machinegunWeapon(s.Weapon) {
+			start[i] += 24 * f[i]
+		}
+		end[i] = start[i] + rangeLimit*f[i]
+	}
+	if p.World.Geometry != nil && !machinegunWeapon(s.Weapon) {
 		tr := p.World.Geometry.TraceProjectile(start, end)
 		if tr.Valid {
 			end = tr.End
 		}
 	}
 	for index, barrel := range s.Barrels {
-		if !barrelRay(s.Self, start, barrel.Origin) && !barrelRay(start, end, barrel.Origin) {
+		intersects := barrelRay(s.Self, start, barrel.Origin) || barrelRay(start, end, barrel.Origin)
+		if machinegunWeapon(s.Weapon) {
+			intersects = barrelRay(s.Self, start, barrel.Origin) || machinegunBarrelCone(start, end, barrel.Origin)
+		}
+		if !intersects {
 			continue
 		}
 		queue := []int{index}
@@ -85,4 +95,29 @@ func barrelRay(from, to, at quake.Vec3) bool {
 		}
 	}
 	return true
+}
+
+// Stock Machinegun kick is bounded at 13.5 degrees; bullet spread and yaw
+// kick fit within this conservative 18-degree cone. The barrel sphere encloses
+// its padded observed box; the extra 12 covers muzzle offset/quantization.
+// This neither corrects aim nor assumes central-ray walls block spread rays.
+func machinegunBarrelCone(from, to, at quake.Vec3) bool {
+	length := quake.Distance(from, to)
+	if length == 0 {
+		return false
+	}
+	center := at
+	center[2] += 20
+	along, distance2 := 0.0, 0.0
+	for i := range from {
+		d := center[i] - from[i]
+		along += d * (to[i] - from[i]) / length
+		distance2 += d * d
+	}
+	radius := math.Sqrt(24*24+24*24+28*28) + 12
+	if along < -radius || along > length+radius {
+		return false
+	}
+	width := radius + math.Max(0, along)*math.Tan(18*math.Pi/180)
+	return math.Max(0, distance2-along*along) <= width*width
 }
