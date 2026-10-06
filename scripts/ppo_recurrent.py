@@ -163,8 +163,8 @@ def main():
         cp=torch.load(args.resume,map_location='cpu',weights_only=True)
         assert cp['version']=='combat_architecture_checkpoint_v1' and cp['architecture']==expected_version and cp['weights_sha256']==sha(args.model) and cp['config']==config
         assert cp['anchor_sha256']==sha(args.anchor_model) and cp['bank_sha256']==sha(args.retention_bank)
-        for key,module in [('actor',actor),('value',value)]:
-            assert all(torch.equal(v.cpu(),cp[key][k].cpu()) for k,v in module.state_dict().items())
+        for module_name,module in [('actor',actor),('value',value)]:
+            assert all(torch.equal(v.cpu(),cp[module_name][k].cpu()) for k,v in module.state_dict().items())
         assert torch.equal(std.detach().cpu(),cp['log_std'].cpu())
         consumed=cp['consumed_rollouts'];assert meta['rollout_sha256'] not in consumed
         updates=cp['updates_completed'];total=cp['total_actor_steps']
