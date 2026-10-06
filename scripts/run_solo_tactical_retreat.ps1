@@ -79,7 +79,9 @@ if($Group -or $GroupRetreat -or $ParasiteMixed){
     # The second vulnerable native actor is a startup fixture, not a later
     # gameplay intervention. Original BSP/AAS and mover physics are unchanged.
     $entityPath=Join-Path $runtime 'baseq2/maps/base1.ent'
-    $flankOrigin=if($ParasiteMixed){'96 -200 24'}elseif($GroupRetreat){'32 -352 24'}else{'200 -320 24'}
+    # Keep fixed-release actors above the floor plane. Their deferred native
+    # startup skips the level.time < 1 droptofloor path; z=24 starts solid.
+    $flankOrigin=if($ParasiteMixed){'96 -200 24.125'}elseif($GroupRetreat){'32 -352 24'}else{'200 -320 24'}
     $flankClass=if($ParasiteMixed){$ParasiteMixedClass}else{'monster_infantry'}
     [IO.File]::AppendAllText($entityPath,"`n{`n`"classname`" `"$flankClass`"`n`"origin`" `"$flankOrigin`"`n}`n",[Text.Encoding]::ASCII)
 }
@@ -89,7 +91,7 @@ try{
     $args="-portable +set ip 127.0.0.1 +set noipx 1 +set dedicated 1 +set coop 1 +set deathmatch 0 +set cheats 1 +set maxclients 4 +set port $Port +set timescale $Timescale +set rcon_password $env:Q2COOPBOT_TEST_RCON +set sv_test_unlimited_loopback 1 +set g_test_damage 1 +set g_test_seed $Seed +map base1"
     if($CombatCapture -and !$Synchronous){$args=$args.Replace('+map base1','+set sv_test_trace_client SoloRetreatBot +map base1')}
     if($Synchronous){
-        @("set sv_harness_instance learning-$Seed",'set sv_test_trace_client SoloRetreatBot','set sv_test_lockstep_client SoloRetreatBot','set g_test_combat_barrier 1','set g_test_combat_clients 1',"set g_test_combat_monster_health $TrainingMonsterHealth","set g_test_combat_release_frame $ReleaseGameFrame")|Set-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Encoding ascii
+        @("set sv_harness_instance learning-$Seed",'set sv_test_trace_client SoloRetreatBot','set sv_test_lockstep_client SoloRetreatBot','set g_test_combat_barrier 1','set g_test_combat_clients 1','set g_test_monster_no_infighting 1',"set g_test_combat_monster_health $TrainingMonsterHealth","set g_test_combat_release_frame $ReleaseGameFrame")|Set-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Encoding ascii
         $args=$args.Replace('+map base1','+exec learning-test.cfg +map base1')
     }
     if($Recovery -or $CornerEscape -or $ParasiteWeapon){$args=$args.Replace('+map base1',"+set skill $RecoverySkill +map base1");$report.skill=$RecoverySkill;$report.initial_health=$(if($CornerEscape){65}elseif($ParasiteWeapon){$ParasiteHealth}else{$RecoveryHealth})}
@@ -102,7 +104,7 @@ try{
     $config=Join-Path $OutputRoot 'bot-config.json'
     $placement=if($ParasiteWeapon -and $ParasiteLoadout -eq 'rail'){'32,-352,24.125'}elseif($CornerEscape){'-40.375,-426,24.125'}elseif($Cover){'240,-416,24.125'}elseif($GroupRetreat){'128,-304,24'}else{'32,-224,24'}
     $enemyClass=if($Cover -or $Circle -or $GroupRetreat){'monster_infantry'}else{'monster_parasite'}
-    $enemyOrigin=if($ParasiteWeapon -and $ParasiteLoadout -eq 'rail'){'240,-160,24'}elseif($CornerEscape){'67.125,-316.875,24'}elseif($Cover){"$CoverTargetX,-224,24"}elseif($GroupRetreat){'192,-304,24'}else{'200,-224,24'}
+    $enemyOrigin=if($ParasiteWeapon -and $ParasiteLoadout -eq 'rail'){'240,-160,24'}elseif($CornerEscape){'67.125,-316.875,24'}elseif($Cover){"$CoverTargetX,-224,24"}elseif($GroupRetreat){'192,-304,24'}else{'200,-224,24.125'}
     if($ParasiteFixture -eq 'remaining-far'){$placement='-48,16,24';$enemyOrigin='200,-224,24'}
     $report.parasite_fixture=$ParasiteFixture
     $initialHealth=if($ParasiteWeapon){$ParasiteHealth}elseif($CornerEscape){65}elseif($Recovery){$RecoveryHealth}elseif($Group -or $GroupRetreat){100}elseif($Cover -or $Circle){25}else{0}
@@ -374,3 +376,4 @@ finally{
     $report|ConvertTo-Json -Depth 8|Set-Content (Join-Path $OutputRoot 'report.json')
 }
 if(!$report.accepted){throw $report.reason}
+

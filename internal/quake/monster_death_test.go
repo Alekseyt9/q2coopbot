@@ -2,6 +2,26 @@ package quake
 
 import "testing"
 
+func TestMonsterDeadForDemo(t *testing.T) {
+	for _, tc := range []struct {
+		path  string
+		frame int
+		dead  bool
+	}{
+		{"models/monsters/soldier/tris.md2", 271, false},
+		{"models/monsters/soldier/tris.md2", 272, true},
+		{"models/monsters/soldier/tris.md2", 474, true},
+		{"models/monsters/soldier/tris.md2", 10, false},
+		{"models/monsters/infantry/tris.md2", 178, true},
+		{"models/monsters/custom/tris.md2", 178, false},
+		{"models/items/tris.md2", 178, false},
+	} {
+		if got := MonsterDead(tc.path, tc.frame); got != tc.dead {
+			t.Fatalf("%s frame %d: dead=%v", tc.path, tc.frame, got)
+		}
+	}
+}
+
 func TestMonsterDeathBoundariesAndModelNames(t *testing.T) {
 	for _, tc := range []struct {
 		model       string

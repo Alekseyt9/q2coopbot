@@ -90,14 +90,14 @@ func parsePolygons(data []byte, name, source string, floorsOnly bool) (MapOutlin
 	f32 := func(b []byte) float64 { return float64(math.Float32frombits(binary.LittleEndian.Uint32(b))) }
 	faceModels := make([]int, len(faces)/20)
 	if !floorsOnly {
-		models, err := lump(13, 64)
+		models, err := lump(13, 48)
 		if err != nil {
 			return out, err
 		}
-		for model := 1; model < len(models)/64; model++ {
-			row := models[model*64:]
-			first := int(int32(binary.LittleEndian.Uint32(row[56:])))
-			count := int(int32(binary.LittleEndian.Uint32(row[60:])))
+		for model := 1; model < len(models)/48; model++ {
+			row := models[model*48:]
+			first := int(int32(binary.LittleEndian.Uint32(row[40:])))
+			count := int(int32(binary.LittleEndian.Uint32(row[44:])))
 			if first < 0 || count < 0 || first+count > len(faceModels) {
 				return out, fmt.Errorf("invalid BSP model faces")
 			}

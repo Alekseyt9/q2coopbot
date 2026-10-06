@@ -25,18 +25,19 @@ type demoEntity struct {
 	Solid  uint16     `json:"solid"`
 }
 type demoFrame struct {
-	Map      string       `json:"map"`
-	Frame    int          `json:"frame"`
-	Self     quake.Vec3   `json:"self"`
-	Eye      quake.Vec3   `json:"eye"`
-	Angles   quake.Vec3   `json:"angles"`
-	FOV      float64      `json:"fov"`
-	Health   int16        `json:"health"`
-	Armor    int16        `json:"armor"`
-	Ammo     int16        `json:"ammo"`
-	Weapon   string       `json:"weapon"`
-	GunFrame int          `json:"gun_frame"`
-	Entities []demoEntity `json:"entities"`
+	Map          string       `json:"map"`
+	Frame        int          `json:"frame"`
+	Self         quake.Vec3   `json:"self"`
+	SelfVelocity quake.Vec3   `json:"self_velocity"`
+	Eye          quake.Vec3   `json:"eye"`
+	Angles       quake.Vec3   `json:"angles"`
+	FOV          float64      `json:"fov"`
+	Health       int16        `json:"health"`
+	Armor        int16        `json:"armor"`
+	Ammo         int16        `json:"ammo"`
+	Weapon       string       `json:"weapon"`
+	GunFrame     int          `json:"gun_frame"`
+	Entities     []demoEntity `json:"entities"`
 }
 type cachedDemo struct {
 	size         int64
@@ -89,6 +90,7 @@ func readDemo(path string) ([]demoFrame, bool, error) {
 		}
 		for _, f := range decoded {
 			frame := demoFrame{Map: decoder.Map, Frame: f.Number, Self: f.Origin, Angles: quake.Vec3{}, FOV: f.FOV, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], GunFrame: f.GunFrame, Weapon: decoder.Config[32+f.Gun], Entities: make([]demoEntity, 0, len(f.Entities))}
+			frame.SelfVelocity = f.Velocity
 			for axis := range frame.Eye {
 				frame.Eye[axis] = f.Origin[axis] + f.ViewOffset[axis]
 				frame.Angles[axis] = float64(f.ViewAngles[axis]) * 360 / 65536
@@ -106,7 +108,11 @@ func readDemo(path string) ([]demoFrame, bool, error) {
 				if id == decoder.PlayerNumber || e.Model == 0 {
 					continue
 				}
-				frame.Entities = append(frame.Entities, demoEntity{id, decoder.Config[32+e.Model], e.Origin, e.Angles, e.Frame, e.Solid})
+				modelPath := decoder.Config[32+e.Model]
+				if quake.MonsterDead(modelPath, e.Frame) {
+					continue
+				}
+				frame.Entities = append(frame.Entities, demoEntity{id, modelPath, e.Origin, e.Angles, e.Frame, e.Solid})
 			}
 			frames = append(frames, frame)
 		}
@@ -222,6 +228,15 @@ func (s *server) demoData(path string) (*cachedDemo, error) {
 	}
 	entry = &cachedDemo{info.Size(), info.ModTime().UnixNano(), body, zipped, etag, maps, len(frames), complete}
 	s.demoCache[path] = entry
+	// Keep decoded playback memory bounded as the user browses many runs.
+	if len(s.demoCache) > 8 {
+		for key := range s.demoCache {
+			if key != path {
+				delete(s.demoCache, key)
+				break
+			}
+		}
+	}
 	return entry, nil
 }
 func (s *server) serveDemos(w http.ResponseWriter, r *http.Request) {

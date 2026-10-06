@@ -39,6 +39,25 @@ func TestOutlineFloorAndInvalidEdge(t *testing.T) {
 	if e != nil || len(outline.Floors) != 1 || outline.Floors[0][1][0] != 64 {
 		t.Fatalf("outline=%+v error=%v", outline, e)
 	}
+	// Inline models are 48-byte Quake II dmodels, including firstface/numfaces.
+	models := make([]byte, 96)
+	binary.LittleEndian.PutUint32(models[48+44:], 1)
+	add(13, models)
+	geometry, err := parsePolygons(data, "test", "fixture", false)
+	if err != nil || len(geometry.Floors) != 1 || len(geometry.FaceModels) != 1 || geometry.FaceModels[0] != 1 {
+		t.Fatalf("inline model geometry: %+v %v", geometry, err)
+	}
+	planeOffset := int(binary.LittleEndian.Uint32(data[8+1*8:]))
+	binary.LittleEndian.PutUint32(data[planeOffset+8:], 0)
+	geometry, err = parsePolygons(data, "test", "fixture", false)
+	if err != nil || len(geometry.Floors) != 1 {
+		t.Fatal("vertical face missing from 3D geometry", err)
+	}
+	outline, err = parseOutline(data, "test", "fixture")
+	if err != nil || len(outline.Floors) != 0 {
+		t.Fatal("vertical face leaked into floor outline", err)
+	}
+	binary.LittleEndian.PutUint32(data[planeOffset+8:], math.Float32bits(1))
 	off := int(binary.LittleEndian.Uint32(data[8+12*8:]))
 	binary.LittleEndian.PutUint32(data[off:], 999)
 	if _, e = parseOutline(data, "test", "fixture"); e == nil {

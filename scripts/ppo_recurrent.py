@@ -1,5 +1,5 @@
 """Residual GRU PPO: Go inference, full provider context, CUDA-only TBPTT."""
-import argparse,copy,json,pathlib,time
+import argparse,copy,json,math,pathlib,time
 from ppo_combat import torch,nn,network,layers,sha,training_devices,advantages,validate_objective,anchor_kl,guarded_actor_step
 from combat_retention_bank import read as read_bank,validate as validate_bank
 from combat_attention import CausalAttention,EntityAttention,initialize_attention,TEMPORAL,ENTITY
@@ -101,7 +101,9 @@ def main():
     ap=argparse.ArgumentParser();ap.add_argument('--model',required=True,type=pathlib.Path);ap.add_argument('--out',required=True,type=pathlib.Path)
     ap.add_argument('--init',action='store_true');ap.add_argument('--architecture',choices=('gru','attention','entity'),default='gru');ap.add_argument('--width',type=int,default=64);ap.add_argument('--data',type=pathlib.Path);ap.add_argument('--config',type=pathlib.Path);ap.add_argument('--resume',type=pathlib.Path)
     ap.add_argument('--anchor-model',type=pathlib.Path);ap.add_argument('--retention-bank',type=pathlib.Path)
+    ap.add_argument('--retention-weight',type=float,default=1.);ap.add_argument('--bank-weight',type=float,default=1.)
     args=ap.parse_args();training_devices();torch.set_num_threads(2);torch.manual_seed(20261006);torch.use_deterministic_algorithms(True)
+    assert all(math.isfinite(w) and w >= 0 for w in (args.retention_weight,args.bank_weight))
     # cuDNN GRU TF32 drifts from Go FP64 by ~2e-3 on real traces.
     # Keep FP32 CUDA training and the existing state parity tolerance.
     torch.backends.cudnn.allow_tf32=False;torch.backends.cuda.matmul.allow_tf32=False
@@ -156,13 +158,14 @@ def main():
     def objective():
         raw,_=compute(actor);lp,entropy=probabilities(raw,std,z,attack,vertical);ratio=(lp-old).exp()
         loss=-torch.minimum(ratio*ad,ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*entropy.mean()
-        return loss+anchor_kl(raw,std,teacher,teacher_std)+bank_loss(),((ratio-1)-(lp-old)).mean()
+        return loss+args.retention_weight*anchor_kl(raw,std,teacher,teacher_std)+args.bank_weight*bank_loss(),((ratio-1)-(lp-old)).mean()
     actor_opt=torch.optim.Adam(list(actor.parameters())+[std],lr=config['actor_lr']);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
     consumed=[];updates=0;total=0
     if args.resume:
         cp=torch.load(args.resume,map_location='cpu',weights_only=True)
         assert cp['version']=='combat_architecture_checkpoint_v1' and cp['architecture']==expected_version and cp['weights_sha256']==sha(args.model) and cp['config']==config
         assert cp['anchor_sha256']==sha(args.anchor_model) and cp['bank_sha256']==sha(args.retention_bank)
+        assert cp.get('retention_weights',[1.,1.])==[args.retention_weight,args.bank_weight]
         for module_name,module in [('actor',actor),('value',value)]:
             assert all(torch.equal(v.cpu(),cp[module_name][k].cpu()) for k,v in module.state_dict().items())
         assert torch.equal(std.detach().cpu(),cp['log_std'].cpu())
@@ -193,8 +196,10 @@ def main():
     assert sha(args.data/'rollout.jsonl')==meta['rollout_sha256']
     args.out.mkdir(exist_ok=False);(args.out/'weights.json').write_text(json.dumps(updated,allow_nan=False))
     cp={'version':'combat_architecture_checkpoint_v1','architecture':expected_version,'weights_sha256':sha(args.out/'weights.json'),'config':config,'anchor_sha256':sha(args.anchor_model),'bank_sha256':sha(args.retention_bank),'actor':actor.state_dict(),'value':value.state_dict(),'log_std':std.detach(),'actor_optimizer':actor_opt.state_dict(),'value_optimizer':value_opt.state_dict(),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all(),'consumed_rollouts':consumed+[meta['rollout_sha256']],'updates_completed':updates+1,'total_actor_steps':total+done}
+    cp['retention_weights']=[args.retention_weight,args.bank_weight]
     torch.save(cp,args.out/'checkpoint.pt');(args.out/'trainer.py').write_bytes(pathlib.Path(__file__).read_bytes())
     report={'architecture':expected_version,'device':'cuda','torch':torch.__version__,'rows':len(rows),'sequence_rows':len(context),'sequences':len(prepared[3]) if prepared else 0,'bptt_steps':bptt if key=='memory' else None,'actor_steps':done,'total_actor_steps':total+done,'updates_completed':updates+1,'actor_trials':trials,'final_approx_kl':float(kl),'old_log_probability_max_error':log_error,'old_value_max_error':value_error,'old_actor_memory_max_error':actor_state_error,'old_value_memory_max_error':value_state_error,'bank_kl_before':initial_bank,'bank_kl_after':final_bank,'seconds':seconds,'weights_sha256':sha(args.out/'weights.json'),'behavior_sha256':sha(args.model),'rollout_sha256':meta['rollout_sha256'],'sequence_sha256':meta.get('sequence_sha256'),'trainer_sha256':sha(pathlib.Path(__file__)),'config_sha256':sha(args.config),'resume_sha256':sha(args.resume) if args.resume else None,'anchor_sha256':sha(args.anchor_model),'bank_sha256':sha(args.retention_bank),'actor_parameters':sum(p.numel() for p in actor.parameters())+std.numel(),'critic_parameters':sum(p.numel() for p in value.parameters()),'scope':'Fresh on-policy architecture PPO. GRU replays all provider context with current-model prefixes, detached every32 frames. Temporal attention is causal/window32; entity attention uses only current v4 values. Loss only on native eligible rows. Bank has no histories: retention measured at zero memory. No learned weapon choice or live promotion.'}
+    report['retention_weight']=args.retention_weight;report['bank_weight']=args.bank_weight
     (args.out/'report.json').write_text(json.dumps(report,indent=2,allow_nan=False));print(json.dumps(report,indent=2))
 
 if __name__=='__main__':main()

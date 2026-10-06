@@ -37,7 +37,9 @@ Root: `workspace/artifacts/combat-architecture-v2-20261006`. `protocol.json` с�
 
 ## Последующие результаты
 
-После update10, прежние monitor seeds; partial native/ownership audit, итоговый цикл ещё идёт:
+**Ограничение выявлено при просмотре демки 2026-10-06:** позиции монстров `z=24` в fixed-release fixture совпадали с плоскостью пола и давали native startsolid. Barrier откладывал startup до level.time≈10, поэтому stock `walkmonster_start_go` пропускал droptofloor (`level.time < 1`). Анимации/атаки продолжались, но оба монстра не перемещались. Эти таблицы описывают прежний fixture с неподвижными монстрами; они не подтверждают качество полноценного боя с преследованием. Frozen source и результаты сохранены для аудита. В текущем harness стандартный Parasite и Mixed Gunner подняты на0.125 units. Отдельный повтор seed28100 на x1 подтвердил движение обоих и гибель Temporal10 без убийств. Продолжать старый20-update опыт как полноценное сравнение нельзя; необходим новый опыт с исправленным fixture и проверкой мобильности.
+
+После update10, прежние monitor seeds; partial native/ownership audit. Продолжение остановилось на проверке GRU11 до оптимизации: critic recurrent-state parity error9.687244892120361e-05 превысил допуск2e-05 при отключённом TF32. MLP11 завершён, остальные ветки имеют10 updates; итоговых20-update результатов ещё нет. Допуски не ослаблены.
 
 | Вариант | Mixed skill1 | Solo skill1 | Solo skill3 |
 |---|---|---|---|
