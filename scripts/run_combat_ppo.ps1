@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory)][string]$Model,
     [Parameter(Mandatory)][string]$Checkpoint,
     [ValidateRange(1,20)][int]$Iterations=4,
+    [ValidateRange(1,20)][int]$EpisodesPerWorker=1,
     [int]$Seed=13600,[int]$EvalSeed=13700,
     [ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,
     [ValidateSet(0,100)][int]$ReleaseGameFrame=0,
@@ -12,7 +13,9 @@ param(
     [string]$Python='F:/src/strat/.venv-gpu/Scripts/python.exe',
     [string]$Config='',[string]$RewardConfig='',[string]$OutputRoot='',
     [string]$AnchorModel='',[double]$RetentionWeight=1.,[ValidateRange(2,100)][int]$RetentionUpdates=4,
-    [ValidateSet('linear','constant')][string]$RetentionMode='linear'
+    [ValidateSet('linear','constant')][string]$RetentionMode='linear',
+    [string]$InitialBatch='',
+    [string]$RetentionBank='',[double]$BankWeight=1.
 )
 $ErrorActionPreference='Stop'
 if($RetentionMode -eq 'constant' -and !$AnchorModel){throw 'Constant retention requires an anchor before collection'}
@@ -28,8 +31,27 @@ $trainingObjective=(Get-Content -LiteralPath $Config -Raw|ConvertFrom-Json).obje
 $rewardVersion=(Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json).version
 if(($rewardVersion -in @('combat_reward_v2','combat_reward_v3','combat_reward_v4') -and !$trainingObjective) -or ($trainingObjective -and $trainingObjective -ne (Get-FileHash -LiteralPath $RewardConfig).Hash)){throw 'Training objective must match reward config before collection'}
 if($rewardVersion -in @('combat_reward_v3','combat_reward_v4') -and (Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json).aim_gamma -ne (Get-Content -LiteralPath $Config -Raw|ConvertFrom-Json).gamma){throw 'Shaping gamma must match PPO before collection'}
-if($Seed -lt 0 -or [long]$Seed+4*$Iterations-1 -gt 2147483647 -or $EvalSeed -lt 0 -or [long]$EvalSeed+3 -gt 2147483647){throw 'Valid independent seeds required'}
-if($EvalSeed -le $Seed+4*$Iterations-1 -and $EvalSeed+3 -ge $Seed){throw 'Evaluation seeds overlap training'}
+$batchEpisodes=4*$EpisodesPerWorker
+if($Seed -lt 0 -or [long]$Seed+$batchEpisodes*$Iterations-1 -gt 2147483647 -or $EvalSeed -lt 0 -or [long]$EvalSeed+3 -gt 2147483647){throw 'Valid independent seeds required'}
+if($EvalSeed -le $Seed+$batchEpisodes*$Iterations-1 -and $EvalSeed+3 -ge $Seed){throw 'Evaluation seeds overlap training'}
+if($RetentionBank){
+    if(!$AnchorModel -or [double]::IsNaN($BankWeight) -or [double]::IsInfinity($BankWeight) -or $BankWeight -le 0){throw 'Bank requires pinned anchor and positive finite weight'}
+    $RetentionBank=(Resolve-Path -LiteralPath $RetentionBank).Path;$bankSHA=(Get-FileHash $RetentionBank).Hash
+    & $Python (Join-Path $PSScriptRoot 'combat_retention_bank.py') --validate $RetentionBank --anchor-model $AnchorModel --ppo-seed $Seed --eval-seed $EvalSeed --iterations $Iterations --episodes-per-worker $EpisodesPerWorker
+    if($LASTEXITCODE){throw 'Bank validation failed before collection'}
+}
+if($InitialBatch){
+    $InitialBatch=(Resolve-Path -LiteralPath $InitialBatch).Path
+    $initialManifestPath=Join-Path $InitialBatch 'manifest.json';$initialReportPath=Join-Path $InitialBatch 'report.json'
+    $initialManifest=Get-Content -LiteralPath $initialManifestPath -Raw|ConvertFrom-Json
+    $initialReport=Get-Content -LiteralPath $initialReportPath -Raw|ConvertFrom-Json
+    $expected=@{model_weights_sha256=(Get-FileHash $Model).Hash;reward_config_sha256=(Get-FileHash $RewardConfig).Hash;training_monster_health=$TrainingMonsterHealth;release_game_frame=$ReleaseGameFrame;timescale=2;game_frames=$GameFrames;workers=4;episodes_per_worker=$EpisodesPerWorker;loadout='blaster';mixed=[bool]$Mixed;synchronous=$true;remote_peer=$false;feedback=$false;health_kit=$false}
+    foreach($field in $expected.Keys){if($initialManifest.$field -ne $expected[$field]){throw "Initial batch mismatch: $field"}}
+    if(!$initialReport.capture_complete -or !$initialReport.provenance_valid -or $initialReport.completed_episodes -ne $batchEpisodes){throw 'Initial batch incomplete'}
+    $actualSeeds=@($initialReport.results|Sort-Object seed|ForEach-Object{if(!$_.seed_confirmed -or !$_.dispatch_valid){throw 'Initial batch seed/dispatch invalid'};[int]$_.seed})
+    if(($actualSeeds -join ',') -ne (($Seed..($Seed+$batchEpisodes-1)) -join ',')){throw 'Initial batch seeds mismatch'}
+    $initialManifestSHA=(Get-FileHash $initialManifestPath).Hash;$initialReportSHA=(Get-FileHash $initialReportPath).Hash
+}
 if(!$OutputRoot){$OutputRoot=Join-Path $repo ('workspace/artifacts/combat-ppo-cycle-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))}
 if(Test-Path -LiteralPath $OutputRoot){throw 'Fresh output required'}
 New-Item -ItemType Directory -Path $OutputRoot|Out-Null;$OutputRoot=(Resolve-Path -LiteralPath $OutputRoot).Path
@@ -38,6 +60,8 @@ $frozenReward=Join-Path $OutputRoot 'reward-config.json';Copy-Item -LiteralPath 
 $rewardSHA=(Get-FileHash -LiteralPath $frozenReward).Hash
 $configSHA=(Get-FileHash -LiteralPath $frozen).Hash;$trainer=Join-Path $PSScriptRoot 'ppo_combat.py';$trainerSHA=(Get-FileHash -LiteralPath $trainer).Hash
 Copy-Item -LiteralPath $trainer -Destination (Join-Path $OutputRoot 'trainer.py')
+$bankHelper=Join-Path $PSScriptRoot 'combat_retention_bank.py';$bankHelperSHA=(Get-FileHash $bankHelper).Hash
+Copy-Item -LiteralPath $bankHelper -Destination (Join-Path $OutputRoot 'bank-helper.py')
 $diagnoser=Join-Path $PSScriptRoot 'diagnose_combat.py';$diagnoserSHA=(Get-FileHash -LiteralPath $diagnoser).Hash
 Copy-Item -LiteralPath $diagnoser -Destination (Join-Path $OutputRoot 'diagnose_combat.py')
 $env:GOCACHE=Join-Path $repo 'workspace/build/gocache';$env:GOTOOLCHAIN='auto'
@@ -48,17 +72,25 @@ try{
     $initialModel=$Model;$initialCheckpoint=$Checkpoint;$steps=@()
     for($iteration=1;$iteration -le $Iterations;$iteration++){
         if((Get-FileHash $frozen).Hash -ne $configSHA -or (Get-FileHash $trainer).Hash -ne $trainerSHA -or (Get-FileHash $frozenReward).Hash -ne $rewardSHA){throw 'Frozen training inputs changed'}
+        if((Get-FileHash $bankHelper).Hash -ne $bankHelperSHA){throw 'Frozen bank helper changed'}
         $dir=Join-Path $OutputRoot "iteration-$iteration";New-Item -ItemType Directory -Path $dir|Out-Null
         $batch=Join-Path $dir 'batch';$data=Join-Path $dir 'rollout';$update=Join-Path $dir 'update'
-        & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker 1 -Timescale 2 -GameFrames $GameFrames -ReleaseGameFrame $ReleaseGameFrame -Mixed:$Mixed -Loadout blaster -CombatMode learned -ProviderFile $Model -Synchronous -RewardConfig $frozenReward -TrainingMonsterHealth $TrainingMonsterHealth -Seed ($Seed+4*($iteration-1)) -Port $Port -OutputRoot $batch
+        if($iteration -eq 1 -and $InitialBatch){
+            if((Get-FileHash $initialManifestPath).Hash -ne $initialManifestSHA -or (Get-FileHash $initialReportPath).Hash -ne $initialReportSHA){throw 'Initial batch changed'}
+            $batch=$InitialBatch
+            @{batch=$batch;manifest_sha256=$initialManifestSHA;report_sha256=$initialReportSHA;scope='Shared first on-policy batch only; later batches collected from each own resumed policy'}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $dir 'reused-batch.json') -Encoding utf8NoBOM
+        }else{
+            & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker $EpisodesPerWorker -Timescale 2 -GameFrames $GameFrames -ReleaseGameFrame $ReleaseGameFrame -Mixed:$Mixed -Loadout blaster -CombatMode learned -ProviderFile $Model -Synchronous -RewardConfig $frozenReward -TrainingMonsterHealth $TrainingMonsterHealth -Seed ($Seed+$batchEpisodes*($iteration-1)) -Port $Port -OutputRoot $batch
+        }
         & $dataTool --batch $batch --model $Model --out $data;if($LASTEXITCODE){throw "Iteration $iteration native replay rejected"}
         $updateArgs=@($trainer,'--model',$Model,'--resume',$Checkpoint,'--data',$data,'--config',$frozen,'--out',$update)
         if($AnchorModel){if((Get-FileHash $AnchorModel).Hash -ne $anchorSHA){throw 'Pinned anchor changed'};$updateArgs+=@('--anchor-model',$AnchorModel,'--retention-weight',$RetentionWeight.ToString([cultureinfo]::InvariantCulture),'--retention-updates',"$RetentionUpdates",'--retention-mode',$RetentionMode)}
+        if($RetentionBank){if((Get-FileHash $RetentionBank).Hash -ne $bankSHA){throw 'Pinned bank changed'};$updateArgs+=@('--retention-bank',$RetentionBank,'--bank-weight',$BankWeight.ToString([cultureinfo]::InvariantCulture))}
         & $Python @updateArgs
         if($LASTEXITCODE){throw "Iteration $iteration PPO update failed"}
         $report=Get-Content -LiteralPath (Join-Path $update 'report.json') -Raw|ConvertFrom-Json
         if(!$report.resume_sha256 -or $report.final_approx_kl -gt 0.010001){throw 'Update acceptance failed'}
-        $steps+=@{iteration=$iteration;seed=$Seed+4*($iteration-1);batch=$batch;rollout=$data;update=$update;report=$report}
+        $steps+=@{iteration=$iteration;seed=$Seed+$batchEpisodes*($iteration-1);batch=$batch;rollout=$data;update=$update;report=$report}
         $Model=Join-Path $update 'weights.json';$Checkpoint=Join-Path $update 'checkpoint.pt'
         $steps|ConvertTo-Json -Depth 12|Set-Content -LiteralPath (Join-Path $OutputRoot 'progress.json') -Encoding utf8NoBOM
     }
@@ -90,7 +122,7 @@ try{
     $diagnostics=Join-Path $OutputRoot 'diagnostics.json'
     & $Python $diagnoser --batch (Join-Path $OutputRoot 'evaluation-before') --batch (Join-Path $OutputRoot 'evaluation-after') --out $diagnostics
     if($LASTEXITCODE){throw 'Evaluation diagnostics failed'}
-    $summary=@{version='combat_ppo_cycle_v1';mixed=[bool]$Mixed;release_game_frame=$ReleaseGameFrame;training_monster_health=$TrainingMonsterHealth;evaluation_monster_health=175;iterations=$Iterations;initial_model=$initialModel;initial_checkpoint=$initialCheckpoint;final_model=$Model;final_checkpoint=$Checkpoint;config_sha256=$configSHA;trainer_sha256=$trainerSHA;diagnoser_sha256=$diagnoserSHA;diagnostics=$diagnostics;steps=$steps;evaluation=$pairs;fixture_promotion_eligible=$eligible;fixture_criterion='All four paired after captures valid; native first-life kill >=1 and no observed death; Mixed additionally requires a kill of both Parasite and Gunner in each episode. gameplay_accepted is the legacy rules-specific harness metric, not learned-policy acceptance.';scope='Fresh on-policy batches with optimizer/RNG resume; paired deterministic evaluation only, no live promotion or statistical generalization claim'}
+    $summary=@{version='combat_ppo_cycle_v1';episodes_per_worker=$EpisodesPerWorker;training_episodes_per_batch=$batchEpisodes;mixed=[bool]$Mixed;release_game_frame=$ReleaseGameFrame;training_monster_health=$TrainingMonsterHealth;evaluation_monster_health=175;iterations=$Iterations;initial_model=$initialModel;initial_checkpoint=$initialCheckpoint;final_model=$Model;final_checkpoint=$Checkpoint;config_sha256=$configSHA;trainer_sha256=$trainerSHA;diagnoser_sha256=$diagnoserSHA;diagnostics=$diagnostics;steps=$steps;evaluation=$pairs;fixture_promotion_eligible=$eligible;fixture_criterion='All four paired after captures valid; native first-life kill >=1 and no observed death; Mixed additionally requires a kill of both Parasite and Gunner in each episode. gameplay_accepted is the legacy rules-specific harness metric, not learned-policy acceptance.';scope='Fresh on-policy batches with optimizer/RNG resume; paired deterministic evaluation only, no live promotion or statistical generalization claim'}
     $summary|ConvertTo-Json -Depth 16|Set-Content -LiteralPath (Join-Path $OutputRoot 'report.json') -Encoding utf8NoBOM
     "PPO cycle: $OutputRoot"
 }finally{Pop-Location}

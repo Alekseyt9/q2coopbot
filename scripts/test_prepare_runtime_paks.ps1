@@ -26,6 +26,13 @@ Install-RuntimePak $source $target $pool
 $digest=(Get-FileHash $source).Hash.ToLowerInvariant();$folder=Join-Path $pool $digest
 $anchor0=Join-Path $folder 'asset-0.pak'
 if(!(Test-Path $anchor0) -or (Get-FileHash $target).Hash -ne (Get-FileHash $source).Hash){throw 'Pool creation failed'}
+$sharedReader=[IO.File]::Open($anchor0,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+try {
+    $sharedTarget=Join-Path $testRoot 'shared-reader.pak'
+    Install-RuntimePak $source $sharedTarget $pool
+    if((Get-RuntimeImmutableHash $sharedTarget) -ne $digest){throw 'Shared pool reader changed bytes'}
+} finally { $sharedReader.Dispose() }
+'PASS: pool hashing permits concurrent writable/delete-sharing handle'
 $script:blocked+=@($anchor0)
 Install-RuntimePak $source (Join-Path $testRoot 'rollover.pak') $pool
 if(!(Test-Path (Join-Path $folder 'asset-1.pak'))){throw 'Saturated shard did not roll over'}

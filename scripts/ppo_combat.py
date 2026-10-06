@@ -3,6 +3,7 @@ import argparse, copy, json, math, pathlib, time, sys
 sys.pycache_prefix=str(pathlib.Path(__file__).resolve().parents[1]/'workspace'/'build'/'python-cache')
 # Shared F: cache configuration is set before importing torch.
 from train_combat_bc import torch, nn, sha, training_devices
+from combat_retention_bank import read as read_bank, validate as validate_bank, pin_bank
 
 def network(layers):
     blocks=[]
@@ -74,13 +75,14 @@ def log_prob(actor,std,x,z,attack,vertical):
     entropy=normal.entropy().sum(1)+bern.entropy()+cat.entropy()
     return lp,entropy
 
-def anchor_kl(raw,std,teacher,teacher_std):
+def anchor_kl(raw,std,teacher,teacher_std,weights=None):
     """KL(anchor || policy) across all stochastic heads, per fresh state."""
     distributions=torch.distributions
     normal=distributions.kl_divergence(distributions.Normal(teacher[:,:4],teacher_std.exp()),distributions.Normal(raw[:,:4],std.exp())).sum(1)
     attack=distributions.kl_divergence(distributions.Bernoulli(logits=teacher[:,4]),distributions.Bernoulli(logits=raw[:,4]))
     vertical=distributions.kl_divergence(distributions.Categorical(logits=teacher[:,5:]),distributions.Categorical(logits=raw[:,5:]))
-    return (normal+attack+vertical).clamp_min(0).mean()
+    terms=(normal+attack+vertical).clamp_min(0)
+    return terms.mean() if weights is None else (terms*weights).sum()
 
 def retention_schedule(anchor_sha,initial,horizon,updates,previous=None,mode='linear'):
     if mode not in ('linear','constant'):raise ValueError('Unknown retention mode')
@@ -138,7 +140,8 @@ def validate_objective(config,meta):
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--init-bc');ap.add_argument('--model');ap.add_argument('--data');ap.add_argument('--resume');ap.add_argument('--config',required=True);ap.add_argument('--out',required=True)
-    ap.add_argument('--anchor-model',type=pathlib.Path);ap.add_argument('--retention-weight',type=float,default=1.);ap.add_argument('--retention-updates',type=int,default=4);ap.add_argument('--retention-mode',choices=('linear','constant'),default='linear');a=ap.parse_args()
+    ap.add_argument('--anchor-model',type=pathlib.Path);ap.add_argument('--retention-weight',type=float,default=1.);ap.add_argument('--retention-updates',type=int,default=4);ap.add_argument('--retention-mode',choices=('linear','constant'),default='linear')
+    ap.add_argument('--retention-bank',type=pathlib.Path);ap.add_argument('--bank-weight',type=float,default=1.);a=ap.parse_args()
     out=pathlib.Path(a.out);out.mkdir(exist_ok=False);config=json.loads(pathlib.Path(a.config).read_text(encoding='utf-8-sig'))
     assert config['version']=='combat_ppo_training_v1';torch.set_num_threads(2);torch.manual_seed(config['seed']);torch.use_deterministic_algorithms(True)
     if a.init_bc:
@@ -171,6 +174,17 @@ def main():
         if anchor['kind']!='combat_ppo_v1' or anchor['feature_version']!=model['feature_version']:raise ValueError('Anchor feature contract differs')
         with torch.no_grad():teacher=network(anchor['actor'])(x)
         teacher_std=torch.tensor(anchor['log_std'])
+    bank=None;bank_tensors={}
+    if a.retention_bank and checkpoint and checkpoint.get('retention') and not checkpoint.get('retention_bank'):raise ValueError('Cannot add a bank to an already started retention branch')
+    bank_spec=pin_bank(sha(a.retention_bank) if a.retention_bank else None,a.bank_weight,checkpoint.get('retention_bank') if checkpoint else None)
+    if a.retention_bank:
+        if not a.anchor_model:raise ValueError('Retention bank requires an anchor')
+        bank=validate_bank(read_bank(a.retention_bank),anchor_sha,model['feature_version'],x.shape[1],{r['seed'] for r in rows})
+        with torch.no_grad():
+            teacher_network=network(anchor['actor'])
+            for split in ('train','validation'):
+                bx=torch.tensor([r['features'] for r in bank[split]],dtype=torch.float32);bw=torch.tensor([r['weight'] for r in bank[split]],dtype=torch.float32)
+                bank_tensors[split]=(bx,bw,teacher_network(bx))
     with torch.no_grad():
         lp,_=log_prob(actor,std,x,z,attack,vertical);log_error=float((lp-old).abs().max());value_error=float((value(x).squeeze(1)-torch.tensor([r['sample']['value'] for r in rows])).abs().max())
         assert log_error<1e-3 and value_error<1e-4, (log_error,value_error)
@@ -180,6 +194,8 @@ def main():
         def step():
             opt.zero_grad();plp,ent=log_prob(probe,pstd,px,pz,pa,pv);ratio=(plp-po).exp();loss=-torch.minimum(ratio*pad,ratio.clamp(1-config['clip'],1+config['clip'])*pad).mean()-config['entropy']*ent.mean()
             if teacher is not None:loss=loss+retention_weight*anchor_kl(probe(px),pstd,teacher.to(device),teacher_std.to(device))
+            if bank is not None:
+                bx,bw,bt=bank_tensors['train'];loss=loss+a.bank_weight*anchor_kl(probe(bx.to(device)),pstd,bt.to(device),teacher_std.to(device),bw.to(device))
             loss.backward();opt.step()
         for _ in range(10):step()
         if device=='cuda':torch.cuda.synchronize()
@@ -189,9 +205,14 @@ def main():
         benchmarks[device]=(time.perf_counter()-start)/30
     device=min(benchmarks,key=benchmarks.get);actor=actor.to(device);value=value.to(device);std=nn.Parameter(std.detach().to(device));x,z,attack,vertical,old,ad,returns=[t.to(device) for t in data]
     if teacher is not None:teacher,teacher_std=teacher.to(device),teacher_std.to(device)
+    bank_tensors={s:tuple(t.to(device) for t in tensors) for s,tensors in bank_tensors.items()}
+    def bank_loss(split='train'):
+        if bank is None:return torch.zeros((),device=device)
+        bx,bw,bt=bank_tensors[split];return anchor_kl(actor(bx),std,bt,teacher_std,bw)
     def retention_loss():
         return anchor_kl(actor(x),std,teacher,teacher_std) if teacher is not None else torch.zeros((),device=device)
     with torch.no_grad():initial_anchor_kl=float(retention_loss())
+    with torch.no_grad():initial_bank_kl={s:float(bank_loss(s)) for s in bank_tensors}
     ad=(ad-ad.mean())/(ad.std(unbiased=False)+1e-8)
     actor_opt=torch.optim.Adam(list(actor.parameters())+[std],lr=config['actor_lr']);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
     if checkpoint:
@@ -206,7 +227,7 @@ def main():
         lp,entropy=log_prob(actor,std,x,z,attack,vertical);ratio=(lp-old).exp();kl=((ratio-1)-(lp-old)).mean()
         if float(kl.detach())>config['target_kl']:break
         loss=-torch.minimum(ratio*ad,ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*entropy.mean()
-        loss=loss+retention_weight*retention_loss()
+        loss=loss+retention_weight*retention_loss()+a.bank_weight*bank_loss()
         assert torch.isfinite(loss);actor_opt.zero_grad();loss.backward();nn.utils.clip_grad_norm_(list(actor.parameters())+[std],config['max_grad_norm'])
         # Checking KL only before the next step can leave an excessive proposal
         # published. Restore the optimizer too and retry a smaller step.
@@ -214,7 +235,7 @@ def main():
                 candidate_lp,candidate_entropy=log_prob(actor,std,x,z,attack,vertical);candidate_ratio=(candidate_lp-old).exp()
                 candidate_kl=((candidate_ratio-1)-(candidate_lp-old)).mean()
                 candidate_loss=-torch.minimum(candidate_ratio*ad,candidate_ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*candidate_entropy.mean()
-                candidate_loss=candidate_loss+retention_weight*retention_loss()
+                candidate_loss=candidate_loss+retention_weight*retention_loss()+a.bank_weight*bank_loss()
                 return candidate_loss,candidate_kl
         trial=guarded_actor_step(list(actor.parameters())+[std],actor_opt,candidate_objective,loss.detach(),config['actor_lr'],config['target_kl'],lambda:std.clamp_(-8,1))
         actor_trials.append(trial)
@@ -229,13 +250,21 @@ def main():
     updated={**model,'actor':layers(actor),'value':layers(value),'log_std':std.detach().cpu().tolist()}
     with torch.no_grad():final_anchor_kl=float(retention_loss())
     if a.anchor_model and sha(a.anchor_model)!=anchor_sha:raise ValueError('Anchor changed during update')
+    if bank is not None:
+        if sha(a.retention_bank)!=bank_spec['sha256']:raise ValueError('Bank changed during update')
+        validate_bank(bank,anchor_sha,model['feature_version'],x.shape[1],{r['seed'] for r in rows})
+    with torch.no_grad():final_bank_kl={s:float(bank_loss(s)) for s in bank_tensors}
     (out/'weights.json').write_text(json.dumps(updated,allow_nan=False))
     # Save optimizer/RNG with the checkpoint; future rollout still needs fresh seeds.
-    torch.save({'version':'combat_ppo_checkpoint_v2','weights_sha256':sha(out/'weights.json'),'consumed_rollouts':consumed+[meta['rollout_sha256']],'updates_completed':updates+1,'total_actor_steps':total_steps+done,'actor':actor.state_dict(),'value':value.state_dict(),'log_std':std.detach(),'actor_optimizer':actor_opt.state_dict(),'value_optimizer':value_opt.state_dict(),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,'config':config,'retention':retention},out/'checkpoint.pt')
+    checkpoint_output={'version':'combat_ppo_checkpoint_v2','weights_sha256':sha(out/'weights.json'),'consumed_rollouts':consumed+[meta['rollout_sha256']],'updates_completed':updates+1,'total_actor_steps':total_steps+done,'actor':actor.state_dict(),'value':value.state_dict(),'log_std':std.detach(),'actor_optimizer':actor_opt.state_dict(),'value_optimizer':value_opt.state_dict(),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,'config':config,'retention':retention}
+    if bank_spec is not None:checkpoint_output['retention_bank']=bank_spec
+    torch.save(checkpoint_output,out/'checkpoint.pt')
     assert math.isfinite(final_kl) and final_kl<=config['target_kl']+1e-6
     report={'scope':'One PPO-Clip update on fresh stochastic first-life transitions; not combat acceptance or weapon learning','torch':torch.__version__,'trainer_sha256':sha(pathlib.Path(__file__)),'device':device,'benchmark_seconds_per_step':benchmarks,'rows':len(rows),'behavior_policy':meta['policy_version'],'behavior_sha256':sha(model_path),'rollout_sha256':meta['rollout_sha256'],'config':config,'config_sha256':sha(pathlib.Path(a.config)),'old_log_probability_max_error':log_error,'old_value_max_error':value_error,'actor_steps':done,'backtracks':backtracks,'rejected_steps':rejected_steps,'final_approx_kl':final_kl,'value_mse':value_loss,'seconds':time.perf_counter()-start,'weights_sha256':sha(out/'weights.json')}
     report.update({'resume_sha256':resume_sha,'updates_completed':updates+1,'total_actor_steps':total_steps+done,'consumed_rollouts':consumed+[meta['rollout_sha256']]})
     report.update(retention=retention,retention_weight=retention_weight,initial_anchor_kl=initial_anchor_kl,final_anchor_kl=final_anchor_kl)
+    if bank_spec is not None:report.update(retention_bank=bank_spec,bank_kl_before=initial_bank_kl,bank_kl_after=final_bank_kl,bank_rows={s:len(bank[s]) for s in bank_tensors})
+    if bank_spec is not None:report['bank_helper_sha256']=sha(pathlib.Path(__file__).with_name('combat_retention_bank.py'))
     report.update(actor_step_guard='uphill_first_moment_v1',actor_trials=actor_trials,direction_fallbacks=sum(t['direction_fallback'] for t in actor_trials))
     if a.resume:assert sha(pathlib.Path(a.resume))==report['resume_sha256']
     (out/'trainer.py').write_bytes(pathlib.Path(__file__).read_bytes())

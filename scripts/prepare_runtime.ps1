@@ -95,7 +95,7 @@ function Install-RuntimePak([string]$Source, [string]$Target, [string]$PoolRoot)
     } catch {
         if (Test-Path -LiteralPath $Target) { throw }
     }
-    $digest = (Get-FileHash -LiteralPath $Source -Algorithm SHA256).Hash.ToLowerInvariant()
+    $digest = Get-RuntimeImmutableHash $Source
     $pool = Join-Path $PoolRoot $digest
     New-Item -ItemType Directory -Path $pool -Force | Out-Null
     foreach ($index in 0..31) {
@@ -111,7 +111,7 @@ function Install-RuntimePak([string]$Source, [string]$Target, [string]$PoolRoot)
                 if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }
             }
         }
-        if ((Get-FileHash -LiteralPath $anchor -Algorithm SHA256).Hash.ToLowerInvariant() -ne $digest) {
+        if ((Get-RuntimeImmutableHash $anchor) -ne $digest) {
             throw "Immutable PAK pool differs from source: $anchor"
         }
         try {
