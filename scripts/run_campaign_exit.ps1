@@ -62,7 +62,13 @@ $sceneName=if($Chain -and $Combat){'base1-base2-campaign-combat-chain.json'}else
 $scene=Get-Content (Join-Path "$PSScriptRoot/scenarios" $sceneName) -Raw|ConvertFrom-Json
 if($Continue){
     $secondRuntime=Join-Path $repo ('workspace/runtime/q2go-elevator-cycle-base2'+$(if($Combat){'-combat'}else{''}))
-    foreach($ext in @('aas','ent')){Copy-Item -LiteralPath (Join-Path $secondRuntime "baseq2/maps/base2.$ext") -Destination (Join-Path $runtime "baseq2/maps/base2.$ext") -Force}
+    foreach($ext in @('aas','ent')) {
+        if($ext -eq 'aas') {
+            & { param($runtimeSource,$runtimeTarget) . "$PSScriptRoot/prepare_runtime.ps1" -FunctionsOnly; Install-RuntimeImmutable $runtimeSource $runtimeTarget } (Join-Path $secondRuntime "baseq2/maps/base2.$ext") (Join-Path $runtime "baseq2/maps/base2.$ext")
+        } else {
+            Copy-Item -LiteralPath (Join-Path $secondRuntime "baseq2/maps/base2.$ext") -Destination (Join-Path $runtime "baseq2/maps/base2.$ext") -Force
+        }
+    }
 }
 if($Chain){& { param($runtimeSource,$runtimeTarget) . "$PSScriptRoot/prepare_runtime.ps1" -FunctionsOnly; Install-RuntimeImmutable $runtimeSource $runtimeTarget } (Join-Path $repo 'workspace/runtime/q2go/baseq2/maps/base3.aas') (Join-Path $runtime 'baseq2/maps/base3.aas')}
 if($Prepare){

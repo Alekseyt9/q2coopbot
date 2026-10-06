@@ -11,13 +11,32 @@ param(
 $ErrorActionPreference = 'Stop'
 # Replace the directory entry, not the contents of a potentially shared hard link.
 # Live sessions may still be using the previous AAS through another path.
+function Get-RuntimeImmutableHash([string]$Path) {
+    for ($attempt = 0; ; $attempt++) {
+        $stream = $null
+        $algorithm = $null
+        try {
+            # Readers must permit another worker to atomically replace its link.
+            $sharing = [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete
+            $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, $sharing)
+            $algorithm = [Security.Cryptography.SHA256]::Create()
+            return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+        } catch [IO.IOException] {
+            if ($attempt -ge 100) { throw }
+            Start-Sleep -Milliseconds 50
+        } finally {
+            if ($algorithm) { $algorithm.Dispose() }
+            if ($stream) { $stream.Dispose() }
+        }
+    }
+}
 function Install-RuntimeImmutable([string]$Source, [string]$Target, [string]$PoolRoot = '') {
     $temporary = $Target + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
     try {
         # Keep a content-addressed snapshot: build outputs and source AAS may change.
-        $digest = (Get-FileHash -LiteralPath $Source -Algorithm SHA256).Hash.ToLowerInvariant()
+        $digest = Get-RuntimeImmutableHash $Source
         if ((Test-Path -LiteralPath $Target) -and
-            (Get-FileHash -LiteralPath $Target -Algorithm SHA256).Hash.ToLowerInvariant() -eq $digest) {
+            (Get-RuntimeImmutableHash $Target) -eq $digest) {
             return
         }
         if (-not $PoolRoot) {
@@ -30,7 +49,7 @@ function Install-RuntimeImmutable([string]$Source, [string]$Target, [string]$Poo
             $pending = Join-Path $snapshotDir ([guid]::NewGuid().ToString('N') + '.tmp')
             try {
                 Copy-Item -LiteralPath $Source -Destination $pending
-                if ((Get-FileHash -LiteralPath $pending -Algorithm SHA256).Hash.ToLowerInvariant() -ne $digest) {
+                if ((Get-RuntimeImmutableHash $pending) -ne $digest) {
                     throw "Source changed while preparing immutable runtime file: $Source"
                 }
                 try { [IO.File]::Move($pending, $snapshot) } catch {
@@ -40,7 +59,7 @@ function Install-RuntimeImmutable([string]$Source, [string]$Target, [string]$Poo
                 if (Test-Path -LiteralPath $pending) { Remove-Item -LiteralPath $pending }
             }
         }
-        if ((Get-FileHash -LiteralPath $snapshot -Algorithm SHA256).Hash.ToLowerInvariant() -ne $digest) {
+        if ((Get-RuntimeImmutableHash $snapshot) -ne $digest) {
             throw "Immutable runtime snapshot differs from source: $snapshot"
         }
         if ([IO.Path]::GetPathRoot($snapshot) -eq [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($Target))) {

@@ -3,6 +3,8 @@ $repo=Split-Path $PSScriptRoot -Parent
 $tokens=$null;$errors=$null
 $ast=[System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'prepare_runtime.ps1'),[ref]$tokens,[ref]$errors)
 if($errors.Count){throw 'Runtime preparer parse failed'}
+$hashDefinition=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-RuntimeImmutableHash'},$true)
+. ([scriptblock]::Create($hashDefinition.Extent.Text))
 $definition=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Install-RuntimePak'},$true)
 . ([scriptblock]::Create($definition.Extent.Text))
 $testRoot=Join-Path $repo ('workspace/build/pak-pool-test-'+[guid]::NewGuid().ToString('N'))
