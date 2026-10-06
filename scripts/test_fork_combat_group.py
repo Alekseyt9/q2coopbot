@@ -7,6 +7,34 @@ from test_fork_combat_aim import AimForkTests
 
 
 class GroupTests(unittest.TestCase):
+    def test_obstacle_escape_only_known_blocked_parent_motion(self):
+        f=self.features((2,));raw=[math.atanh(.75),0,0,0,0,0,0,0]
+        self.assertEqual(labels(f,raw,obstacle_escape=True),(None,None,None))
+        f[25:31]=[1,0,1,10/64,1,0]
+        move,aim,slot=labels(f,raw,obstacle_escape=True)
+        self.assertAlmostEqual(move[0],0);self.assertAlmostEqual(move[1],-.75)
+        self.assertIsNone(aim);self.assertIsNone(slot)
+        f[27]=0;self.assertEqual(labels(f,raw,obstacle_escape=True),(None,None,None))
+        f[27]=1
+        f[2]=0;self.assertEqual(labels(f,raw,obstacle_escape=True),(None,None,None))
+        f[2]=1;raw[0]=0;self.assertEqual(labels(f,raw,obstacle_escape=True),(None,None,None))
+
+    def test_obstacle_escape_compensates_parent_turn_and_rejects_unsafe_exit(self):
+        f=self.features((0,));raw=[math.atanh(.75),0,math.atanh(.5),0,0,0,0,0]
+        f[37:43]=[1,0,1,0,1,0] # Turn90: proposed direction2 blocked.
+        move,_,_=labels(f,raw,obstacle_escape=True)
+        self.assertAlmostEqual(move[0],0);self.assertAlmostEqual(move[1],.75)
+        f[30]=49/32;self.assertEqual(labels(f,raw,obstacle_escape=True),(None,None,None))
+        f[30]=0;f[29]=0;self.assertEqual(labels(f,raw,obstacle_escape=True),(None,None,None))
+        with self.assertRaises(ValueError):labels(f,raw,barrel_escape=True,obstacle_escape=True)
+
+    def test_obstacle_escape_labels_remaining_visible_parasite_without_hidden_truth(self):
+        f=self.features((4,));f[73:85]=[0.]*12;f[808]=1/8
+        f[25:31]=[1,0,1,0,1,0];raw=[math.atanh(.75),0,0,0,0,0,0,0]
+        move,aim,_=labels(f,raw,obstacle_escape=True)
+        self.assertLess(move[0],0);self.assertIsNone(aim)
+        f[85]=0;self.assertEqual(labels(f,raw,obstacle_escape=True),(None,None,None))
+
     def features(self, directions=range(8)):
         f = ManeuverTests().features(directions)
         for slot, parasite, x, angle in [(0, False, 100., 0.), (1, True, 180., 45.)]:

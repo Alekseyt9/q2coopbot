@@ -1,5 +1,5 @@
 import unittest, tempfile, pathlib, copy
-from ppo_combat import advantages, restore_checkpoint, validate_objective, restore_optimizer, retention_schedule, anchor_kl, training_devices, torch, nn, sha
+from ppo_combat import advantages, restore_checkpoint, validate_objective, restore_optimizer, guarded_actor_step, retention_schedule, anchor_kl, training_devices, torch, nn, sha
 
 def row(seed,index,reward,value,next_value,terminal=False,truncated=False):
     return {'seed':seed,'index':index,'frame':index,'next_frame':index+1,'reward':reward,'sample':{'value':value},'next_value':next_value,'terminal':terminal,'truncated':truncated}
@@ -19,6 +19,54 @@ class GAETest(unittest.TestCase):
         self.assertAlmostEqual(a[0],2.44)
 
 class ResumeTest(unittest.TestCase):
+    def test_constant_retention_keeps_weight_and_pins_mode_on_resume(self):
+        spec,weight=retention_schedule('sha',1.,4,53,mode='constant')
+        self.assertEqual(spec['mode'],'constant');self.assertEqual(weight,1.)
+        for elapsed in (1,3,4,100):
+            resumed,weight=retention_schedule('sha',1.,4,53+elapsed,spec,'constant')
+            self.assertEqual(resumed,spec);self.assertEqual(weight,1.)
+        with self.assertRaisesRegex(ValueError,'changed on resume'):retention_schedule('sha',1.,4,54,spec,'linear')
+        legacy,_=retention_schedule('sha',1.,4,53)
+        self.assertNotIn('mode',legacy)
+        with self.assertRaisesRegex(ValueError,'changed on resume'):retention_schedule('sha',1.,4,54,legacy,'constant')
+
+    def test_invalid_retention_mode_or_missing_anchor_rejected(self):
+        with self.assertRaisesRegex(ValueError,'Unknown'):retention_schedule('sha',1.,4,53,mode='other')
+        with self.assertRaisesRegex(ValueError,'requires an anchor'):retention_schedule(None,1.,4,53,mode='constant')
+
+    def direction_case(self):
+        p=nn.Parameter(torch.tensor([1.],device=training_devices()[0]));opt=torch.optim.Adam([p],lr=.01)
+        p.grad=-10*torch.ones_like(p);opt.step()
+        with torch.no_grad():p.fill_(1.)
+        opt.zero_grad();loss=p.square().sum();loss.backward()
+        return p,opt,loss.detach(),copy.deepcopy(opt.state_dict())
+
+    def test_uphill_momentum_repaired_without_resetting_clock_or_second_moment(self):
+        p,opt,loss,snapshot=self.direction_case()
+        result=guarded_actor_step([p],opt,lambda:(p.square().sum(),(p-1).square().sum()),loss,.01,.01)
+        self.assertTrue(result['accepted']);self.assertTrue(result['direction_fallback'])
+        self.assertGreater(result['initial_grad_dot_delta'],0);self.assertLess(result['accepted_grad_dot_delta'],0)
+        self.assertEqual(int(opt.state[p]['step']),2);self.assertLess(float(p.detach()),1.)
+        expected=.999*snapshot['state'][0]['exp_avg_sq']+.001*p.grad.square()
+        self.assertTrue(torch.allclose(opt.state[p]['exp_avg_sq'],expected))
+        self.assertTrue(torch.allclose(opt.state[p]['exp_avg'],.1*p.grad))
+        self.assertEqual(opt.param_groups[0]['lr'],.01)
+        self.assertEqual(int(snapshot['state'][0]['step']),1)
+
+    def test_rejected_fallback_restores_parameters_moments_clock_and_lr(self):
+        p,opt,loss,snapshot=self.direction_case();before=p.detach().clone()
+        result=guarded_actor_step([p],opt,lambda:(p.square().sum(),torch.ones((),device=p.device)),loss,.01,0.)
+        self.assertFalse(result['accepted']);self.assertTrue(result['direction_fallback'])
+        self.assertTrue(torch.equal(p,before));self.assertEqual(opt.state_dict()['param_groups'],snapshot['param_groups'])
+        for k,v in opt.state[p].items():self.assertTrue(torch.equal(v,snapshot['state'][0][k]))
+
+    def test_downhill_step_preserves_normal_adam_momentum(self):
+        p=nn.Parameter(torch.tensor([1.],device=training_devices()[0]));opt=torch.optim.Adam([p],lr=.01)
+        loss=p.square().sum();loss.backward()
+        result=guarded_actor_step([p],opt,lambda:(p.square().sum(),(p-1).square().sum()),loss.detach(),.01,.01)
+        self.assertTrue(result['accepted']);self.assertFalse(result['direction_fallback'])
+        self.assertEqual(int(opt.state[p]['step']),1)
+
     def test_retention_covers_every_head_and_has_cuda_gradients(self):
         device=training_devices()[0];teacher=torch.zeros(3,8,device=device);std=torch.zeros(4,device=device)
         self.assertEqual(float(anchor_kl(teacher,std,teacher,std)),0.)
@@ -69,10 +117,10 @@ class ResumeTest(unittest.TestCase):
     def test_resume_and_reject_reused_rollout_or_other_weights(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=pathlib.Path(tmp);model=root/'weights.json';model.write_text('{}')
-            actor=nn.Linear(2,2);value=nn.Linear(2,1);std=nn.Parameter(torch.zeros(4))
+            device=training_devices()[0];actor=nn.Linear(2,2).to(device);value=nn.Linear(2,1).to(device);std=nn.Parameter(torch.zeros(4,device=device))
             opt=torch.optim.Adam(list(actor.parameters())+[std],lr=.001)
             def step(module,optimizer):
-                optimizer.zero_grad();(module(torch.ones(1,2)).sum()).backward();optimizer.step()
+                optimizer.zero_grad();(module(torch.ones(1,2,device=device)).sum()).backward();optimizer.step()
             step(actor,opt)
             ck={'version':'combat_ppo_checkpoint_v2','weights_sha256':sha(model),'consumed_rollouts':['old'],'updates_completed':2,'total_actor_steps':20,'actor':copy.deepcopy(actor.state_dict()),'value':value.state_dict(),'log_std':std.detach(),'config':{},'actor_optimizer':copy.deepcopy(opt.state_dict())}
             path=root/'checkpoint.pt';torch.save(ck,path)

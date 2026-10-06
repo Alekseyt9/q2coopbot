@@ -11,9 +11,11 @@ param(
     [ValidateRange(1024,65530)][int]$Port=33100,
     [string]$Python='F:/src/strat/.venv-gpu/Scripts/python.exe',
     [string]$Config='',[string]$RewardConfig='',[string]$OutputRoot='',
-    [string]$AnchorModel='',[double]$RetentionWeight=1.,[ValidateRange(2,100)][int]$RetentionUpdates=4
+    [string]$AnchorModel='',[double]$RetentionWeight=1.,[ValidateRange(2,100)][int]$RetentionUpdates=4,
+    [ValidateSet('linear','constant')][string]$RetentionMode='linear'
 )
 $ErrorActionPreference='Stop'
+if($RetentionMode -eq 'constant' -and !$AnchorModel){throw 'Constant retention requires an anchor before collection'}
 if($Mixed -and $TrainingMonsterHealth -ne 0){throw 'Mixed training requires stock monster health'}
 $repo=Split-Path $PSScriptRoot -Parent
 if(!$Config){$Config=Join-Path $PSScriptRoot 'scenarios/combat-ppo-v1.json'}
@@ -51,7 +53,7 @@ try{
         & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker 1 -Timescale 2 -GameFrames $GameFrames -ReleaseGameFrame $ReleaseGameFrame -Mixed:$Mixed -Loadout blaster -CombatMode learned -ProviderFile $Model -Synchronous -RewardConfig $frozenReward -TrainingMonsterHealth $TrainingMonsterHealth -Seed ($Seed+4*($iteration-1)) -Port $Port -OutputRoot $batch
         & $dataTool --batch $batch --model $Model --out $data;if($LASTEXITCODE){throw "Iteration $iteration native replay rejected"}
         $updateArgs=@($trainer,'--model',$Model,'--resume',$Checkpoint,'--data',$data,'--config',$frozen,'--out',$update)
-        if($AnchorModel){if((Get-FileHash $AnchorModel).Hash -ne $anchorSHA){throw 'Pinned anchor changed'};$updateArgs+=@('--anchor-model',$AnchorModel,'--retention-weight',$RetentionWeight.ToString([cultureinfo]::InvariantCulture),'--retention-updates',"$RetentionUpdates")}
+        if($AnchorModel){if((Get-FileHash $AnchorModel).Hash -ne $anchorSHA){throw 'Pinned anchor changed'};$updateArgs+=@('--anchor-model',$AnchorModel,'--retention-weight',$RetentionWeight.ToString([cultureinfo]::InvariantCulture),'--retention-updates',"$RetentionUpdates",'--retention-mode',$RetentionMode)}
         & $Python @updateArgs
         if($LASTEXITCODE){throw "Iteration $iteration PPO update failed"}
         $report=Get-Content -LiteralPath (Join-Path $update 'report.json') -Raw|ConvertFrom-Json
