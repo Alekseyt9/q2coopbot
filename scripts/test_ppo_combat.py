@@ -1,5 +1,5 @@
 import unittest, tempfile, pathlib, copy
-from ppo_combat import advantages, restore_checkpoint, validate_objective, restore_optimizer, training_devices, torch, nn, sha
+from ppo_combat import advantages, restore_checkpoint, validate_objective, restore_optimizer, retention_schedule, anchor_kl, training_devices, torch, nn, sha
 
 def row(seed,index,reward,value,next_value,terminal=False,truncated=False):
     return {'seed':seed,'index':index,'frame':index,'next_frame':index+1,'reward':reward,'sample':{'value':value},'next_value':next_value,'terminal':terminal,'truncated':truncated}
@@ -19,6 +19,26 @@ class GAETest(unittest.TestCase):
         self.assertAlmostEqual(a[0],2.44)
 
 class ResumeTest(unittest.TestCase):
+    def test_retention_covers_every_head_and_has_cuda_gradients(self):
+        device=training_devices()[0];teacher=torch.zeros(3,8,device=device);std=torch.zeros(4,device=device)
+        self.assertEqual(float(anchor_kl(teacher,std,teacher,std)),0.)
+        for column in (0,2,4,5):
+            raw=teacher.clone();raw[:,column]=1;raw.requires_grad_()
+            loss=anchor_kl(raw,std,teacher,std);self.assertGreater(float(loss.detach()),0.)
+            loss.backward();self.assertGreater(float(raw.grad[:,column].abs().sum()),0.)
+        narrow=std.clone();narrow[0]=-1
+        self.assertGreater(float(anchor_kl(teacher,narrow,teacher,std)),0.)
+
+    def test_retention_anneals_and_resume_pins_schedule(self):
+        spec,weight=retention_schedule('sha',1.,4,53)
+        self.assertEqual(weight,1.)
+        for i,expected in ((1,2/3),(2,1/3),(3,0.),(4,0.)):
+            resumed,weight=retention_schedule('sha',1.,4,53+i,spec)
+            self.assertEqual(resumed,spec);self.assertAlmostEqual(weight,expected)
+        for args in ((None,1.,4,54),('other',1.,4,54),('sha',2.,4,54),('sha',1.,5,54)):
+            with self.assertRaises(ValueError):retention_schedule(*args,previous=spec)
+        with self.assertRaises(ValueError):retention_schedule('sha',float('nan'),4,53)
+
     def test_backtracking_snapshot_survives_rejected_cuda_trials(self):
         parameter=nn.Parameter(torch.tensor([1.],device=training_devices()[0]))
         optimizer=torch.optim.Adam([parameter],lr=.01)

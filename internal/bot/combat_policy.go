@@ -10,6 +10,7 @@ import (
 )
 
 type combatControl struct {
+	engagement combatEngagement
 	history    policy.History
 	mode       string
 	provider   policy.Provider
@@ -63,8 +64,10 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		sel.Fallback = "setup_or_harness_override"
 		return rules()
 	}
-	if len(o.Enemies) == 0 {
-		sel.Fallback = "system2_noncombat"
+	active, continuation, fallback := b.engagement.observe(o, c.planner.World.Snapshot.Defeated)
+	sel.CombatContinuation = continuation
+	if !active {
+		sel.Fallback = fallback
 		return rules()
 	}
 	if o.Weapon != "Blaster" {
@@ -98,12 +101,19 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 	sel.CandidateCommand, sel.GuardedCommand, sel.Interventions = &proposed, &guarded, changes
 	sel.ElapsedUS = time.Since(start).Microseconds()
 	budget := 5 * time.Millisecond
+	enforceBudget := !c.testSynchronous
 	if remote, ok := b.provider.(*policy.Remote); ok && c.testSynchronous {
 		budget = remote.DecisionBudget()
+		enforceBudget = true
 	}
 	if sel.ElapsedUS > budget.Microseconds() {
-		sel.Fallback = "inference_budget_exceeded"
-		return rules()
+		sel.InferenceBudgetExceeded = true
+		// Local inference finishes while a synchronous test world is held.
+		// Scheduler/GC delays must not inject a rules command into that rollout.
+		if enforceBudget {
+			sel.Fallback = "inference_budget_exceeded"
+			return rules()
+		}
 	}
 	if b.mode == "learned-shadow" {
 		return rules()

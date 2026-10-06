@@ -29,6 +29,28 @@ def log_prob(actor,std,x,z,attack,vertical):
     entropy=normal.entropy().sum(1)+bern.entropy()+cat.entropy()
     return lp,entropy
 
+def anchor_kl(raw,std,teacher,teacher_std):
+    """KL(anchor || policy) across all stochastic heads, per fresh state."""
+    distributions=torch.distributions
+    normal=distributions.kl_divergence(distributions.Normal(teacher[:,:4],teacher_std.exp()),distributions.Normal(raw[:,:4],std.exp())).sum(1)
+    attack=distributions.kl_divergence(distributions.Bernoulli(logits=teacher[:,4]),distributions.Bernoulli(logits=raw[:,4]))
+    vertical=distributions.kl_divergence(distributions.Categorical(logits=teacher[:,5:]),distributions.Categorical(logits=raw[:,5:]))
+    return (normal+attack+vertical).clamp_min(0).mean()
+
+def retention_schedule(anchor_sha,initial,horizon,updates,previous=None):
+    if not anchor_sha:
+        if previous: raise ValueError('Resumed retention requires the pinned anchor')
+        return None,0.
+    if not math.isfinite(initial) or initial<=0 or horizon<2:
+        raise ValueError('Positive finite retention weight and at least two updates required')
+    spec=dict(anchor_sha256=anchor_sha,initial_weight=initial,updates=horizon,start_updates=updates)
+    if previous:
+        spec['start_updates']=previous['start_updates']
+        if spec!=previous: raise ValueError('Retention schedule or anchor changed on resume')
+    elapsed=updates-spec['start_updates']
+    if elapsed<0: raise ValueError('Retention counter precedes schedule')
+    return spec,initial*max(0.,1-elapsed/(horizon-1))
+
 def advantages(rows,gamma,lam):
     values=[r['sample']['value'] for r in rows];adv=[0.0]*len(rows)
     for i in reversed(range(len(rows))):
@@ -66,7 +88,8 @@ def validate_objective(config,meta):
         assert expected.lower()==meta.get('reward_config_sha256','').lower(), 'Rollout reward differs from checkpoint objective'
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--init-bc');ap.add_argument('--model');ap.add_argument('--data');ap.add_argument('--resume');ap.add_argument('--config',required=True);ap.add_argument('--out',required=True);a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--init-bc');ap.add_argument('--model');ap.add_argument('--data');ap.add_argument('--resume');ap.add_argument('--config',required=True);ap.add_argument('--out',required=True)
+    ap.add_argument('--anchor-model',type=pathlib.Path);ap.add_argument('--retention-weight',type=float,default=1.);ap.add_argument('--retention-updates',type=int,default=4);a=ap.parse_args()
     out=pathlib.Path(a.out);out.mkdir(exist_ok=False);config=json.loads(pathlib.Path(a.config).read_text(encoding='utf-8-sig'))
     assert config['version']=='combat_ppo_training_v1';torch.set_num_threads(2);torch.manual_seed(config['seed']);torch.use_deterministic_algorithms(True)
     if a.init_bc:
@@ -91,6 +114,14 @@ def main():
     actor=network(model['actor']);value=network(model['value']);std=nn.Parameter(torch.tensor(model['log_std']))
     checkpoint=None;consumed=[];updates=0;total_steps=0;resume_sha=sha(pathlib.Path(a.resume)) if a.resume else None
     if a.resume:checkpoint,consumed,updates,total_steps=restore_checkpoint(a.resume,model_path,config,actor,value,std,meta['rollout_sha256'])
+    anchor_sha=sha(a.anchor_model) if a.anchor_model else None
+    retention,retention_weight=retention_schedule(anchor_sha,a.retention_weight,a.retention_updates,updates,checkpoint.get('retention') if checkpoint else None)
+    teacher,teacher_std=None,None
+    if a.anchor_model:
+        anchor=json.loads(a.anchor_model.read_text())
+        if anchor['kind']!='combat_ppo_v1' or anchor['feature_version']!=model['feature_version']:raise ValueError('Anchor feature contract differs')
+        with torch.no_grad():teacher=network(anchor['actor'])(x)
+        teacher_std=torch.tensor(anchor['log_std'])
     with torch.no_grad():
         lp,_=log_prob(actor,std,x,z,attack,vertical);log_error=float((lp-old).abs().max());value_error=float((value(x).squeeze(1)-torch.tensor([r['sample']['value'] for r in rows])).abs().max())
         assert log_error<1e-3 and value_error<1e-4, (log_error,value_error)
@@ -98,7 +129,9 @@ def main():
     for device in training_devices():
         probe=network(model['actor']).to(device);pstd=nn.Parameter(torch.tensor(model['log_std'],device=device));px,pz,pa,pv,po,pad,pret=[t.to(device) for t in data];opt=torch.optim.Adam(list(probe.parameters())+[pstd],lr=config['actor_lr'])
         def step():
-            opt.zero_grad();plp,ent=log_prob(probe,pstd,px,pz,pa,pv);ratio=(plp-po).exp();loss=-torch.minimum(ratio*pad,ratio.clamp(1-config['clip'],1+config['clip'])*pad).mean()-config['entropy']*ent.mean();loss.backward();opt.step()
+            opt.zero_grad();plp,ent=log_prob(probe,pstd,px,pz,pa,pv);ratio=(plp-po).exp();loss=-torch.minimum(ratio*pad,ratio.clamp(1-config['clip'],1+config['clip'])*pad).mean()-config['entropy']*ent.mean()
+            if teacher is not None:loss=loss+retention_weight*anchor_kl(probe(px),pstd,teacher.to(device),teacher_std.to(device))
+            loss.backward();opt.step()
         for _ in range(10):step()
         if device=='cuda':torch.cuda.synchronize()
         start=time.perf_counter()
@@ -106,6 +139,10 @@ def main():
         if device=='cuda':torch.cuda.synchronize()
         benchmarks[device]=(time.perf_counter()-start)/30
     device=min(benchmarks,key=benchmarks.get);actor=actor.to(device);value=value.to(device);std=nn.Parameter(std.detach().to(device));x,z,attack,vertical,old,ad,returns=[t.to(device) for t in data]
+    if teacher is not None:teacher,teacher_std=teacher.to(device),teacher_std.to(device)
+    def retention_loss():
+        return anchor_kl(actor(x),std,teacher,teacher_std) if teacher is not None else torch.zeros((),device=device)
+    with torch.no_grad():initial_anchor_kl=float(retention_loss())
     ad=(ad-ad.mean())/(ad.std(unbiased=False)+1e-8)
     actor_opt=torch.optim.Adam(list(actor.parameters())+[std],lr=config['actor_lr']);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
     if checkpoint:
@@ -120,6 +157,7 @@ def main():
         lp,entropy=log_prob(actor,std,x,z,attack,vertical);ratio=(lp-old).exp();kl=((ratio-1)-(lp-old)).mean()
         if float(kl.detach())>config['target_kl']:break
         loss=-torch.minimum(ratio*ad,ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*entropy.mean()
+        loss=loss+retention_weight*retention_loss()
         assert torch.isfinite(loss);actor_opt.zero_grad();loss.backward();nn.utils.clip_grad_norm_(list(actor.parameters())+[std],config['max_grad_norm'])
         saved_actor=copy.deepcopy(actor.state_dict());saved_std=std.detach().clone();saved_opt=copy.deepcopy(actor_opt.state_dict());accepted=False
         # Checking KL only before the next step can leave an excessive proposal
@@ -134,6 +172,7 @@ def main():
                 std.clamp_(-8,1);candidate_lp,candidate_entropy=log_prob(actor,std,x,z,attack,vertical);candidate_ratio=(candidate_lp-old).exp()
                 candidate_kl=((candidate_ratio-1)-(candidate_lp-old)).mean()
                 candidate_loss=-torch.minimum(candidate_ratio*ad,candidate_ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*candidate_entropy.mean()
+                candidate_loss=candidate_loss+retention_weight*retention_loss()
                 accepted=bool(torch.isfinite(candidate_kl) and torch.isfinite(candidate_loss) and candidate_kl<=config['target_kl'] and candidate_loss<=loss.detach()+1e-7)
             if accepted:backtracks+=retry;break
         if not accepted:
@@ -147,12 +186,15 @@ def main():
     with torch.no_grad():
         lp,_=log_prob(actor,std,x,z,attack,vertical);ratio=(lp-old).exp();final_kl=float(((ratio-1)-(lp-old)).mean());value_loss=float(((value(x).squeeze(1)-returns)**2).mean())
     updated={**model,'actor':layers(actor),'value':layers(value),'log_std':std.detach().cpu().tolist()}
+    with torch.no_grad():final_anchor_kl=float(retention_loss())
+    if a.anchor_model and sha(a.anchor_model)!=anchor_sha:raise ValueError('Anchor changed during update')
     (out/'weights.json').write_text(json.dumps(updated,allow_nan=False))
     # Save optimizer/RNG with the checkpoint; future rollout still needs fresh seeds.
-    torch.save({'version':'combat_ppo_checkpoint_v2','weights_sha256':sha(out/'weights.json'),'consumed_rollouts':consumed+[meta['rollout_sha256']],'updates_completed':updates+1,'total_actor_steps':total_steps+done,'actor':actor.state_dict(),'value':value.state_dict(),'log_std':std.detach(),'actor_optimizer':actor_opt.state_dict(),'value_optimizer':value_opt.state_dict(),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,'config':config},out/'checkpoint.pt')
+    torch.save({'version':'combat_ppo_checkpoint_v2','weights_sha256':sha(out/'weights.json'),'consumed_rollouts':consumed+[meta['rollout_sha256']],'updates_completed':updates+1,'total_actor_steps':total_steps+done,'actor':actor.state_dict(),'value':value.state_dict(),'log_std':std.detach(),'actor_optimizer':actor_opt.state_dict(),'value_optimizer':value_opt.state_dict(),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,'config':config,'retention':retention},out/'checkpoint.pt')
     assert math.isfinite(final_kl) and final_kl<=config['target_kl']+1e-6
     report={'scope':'One PPO-Clip update on fresh stochastic first-life transitions; not combat acceptance or weapon learning','torch':torch.__version__,'trainer_sha256':sha(pathlib.Path(__file__)),'device':device,'benchmark_seconds_per_step':benchmarks,'rows':len(rows),'behavior_policy':meta['policy_version'],'behavior_sha256':sha(model_path),'rollout_sha256':meta['rollout_sha256'],'config':config,'config_sha256':sha(pathlib.Path(a.config)),'old_log_probability_max_error':log_error,'old_value_max_error':value_error,'actor_steps':done,'backtracks':backtracks,'rejected_steps':rejected_steps,'final_approx_kl':final_kl,'value_mse':value_loss,'seconds':time.perf_counter()-start,'weights_sha256':sha(out/'weights.json')}
     report.update({'resume_sha256':resume_sha,'updates_completed':updates+1,'total_actor_steps':total_steps+done,'consumed_rollouts':consumed+[meta['rollout_sha256']]})
+    report.update(retention=retention,retention_weight=retention_weight,initial_anchor_kl=initial_anchor_kl,final_anchor_kl=final_anchor_kl)
     if a.resume:assert sha(pathlib.Path(a.resume))==report['resume_sha256']
     (out/'trainer.py').write_bytes(pathlib.Path(__file__).read_bytes())
     assert sha(model_path)==meta['model_sha256'] and sha(root/'rollout.jsonl')==meta['rollout_sha256']

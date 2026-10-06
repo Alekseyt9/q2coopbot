@@ -10,12 +10,14 @@ import (
 )
 
 type probeProvider struct {
+	delay      time.Duration
 	panicNow   bool
 	wrongFrame bool
 }
 
 func (p probeProvider) Version() string { return "test_probe" }
 func (p probeProvider) Decide(o policy.Observation) (policy.Action, error) {
+	time.Sleep(p.delay)
 	if p.panicNow {
 		panic("diagnostic failure")
 	}
@@ -48,6 +50,45 @@ func TestDirectProviderControlsAnglesWithoutTacticalAssistance(t *testing.T) {
 	cmd, proposed, sel, direct := c.combatCommand(o, time.Now())
 	if !direct || sel.Owner != "provider" || proposed.Forward != 80 || proposed.Side != 40 || proposed.Buttons != 0 || cmd.Yaw != proposed.Yaw || cmd.Pitch != proposed.Pitch || c.planner.World.Command.AimSource != "policy" || c.planner.World.Command.AimEntity != 0 {
 		t.Fatal("rules retargeted or replaced provider", cmd, proposed, sel, c.planner.World.Command)
+	}
+}
+
+func TestDirectProviderKeepsEmptyObservationDuringOcclusion(t *testing.T) {
+	c := policyClient(t, "learned")
+	o := c.combatObservation(time.Now())
+	if _, _, _, direct := c.combatCommand(o, time.Now()); !direct {
+		t.Fatal("visible start not learned")
+	}
+	c.latestFrame++
+	c.planner.World.Snapshot.Frame = c.latestFrame
+	c.planner.World.Snapshot.Enemies = nil
+	o = c.combatObservation(time.Now())
+	_, proposed, selection, direct := c.combatCommand(o, time.Now())
+	if !direct || selection.Owner != "provider" || !selection.CombatContinuation || len(o.Enemies) != 0 || proposed.Forward != 80 {
+		t.Fatal("rules or synthetic target replaced occluded policy", selection, o.Enemies)
+	}
+	c.latestFrame++
+	c.planner.World.Snapshot.Frame = c.latestFrame
+	c.planner.World.Snapshot.Defeated = []quake.Object{{ID: 300}}
+	o = c.combatObservation(time.Now())
+	_, _, selection, direct = c.combatCommand(o, time.Now())
+	if direct || selection.Fallback != "system2_noncombat" {
+		t.Fatal("observed death did not return to travel", selection)
+	}
+}
+
+func TestLocalInferenceBudgetDoesNotInjectRulesIntoLockstep(t *testing.T) {
+	for _, synchronous := range []bool{false, true} {
+		c := policyClient(t, "learned")
+		c.testSynchronous = synchronous
+		c.combatControl.provider = probeProvider{delay: 8 * time.Millisecond}
+		_, _, selection, direct := c.combatCommand(c.combatObservation(time.Now()), time.Now())
+		if !selection.InferenceBudgetExceeded || direct != synchronous {
+			t.Fatal("budget ownership differs", synchronous, selection)
+		}
+		if !synchronous && selection.Fallback != "inference_budget_exceeded" {
+			t.Fatal("live budget lost", selection)
+		}
 	}
 }
 

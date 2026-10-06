@@ -10,16 +10,18 @@ param(
     [ValidateRange(20,500)][int]$GameFrames=300,
     [ValidateRange(1024,65530)][int]$Port=33100,
     [string]$Python='F:/src/strat/.venv-gpu/Scripts/python.exe',
-    [string]$Config='',[string]$RewardConfig='',[string]$OutputRoot=''
+    [string]$Config='',[string]$RewardConfig='',[string]$OutputRoot='',
+    [string]$AnchorModel='',[double]$RetentionWeight=1.,[ValidateRange(2,100)][int]$RetentionUpdates=4
 )
 $ErrorActionPreference='Stop'
-if($Mixed -and ($TrainingMonsterHealth -ne 0 -or $ReleaseGameFrame -ne 0)){throw 'Mixed training requires stock monster health and unfixed release'}
+if($Mixed -and $TrainingMonsterHealth -ne 0){throw 'Mixed training requires stock monster health'}
 $repo=Split-Path $PSScriptRoot -Parent
 if(!$Config){$Config=Join-Path $PSScriptRoot 'scenarios/combat-ppo-v1.json'}
 if(!$RewardConfig){$RewardConfig=Join-Path $PSScriptRoot 'scenarios/combat-reward-v1.json'}
 $RewardConfig=(Resolve-Path -LiteralPath $RewardConfig).Path
 $Model=(Resolve-Path -LiteralPath $Model).Path;$Checkpoint=(Resolve-Path -LiteralPath $Checkpoint).Path
 $Python=(Resolve-Path -LiteralPath $Python).Path;$Config=(Resolve-Path -LiteralPath $Config).Path
+if($AnchorModel){$AnchorModel=(Resolve-Path -LiteralPath $AnchorModel).Path;$anchorSHA=(Get-FileHash $AnchorModel).Hash}
 $trainingObjective=(Get-Content -LiteralPath $Config -Raw|ConvertFrom-Json).objective_reward_sha256
 $rewardVersion=(Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json).version
 if(($rewardVersion -in @('combat_reward_v2','combat_reward_v3','combat_reward_v4') -and !$trainingObjective) -or ($trainingObjective -and $trainingObjective -ne (Get-FileHash -LiteralPath $RewardConfig).Hash)){throw 'Training objective must match reward config before collection'}
@@ -48,7 +50,9 @@ try{
         $batch=Join-Path $dir 'batch';$data=Join-Path $dir 'rollout';$update=Join-Path $dir 'update'
         & "$PSScriptRoot/run_learned_combat_baseline.ps1" -Workers 4 -EpisodesPerWorker 1 -Timescale 2 -GameFrames $GameFrames -ReleaseGameFrame $ReleaseGameFrame -Mixed:$Mixed -Loadout blaster -CombatMode learned -ProviderFile $Model -Synchronous -RewardConfig $frozenReward -TrainingMonsterHealth $TrainingMonsterHealth -Seed ($Seed+4*($iteration-1)) -Port $Port -OutputRoot $batch
         & $dataTool --batch $batch --model $Model --out $data;if($LASTEXITCODE){throw "Iteration $iteration native replay rejected"}
-        & $Python $trainer --model $Model --resume $Checkpoint --data $data --config $frozen --out $update
+        $updateArgs=@($trainer,'--model',$Model,'--resume',$Checkpoint,'--data',$data,'--config',$frozen,'--out',$update)
+        if($AnchorModel){if((Get-FileHash $AnchorModel).Hash -ne $anchorSHA){throw 'Pinned anchor changed'};$updateArgs+=@('--anchor-model',$AnchorModel,'--retention-weight',$RetentionWeight.ToString([cultureinfo]::InvariantCulture),'--retention-updates',"$RetentionUpdates")}
+        & $Python @updateArgs
         if($LASTEXITCODE){throw "Iteration $iteration PPO update failed"}
         $report=Get-Content -LiteralPath (Join-Path $update 'report.json') -Raw|ConvertFrom-Json
         if(!$report.resume_sha256 -or $report.final_approx_kl -gt 0.010001){throw 'Update acceptance failed'}

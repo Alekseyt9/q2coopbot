@@ -55,3 +55,59 @@ fresh training19800–19815, Mixed19900–19903, Solo20000–20003; прежни
 те же, fixed4 updates. Root `combat-ppo-barrel-joint-v4-20261006-retry`.
 Теперь независимый audit требует exact Adam accepted step counters и value
 counters, помимо lineage/native proofs/KL/objective. Live promotion нет.
+
+56 focused Python tests прошли, включая actual CUDA retry regression.
+Первые weights остаются наблюдаемым поведением, но их optimizer lineage
+не подтверждает заявленный откат; такой же старый код мог влиять на прежние
+PPO циклы. Новый опыт начинает с пустого optimizer после supervised parent,
+а не с optimizer первого ошибочного цикла. Архитектура и reward прежние.
+
+## Исправленный цикл: обучение и Mixed оценка
+
+581/781/561/718 fresh rows, total2641. Accepted actor steps6/10/10/9,
+actual Adam counters6/16/26/35; value counters40/80/120/160. Final57 updates,
+559 total actor steps. Все четыре updates CUDA-only, KL0.0099993/0.0085831/
+0.0095841/0.0099998; два update остановлены после rejected trial без его
+применения. Baseline moments/counters теперь остаются неизменными.
+Exact lineage/optimizer counters/objective/gamma/source proofs проверены;
+native replay повторён, exported rollout bytes совпали во всех четырёх batch.
+
+Final weights `ced33b062164cec90e253f13707b18a198090cf64bf611407e2d11ad81cd3b92`,
+checkpoint `41ee1af1c24ab3783a79c9adbc2e2731491e5650da2b4ab34284b46c6a9c3282`.
+Training first-life:3 kills/9 deaths, в том числе полное завершение19805.
+Все3 kill reward rows (19805 steps164/274,19809 step196) вошли в PPO.
+2641 consumed scores совпали с native source rewards; independent component
+audit max error8.88e-16. Sparse успешные переходы есть, но их мало.
+
+| Mixed19900–19903 | Barrel parent | Corrected PPO |
+|---|---:|---:|
+| Оба монстра убиты без смерти | 2/4 | 0/4 |
+| Kills / deaths | 5 / 2 | 3 / 3 |
+| Incoming health damage | 325 | 318 |
+| Outgoing health damage | 1035 | 865 |
+| Barrel damage | 0 | 0 |
+| Grenade damage | 162 | 0 |
+
+Native incoming attribution Gunner183→33, Parasite142→285. Это перенос риска,
+не общее улучшение: основной критерий полного боя ухудшился. Before19902
+kill перед смертью не считается победой; after19900 trace_end без kills
+тоже не победа. Все kills provider; runtime handoff не создаёт улучшение.
+Hull interventions131→21, unsupported37→24, no-ground1→2, applied attack
+709→842; уменьшение movement guards не является приёмкой боя. Bbox error>15°
+34/709→107/842, не hit accuracy. Парные условия/fingerprints/seeds проверены.
+
+Ветка не принята и не включена в live. Следующий ограниченный опыт должен
+проверять сохранение исходных навыков при PPO, например временную distribution
+retention к исходному learned actor на fresh training states с заранее
+фиксированным ослаблением веса. Это будущая гипотеза, пока не реализована;
+не Go tactical override и не обещание улучшения. Sparse full-success episodes
+и влияние discount/GAE на позднее добивание надо учитывать отдельно, не меняя
+одновременно reward/horizon/архитектуру и retention. Eval states исключены.
+
+Solo20000–20003: оба варианта4 kills/0 deaths, outgoing700, incoming192→150.
+Kill ownership и handoff после kill подтверждены. Исправленный цикл содержит
+32 валидных captures:16 training +16 paired Mixed/Solo eval. Парные source/native
+fingerprints и условия совпали, source receipts и reward audit пройдены.
+Первый дефектный цикл хранится отдельно с `validation-status.json=false`;
+его states/checkpoints не использованы в повторе. Пользовательский live marker
+сохранён, принадлежащих этому опыту игровых процессов после оценки нет.

@@ -27,7 +27,7 @@ if($Loadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){thro
 if($TeacherVertical -and (!$Synchronous -or $CombatMode -ne 'rules' -or $Loadout -ne 'shotgun' -or $Feedback)){throw 'Vertical exercise requires synchronous fixed Shotgun rules without feedback'}
 if($RewardConfig -and !$Synchronous){throw 'Reward export requires -Synchronous'}
 if($TrainingMonsterHealth -and (!$Synchronous -or $Loadout -ne 'blaster' -or $Mixed -or $HealthKit -or $Feedback)){throw 'Curriculum requires isolated synchronous Blaster fixture'}
-if($ReleaseGameFrame -and (!$Synchronous -or $Loadout -ne 'blaster' -or $Mixed -or $HealthKit -or $GameFrames -lt 150)){throw 'Fixed release requires isolated synchronous Blaster fixture and >=150 game frames'}
+if($ReleaseGameFrame -and (!$Synchronous -or $Loadout -ne 'blaster' -or $HealthKit -or $GameFrames -lt 150)){throw 'Fixed release requires synchronous Blaster fixture without health kit and >=150 game frames'}
 $repo=Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/harness_manifest.ps1"
 if(!$OutputRoot){$OutputRoot=Join-Path $repo ('workspace/artifacts/learned-combat-baseline-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))}
@@ -161,6 +161,8 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 if($using:ReleaseGameFrame){
                     $weapon=@($rngLog|Select-String '^g_test_weapon_start game_frame=(\d+) actor=1 weapon=Blaster gunframe_before=\d+ gunframe_after=9$')
                     if($weapon.Count -ne 1 -or [int]$weapon[0].Matches[0].Groups[1].Value -ne $using:ReleaseGameFrame){throw 'Fixed weapon phase differs'}
+                    $world=@($rngLog|Select-String '^g_test_world_start frame=(\d+) phase=fixed_map_hold free_pool_reset=1$')
+                    if($world.Count -ne 1 -or [int]$world[0].Matches[0].Groups[1].Value -ne $using:ReleaseGameFrame){throw 'Fixed map preparation hold unconfirmed'}
                 }
             }
             $curriculumProof=$null
@@ -228,6 +230,7 @@ $manifest=[ordered]@{
     training_monster_health=$TrainingMonsterHealth
     post_frame_rng_reset=[bool]$Synchronous
     release_game_frame=$ReleaseGameFrame
+    fixed_world_hold=[bool]$ReleaseGameFrame
     game_frame_budget=$(if($Synchronous){'Commands after combat barrier; preparation excluded'}else{'All commands; preparation included'})
     observation_version='combat_observation_v3';action_version='combat_action_v1';reward_version=$(if($RewardConfig){(Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json).version}else{$null});reward_config_sha256=$(if($RewardConfig){$rewardHash}else{$null});reward_config=$(if($RewardConfig){Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json}else{$null});server_outcome_version=$(if($Synchronous){'server_step_effects_v1'}else{'server_damage_window_v1'})
     timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;mixed=[bool]$Mixed;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous;teacher_vertical=[bool]$TeacherVertical

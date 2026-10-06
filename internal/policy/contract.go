@@ -238,14 +238,16 @@ type Intervention struct {
 }
 
 type Selection struct {
-	Sample           *Sample        `json:"sample,omitempty"`
-	Mode             string         `json:"mode"`
-	Owner            string         `json:"owner"`
-	ProviderVersion  string         `json:"provider_version,omitempty"`
-	Candidate        *Action        `json:"candidate,omitempty"`
-	CandidateCommand *quake.UserCmd `json:"candidate_command,omitempty"`
-	GuardedCommand   *quake.UserCmd `json:"guarded_command,omitempty"`
-	Interventions    []Intervention `json:"interventions,omitempty"`
-	Fallback         string         `json:"fallback,omitempty"`
-	ElapsedUS        int64          `json:"elapsed_us"`
+	InferenceBudgetExceeded bool           `json:"inference_budget_exceeded,omitempty"`
+	CombatContinuation      bool           `json:"combat_continuation,omitempty"`
+	Sample                  *Sample        `json:"sample,omitempty"`
+	Mode                    string         `json:"mode"`
+	Owner                   string         `json:"owner"`
+	ProviderVersion         string         `json:"provider_version,omitempty"`
+	Candidate               *Action        `json:"candidate,omitempty"`
+	CandidateCommand        *quake.UserCmd `json:"candidate_command,omitempty"`
+	GuardedCommand          *quake.UserCmd `json:"guarded_command,omitempty"`
+	Interventions           []Intervention `json:"interventions,omitempty"`
+	Fallback                string         `json:"fallback,omitempty"`
+	ElapsedUS               int64          `json:"elapsed_us"`
 }
