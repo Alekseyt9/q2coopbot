@@ -10,6 +10,12 @@ import torch
 from torch import nn
 
 def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
+
+def training_devices():
+    """User requires CUDA-only training; never silently fall back to CPU."""
+    if not torch.cuda.is_available():
+        raise RuntimeError('Combat training requires CUDA; CPU training is disabled')
+    return ['cuda']
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--data',required=True);ap.add_argument('--out',required=True);ap.add_argument('--config',required=True);a=ap.parse_args()
     root=pathlib.Path(a.data);out=pathlib.Path(a.out);out.mkdir(exist_ok=False)
@@ -36,7 +42,7 @@ def main():
         if m[:,3].any():terms.append(nn.functional.cross_entropy(raw[m[:,3],5:],vertical[m[:,3]],weight=vweight.to(raw.device)))
         return sum(terms)
     benchmark={}
-    for device in ['cpu']+(['cuda'] if torch.cuda.is_available() else []):
+    for device in training_devices():
         probe=make_model().to(device);px,py,pm,pa,pv=[t.to(device) for t in datasets['train']];probe_opt=torch.optim.Adam(probe.parameters(),lr=config['learning_rate'])
         def probe_step():
             probe_opt.zero_grad();loss(probe(px),py,pm,pa,pv).backward();probe_opt.step()

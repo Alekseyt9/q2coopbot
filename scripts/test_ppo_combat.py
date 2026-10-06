@@ -1,5 +1,5 @@
 import unittest, tempfile, pathlib, copy
-from ppo_combat import advantages, restore_checkpoint, validate_objective, torch, nn, sha
+from ppo_combat import advantages, restore_checkpoint, validate_objective, restore_optimizer, training_devices, torch, nn, sha
 
 def row(seed,index,reward,value,next_value,terminal=False,truncated=False):
     return {'seed':seed,'index':index,'frame':index,'next_frame':index+1,'reward':reward,'sample':{'value':value},'next_value':next_value,'terminal':terminal,'truncated':truncated}
@@ -19,6 +19,23 @@ class GAETest(unittest.TestCase):
         self.assertAlmostEqual(a[0],2.44)
 
 class ResumeTest(unittest.TestCase):
+    def test_backtracking_snapshot_survives_rejected_cuda_trials(self):
+        parameter=nn.Parameter(torch.tensor([1.],device=training_devices()[0]))
+        optimizer=torch.optim.Adam([parameter],lr=.01)
+        parameter.grad=torch.ones_like(parameter);optimizer.step()
+        baseline=copy.deepcopy(optimizer.state_dict())
+        reference=copy.deepcopy(baseline)
+        for gradient in (2.,3.,4.):
+            restore_optimizer(optimizer,baseline)
+            parameter.grad=torch.full_like(parameter,gradient);optimizer.step()
+            self.assertEqual(int(optimizer.state[parameter]['step']),2)
+            for key,value in baseline['state'][0].items():
+                self.assertTrue(torch.equal(value,reference['state'][0][key]))
+            self.assertEqual(int(baseline['state'][0]['step']),1)
+        restore_optimizer(optimizer,baseline)
+        for key,value in optimizer.state[parameter].items():
+            self.assertTrue(torch.equal(value,baseline['state'][0][key]))
+
     def test_objective_pin_rejects_wrong_or_unpinned_kill_reward(self):
         validate_objective({}, {})
         validate_objective({'objective_reward_sha256':'abc'}, {'reward_config_sha256':'ABC','reward_version':'combat_reward_v2'})

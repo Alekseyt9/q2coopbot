@@ -94,5 +94,31 @@ class GroupTests(unittest.TestCase):
         self.assertEqual(new['value_optimizer']['state'],{})
         self.assertLess(sum(report['movement_mae_after']),sum(report['movement_mae_before']))
 
+    def test_finish_only_never_labels_two_threats_or_close_solo(self):
+        f = self.features((0,4))
+        self.assertEqual(labels(f,[0.]*8,finish_only=True),(None,None,None))
+        f[73:169] = [0.]*96;f[426:466] = [0.]*40;f[808] = 1/8
+        f[73:85] = [1,400/512,400/512,0,0,0,0,0,0,1,0,1]
+        f[426:431] = [1,0,1,0,1]
+        move,aim,slot = labels(f,[0.]*8,finish_only=True)
+        self.assertGreater(move[0],0);self.assertEqual(aim,[0.,0.]);self.assertEqual(slot,0)
+        f[75] = 320/512
+        self.assertEqual(labels(f,[0.]*8,finish_only=True),(None,None,None))
+        f[75] = 400/512;f[82] = 0;f[83] = 1
+        self.assertEqual(labels(f,[0.]*8,finish_only=True),(None,None,None))
+        with self.assertRaises(ValueError):labels(f,[0.]*8,range_band=True,finish_only=True)
+
+    def test_barrel_escape_learns_distance_not_aim_and_masks_unknown_props(self):
+        f = self.features((0,4));f[73:169] = [0.]*96
+        f[73:85] = [1,400/512,400/512,0,0,0,0,0,0,1,0,1];f[808] = 1/8
+        self.assertEqual(labels(f,[0.]*8,barrel_escape=True),(None,None,None))
+        f[259] = 1;f[260:269] = [1,100/512,100/512,0,0,1,0,0,0]
+        move,aim,slot = labels(f,[0.]*8,barrel_escape=True)
+        self.assertLess(move[0],0);self.assertIsNone(aim);self.assertIsNone(slot)
+        f[265] = 0
+        self.assertEqual(labels(f,[0.]*8,barrel_escape=True),(None,None,None))
+        f[265] = 1;f[259] = 0
+        self.assertEqual(labels(f,[0.]*8,barrel_escape=True),(None,None,None))
+
 
 if __name__ == '__main__':unittest.main()

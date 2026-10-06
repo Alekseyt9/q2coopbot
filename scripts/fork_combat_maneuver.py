@@ -8,7 +8,7 @@ import time
 sys.pycache_prefix = str(pathlib.Path(__file__).resolve().parents[1] / 'workspace/build/python-cache')
 from fork_combat_exploration import fork
 from fork_combat_aim import finish_actor
-from ppo_combat import network, torch, sha
+from ppo_combat import network, torch, sha, training_devices
 
 
 def movement_label(f, raw):
@@ -127,7 +127,7 @@ def fit(model, checkpoint, rows, retain_rows, epochs=1500):
             loss.backward()
             optimizer.step()
         return actor, step
-    for device in ['cpu']+(['cuda'] if torch.cuda.is_available() else []):
+    for device in training_devices():
         actor, step = setup(device)
         for _ in range(10): step()
         if device == 'cuda': torch.cuda.synchronize()

@@ -59,4 +59,105 @@ Root: `workspace/artifacts/combat-group-threat-v4-curriculum-20261006`.
 15 focused tests прошли: masks/clearance/drop, threat target vs nearest,
 incoming/receding/unknown projectile velocity, совместный yaw/sidemove,
 finite/bbox validation, сохранение parent/std/history/counters/retention.
-PowerShell driver проходит parser check. Боевой результат ожидает оценки.
+PowerShell driver проходит parser check.
+
+## Завершённая оценка group curriculum
+
+Четыре fresh batch дали2523 новых training states:646/292/721/864.
+Второй batch прервался на sharing violation общего AAS при атомарной замене.
+Он исключён, повторён как `iteration-2-retry` с теми же policy/сидами.
+Immutable hash reader теперь открывает файл с ReadWrite|Delete sharing,
+не изменяя hardlink contents; bounded retries сохранены. Оба focused storage
+теста прошли. Итоговый fit содержит6691 group rows и1720 solo retention rows.
+CUDA быстрее CPU примерно5–9 раз в четырёх fit. PPO counters остаются53/524;
+новых PPO updates и training kills в этих16 валидных captures нет.
+
+Final weights `c5b04e538238ad6be39ee8334d282241fb7f2d51f105f1ba1f6f34d9ae00d808`,
+checkpoint `1aea95a92c54ab4ef255525eb3fcc0fd3f19a8723bfa612832561e4d8d8b9811`.
+Независимые lineage/native provenance/tensor parity audits проверили все inputs,
+std/RNG/consumed history, reset Adam/critic. Reward component max error8.88e-16.
+Partial failed capture не включён. Frozen trainer лежит в experiment root.
+
+| Новые парные условия | Parent | Group curriculum |
+|---|---:|---:|
+| Mixed18700–18703: kills | 3 | 3 |
+| Mixed: deaths | 4 | 1 |
+| Mixed: оба монстра убиты без смерти | 0/4 | 0/4 |
+| Mixed: incoming health damage | 400 | 224 |
+| Mixed: outgoing health damage | 1085 | 675 |
+| Solo18800–18803: kills/deaths | 4/0 | 4/0 |
+| Solo: incoming health damage | 174 | 149 |
+
+В Mixed новая policy убила Gunner в трёх эпизодах, Parasite оставался живым
+во всех четырёх. Три окончания по лимиту кадров — выживание, не победа.
+Native incoming attribution: Parent Parasite364/Gunner36, новая Parasite0/Gunner224.
+Это локальный результат четырёх сидов, не доказательство общего превосходства.
+Все solo kills принадлежат provider, handoff происходит после убийства.
+
+Mixed guards: hull167→522, unsupported4→13, barrel attack suppression0→31;
+applied attack523→956. Ошибка aim более15° относительно хотя бы одного
+наблюдаемого bbox:0/523→187/956. Эта метрика не является точностью попаданий;
+nearest-only диагностика также может ошибочно штрафовать выбор другой цели.
+Все16 парных eval captures имеют valid provenance/dispatch/seeds и одинаковые
+условия каждой пары. Live promotion нет: основная цель полного завершения не достигнута.
+
+## Зафиксированное продолжение: ограниченная дистанция
+
+Гипотеза: только repulsion поощряет бесконечный отход и не обучает продолжать
+бой после исчезновения одного из двух врагов. `--range-band` добавляет штраф
+за дистанцию выше320 от видимого Parasite и выше512 от видимого Gunner.
+Учебная метка разрешена также для одного видимого Gunner или одного Parasite
+дальше256. Близкий одиночный Parasite остаётся под retention; невидимая цель
+не создаёт меток. Геометрия/velocity masks и guards прежние. Это offline
+supervised гипотеза, не новый runtime контроллер и не PPO.
+
+Один fixed2000 epoch fit от итогового group checkpoint на тех же6691+1720
+training states, без18700/18800 eval inputs. Range-band weights
+`ab0288d86b26b63c97b0a1e006d4f32ce34524a6d39ba7dbb9532f9048cff21c`.
+CUDA1.86ms/step против CPU20.78ms/step; выбран GPU. Training gate пройден:
+solo movement drift0.00811/0.01595, aim0.671/0.174°, attack0.000188,
+vertical KL3.17e-6.16 focused tests прошли, включая возврат к дальней
+оставшейся цели и отсутствие метки на неизвестную/близкую solo цель.
+
+До результата зафиксированы новые paired Mixed18900–18903 и Solo19000–19003,
+4 independent instances x2,300 frames, Blaster; solo175HP/release100.
+Reference — final group, candidate — единственный fixed range-band fit.
+Нет выбора checkpoint по eval. Артефакты: `combat-group-range-v4-fork-20261006`
+и `combat-group-range-v4-eval-20261006`.
+
+## Результат range-band: ветка отклонена
+
+| Новые парные условия | Group reference | Range-band |
+|---|---:|---:|
+| Mixed18900–18903: kills | 2 | 0 |
+| Mixed: deaths | 1 | 4 |
+| Mixed: оба монстра убиты без смерти | 0/4 | 0/4 |
+| Mixed: incoming health damage | 151 | 400 |
+| Mixed: outgoing health damage | 640 | 290 |
+| Solo19000–19003: kills/deaths | 4/0 | 4/0 |
+| Solo: incoming health damage | 123 | 119 |
+
+Все16 captures валидны; paired fingerprint/условия/seed совпадают,
+native attribution/kill ownership/guards независимо проверены.
+Range-band checkpoint SHA256
+`98cb1c1fee49b3543df1e7f5318fd31ce3470f89562d3c74e2c43500c6f41abc`;
+std/RNG/history/53 updates/524 actor steps сохранены, input proofs/tensor parity
+проверены. Reward component max error4.44e-16. В eval не обучались.
+
+В Mixed весь incoming урон обоих вариантов принадлежит Gunner. Reference
+убивает Gunner в двух эпизодах и оставляет Parasite; range-band не убивает
+ни одного. Barrel suppression3→85, applied attack938→84; hull587→3.
+Меньше столкновений со стеной не означает лучший бой. В этих captures
+закрытие дистанции сопровождается большим риском и блокировкой выстрелов
+у бочек. Причинный вклад каждого изменения отдельно ещё не проверен.
+Ноль bbox errors>15° на84 оставшихся applied shots не компенсирует отсутствие
+убийств и не доказывает точность стрельбы. Solo kills — provider, frame178,
+handoff179; выигрыш4 health points не является общим улучшением.
+
+Range-band не принят. Group reference также не принят вместо прежнего parent:
+полных Mixed побед нет, перенос результата18700 на18900 не гарантирован.
+Следующий ограниченный опыт должен отдельно обучать продолжение боя после
+первого убийства и сохранять поведение в состоянии двух угроз; нужен контроль
+риска Gunner и возможности стрелять вокруг наблюдаемых препятствий. Простое
+сближение со всеми видимыми целями и уменьшение hull interventions не подходят
+как критерии успеха. Следующие training/eval seeds должны быть новыми.

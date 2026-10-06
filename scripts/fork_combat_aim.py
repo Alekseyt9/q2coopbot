@@ -7,7 +7,7 @@ import sys
 import time
 sys.pycache_prefix = str(pathlib.Path(__file__).resolve().parents[1] / 'workspace/build/python-cache')
 from fork_combat_exploration import fork
-from ppo_combat import network, layers, torch, sha
+from ppo_combat import network, layers, torch, sha, training_devices
 
 
 def aim_labels(rows, limit=20.):
@@ -68,7 +68,7 @@ def fit_joint(child, state, x, target, epochs, limit, distill_weight):
             optimizer.step()
         return actor, step
 
-    for device in ['cpu'] + (['cuda'] if torch.cuda.is_available() else []):
+    for device in training_devices():
         actor, step = setup(device)
         for _ in range(10): step()
         if device == 'cuda': torch.cuda.synchronize()
@@ -122,7 +122,7 @@ def fit(model, checkpoint, rows, epochs=1500, limit=20., mode='head', distill_we
 
     latent_target = torch.atanh(target/180)
     benchmark = {}
-    for device in ['cpu'] + (['cuda'] if torch.cuda.is_available() else []):
+    for device in training_devices():
         head = head_on(device)
         h, y = hidden.to(device), latent_target.to(device)
         optimizer = torch.optim.Adam(head.parameters(), lr=.003)

@@ -2,7 +2,7 @@
 import argparse, copy, json, math, pathlib, time, sys
 sys.pycache_prefix=str(pathlib.Path(__file__).resolve().parents[1]/'workspace'/'build'/'python-cache')
 # Shared F: cache configuration is set before importing torch.
-from train_combat_bc import torch, nn, sha
+from train_combat_bc import torch, nn, sha, training_devices
 
 def network(layers):
     blocks=[]
@@ -14,6 +14,12 @@ def network(layers):
     return nn.Sequential(*blocks)
 
 def layers(model):return [{'weight':l.weight.detach().cpu().tolist(),'bias':l.bias.detach().cpu().tolist()} for l in model if isinstance(l,nn.Linear)]
+
+def restore_optimizer(optimizer,snapshot):
+    # PyTorch can reuse same-device tensors from load_state_dict. Each trial
+    # needs its own moments/step counters so a rejected step cannot mutate
+    # the baseline used by later retries or the final rejection restore.
+    optimizer.load_state_dict(copy.deepcopy(snapshot))
 
 def log_prob(actor,std,x,z,attack,vertical):
     raw=actor(x);normal=torch.distributions.Normal(raw[:,:4],std.exp())
@@ -89,7 +95,7 @@ def main():
         lp,_=log_prob(actor,std,x,z,attack,vertical);log_error=float((lp-old).abs().max());value_error=float((value(x).squeeze(1)-torch.tensor([r['sample']['value'] for r in rows])).abs().max())
         assert log_error<1e-3 and value_error<1e-4, (log_error,value_error)
     benchmarks={}
-    for device in ['cpu']+(['cuda'] if torch.cuda.is_available() else []):
+    for device in training_devices():
         probe=network(model['actor']).to(device);pstd=nn.Parameter(torch.tensor(model['log_std'],device=device));px,pz,pa,pv,po,pad,pret=[t.to(device) for t in data];opt=torch.optim.Adam(list(probe.parameters())+[pstd],lr=config['actor_lr'])
         def step():
             opt.zero_grad();plp,ent=log_prob(probe,pstd,px,pz,pa,pv);ratio=(plp-po).exp();loss=-torch.minimum(ratio*pad,ratio.clamp(1-config['clip'],1+config['clip'])*pad).mean()-config['entropy']*ent.mean();loss.backward();opt.step()
@@ -121,7 +127,7 @@ def main():
         for retry in range(13):
             actor.load_state_dict(saved_actor)
             with torch.no_grad():std.copy_(saved_std)
-            actor_opt.load_state_dict(saved_opt)
+            restore_optimizer(actor_opt,saved_opt)
             for group in actor_opt.param_groups:group['lr']=config['actor_lr']*(.5**retry)
             actor_opt.step()
             with torch.no_grad():
@@ -133,7 +139,7 @@ def main():
         if not accepted:
             actor.load_state_dict(saved_actor)
             with torch.no_grad():std.copy_(saved_std)
-            actor_opt.load_state_dict(saved_opt);rejected_steps+=1;break
+            restore_optimizer(actor_opt,saved_opt);rejected_steps+=1;break
         done+=1
     for _ in range(config['value_steps']):
         vloss=((value(x).squeeze(1)-returns)**2).mean();assert torch.isfinite(vloss);value_opt.zero_grad();vloss.backward();nn.utils.clip_grad_norm_(value.parameters(),config['max_grad_norm']);value_opt.step()
