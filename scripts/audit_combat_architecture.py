@@ -17,8 +17,21 @@ def main():
     python_sources=read(root/'python-sources.json') if (root/'python-sources.json').exists() else []
     for source in python_sources:
         assert sha(root/'python-sources'/source['name'])==source['sha256']==sha(pathlib.Path(__file__).parent/source['name'])
+    isolation=read(root/'source-isolation.json') if (root/'source-isolation.json').exists() else None
+    if isolation:
+        for source in isolation['source_hashes']:assert sha(pathlib.Path(isolation['source_snapshot'])/source['path'])==source['sha256']
+        for excluded in isolation.get('excluded_batches',[]):
+            folder=root/excluded['path'];assert sha(folder/'report.json')==excluded['report_sha256'] and sha(folder/'manifest.json')==excluded['manifest_sha256']
     parent=read(root/'parent.json');arms=('mlp','gru','attention','entity');fingerprints=set();records=[];training={};evaluation={};curves={};prefixes={};counts=collections.Counter()
     repairs=read(root/'export-repair-manifest.json') if (root/'export-repair-manifest.json').exists() else {}
+    evaluation_overrides=read(root/'evaluation-overrides.json') if (root/'evaluation-overrides.json').exists() else {}
+    def selected_evaluation(path):
+        key=path.relative_to(root).as_posix()
+        if key in evaluation_overrides:
+            chosen=(root/evaluation_overrides[key]).resolve();assert chosen.is_relative_to(root)
+            return chosen
+        fixed=path.with_name(path.name+'-fixed')
+        return fixed if fixed.exists() else path
     def published(arm):
         return root/repairs[arm]['export'] if arm in repairs else root/arm/f'iteration-{iterations}/update'
     def exact(a,b):
@@ -131,6 +144,7 @@ def main():
             curves[str(curve_iteration)][fixture]={}
             for arm in arms:
                 path=root/arm/f'curve-{curve_iteration}'/f'evaluation-{fixture}'
+                path=selected_evaluation(path)
                 result,_=batch(path,range(seed+offset,seed+offset+4),fixture=='mixed',3 if fixture=='hard-solo' else 1)
                 manifest=read(path/'manifest.json');actual=read(manifest['model_weights']);expected=read(root/arm/f'iteration-{curve_iteration}/update/weights.json')
                 actual['deterministic']=expected['deterministic'];assert actual==expected
@@ -139,15 +153,18 @@ def main():
         evaluation[fixture]={}
         for arm in ('parent',)+arms:
             path=root/arm/f'evaluation-{fixture}'
-            if path.with_name(path.name+'-fixed').exists():path=path.with_name(path.name+'-fixed')
+            path=selected_evaluation(path)
             result,_=batch(path,range(eval_seed,eval_seed+4),fixture=='mixed',3 if fixture=='hard-solo' else 1)
             manifest=read(path/'manifest.json');actual=read(manifest['model_weights']);expected=parent if arm=='parent' else read(published(arm)/'weights.json')
             actual['deterministic']=expected['deterministic'];assert actual==expected
             evaluation[fixture][arm]=result
     expected_batches=4*iterations+12*len(curve_iterations)+15
     assert dict(counts)==dict(captures=4*expected_batches,batches=expected_batches) and len(fingerprints)==1
+    if isolation:assert list(fingerprints)[0][0]==isolation['source_fingerprint']
     closure={arm:audit_closure(root/arm) for arm in arms}
     out=dict(complete=True,counts=dict(counts),initial_native_behavior_equal=True,source_native_fingerprints=list(fingerprints)[0],training=training,evaluation=evaluation,curves=curves,closure=closure,manifests=records,export_repairs=repairs,live_promoted=False,scope=f'{iterations} CUDA updates per architecture from the same pretrained MLP, fresh Adam, paired training seeds, fixed Blaster. Curve checkpoints are read-only, never training inputs or checkpoint selection; final evaluation uses its protocol seed offset. Four seeds per condition, unequal parameter counts, zero-memory historical bank and no full regression suite: not statistical superiority or production acceptance. Export repairs, if present, preserve all saved tensors/optimizer/RNG; immutable malformed originals remain separate.')
+    out['source_isolation']=isolation
+    out['evaluation_overrides']=evaluation_overrides
     (root/'completion-status.json').write_text(json.dumps(out,indent=2)+'\n');print(json.dumps(dict(counts=dict(counts),evaluation={f:{a:r['totals'] for a,r in arms.items()} for f,arms in evaluation.items()}),indent=2))
 
 if __name__=='__main__':main()

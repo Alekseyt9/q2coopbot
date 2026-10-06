@@ -43,7 +43,14 @@ func TestDemoReplayAndRotation(t *testing.T) {
 	frame = binary.LittleEndian.AppendUint32(frame, 1)
 	frame = binary.LittleEndian.AppendUint32(frame, 0xffffffff)
 	frame = append(frame, 0, 0, 17, 0, 0, 0, 0, 0, 0, 18, 0, 0)
+	// Both objectives and inventory would obscure playback, but the live
+	// decoder must retain them for the bot's inventory polling.
+	binary.LittleEndian.PutUint32(frame[14:], 1<<13)
+	frame = append(frame[:18], 3, 0, 18, 0, 0)
 	send(frame)
+	if decoder.Frames[1].Stats[13] != 3 {
+		t.Fatal("live layout stats changed")
+	}
 	delta := append([]byte(nil), frame...)
 	binary.LittleEndian.PutUint32(delta[1:], 2)
 	binary.LittleEndian.PutUint32(delta[5:], 1)
@@ -83,6 +90,11 @@ func TestDemoReplayAndRotation(t *testing.T) {
 				t.Fatal(err)
 			}
 			frameCount += len(frames)
+			for _, f := range frames {
+				if f.Stats[13] != 0 {
+					t.Fatal("layout overlay in demo")
+				}
+			}
 			if replay.ServerdataSeen && (data[9] != 1 || binary.LittleEndian.Uint32(data[5:]) != 0x10009) {
 				t.Fatal("wrong demo serverdata")
 			}

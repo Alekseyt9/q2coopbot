@@ -12,9 +12,10 @@ import (
 // MapOutline contains upward-facing BSP polygons in original world coordinates.
 // Overlapping floors retain their Z coordinates for height filtering in the viewer.
 type MapOutline struct {
-	Name   string   `json:"name"`
-	Source string   `json:"source"`
-	Floors [][]Vec3 `json:"floors"`
+	Name       string   `json:"name"`
+	Source     string   `json:"source"`
+	Floors     [][]Vec3 `json:"floors"`
+	FaceModels []int    `json:"face_models,omitempty"`
 }
 
 func LoadMapOutline(root, name string) (MapOutline, error) {
@@ -33,6 +34,26 @@ func LoadMapOutline(root, name string) (MapOutline, error) {
 }
 
 func parseOutline(data []byte, name, source string) (MapOutline, error) {
+	return parsePolygons(data, name, source, true)
+}
+
+// LoadMapGeometry retains walls, ceilings and inline brush-model polygons.
+func LoadMapGeometry(root, name string) (MapOutline, error) {
+	if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(name) {
+		return MapOutline{}, fmt.Errorf("invalid map name")
+	}
+	data, source, err := readMapAsset(root, name)
+	if err != nil {
+		source = filepath.Join(root, name+".bsp")
+		data, err = os.ReadFile(source)
+	}
+	if err != nil {
+		return MapOutline{}, err
+	}
+	return parsePolygons(data, name, source, false)
+}
+
+func parsePolygons(data []byte, name, source string, floorsOnly bool) (MapOutline, error) {
 	out := MapOutline{Name: name, Source: source, Floors: make([][]Vec3, 0)}
 	if len(data) < 160 || string(data[:4]) != "IBSP" || binary.LittleEndian.Uint32(data[4:]) != 38 {
 		return out, fmt.Errorf("invalid Quake II BSP")
@@ -67,6 +88,24 @@ func parseOutline(data []byte, name, source string) (MapOutline, error) {
 		return out, e
 	}
 	f32 := func(b []byte) float64 { return float64(math.Float32frombits(binary.LittleEndian.Uint32(b))) }
+	faceModels := make([]int, len(faces)/20)
+	if !floorsOnly {
+		models, err := lump(13, 64)
+		if err != nil {
+			return out, err
+		}
+		for model := 1; model < len(models)/64; model++ {
+			row := models[model*64:]
+			first := int(int32(binary.LittleEndian.Uint32(row[56:])))
+			count := int(int32(binary.LittleEndian.Uint32(row[60:])))
+			if first < 0 || count < 0 || first+count > len(faceModels) {
+				return out, fmt.Errorf("invalid BSP model faces")
+			}
+			for i := first; i < first+count; i++ {
+				faceModels[i] = model
+			}
+		}
+	}
 	for p := 0; p < len(faces); p += 20 {
 		face := faces[p:]
 		plane := int(binary.LittleEndian.Uint16(face)) * 20
@@ -77,7 +116,7 @@ func parseOutline(data []byte, name, source string) (MapOutline, error) {
 		if binary.LittleEndian.Uint16(face[2:]) != 0 {
 			nz = -nz
 		}
-		if nz < 0.5 {
+		if floorsOnly && nz < 0.5 {
 			continue
 		}
 		first := int(int32(binary.LittleEndian.Uint32(face[4:])))
@@ -110,6 +149,9 @@ func parseOutline(data []byte, name, source string) (MapOutline, error) {
 		}
 		if len(poly) >= 3 {
 			out.Floors = append(out.Floors, poly)
+			if !floorsOnly {
+				out.FaceModels = append(out.FaceModels, faceModels[p/20])
+			}
 		}
 	}
 	return out, nil

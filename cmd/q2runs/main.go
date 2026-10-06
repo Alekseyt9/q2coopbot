@@ -48,13 +48,15 @@ type run struct {
 	Bytes    int64     `json:"bytes"`
 }
 type server struct {
-	root     string
-	assets   []string
-	mu       sync.Mutex
-	runs     []run
-	scanned  time.Time
-	mapMu    sync.Mutex
-	mapCache map[string]*cachedMap
+	root      string
+	assets    []string
+	mu        sync.Mutex
+	runs      []run
+	scanned   time.Time
+	mapMu     sync.Mutex
+	mapCache  map[string]*cachedMap
+	demoMu    sync.Mutex
+	demoCache map[string]*cachedDemo
 }
 
 // Ignore non-telemetry JSONL and tolerate an unfinished final line of a live trace.
@@ -220,6 +222,9 @@ func (s *server) handler() http.Handler {
 		s.serveMap(w, r)
 	})
 	mux.HandleFunc("GET /api/map.svg", s.serveMap)
+	mux.HandleFunc("GET /api/map.mesh", s.serveMesh)
+	mux.HandleFunc("GET /api/demos", s.serveDemos)
+	mux.HandleFunc("GET /api/demo", s.serveDemo)
 	files, _ := fs.Sub(web, "web")
 	mux.Handle("/", http.FileServer(http.FS(files)))
 	return mux

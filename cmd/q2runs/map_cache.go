@@ -19,12 +19,15 @@ import (
 var mapNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 type cachedMap struct {
-	mu                 sync.Mutex
-	signature          string
-	body, compressed   []byte
-	etag               string
-	svg, svgCompressed []byte
-	svgETag            string
+	mu                   sync.Mutex
+	signature            string
+	body, compressed     []byte
+	etag                 string
+	svg, svgCompressed   []byte
+	svgETag              string
+	meshSignature        string
+	mesh, meshCompressed []byte
+	meshETag             string
 }
 
 // Stat loose BSPs and PAKs without opening their contents. This also detects

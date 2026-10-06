@@ -79,6 +79,8 @@ type Frame struct {
 	Suppressed      byte
 	RemovedEntities []int
 	Origin          Vec3
+	ViewOffset      Vec3
+	FOV             float64
 	Velocity        Vec3
 	PMFlags         byte
 	Gravity         int16
@@ -106,6 +108,7 @@ const playerSkinsConfigBase = 32 + 5*256 // CS_PLAYERSKINS in protocol 34.
 type Decoder struct {
 	CaptureDemo        bool
 	DemoPayload        []byte
+	demoLayoutOffsets  []int
 	Inventory          [256]int16
 	InventoryKnown     bool
 	InventoryFrame     int
@@ -349,6 +352,16 @@ func (d *Decoder) playerstate(r *reader, old Frame) (Frame, error) {
 	}
 	for _, p := range [][2]int{{128, 3}, {256, 6}, {512, 3}} {
 		if flags&uint16(p[0]) != 0 {
+			if p[0] == 128 {
+				for axis := range f.ViewOffset {
+					v, err := r.byte()
+					if err != nil {
+						return f, err
+					}
+					f.ViewOffset[axis] = float64(int8(v)) / 4
+				}
+				continue
+			}
 			if p[0] == 256 {
 				for axis := range f.ViewAngles {
 					f.ViewAngles[axis], e = r.short()
@@ -384,6 +397,14 @@ func (d *Decoder) playerstate(r *reader, old Frame) (Frame, error) {
 	}
 	for _, p := range [][2]int{{1024, 4}, {2048, 1}, {16384, 1}} {
 		if flags&uint16(p[0]) != 0 {
+			if p[0] == 2048 {
+				v, err := r.byte()
+				if err != nil {
+					return f, err
+				}
+				f.FOV = float64(v)
+				continue
+			}
 			if e = skip(p[1]); e != nil {
 				return f, e
 			}
@@ -395,6 +416,9 @@ func (d *Decoder) playerstate(r *reader, old Frame) (Frame, error) {
 	}
 	for i := 0; i < 32; i++ {
 		if uint32(mask)&(uint32(1)<<i) != 0 {
+			if d.CaptureDemo && i == 13 {
+				d.demoLayoutOffsets = append(d.demoLayoutOffsets, r.pos)
+			}
 			f.Stats[i], e = r.short()
 			if e != nil {
 				return f, e
@@ -491,6 +515,7 @@ func (d *Decoder) frame(r *reader) (Frame, error) {
 func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 	r := reader{data: data}
 	d.DemoPayload = d.DemoPayload[:0]
+	d.demoLayoutOffsets = d.demoLayoutOffsets[:0]
 	d.Commands = nil
 	d.Sounds = nil
 	d.Explosions = nil
@@ -729,6 +754,13 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 		if d.CaptureDemo && op != 11 && op != 8 && op != 16 {
 			at := len(d.DemoPayload)
 			d.DemoPayload = append(d.DemoPayload, data[start:r.pos]...)
+			// The bot opens inventory for telemetry. Hide its inventory/objectives
+			// overlays in playback while retaining health, armor, ammo and live stats.
+			for _, offset := range d.demoLayoutOffsets {
+				if offset >= start && offset+2 <= r.pos {
+					binary.LittleEndian.PutUint16(d.DemoPayload[at+offset-start:], 0)
+				}
+			}
 			if op == 12 {
 				d.DemoPayload[at+9] = 1 // attractloop, as in Yamagi CL_Record_f
 				count := binary.LittleEndian.Uint32(d.DemoPayload[at+5:])
