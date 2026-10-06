@@ -137,6 +137,17 @@ func run() error {
 	}
 	defer f.Close()
 	enc := json.NewEncoder(f)
+	var contextFile *os.File
+	var contextEncoder *json.Encoder
+	contextRows := 0
+	if behavior.IsRecurrent() {
+		contextFile, e = os.Create(filepath.Join(*out, "sequence.jsonl"))
+		if e != nil {
+			return e
+		}
+		defer contextFile.Close()
+		contextEncoder = json.NewEncoder(contextFile)
+	}
 	receipts := map[string]string{}
 	remember := func(path string) error {
 		h, e := sha(path)
@@ -254,9 +265,13 @@ func run() error {
 				return proofErr
 			}
 			if manifest.ReleaseFrame > 0 {
+				idleFrame := 9
+				if weapon == "Machinegun" {
+					idleFrame = 6
+				}
 				for _, step := range steps {
 					if step.Owner == "provider" {
-						if step.Observation.GunFrame != 9 {
+						if step.Observation.GunFrame != idleFrame {
 							return fmt.Errorf("first policy weapon phase differs")
 						}
 						break
@@ -289,6 +304,21 @@ func run() error {
 			if s.Observation.Identity.Life == 1 && s.Owner == "provider" && (s.Provider != p.Version() || s.Sample == nil) {
 				return fmt.Errorf("missing or foreign on-policy sample")
 			}
+			if s.Observation.Identity.Life == 1 && s.Owner == "provider" && s.Provider == p.Version() && s.Sample != nil {
+				if e = p.VerifyMemory(s.Observation, *s.Sample); e != nil {
+					return e
+				}
+				if contextEncoder != nil {
+					x, err := policy.FeaturesForVersion(s.Observation, p.FeatureVersion())
+					if err != nil {
+						return err
+					}
+					if err = contextEncoder.Encode(map[string]any{"features": x, "seed": r.Seed, "index": s.Index, "frame": s.Observation.Identity.Frame, "memory": s.Sample.Memory}); err != nil {
+						return err
+					}
+					contextRows++
+				}
+			}
 			if s.Observation.Identity.Life != 1 || s.Owner != "provider" || s.Provider != p.Version() || s.Sample == nil || s.Next == nil || !reward.Available || reward.Score == nil {
 				skipped++
 				continue
@@ -309,7 +339,7 @@ func run() error {
 			}
 			nv := 0.0
 			if !s.Terminal && !(manifest.Reward.HasKillReward() && s.Truncated && s.Reason == "control_handoff") {
-				nv, e = p.Value(*s.Next)
+				nv, e = p.ValueAfter(s.Observation, *s.Sample, *s.Next)
 				if e != nil {
 					return e
 				}
@@ -339,7 +369,20 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	data, _ := json.MarshalIndent(map[string]any{"version": "combat_ppo_rollout_v1", "feature_version": behavior.FeatureVersion(), "reward_config_sha256": strings.ToLower(manifest.RewardSHA), "reward_version": manifest.Reward.Version, "aim_gamma": manifest.Reward.AimGamma, "training_monster_health": manifest.TrainingHealth, "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE; v2 verified control handoff retains reward with zero segment bootstrap; full world reset equivalence unproven"}, "", "  ")
+	metadata := map[string]any{"version": "combat_ppo_rollout_v1", "feature_version": behavior.FeatureVersion(), "reward_config_sha256": strings.ToLower(manifest.RewardSHA), "reward_version": manifest.Reward.Version, "aim_gamma": manifest.Reward.AimGamma, "training_monster_health": manifest.TrainingHealth, "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE; v2 verified control handoff retains reward with zero segment bootstrap; full world reset equivalence unproven"}
+	if contextFile != nil {
+		if e = contextFile.Sync(); e != nil {
+			return e
+		}
+		h, err := sha(filepath.Join(*out, "sequence.jsonl"))
+		if err != nil {
+			return err
+		}
+		metadata["recurrent_version"] = behavior.MemoryVersion()
+		metadata["sequence_sha256"] = h
+		metadata["sequence_rows"] = contextRows
+	}
+	data, _ := json.MarshalIndent(metadata, "", "  ")
 	fmt.Printf("PPO rollout verified: rows=%d terminal=%d policy=%s\n", count, terminals, behavior.Version())
 	return os.WriteFile(filepath.Join(*out, "report.json"), data, 0644)
 }

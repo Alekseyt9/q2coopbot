@@ -153,6 +153,7 @@ def main():
         (out/'report.json').write_text(json.dumps({'scope':'BC initialized stochastic actor, zero value; no PPO update yet','bc_sha256':sha(pathlib.Path(a.init_bc)),'config_sha256':sha(pathlib.Path(a.config))},indent=2));return
     assert a.model and a.data
     model_path=pathlib.Path(a.model);root=pathlib.Path(a.data);model=json.loads(model_path.read_text());meta=json.loads((root/'report.json').read_text())
+    assert not any(model.get(k) for k in ('memory','attention','entity_attention')), 'Architecture models require ppo_recurrent.py'
     validate_objective(config,meta)
     assert model['kind']=='combat_ppo_v1' and not model['deterministic'] and meta['version']=='combat_ppo_rollout_v1' and sha(model_path)==meta['model_sha256']
     assert meta.get('feature_version','combat_features_v1')==model['feature_version'], 'Rollout feature version differs'

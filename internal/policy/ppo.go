@@ -15,25 +15,29 @@ import (
 const PPOKind = "combat_ppo_v1"
 
 type PPOFile struct {
-	Kind          string       `json:"kind"`
-	Features      string       `json:"feature_version"`
-	Actor         []DenseLayer `json:"actor"`
-	Value         []DenseLayer `json:"value"`
-	LogStd        [4]float64   `json:"log_std"`
-	SamplingSeed  int64        `json:"sampling_seed"`
-	Deterministic bool         `json:"deterministic"`
+	Kind            string               `json:"kind"`
+	Features        string               `json:"feature_version"`
+	Actor           []DenseLayer         `json:"actor"`
+	Value           []DenseLayer         `json:"value"`
+	LogStd          [4]float64           `json:"log_std"`
+	SamplingSeed    int64                `json:"sampling_seed"`
+	Deterministic   bool                 `json:"deterministic"`
+	Memory          *GRUFile             `json:"memory,omitempty"`
+	Attention       *AttentionFile       `json:"attention,omitempty"`
+	EntityAttention *EntityAttentionFile `json:"entity_attention,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
 // Jacobian cancels. Quantization/guards belong to environment execution.
 type Sample struct {
-	Version        string     `json:"version"`
-	SamplingSeed   int64      `json:"sampling_seed"`
-	Latent         [4]float64 `json:"latent"`
-	Attack         bool       `json:"attack"`
-	Vertical       int        `json:"vertical"`
-	LogProbability float64    `json:"log_probability"`
-	Value          float64    `json:"value"`
+	Version        string        `json:"version"`
+	SamplingSeed   int64         `json:"sampling_seed"`
+	Latent         [4]float64    `json:"latent"`
+	Attack         bool          `json:"attack"`
+	Vertical       int           `json:"vertical"`
+	LogProbability float64       `json:"log_probability"`
+	Value          float64       `json:"value"`
+	Memory         *MemorySample `json:"memory,omitempty"`
 }
 type PPO struct {
 	file          PPOFile
@@ -41,6 +45,8 @@ type PPO struct {
 	version       string
 	rng           *rand.Rand
 	last          *Sample
+	memory        memoryState
+	lastAction    *Action
 }
 
 func LoadPPO(path string) (*PPO, error) {
@@ -69,6 +75,15 @@ func LoadPPO(path string) (*PPO, error) {
 	if e = validateFeatureLayers(f.Value, 1, f.Features); e != nil {
 		return nil, e
 	}
+	if e = validateMemory(f.Memory, f.Actor, f.Value); e != nil {
+		return nil, e
+	}
+	if e = validateAttention(f.Attention, f.Memory, f.Actor, f.Value); e != nil {
+		return nil, e
+	}
+	if e = validateEntityAttention(f.EntityAttention, f); e != nil {
+		return nil, e
+	}
 	for _, s := range f.LogStd {
 		if math.IsNaN(s) || math.IsInf(s, 0) || s < -8 || s > 1 {
 			return nil, fmt.Errorf("invalid PPO standard deviation")
@@ -89,7 +104,25 @@ func (p *PPO) FeatureVersion() string { return p.file.Features }
 func (p *PPO) SamplingSeed() int64    { return p.file.SamplingSeed }
 func (p *PPO) IsStochastic() bool     { return !p.file.Deterministic }
 func (p *PPO) LastSample() *Sample    { return p.last }
+func (p *PPO) IsRecurrent() bool      { return p.file.Memory != nil || p.file.Attention != nil }
+func (p *PPO) MemoryVersion() string {
+	if p.file.Attention != nil {
+		return AttentionVersion
+	}
+	if p.file.Memory != nil {
+		return GRUVersion
+	}
+	return ""
+}
 func (p *PPO) Value(o Observation) (float64, error) {
+	if p.file.EntityAttention != nil {
+		_, v, _, e := p.memoryRaw(o, nil)
+		return v, e
+	}
+	if p.IsRecurrent() {
+		_, v, _, e := p.memoryRaw(o, p.beforeMemory(o))
+		return v, e
+	}
 	x, e := p.critic.Raw(o)
 	if e != nil {
 		return 0, e
@@ -101,11 +134,7 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	if s.Version != p.version || s.Vertical < 0 || s.Vertical > 2 {
 		return Action{}, 0, 0, fmt.Errorf("PPO sample version/category")
 	}
-	x, e := p.actor.Raw(o)
-	if e != nil {
-		return Action{}, 0, 0, e
-	}
-	value, e := p.Value(o)
+	x, value, _, e := p.memoryRaw(o, s.Memory)
 	if e != nil {
 		return Action{}, 0, 0, e
 	}
@@ -133,12 +162,16 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	return a, lp, value, e
 }
 func (p *PPO) Decide(o Observation) (Action, error) {
+	if p.IsRecurrent() && p.memory.valid && p.memory.identity == o.Identity && p.lastAction != nil {
+		return *p.lastAction, nil
+	}
 	p.last = nil
-	x, e := p.actor.Raw(o)
+	before := p.beforeMemory(o)
+	x, _, after, e := p.memoryRaw(o, before)
 	if e != nil {
 		return Action{}, e
 	}
-	s := Sample{Version: p.version, SamplingSeed: p.file.SamplingSeed}
+	s := Sample{Version: p.version, SamplingSeed: p.file.SamplingSeed, Memory: before}
 	for i := range s.Latent {
 		s.Latent[i] = x[i]
 		if !p.file.Deterministic {
@@ -173,6 +206,10 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		return Action{}, e
 	}
 	s.LogProbability, s.Value = lp, value
+	if p.IsRecurrent() {
+		p.memory = memoryState{identity: o.Identity, actor: after.Actor, value: after.Value, position: after.Position, valid: true}
+		p.lastAction = &a
+	}
 	if !p.file.Deterministic {
 		p.last = &s
 	}
