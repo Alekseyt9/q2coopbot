@@ -13,10 +13,11 @@ import (
 const Version = "observed_bbox_aim_query_v1"
 
 type Label struct {
-	Version string        `json:"version"`
-	Target  int           `json:"target"`
-	Action  policy.Action `json:"desired_action"`
-	Scope   string        `json:"scope"`
+	InputScale float64       `json:"planar_input_scale,omitempty"`
+	Version    string        `json:"version"`
+	Target     int           `json:"target"`
+	Action     policy.Action `json:"desired_action"`
+	Scope      string        `json:"scope"`
 }
 
 // Query requires a confirmed clear observed target and known protocol bbox.

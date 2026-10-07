@@ -131,3 +131,6 @@ go run ./cmd/q2episode --episodes parasite-blaster-generated `
 
 
 
+
+Расширены rules capabilities двух generated MG recipes с frozen seed_revision (1/2); все20 семейств доступны для правил и learned. [Fire BC/RL comparison](combat_fire_bc_rl_20261007.md):rules66/80 противFire BC51/80 на парном offset24. [Verified learned-state query corpus](combat_aim_query_20261007.md):новая selection counterfactual_observed_bbox_aim_v1, desired annotation отдельно от actual action/reward, legacy BC exporter rejects query data. Query-only aim branch не принят после47/80→30/80; final test не запускался.
+

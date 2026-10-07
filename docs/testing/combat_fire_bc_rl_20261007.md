@@ -27,3 +27,42 @@ Update30 before/after validation на offset24 завершена: fire BC51/80�
 
 В отдельном ignored prototype разработана Go nominal aim query на observed bbox/current eye. Unit tests покрывают большой промах, wrap179→-179, crouched eye, неизвестный bbox, скрытую ближайшую цель и stale observation. Prototype не подключён к runtime и ещё не экспортирует verified training corpus. Источник source fingerprint активного reference-pool не менялся.
 
+
+## Сравнение всех четырёх вариантов
+
+| Метрика | Update29 | Fire BC | Fire BC+PPO30 | Rules |
+|---|---:|---:|---:|---:|
+| Победы |45/80|51/80|48/80|66/80|
+| Смерти в первой жизни |32|28|31|8|
+| Убийства в первой жизни |46|52|49|68|
+| Полученный health damage |3976|3527|3706|1207|
+
+Полная проверка320 validation captures завершена: batches complete/provenance valid, pool source_unchanged=true, reports SHA совпали с bindings. Generated fixtures и multiset native release class/pose/health/solid всех80 условий совпали. Engine entity IDs иногда различаются из-за allocation; они сопоставляются внутри каждого прогона и не являются physical reset conditions. Raw entity IDs не входят в policy feature vector. Полная эквивалентность скрытого engine state не заявлена.
+
+Fire BC улучшила reference Update29 на6 побед в этом новом cohort; PPO30 снизил результат на3 относительно Fire BC. Rules остаётся лучше:66/80 против51/80. Это известные20 семейств и validation seeds, не unseen-geometry или full base1/base2 acceptance. Превосходство ordinary controller ещё не достигнуто; основная runtime policy не заменена.
+
+| Семейство | Update29 | Fire BC | Fire BC+PPO30 | Rules |
+|---|---:|---:|---:|---:|
+|parasite-blaster-generated|4/4|4/4|4/4|4/4|
+|parasite-gunner-blaster-generated|0/4|0/4|0/4|0/4|
+|parasite-machinegun-recoil|4/4|4/4|3/4|4/4|
+|parasite-gunner-machinegun-recoil|1/4|1/4|1/4|0/4|
+|campaign-base1-site-01-blaster|4/4|4/4|3/4|4/4|
+|campaign-base1-site-01-machinegun|2/4|3/4|2/4|4/4|
+|campaign-base1-site-02-blaster|4/4|4/4|3/4|4/4|
+|campaign-base1-site-02-machinegun|4/4|3/4|4/4|4/4|
+|campaign-base1-site-03-blaster|1/4|1/4|2/4|4/4|
+|campaign-base1-site-03-machinegun|0/4|0/4|0/4|3/4|
+|campaign-base1-site-04-blaster|4/4|2/4|2/4|4/4|
+|campaign-base1-site-04-machinegun|1/4|0/4|2/4|4/4|
+|campaign-base2-site-01-blaster|4/4|4/4|4/4|4/4|
+|campaign-base2-site-01-machinegun|3/4|4/4|4/4|4/4|
+|campaign-base2-site-02-blaster|0/4|0/4|0/4|4/4|
+|campaign-base2-site-02-machinegun|0/4|1/4|0/4|4/4|
+|campaign-base2-site-03-blaster|1/4|4/4|2/4|4/4|
+|campaign-base2-site-03-machinegun|4/4|4/4|4/4|4/4|
+|campaign-base2-site-04-blaster|4/4|4/4|4/4|2/4|
+|campaign-base2-site-04-machinegun|0/4|4/4|4/4|1/4|
+
+Authoritative comparison: workspace/artifacts/fire-bc-rl-v2-20261007/comparison.json. Update seals и source SHA сохранены. Следующий этап — native-verified learned-state corpus с отдельными nominal aim annotations; отдельная ветка от Fire BC без принятия неулучшившего PPO30.
+

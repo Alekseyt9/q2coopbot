@@ -14,7 +14,7 @@ def sequences(rows):
         groups[-1].append(row);last=(key,i['frame'])
     return groups
 
-def tensors(rows,device):
+def tensors(rows,device,require_attack=True):
     groups=sequences(rows);length=max(map(len,groups));width=len(rows[0]['features'])
     x=torch.zeros((len(groups),length,width),device=device);target=torch.zeros((len(groups),length,2),device=device)
     aim=torch.zeros((len(groups),length),device=device,dtype=torch.bool);attack_mask=aim.clone();attack=x[:,:,0].clone();valid=aim.clone()
@@ -24,7 +24,8 @@ def tensors(rows,device):
         aim[i,:n]=torch.tensor([r['mask'][1] for r in group],device=device)
         attack_mask[i,:n]=torch.tensor([r['mask'][2] for r in group],device=device)
         attack[i,:n]=torch.tensor([float(r['attack']) for r in group],device=device);valid[i,:n]=True
-    assert aim.any() and attack_mask.any() and attack[attack_mask].min()==0 and attack[attack_mask].max()==1
+    assert aim.any()
+    if require_attack:assert attack_mask.any() and attack[attack_mask].min()==0 and attack[attack_mask].max()==1
     return x,target,aim,attack_mask,attack,valid
 
 def main():
@@ -56,20 +57,24 @@ def main():
                 p.requires_grad_(True)
                 mask=torch.zeros_like(p);mask[selected]=1
                 p.register_hook(lambda grad,mask=mask:grad*mask)
-    datasets={s:tensors(r,device) for s,r in rows.items()}
+    aim_loss_kind=config.get('aim_loss','coordinate_mse')
+    assert aim_loss_kind in ('coordinate_mse','wrapped_yaw_v1')
+    datasets={s:tensors(r,device,train_scope!='aim_heads') for s,r in rows.items()}
     with torch.no_grad(): reference={s:actor(d[0])[0].detach() for s,d in datasets.items()}
     # Native teacher tracks aim/fire. Other heads retain this branch's behavior;
     # full mixed live evaluation is still needed to detect forgetting.
     cols=[0,1]+list(range(5,len(model['actor'][-1]['bias'])))
     def losses(split):
         x,target,aim,am,attack,valid=datasets[split];raw=actor(x)[0]
-        aim_loss=(raw[... ,2:4].tanh()[aim]-target[aim]).square().mean()
+        error=raw[... ,2:4].tanh()[aim]-target[aim]
+        if aim_loss_kind=='wrapped_yaw_v1':error=torch.stack(((error[:,0]+1).remainder(2)-1,error[:,1]),-1)
+        aim_loss=error.square().mean()
         logits=raw[...,4][am];labels=attack[am];pos=labels==1;neg=~pos
         bce=nn.functional.binary_cross_entropy_with_logits(logits,labels,reduction='none')
-        attack_loss=.5*(bce[pos].mean()+bce[neg].mean())
+        attack_loss=.5*(bce[pos].mean()+bce[neg].mean()) if pos.any() and neg.any() else raw.sum()*0
         retention=(raw[...,cols][valid]-reference[split][...,cols][valid]).square().mean()
         loss=config['aim_weight']*aim_loss+config['attack_weight']*attack_loss+config['retention_weight']*retention
-        return loss,dict(aim_rmse_degrees=float(aim_loss.detach().sqrt()*180),attack_balanced_bce=float(attack_loss.detach()),retention_mse=float(retention.detach()))
+        return loss,dict(aim_rmse_degrees=float(aim_loss.detach().sqrt()*180),attack_balanced_bce=float(attack_loss.detach()) if pos.any() and neg.any() else None,attack_rows=int(am.sum()),retention_mse=float(retention.detach()))
     opt=torch.optim.Adam([p for p in actor.parameters() if p.requires_grad],lr=config['learning_rate']);history=[];start=time.perf_counter()
     with torch.no_grad(): before={s:losses(s)[1] for s in datasets}
     for epoch in range(config['epochs']):
@@ -101,6 +106,7 @@ def main():
     durable_write(a.out/'checkpoint.pt',lambda f:torch.save(cp,f))
     report=dict(version='combat_sequence_bc_update_v1',device=device,architecture=TEMPORAL,epochs=config['epochs'],train_context=meta['counts']['train'],validation_context=meta['counts']['validation'],train_aim_rows=meta['aim_rows']['train'],validation_aim_rows=meta['aim_rows']['validation'],before=before,after=after,history=history,seconds=time.perf_counter()-start,weights_sha256=sha(a.out/'weights.json'),checkpoint_sha256=sha(a.out/'checkpoint.pt'),parent=sha(a.model),data_sha256=meta['data_sha256'],config_sha256=sha(a.config),trainer_sha256=sha(pathlib.Path(__file__)),ppo_updates_completed=cp['updates_completed'],ppo_total_actor_steps=cp['total_actor_steps'],scope='Masked aim/fire BC on verified teacher sequences; fixed final epoch; final test deferred. No live acceptance, architecture superiority, tactical movement or weapon-choice claim.')
     report['train_scope']=train_scope
+    report['aim_loss']=aim_loss_kind
     report['non_aim_fire_parameters_exactly_preserved']=selected is not None
     report['selected_action_rows']=selected
     report['unselected_parameters_exactly_preserved']=selected is not None

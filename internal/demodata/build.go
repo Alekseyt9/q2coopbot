@@ -347,18 +347,31 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 			var query *aimquery.Label
 			if spec.SelectionVersion == AimQuerySelectionVersion {
 				if s.Owner == "provider" && s.Observation.Identity.Life == 1 {
-					if s.Sample == nil || s.Provider != queryPolicy.Version() {
+					if s.Provider != queryPolicy.Version() {
 						return fmt.Errorf("query state has no matching behavior sample")
 					}
-					if err := queryPolicy.VerifyMemory(s.Observation, *s.Sample); err != nil {
-						return err
-					}
-					a, lp, value, err := queryPolicy.Review(s.Observation, *s.Sample)
-					if err != nil {
-						return err
-					}
-					if !reflect.DeepEqual(a, s.Action) || math.Abs(lp-s.Sample.LogProbability) > 1e-8 || math.Abs(value-s.Sample.Value) > 1e-8 {
-						return fmt.Errorf("query behavior sample changed")
+					if !queryPolicy.IsStochastic() {
+						a, err := queryPolicy.Decide(s.Observation)
+						if err != nil {
+							return err
+						}
+						if !reflect.DeepEqual(a, s.Action) {
+							return fmt.Errorf("deterministic query behavior action differs")
+						}
+					} else {
+						if s.Sample == nil {
+							return fmt.Errorf("stochastic query state has no behavior sample")
+						}
+						if err := queryPolicy.VerifyMemory(s.Observation, *s.Sample); err != nil {
+							return err
+						}
+						a, lp, value, err := queryPolicy.Review(s.Observation, *s.Sample)
+						if err != nil {
+							return err
+						}
+						if !reflect.DeepEqual(a, s.Action) || math.Abs(lp-s.Sample.LogProbability) > 1e-8 || math.Abs(value-s.Sample.Value) > 1e-8 {
+							return fmt.Errorf("query behavior sample changed")
+						}
 					}
 				}
 				var err error

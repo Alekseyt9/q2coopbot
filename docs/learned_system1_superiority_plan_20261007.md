@@ -195,3 +195,6 @@ Temporal+GRU сейчас не поддерживается совместно. 
 
 **Уточнение по раздельным BC контролям:** aim-only24/80, fire-only50/80 против Update29 36/80 на одном offset20 validation cohort. Результат выбора ветки, не final-test superiority. Fire-only checkpoint используется в новой mixed PPO партии (train40, validation24, pool16/CUDA). Aim query corpus остаётся отдельным улучшением данных; рост сети пока не начат. [Полные исходы и метрики](testing/combat_sequence_bc_20261007.md).
 
+
+**Итог следующего этапа:** новый offset24 comparison:Update29 45/80, Fire BC51/80, Fire BC+PPO30 48/80, rules66/80. PPO update6986 transitions CUDA завершён, но не принят как улучшение. Implemented learned-state nominal aim query corpus6364 train/6234 validation labels; source/native/model replay проверен, Go/CUDA RMSE совпал. На новом offset28 query-only aim branch47/80→30/80, не принят. Следующий focus — согласованное aim/movement обучение и свежий mixed PPO; architecture64→128/GRU128 остаётся в плане. [Fire BC/RL](testing/combat_fire_bc_rl_20261007.md), [Aim queries](testing/combat_aim_query_20261007.md).
+
