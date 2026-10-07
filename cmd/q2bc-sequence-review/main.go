@@ -118,7 +118,7 @@ func run() error {
 				return err
 			}
 			s := d.Step
-			if d.Selection.Version != demodata.AimQuerySelectionVersion {
+			if !demodata.IsQuerySelection(d.Selection.Version) {
 				return fmt.Errorf("not a query corpus")
 			}
 			if s.Owner != "provider" || s.Observation.Identity.Life != 1 || s.Observation.Health <= 0 || s.Observation.AgeMS < 0 || s.Observation.AgeMS > 300 || s.Native == nil || s.Execution == nil || !s.Execution.Matched {

@@ -8,6 +8,33 @@ import (
 )
 
 const AimQuerySelectionVersion = "counterfactual_observed_bbox_aim_v1"
+const CoordinatedQuerySelectionVersion = "counterfactual_observed_bbox_aim_world_input_v1"
+
+func IsQuerySelection(version string) bool {
+	return version == AimQuerySelectionVersion || version == CoordinatedQuerySelectionVersion
+}
+
+func SelectCoordinatedQuery(s learningenv.Step, c policy.Capture, mode string) (Selection, *aimquery.Label, error) {
+	r, q, err := SelectAimQuery(s, c, mode)
+	r.Version = CoordinatedQuerySelectionVersion
+	if err != nil || q == nil {
+		return r, nil, err
+	}
+	r.Heads.Aim = false
+	r.Quality = "rejected"
+	r.Reason = "unsupported_or_guarded_planar_input"
+	if c.Changed || c.LimitReason != "" || c.MoveLimitReason != "" || len(s.Interventions) != 0 || c.Applied != s.AppliedAction || c.AppliedCommand != s.Command {
+		return r, nil, nil
+	}
+	q, err = aimquery.QueryCoordinated(s.Observation, s.AppliedAction)
+	if err != nil || q == nil {
+		return r, nil, err
+	}
+	r.Heads.Aim, r.Heads.Movement = true, true
+	r.Quality = "unexecuted nominal aim and re-expressed actual planar input; not expert movement or trajectory proof"
+	r.Reason = "nominal_aim_with_coordinated_world_input"
+	return r, q, nil
+}
 
 // SelectAimQuery annotates an already verified learned-state observation.
 // The query is not the executed command and has no associated outcome label.

@@ -198,3 +198,9 @@ Temporal+GRU сейчас не поддерживается совместно. 
 
 **Итог следующего этапа:** новый offset24 comparison:Update29 45/80, Fire BC51/80, Fire BC+PPO30 48/80, rules66/80. PPO update6986 transitions CUDA завершён, но не принят как улучшение. Implemented learned-state nominal aim query corpus6364 train/6234 validation labels; source/native/model replay проверен, Go/CUDA RMSE совпал. На новом offset28 query-only aim branch47/80→30/80, не принят. Следующий focus — согласованное aim/movement обучение и свежий mixed PPO; architecture64→128/GRU128 остаётся в плане. [Fire BC/RL](testing/combat_fire_bc_rl_20261007.md), [Aim queries](testing/combat_aim_query_20261007.md).
 
+
+
+**Следующий выполненный шаг:** implemented coordinated aim/world-input query и joint-head CUDA BC на818 train/365 validation labels,13518 temporal contexts. Все native source/model receipts проверены; guards сохраняются masked. Запущена160-capture paired evaluation pool16/x2 на повторном validation28; до результата ветка не принимается. [Contracts, corpus, tests и CUDA metrics](testing/combat_coordinated_query_20261007.md).
+
+
+**Итог coordinated joint labels:** native paired47/80→30/80, branch не принята. Добавлена явная differentiable world-input coupling loss с CUDA basis/gradient verification и двумя CUDA pilot weights1/16. Go replay checks прекращены по инструкции пользователя; GPU-only training сохраняется. Coupled branch требует live проверки; увеличение encoder/GRU128 по-прежнему следующий architecture experiment. [Результаты](testing/combat_coordinated_query_20261007.md).

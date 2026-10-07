@@ -72,16 +72,24 @@ func convert(d diagnostic, feature string) (*sample, error) {
 	if d.Selection.Quality == "rejected" {
 		labelKind = "context"
 	}
-	if d.Selection.Version == demodata.AimQuerySelectionVersion {
+	if demodata.IsQuerySelection(d.Selection.Version) {
 		if s.Owner != "provider" {
 			return nil, nil
 		}
 		if mask[1] {
-			if d.Query == nil || d.Query.Version != aimquery.Version || d.Query.Action.Identity != s.Observation.Identity || mask[0] || mask[2] || mask[3] {
+			coordinated := d.Selection.Version == demodata.CoordinatedQuerySelectionVersion
+			version := aimquery.Version
+			if coordinated {
+				version = aimquery.CoordinatedVersion
+			}
+			if d.Query == nil || d.Query.Version != version || d.Query.Action.Identity != s.Observation.Identity || mask[0] != coordinated || mask[2] || mask[3] || h.Weapon {
 				return nil, fmt.Errorf("invalid counterfactual aim mask/identity")
 			}
 			a = d.Query.Action
 			labelKind = "counterfactual_nominal_aim"
+			if coordinated {
+				labelKind = "counterfactual_nominal_aim_world_input"
+			}
 			if _, err := policy.Command(s.Observation, a, [3]int16{}); err != nil {
 				return nil, err
 			}

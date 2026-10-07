@@ -69,7 +69,7 @@ func run() error {
 		if !r.Ready {
 			return fmt.Errorf("source not ready")
 		}
-		if r.SelectionVersion == demodata.AimQuerySelectionVersion {
+		if demodata.IsQuerySelection(r.SelectionVersion) {
 			return fmt.Errorf("counterfactual aim labels require q2bc-sequence-data; they are not applied teacher commands")
 		}
 		spec, e := os.ReadFile(filepath.Join(root, "spec.json"))

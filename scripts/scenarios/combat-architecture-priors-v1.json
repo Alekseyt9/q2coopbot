@@ -1,0 +1,1 @@
+{"version":"combat_architecture_prior_v1","seeds":[20261007,20261008],"epochs":300,"learning_rate":0.0003,"value_weight":1.0,"arms":[{"id":"mlp64","architecture":"mlp","width":64},{"id":"attention64","architecture":"attention","width":64},{"id":"attention128","architecture":"attention","width":128},{"id":"gru128","architecture":"gru","width":128}]}

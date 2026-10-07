@@ -3,6 +3,7 @@ import argparse, copy, json, pathlib, time
 from ppo_combat import torch, nn, sha
 from ppo_recurrent import durable_json, durable_write
 from combat_attention import CausalAttention, TEMPORAL
+from combat_control_coupling import coupling_mse
 
 def read(path): return json.loads(pathlib.Path(path).read_text(encoding='utf-8-sig'))
 
@@ -16,17 +17,18 @@ def sequences(rows):
 
 def tensors(rows,device,require_attack=True):
     groups=sequences(rows);length=max(map(len,groups));width=len(rows[0]['features'])
-    x=torch.zeros((len(groups),length,width),device=device);target=torch.zeros((len(groups),length,2),device=device)
-    aim=torch.zeros((len(groups),length),device=device,dtype=torch.bool);attack_mask=aim.clone();attack=x[:,:,0].clone();valid=aim.clone()
+    x=torch.zeros((len(groups),length,width),device=device);target=torch.zeros((len(groups),length,4),device=device)
+    aim=torch.zeros((len(groups),length),device=device,dtype=torch.bool);movement=aim.clone();attack_mask=aim.clone();attack=x[:,:,0].clone();valid=aim.clone()
     for i,group in enumerate(groups):
         n=len(group);x[i,:n]=torch.tensor([r['features'] for r in group],device=device)
-        target[i,:n]=torch.tensor([r['targets'][2:4] for r in group],device=device)
+        target[i,:n]=torch.tensor([r['targets'][:4] for r in group],device=device)
+        movement[i,:n]=torch.tensor([r['mask'][0] for r in group],device=device)
         aim[i,:n]=torch.tensor([r['mask'][1] for r in group],device=device)
         attack_mask[i,:n]=torch.tensor([r['mask'][2] for r in group],device=device)
         attack[i,:n]=torch.tensor([float(r['attack']) for r in group],device=device);valid[i,:n]=True
     assert aim.any()
     if require_attack:assert attack_mask.any() and attack[attack_mask].min()==0 and attack[attack_mask].max()==1
-    return x,target,aim,attack_mask,attack,valid
+    return x,target,aim,attack_mask,attack,valid,movement
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--model',type=pathlib.Path,required=True);ap.add_argument('--checkpoint',type=pathlib.Path,required=True);ap.add_argument('--data',type=pathlib.Path,required=True);ap.add_argument('--config',type=pathlib.Path,required=True);ap.add_argument('--out',type=pathlib.Path,required=True);a=ap.parse_args()
@@ -46,8 +48,16 @@ def main():
     assert cp['version']=='combat_architecture_checkpoint_v1' and cp['architecture']==TEMPORAL and cp['weights_sha256']==sha(a.model)
     assert all(torch.equal(v.cpu(),cp['actor'][k].cpu()) for k,v in actor.state_dict().items())
     train_scope=config.get('train_scope','full_actor')
-    assert train_scope in ('full_actor','aim_fire_heads','aim_heads','fire_head')
-    selected={'aim_fire_heads':[2,3,4],'aim_heads':[2,3],'fire_head':[4]}.get(train_scope)
+    assert train_scope in ('full_actor','aim_fire_heads','aim_heads','fire_head','aim_movement_heads')
+    assert config.get('world_input_weight',0)>=0
+    if config.get('world_input_weight',0)>0:assert train_scope=='aim_movement_heads'
+    if train_scope=='aim_movement_heads':
+        assert config.get('movement_weight',0)>0 and config['attack_weight']==0
+        for split in rows:
+            assert all(r['mask'][0]==r['mask'][1] and not any(r['mask'][2:]) and
+                       (not r['mask'][1] or r['label_kind']=='counterfactual_nominal_aim_world_input')
+                       for r in rows[split]),'Coordinated scope requires paired counterfactual aim/movement masks'
+    selected={'aim_fire_heads':[2,3,4],'aim_heads':[2,3],'fire_head':[4],'aim_movement_heads':[0,1,2,3]}.get(train_scope)
     preserved=[i for i in range(len(model['actor'][-1]['bias'])) if selected is not None and i not in selected]
     original_state={k:v.detach().clone() for k,v in actor.state_dict().items()}
     if selected is not None:
@@ -59,22 +69,25 @@ def main():
                 p.register_hook(lambda grad,mask=mask:grad*mask)
     aim_loss_kind=config.get('aim_loss','coordinate_mse')
     assert aim_loss_kind in ('coordinate_mse','wrapped_yaw_v1')
-    datasets={s:tensors(r,device,train_scope!='aim_heads') for s,r in rows.items()}
+    datasets={s:tensors(r,device,train_scope not in ('aim_heads','aim_movement_heads')) for s,r in rows.items()}
     with torch.no_grad(): reference={s:actor(d[0])[0].detach() for s,d in datasets.items()}
     # Native teacher tracks aim/fire. Other heads retain this branch's behavior;
     # full mixed live evaluation is still needed to detect forgetting.
-    cols=[0,1]+list(range(5,len(model['actor'][-1]['bias'])))
+    cols=preserved if selected is not None else [0,1]+list(range(5,len(model['actor'][-1]['bias'])))
     def losses(split):
-        x,target,aim,am,attack,valid=datasets[split];raw=actor(x)[0]
-        error=raw[... ,2:4].tanh()[aim]-target[aim]
+        x,target,aim,am,attack,valid,movement=datasets[split];raw=actor(x)[0]
+        error=raw[... ,2:4].tanh()[aim]-target[...,2:4][aim]
         if aim_loss_kind=='wrapped_yaw_v1':error=torch.stack(((error[:,0]+1).remainder(2)-1,error[:,1]),-1)
         aim_loss=error.square().mean()
         logits=raw[...,4][am];labels=attack[am];pos=labels==1;neg=~pos
         bce=nn.functional.binary_cross_entropy_with_logits(logits,labels,reduction='none')
         attack_loss=.5*(bce[pos].mean()+bce[neg].mean()) if pos.any() and neg.any() else raw.sum()*0
         retention=(raw[...,cols][valid]-reference[split][...,cols][valid]).square().mean()
-        loss=config['aim_weight']*aim_loss+config['attack_weight']*attack_loss+config['retention_weight']*retention
-        return loss,dict(aim_rmse_degrees=float(aim_loss.detach().sqrt()*180),attack_balanced_bce=float(attack_loss.detach()) if pos.any() and neg.any() else None,attack_rows=int(am.sum()),retention_mse=float(retention.detach()))
+        movement_loss=(raw[...,0:2].tanh()[movement]-target[...,0:2][movement]).square().mean() if movement.any() else raw.sum()*0
+        world_loss=coupling_mse(x,raw[...,0:4].tanh(),target,movement) if train_scope=='aim_movement_heads' else raw.sum()*0
+        if train_scope=='aim_movement_heads':assert movement.any() and config.get('movement_weight',0)>0
+        loss=config.get('world_input_weight',0)*world_loss+config.get('movement_weight',0)*movement_loss+config['aim_weight']*aim_loss+config['attack_weight']*attack_loss+config['retention_weight']*retention
+        return loss,dict(world_input_rmse=float(world_loss.detach().sqrt()) if train_scope=='aim_movement_heads' else None,movement_rmse=float(movement_loss.detach().sqrt()) if movement.any() else None,movement_rows=int(movement.sum()),aim_rmse_degrees=float(aim_loss.detach().sqrt()*180),attack_balanced_bce=float(attack_loss.detach()) if pos.any() and neg.any() else None,attack_rows=int(am.sum()),retention_mse=float(retention.detach()))
     opt=torch.optim.Adam([p for p in actor.parameters() if p.requires_grad],lr=config['learning_rate']);history=[];start=time.perf_counter()
     with torch.no_grad(): before={s:losses(s)[1] for s in datasets}
     for epoch in range(config['epochs']):
@@ -107,9 +120,13 @@ def main():
     report=dict(version='combat_sequence_bc_update_v1',device=device,architecture=TEMPORAL,epochs=config['epochs'],train_context=meta['counts']['train'],validation_context=meta['counts']['validation'],train_aim_rows=meta['aim_rows']['train'],validation_aim_rows=meta['aim_rows']['validation'],before=before,after=after,history=history,seconds=time.perf_counter()-start,weights_sha256=sha(a.out/'weights.json'),checkpoint_sha256=sha(a.out/'checkpoint.pt'),parent=sha(a.model),data_sha256=meta['data_sha256'],config_sha256=sha(a.config),trainer_sha256=sha(pathlib.Path(__file__)),ppo_updates_completed=cp['updates_completed'],ppo_total_actor_steps=cp['total_actor_steps'],scope='Masked aim/fire BC on verified teacher sequences; fixed final epoch; final test deferred. No live acceptance, architecture superiority, tactical movement or weapon-choice claim.')
     report['train_scope']=train_scope
     report['aim_loss']=aim_loss_kind
+    report['world_input_weight']=config.get('world_input_weight',0)
+    report['coupling_module_sha256']=sha(pathlib.Path(__file__).with_name('combat_control_coupling.py'))
     report['non_aim_fire_parameters_exactly_preserved']=selected is not None
     report['selected_action_rows']=selected
     report['unselected_parameters_exactly_preserved']=selected is not None
+    if train_scope=='aim_movement_heads':
+        report['scope']='Masked joint nominal aim and planar input re-expression on verified learned visitation. Not executed expert movement or trajectory proof. Frozen encoder/attention and exact retention of fire/vertical/weapon outputs on corpus contexts. Fixed final epoch; final test deferred; live performance unproven.'
     durable_json(a.out/'report.json',report);durable_json(a.out/'complete.json',dict(version='combat_update_complete_v1',weights_sha256=report['weights_sha256'],checkpoint_sha256=report['checkpoint_sha256'],report_sha256=sha(a.out/'report.json')))
     print(json.dumps(report,indent=2))
 

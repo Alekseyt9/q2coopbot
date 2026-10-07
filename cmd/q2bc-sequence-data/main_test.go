@@ -41,6 +41,19 @@ func TestCounterfactualAimUsesSeparateTargetAndCannotInventFireLabel(t *testing.
 		t.Fatal("source action rewritten")
 	}
 	d.Query = nil
+	d.Selection.Version = demodata.CoordinatedQuerySelectionVersion
+	d.Selection.Heads.Movement = true
+	d.Query = &aimquery.Label{Version: aimquery.CoordinatedVersion, Action: policy.Action{Version: policy.ActionVersion, Identity: id, Side: -.5, YawDelta: -90, Vertical: "release"}}
+	r, e = convert(d, policy.WeaponFeatureVersion)
+	if e != nil || r == nil || !r.Mask[0] || r.Targets[1] != -.5 || r.LabelKind != "counterfactual_nominal_aim_world_input" {
+		t.Fatal(r, e)
+	}
+	d.Selection.Heads.Attack = true
+	if _, e = convert(d, policy.WeaponFeatureVersion); e == nil {
+		t.Fatal("invented fire label accepted")
+	}
+	d.Selection.Heads.Attack = false
+	d.Query = nil
 	if _, e = convert(d, policy.WeaponFeatureVersion); e == nil {
 		t.Fatal("query absent but label accepted")
 	}

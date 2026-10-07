@@ -42,10 +42,10 @@ type Spec struct {
 }
 
 func (s Spec) Validate() error {
-	if s.Version != "combat_dataset_spec_v1" || s.SelectionVersion != SelectionVersion && s.SelectionVersion != ReleaseSelectionVersion && s.SelectionVersion != VerticalSelectionVersion && s.SelectionVersion != TrackingSelectionVersion && s.SelectionVersion != RangedTrackingSelectionVersion && s.SelectionVersion != AimQuerySelectionVersion || s.Condition.Map == "" || !s.Condition.Synchronous || len(s.Episodes) == 0 {
+	if s.Version != "combat_dataset_spec_v1" || s.SelectionVersion != SelectionVersion && s.SelectionVersion != ReleaseSelectionVersion && s.SelectionVersion != VerticalSelectionVersion && s.SelectionVersion != TrackingSelectionVersion && s.SelectionVersion != RangedTrackingSelectionVersion && !IsQuerySelection(s.SelectionVersion) || s.Condition.Map == "" || !s.Condition.Synchronous || len(s.Episodes) == 0 {
 		return fmt.Errorf("invalid dataset specification")
 	}
-	if s.SelectionVersion == AimQuerySelectionVersion && !s.DeferredTest {
+	if IsQuerySelection(s.SelectionVersion) && !s.DeferredTest {
 		return fmt.Errorf("aim query corpus requires deferred final test")
 	}
 	if (s.SelectionVersion == VerticalSelectionVersion) != s.Condition.TeacherVertical {
@@ -279,7 +279,7 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 		root := input.Result.Root
 		source := Source{Batch: input.Batch, Seed: assignment.Seed, Split: assignment.Split, Controller: input.Manifest.Source, Native: input.Manifest.Native, Files: map[string]string{}}
 		source.Assistance = "rules tactical controller and fixture placement"
-		if spec.SelectionVersion == AimQuerySelectionVersion {
+		if IsQuerySelection(spec.SelectionVersion) {
 			source.Assistance = "learned visitation; offline observed-bbox nominal aim query, not an executed teacher action"
 		}
 		if input.Manifest.Loadout == "shotgun" {
@@ -290,7 +290,7 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 		}
 		paths := map[string]string{"manifest": filepath.Join(input.Batch, "manifest.json"), "report": filepath.Join(input.Batch, "report.json"), "config": filepath.Join(root, "bot-config.json"), "trace": filepath.Join(root, "bot.jsonl"), "server": filepath.Join(root, "server.log"), "steps": filepath.Join(root, "dataset/steps.jsonl"), "effects": filepath.Join(root, "dataset/server_outcomes.jsonl"), "rewards": filepath.Join(root, "dataset/rewards.jsonl"), "initial": filepath.Join(root, "dataset/episode_start.json"), "reset": filepath.Join(root, "reset-expectation.json")}
 		var queryPolicy *policy.PPO
-		if spec.SelectionVersion == AimQuerySelectionVersion {
+		if IsQuerySelection(spec.SelectionVersion) {
 			var cfg struct {
 				Combat struct {
 					File string `json:"provider_file"`
@@ -345,7 +345,7 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 		err := verifyEpisode(input, spec.Condition.Map, func(s learningenv.Step, effects learningenv.ServerOutcome, reward learningenv.Reward, c policy.Capture) error {
 			selection := SelectVersion(s, effects, c, input.Manifest.Mode, spec.SelectionVersion)
 			var query *aimquery.Label
-			if spec.SelectionVersion == AimQuerySelectionVersion {
+			if IsQuerySelection(spec.SelectionVersion) {
 				if s.Owner == "provider" && s.Observation.Identity.Life == 1 {
 					if s.Provider != queryPolicy.Version() {
 						return fmt.Errorf("query state has no matching behavior sample")
@@ -375,7 +375,11 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 					}
 				}
 				var err error
-				selection, query, err = SelectAimQuery(s, c, input.Manifest.Mode)
+				if spec.SelectionVersion == CoordinatedQuerySelectionVersion {
+					selection, query, err = SelectCoordinatedQuery(s, c, input.Manifest.Mode)
+				} else {
+					selection, query, err = SelectAimQuery(s, c, input.Manifest.Mode)
+				}
 				if err != nil {
 					return err
 				}
@@ -436,8 +440,11 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 		}
 		report.Sources = append(report.Sources, source)
 	}
-	if spec.SelectionVersion == AimQuerySelectionVersion {
-		report.Scope = "Verified learned visitation/actual native execution; separately stored UNEXECUTED nominal observed-bbox aim queries. Actual commands and rewards unchanged. No firing/movement teacher, hit, optimal-target or tactical acceptance claim; final test deferred."
+	if IsQuerySelection(spec.SelectionVersion) {
+		report.Scope = "Verified learned visitation/actual native execution; separately stored UNEXECUTED nominal observed-bbox aim queries. Actual commands and rewards unchanged. Optional planar-input re-expression is not optimal movement or trajectory proof. No firing teacher, hit, optimal-target or tactical acceptance claim; final test deferred."
+	}
+	if spec.SelectionVersion == CoordinatedQuerySelectionVersion {
+		report.Scope += " Guarded/unsupported movement masked; individual families may supply context only. Ready means verified sequence input, not per-family movement supervision. Combined training must require positive aim/movement rows."
 	}
 	current, err := fileSHA(specPath)
 	if err != nil {
@@ -453,7 +460,10 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 		if name == "test" && spec.DeferredTest {
 			continue
 		}
-		if report.Splits[name].Candidates == 0 {
+		// Coordinated queries deliberately reject guarded/unsupported movement.
+		// A family can contribute verified temporal context without an aim label;
+		// the combined sequence trainer still requires positive labelled rows.
+		if report.Splits[name].Candidates == 0 && (spec.SelectionVersion != CoordinatedQuerySelectionVersion || report.Splits[name].Steps == 0) {
 			report.Ready = false
 		}
 		if report.Splits[name].AttackPositive == 0 || report.Splits[name].AttackNegative == 0 {
