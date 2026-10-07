@@ -111,7 +111,9 @@ func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
 	if o.MonsterHealthDamage < 0 || o.ReceivedHealthDamage < 0 || o.SelfHealthDamage < 0 || o.TeammateHealthDamage < 0 || o.Deaths < 0 || o.Deaths > 1 || o.SelfHealthDamage > o.ReceivedHealthDamage {
 		return deny("invalid_native_effects")
 	}
-	if s.Terminal != (s.Next.Health <= 0) || (s.Terminal && o.Deaths != 1) || (!s.Terminal && o.Deaths != 0) {
+	goalTerminal := s.Terminal && s.Reason == "combat_goal_complete" && s.Next.Health > 0
+	deathTerminal := s.Terminal && !goalTerminal
+	if s.Reason == "combat_goal_complete" && !goalTerminal || deathTerminal != (s.Next.Health <= 0) || (deathTerminal && o.Deaths != 1) || (!deathTerminal && o.Deaths != 0) {
 		return deny("death_evidence_mismatch")
 	}
 	if c.HasKillReward() {

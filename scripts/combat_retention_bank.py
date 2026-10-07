@@ -63,11 +63,12 @@ def main():
     ap=argparse.ArgumentParser();ap.add_argument('--anchor-model',type=pathlib.Path,required=True);ap.add_argument('--train-data',type=pathlib.Path,action='append');ap.add_argument('--validation-data',type=pathlib.Path,action='append');ap.add_argument('--forbidden-seeds',type=pathlib.Path);ap.add_argument('--per-bucket',type=int,default=64);ap.add_argument('--out',type=pathlib.Path)
     ap.add_argument('--validate',type=pathlib.Path);ap.add_argument('--ppo-seed',type=int);ap.add_argument('--eval-seed',type=int);ap.add_argument('--iterations',type=int,default=4)
     ap.add_argument('--episodes-per-worker',type=int,choices=range(1,21),default=1)
+    ap.add_argument('--eval-episodes-per-worker',type=int,choices=range(1,21),default=1)
     ap.add_argument('--balance',choices=('count','composition'),default='count');a=ap.parse_args()
     if a.validate:
         anchor=read(a.anchor_model)
         seeds=rollout_seeds(a.ppo_seed,a.iterations,a.episodes_per_worker) if a.ppo_seed is not None else []
-        if a.eval_seed is not None:seeds+=list(range(a.eval_seed,a.eval_seed+4))
+        if a.eval_seed is not None:seeds+=rollout_seeds(a.eval_seed,1,a.eval_episodes_per_worker)
         validate(read(a.validate),sha(a.anchor_model),anchor['feature_version'],len(anchor['actor'][0]['weight'][0]),seeds);print('Bank validation passed');return
     if not a.train_data or not a.validation_data or not a.forbidden_seeds or not a.out:raise ValueError('Train/validation data, excluded seeds and output required')
     if a.per_bucket<1:raise ValueError('Positive bucket cap required')

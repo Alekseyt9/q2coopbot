@@ -8,6 +8,9 @@ param(
  [string]$Config='scripts/scenarios/combat-ppo-maneuver-v4.json',
  [string]$Reward='scripts/scenarios/combat-reward-maneuver-v4.json',
  [string]$InitialCheckpoint='',
+ [ValidateRange(1,20)][int]$EpisodesPerWorker=1,
+ [ValidateSet('uniform','mixed-solo-mixed')][string]$EpisodePattern='uniform',
+ [ValidateRange(1,20)][int]$EvalEpisodesPerWorker=1,
  [ValidateRange(1,20)][int]$Iterations=4,
  [int]$Seed=30000,[int]$EvalSeed=30400,[int]$Port=34400
 )
@@ -16,14 +19,16 @@ $repo=Split-Path $PSScriptRoot -Parent
 Push-Location $repo
 try {
  if(Test-Path -LiteralPath $OutputRoot){throw 'Fresh output root required'}
- if($EvalSeed -le $Seed+4*$Iterations-1 -and $EvalSeed+3 -ge $Seed){throw 'Evaluation seeds overlap training'}
+ if($EpisodePattern -ne 'uniform' -and $EpisodesPerWorker -ne 3){throw 'Mixed/Solo pattern requires exactly three episodes per worker'}
+ $batchWidth=4*$EpisodesPerWorker
+ if($EvalSeed -le $Seed+$batchWidth*$Iterations-1 -and $EvalSeed+4*$EvalEpisodesPerWorker-1 -ge $Seed){throw 'Evaluation seeds overlap training'}
  $Model=(Resolve-Path $Model).Path;$Anchor=(Resolve-Path $Anchor).Path;$Bank=(Resolve-Path $Bank).Path
  if($InitialCheckpoint){
   $InitialCheckpoint=(Resolve-Path $InitialCheckpoint).Path
   & $Python -c 'import sys,hashlib,torch; c=torch.load(sys.argv[1],map_location="cpu",weights_only=True); assert c["weights_sha256"]==hashlib.sha256(open(sys.argv[2],"rb").read()).hexdigest(); assert c["retention_weights"]==[0.,0.]' $InitialCheckpoint $Model
   if($LASTEXITCODE){throw 'Initial checkpoint does not match model or mobile retention settings'}
  }
- & $Python scripts/combat_retention_bank.py --validate $Bank --anchor-model $Anchor --ppo-seed $Seed --eval-seed $EvalSeed --iterations $Iterations
+ & $Python scripts/combat_retention_bank.py --validate $Bank --anchor-model $Anchor --ppo-seed $Seed --eval-seed $EvalSeed --iterations $Iterations --episodes-per-worker $EpisodesPerWorker --eval-episodes-per-worker $EvalEpisodesPerWorker
  if($LASTEXITCODE){throw 'Reference provenance validation failed'}
  New-Item -ItemType Directory -Path $OutputRoot | Out-Null
  $OutputRoot=(Resolve-Path $OutputRoot).Path
@@ -39,6 +44,14 @@ try {
  $initial=Get-Content $weights -Raw|ConvertFrom-Json
  if(!$initial.attention -or $initial.deterministic){throw 'Requires stochastic Temporal attention weights'}
  @{version='mobile_machinegun_v1';initial_sha256=(Get-FileHash $weights).Hash;iterations=$Iterations;workers=4;timescale=2;training_seeds=@($Seed..($Seed+4*$Iterations-1));evaluation_seeds=@($EvalSeed..($EvalSeed+3));loadout='machinegun';bullets=100;skill=1;monster_spawn_height=24.125;monster_no_infighting=$true;retention_weight=0;bank_weight=0;optimizer='fresh Adam; resume only within corrected cycle';scope='Historical Temporal10 is a warm start; old stationary captures are not training losses or mobile evaluation evidence'}|ConvertTo-Json -Depth 5|Set-Content "$OutputRoot/protocol.json"
+ $protocol=Get-Content "$OutputRoot/protocol.json" -Raw|ConvertFrom-Json
+ $protocol.training_seeds=@($Seed..($Seed+$batchWidth*$Iterations-1))
+ $protocol.evaluation_seeds=@($EvalSeed..($EvalSeed+4*$EvalEpisodesPerWorker-1))
+ $protocol|Add-Member -NotePropertyName stop_on_goal -NotePropertyValue $true
+ $protocol|Add-Member -NotePropertyName episodes_per_worker -NotePropertyValue $EpisodesPerWorker
+ $protocol|Add-Member -NotePropertyName episode_pattern -NotePropertyValue $EpisodePattern
+ $protocol|Add-Member -NotePropertyName eval_episodes_per_worker -NotePropertyValue $EvalEpisodesPerWorker
+ $protocol|ConvertTo-Json -Depth 5|Set-Content "$OutputRoot/protocol.json"
  if($InitialCheckpoint){
   $protocol=Get-Content "$OutputRoot/protocol.json" -Raw|ConvertFrom-Json
   $protocol.optimizer='Resume Adam from verified matching mobile checkpoint'
@@ -64,7 +77,9 @@ try {
    # Stock crusher damage may retain an enemy as attacker on an already dead
    # monster. Corpses have lost SVF_MONSTER; their damage is not infighting.
    if($log|Select-String 'g_test_damage version=.*health_before=[1-9][0-9]* .*target_class=monster_\w+ attacker_class=monster_'){throw 'Native live monster friendly damage occurred'}
-   $positions=@{};foreach($class in @('monster_parasite','monster_gunner')){
+   $expectedClasses=@('monster_parasite')
+   if($episode.fixture_mixed){$expectedClasses+='monster_gunner'}
+   $positions=@{};foreach($class in $expectedClasses){
     $points=@($rows|ForEach-Object{$_.enemies|Where-Object class -eq $class}|ForEach-Object{"$($_.origin[0]),$($_.origin[1])"}|Select-Object -Unique)
     $positions[$class]=$points.Count
     if($points.Count -lt 2){throw "Monster mobility not verified for $class seed$($episode.seed)"}
@@ -76,7 +91,7 @@ try {
  foreach($iteration in 1..$Iterations){
   $folder="$OutputRoot/iteration-$iteration";New-Item -ItemType Directory -Path $folder|Out-Null
   @{stage='capture';iteration=$iteration;iterations=$Iterations}|ConvertTo-Json|Set-Content "$OutputRoot/progress.json"
-  & scripts/run_learned_combat_baseline.ps1 -Workers 4 -EpisodesPerWorker 1 -Timescale 2 -GameFrames 300 -ReleaseGameFrame 100 -Mixed -Loadout machinegun -Skill 1 -CombatMode learned -ProviderFile $weights -Synchronous -RewardConfig "$OutputRoot/reward.json" -Seed ($Seed+4*($iteration-1)) -Port $Port -OutputRoot "$folder/batch"
+  & scripts/run_learned_combat_baseline.ps1 -Workers 4 -EpisodesPerWorker $EpisodesPerWorker -EpisodePattern $EpisodePattern -Timescale 2 -GameFrames 300 -ReleaseGameFrame 100 -Mixed -Loadout machinegun -Skill 1 -CombatMode learned -ProviderFile $weights -Synchronous -StopOnGoal -RewardConfig "$OutputRoot/reward.json" -Seed ($Seed+$batchWidth*($iteration-1)) -Port $Port -OutputRoot "$folder/batch"
   Check-MobileBatch "$folder/batch"
   & "$OutputRoot/q2ppo-data.exe" --batch "$folder/batch" --model $weights --out "$folder/rollout"
   if($LASTEXITCODE){throw 'Native rollout export failed'}
@@ -97,7 +112,7 @@ try {
   $eval=Get-Content $modelPath -Raw|ConvertFrom-Json;$eval.deterministic=$true
   $eval|ConvertTo-Json -Depth 16|Set-Content "$OutputRoot/eval-$label.json" -Encoding utf8NoBOM
   @{stage='evaluation';label=$label;iterations=$Iterations}|ConvertTo-Json|Set-Content "$OutputRoot/progress.json"
-  & scripts/run_learned_combat_baseline.ps1 -Workers 4 -EpisodesPerWorker 1 -Timescale 2 -GameFrames 300 -ReleaseGameFrame 100 -Mixed -Loadout machinegun -Skill 1 -CombatMode learned -ProviderFile "$OutputRoot/eval-$label.json" -Synchronous -RewardConfig "$OutputRoot/reward.json" -Seed $EvalSeed -Port $Port -OutputRoot "$OutputRoot/evaluation-$label"
+  & scripts/run_learned_combat_baseline.ps1 -Workers 4 -EpisodesPerWorker $EvalEpisodesPerWorker -Timescale 2 -GameFrames 300 -ReleaseGameFrame 100 -Mixed -Loadout machinegun -Skill 1 -CombatMode learned -ProviderFile "$OutputRoot/eval-$label.json" -Synchronous -StopOnGoal -RewardConfig "$OutputRoot/reward.json" -Seed $EvalSeed -Port $Port -OutputRoot "$OutputRoot/evaluation-$label"
   Check-MobileBatch "$OutputRoot/evaluation-$label"
  }
  @{stage='complete';iterations=$Iterations;final_weights=$weights;source_fingerprint=$script:acceptedFingerprint;native_source_fingerprint=$script:acceptedNativeFingerprint}|ConvertTo-Json|Set-Content "$OutputRoot/progress.json"

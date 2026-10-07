@@ -89,6 +89,7 @@ func run() error {
 		PostFrameRNG   bool                     `json:"post_frame_rng_reset"`
 		ReleaseFrame   int                      `json:"release_game_frame"`
 		Loadout        string                   `json:"loadout"`
+		StopOnGoal     bool                     `json:"stop_on_goal"`
 	}
 	if e := read(filepath.Join(*batch, "manifest.json"), &manifest); e != nil {
 		return e
@@ -114,12 +115,14 @@ func run() error {
 		Valid    bool `json:"provenance_valid"`
 		Complete bool `json:"capture_complete"`
 		Results  []struct {
-			Root      string `json:"root"`
-			Seed      int    `json:"seed"`
-			Valid     bool   `json:"capture_valid"`
-			Dispatch  bool   `json:"dispatch_valid"`
-			ConfigSHA string `json:"provider_config_sha256"`
-			Worker    int    `json:"worker"`
+			Root      string                `json:"root"`
+			Seed      int                   `json:"seed"`
+			Valid     bool                  `json:"capture_valid"`
+			Dispatch  bool                  `json:"dispatch_valid"`
+			ConfigSHA string                `json:"provider_config_sha256"`
+			Worker    int                   `json:"worker"`
+			Mixed     bool                  `json:"fixture_mixed"`
+			Goal      *learningenv.GoalStop `json:"goal_stop"`
 		} `json:"results"`
 	}
 	if e = read(filepath.Join(*batch, "report.json"), &report); e != nil {
@@ -217,6 +220,55 @@ func run() error {
 		}
 		replay := filepath.Join(*out, fmt.Sprintf("replay-%d", i))
 		args := []string{"--trace", paths[0], "--server-log", paths[1], "--reset-expectation", paths[2], "--reward-config", rewardPath, "--out", replay, "--worker", fmt.Sprintf("worker-%d", r.Worker), "--episode", fmt.Sprintf("seed-%d", r.Seed), "--end-reason", "game_frame_limit", "--client-name", "SoloRetreatBot", "--require-execution", "--synchronous"}
+		if r.Goal != nil {
+			if !manifest.StopOnGoal {
+				return fmt.Errorf("goal stop not declared by manifest")
+			}
+			path := filepath.Join(r.Root, "goal-stop.json")
+			var goal learningenv.GoalStop
+			if e = read(path, &goal); e != nil {
+				return e
+			}
+			if !reflect.DeepEqual(goal, *r.Goal) {
+				return fmt.Errorf("goal stop receipt changed")
+			}
+			if e = remember(path); e != nil {
+				return e
+			}
+			log, err := os.ReadFile(paths[1])
+			if err != nil {
+				return err
+			}
+			events, err := learningenv.ReadDamageEvents(strings.NewReader(string(log)))
+			if err != nil {
+				return err
+			}
+			native, err := learningenv.ReadNativeSteps(strings.NewReader(string(log)), events)
+			if err != nil {
+				return err
+			}
+			trace, err := rows[struct {
+				Capture policy.Capture `json:"combat_policy"`
+			}](paths[0])
+			if err != nil {
+				return err
+			}
+			var observed policy.Observation
+			for _, row := range trace {
+				if row.Capture.Observation.Identity.Frame == goal.ObservedFrame {
+					observed = row.Capture.Observation
+				}
+			}
+			if err = learningenv.VerifyGoalStop(goal, native.Release, events, observed, r.Mixed); err != nil {
+				return err
+			}
+			for i := range args {
+				if args[i] == "game_frame_limit" {
+					args[i] = "combat_goal_complete"
+				}
+			}
+			args = append(args, "--goal-observed-frame", fmt.Sprint(goal.ObservedFrame))
+		}
 		output, e := exec.Command(exporter, args...).CombinedOutput()
 		if e != nil {
 			return fmt.Errorf("native replay: %w %s", e, output)

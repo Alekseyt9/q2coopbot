@@ -29,6 +29,7 @@ func run() error {
 	worker := flag.String("worker", "", "Worker identity")
 	episode := flag.String("episode", "", "Episode identity")
 	endReason := flag.String("end-reason", "trace_end", "Reason for truncating the final command")
+	goalFrame := flag.Int("goal-observed-frame", 0, "Supervisor-verified goal boundary; offline terminal label only")
 	serverLog := flag.String("server-log", "", "Optional native log for separate server damage windows")
 	clientName := flag.String("client-name", "GoCoopMate", "Name selected by native sv_test_trace_client")
 	requireExecution := flag.Bool("require-execution", false, "Reject export without exact server dispatch for every sent command")
@@ -36,6 +37,9 @@ func run() error {
 	synchronous := flag.Bool("synchronous", false, "Require native one-command/one-tick phases and seeded single-client barrier")
 	rewardFile := flag.String("reward-config", "", "Optional explicit experimental reward JSON; requires synchronous proof")
 	flag.Parse()
+	if *goalFrame < 0 || *goalFrame > 0 && (!*synchronous || *endReason != "combat_goal_complete") {
+		return fmt.Errorf("goal boundary requires synchronous goal completion")
+	}
 	if *input == "" || *out == "" || *worker == "" || *episode == "" {
 		return fmt.Errorf("trace, out, worker and episode required")
 	}
@@ -184,9 +188,21 @@ func run() error {
 	var sent []harness.Trace
 	var initial *policy.Observation
 	var resetProof *learningenv.ResetProof
+	goalMarked := false
 	emit := func(s *learningenv.Step, o *learningenv.Outcome) error {
 		if s == nil {
 			return nil
+		}
+		if *goalFrame > 0 {
+			if s.Next != nil && s.Next.Identity.Frame == *goalFrame {
+				if s.Truncated || s.Terminal || s.Next.Health <= 0 || s.Next.Identity.Life != 1 {
+					return fmt.Errorf("goal boundary lacks a complete living first-life transition")
+				}
+				s.Terminal, s.Reason, goalMarked = true, "combat_goal_complete", true
+			} else if s.Observation.Identity.Frame >= *goalFrame {
+				// Preserve dispatch auditing while excluding supervisor stop latency from PPO.
+				s.Truncated, s.Reason = true, "after_combat_goal"
+			}
 		}
 		if initial == nil {
 			copy := s.Observation
@@ -309,6 +325,9 @@ func run() error {
 	s, o := a.Close(*endReason)
 	if err := emit(s, o); err != nil {
 		return err
+	}
+	if *goalFrame > 0 && !goalMarked {
+		return fmt.Errorf("verified goal observation missing from complete transitions")
 	}
 	if err := stepWriter.Flush(); err != nil {
 		return err

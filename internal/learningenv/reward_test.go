@@ -45,6 +45,27 @@ func TestRewardCostsAndFirstDeath(t *testing.T) {
 	}
 }
 
+func TestSuccessfulGoalTerminalIsNotDeath(t *testing.T) {
+	c, s, o := rewardFixture()
+	s.Terminal, s.Reason = true, "combat_goal_complete"
+	r := c.Evaluate(&s, o)
+	if !r.Available || r.Components["death"] != 0 {
+		t.Fatalf("living goal terminal denied or penalized: %+v", r)
+	}
+	o.Deaths = 1
+	if c.Evaluate(&s, o).Available {
+		t.Fatal("goal accepted despite native player death")
+	}
+	o.Deaths, s.Next.Health = 0, 0
+	if c.Evaluate(&s, o).Available {
+		t.Fatal("dead goal accepted")
+	}
+	s.Next.Health, s.Reason = 90, ""
+	if c.Evaluate(&s, o).Available {
+		t.Fatal("arbitrary living terminal accepted")
+	}
+}
+
 func TestRewardMasksUnprovenTransitions(t *testing.T) {
 	for _, name := range []string{"respawn", "tail", "gap", "handoff", "dispatch", "native", "death", "outcome", "legacy"} {
 		t.Run(name, func(t *testing.T) {

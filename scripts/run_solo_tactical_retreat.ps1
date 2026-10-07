@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet('standard','remaining-far')][string]$ParasiteFixture='standard',[ValidateSet(0,100)][int]$ReleaseGameFrame=0,[ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$Synchronous,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','machinegun','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
+param([ValidateSet('standard','remaining-far')][string]$ParasiteFixture='standard',[ValidateSet(0,100)][int]$ReleaseGameFrame=0,[ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$Synchronous,[switch]$StopOnGoal,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','machinegun','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
 function Measure-BarrelSafety($Rows,$Events) {
     $actor=$Rows[0].self_entity
@@ -13,6 +13,7 @@ function Measure-BarrelSafety($Rows,$Events) {
         scope='Observed stock barrels and Blaster shot guard; no unseen barrel or other weapon acceptance'
     }
 }
+if($StopOnGoal -and (!$Synchronous -or !$ParasiteWeapon)){throw 'Goal stop requires a synchronous combat fixture'}
 if($CoverFight){$Cover=$true}
 if($Group){$Circle=$true}
 if($GroupRetreat -and ($Group -or $Circle -or $Cover)){throw 'GroupRetreat is a separate fixture'}
@@ -42,7 +43,7 @@ if(!$Worker){
         $args+=@('-GameFrames',$using:GameFrames)
         $args+=@('-ParasiteFixture',$using:ParasiteFixture)
         $args+=@('-TrainingMonsterHealth',$using:TrainingMonsterHealth);$args+=@('-ReleaseGameFrame',$using:ReleaseGameFrame)
-        if($using:Synchronous){$args+='-Synchronous'}
+        if($using:Synchronous){$args+='-Synchronous'};if($using:StopOnGoal){$args+='-StopOnGoal'}
         if($using:RequireMixedDetour){$args+='-RequireMixedDetour'}
         if($using:Cover){$args+='-Cover'}
         if($using:CoverFight){$args+='-CoverFight'}
@@ -108,9 +109,9 @@ try{
     if($ParasiteFixture -eq 'remaining-far'){$placement='-48,16,24';$enemyOrigin='200,-224,24'}
     $report.parasite_fixture=$ParasiteFixture
     $initialHealth=if($ParasiteWeapon){$ParasiteHealth}elseif($CornerEscape){65}elseif($Recovery){$RecoveryHealth}elseif($Group -or $GroupRetreat){100}elseif($Cover -or $Circle){25}else{0}
-    @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};combat=@{mode=$CombatMode;provider_file=$ProviderFile};run=@{duration=$(if($GameFrames){'60s'}else{'15s'});game_frames=$GameFrames;frame_paced=$true;mode='campaign';next_map='base2'};test=@{teleport_map='base1';teleport=$placement;spawn_map='base1';spawn_soldier=$enemyOrigin;spawn_class=$enemyClass;teacher_vertical=[bool]$TeacherVertical;synchronous=[bool]$Synchronous;combat_barrier=[bool]$Synchronous;setup_hold_frames=$(if($Cover -or $Circle -or $GroupRetreat -or $Recovery -or $CornerEscape -or $ParasiteWeapon){10}else{0});initial_health=$initialHealth;weapon_switch_fixture=$(if($ParasiteWeapon){"parasite_$ParasiteLoadout"}else{""})};output=@{trace_jsonl=$trace;combat_capture=[bool]$CombatCapture}}|ConvertTo-Json -Depth 6|Set-Content $config
+    @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};combat=@{mode=$CombatMode;provider_file=$ProviderFile};run=@{duration=$(if($GameFrames){'60s'}else{'15s'});game_frames=$GameFrames;frame_paced=$true;mode='campaign';next_map='base2'};test=@{teleport_map='base1';teleport=$placement;spawn_map='base1';spawn_soldier=$enemyOrigin;spawn_class=$enemyClass;teacher_vertical=[bool]$TeacherVertical;synchronous=[bool]$Synchronous;combat_barrier=[bool]$Synchronous;setup_hold_frames=$(if($Cover -or $Circle -or $GroupRetreat -or $Recovery -or $CornerEscape -or $ParasiteWeapon){10}else{0});initial_health=$initialHealth;weapon_switch_fixture=$(if($ParasiteWeapon){"parasite_$ParasiteLoadout"}else{""})};output=@{stop_file=$(if($StopOnGoal){Join-Path $OutputRoot 'goal.stop'}else{''});trace_jsonl=$trace;combat_capture=[bool]$CombatCapture}}|ConvertTo-Json -Depth 6|Set-Content $config
     $bot=Start-Process $Client -ArgumentList "--config `"$config`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
-    $waitMilliseconds=$(if($GameFrames){[int]([math]::Max(25,$GameFrames/(10*$Timescale)+10)*1000)}else{25000});$null=$bot.WaitForExit($waitMilliseconds);if(!$bot.HasExited){throw 'Bot timeout'};if($bot.ExitCode){throw 'Bot failed'}
+    $waitMilliseconds=$(if($GameFrames){[int]([math]::Max(25,$GameFrames/(10*$Timescale)+10)*1000)}else{25000});if($StopOnGoal){. "$PSScriptRoot/combat_goal_stop.ps1";$goalClasses=@('monster_parasite');if($ParasiteMixed){$goalClasses+=$ParasiteMixedClass};Wait-CombatGoalOrExit $bot $OutputRoot $waitMilliseconds $goalClasses}else{$null=$bot.WaitForExit($waitMilliseconds)};if(!$bot.HasExited){throw 'Bot timeout'};if($bot.ExitCode){throw 'Bot failed'}
     $rows=@(Get-Content $trace|ForEach-Object {$_|ConvertFrom-Json})
     . "$PSScriptRoot/read_damage_events.ps1"
     $events=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log'))
