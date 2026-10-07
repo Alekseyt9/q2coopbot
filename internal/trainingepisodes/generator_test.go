@@ -2,6 +2,7 @@ package trainingepisodes
 
 import (
 	"path/filepath"
+	"q2coopbot/internal/quake"
 	"reflect"
 	"strings"
 	"testing"
@@ -44,6 +45,18 @@ func TestGeneratedConditionsArePairedAndPlanCannotBeModified(t *testing.T) {
 	write(t, path, p)
 	if err := VerifyPlan(path, root); err == nil {
 		t.Fatal("modified sampled position accepted")
+	}
+}
+
+func TestStartupMonsterCannotOverlapNativePlayerSpawn(t *testing.T) {
+	root, _ := filepath.Abs(filepath.Join("..", ".."))
+	world, err := loadGenerationWorld(root)
+	if err != nil {
+		t.Skipf("local BSP needed: %v", err)
+	}
+	v := Instance{Player: quake.Vec3{32, -224, 24.125}, Monsters: []GeneratedMonster{{"monster_parasite", quake.Vec3{200, -224, 24.125}}, {"monster_gunner", quake.Vec3{106.375, -303.125, 24.125}}}}
+	if reason := checkStart(v, &world); reason != "native_spawn_overlap" {
+		t.Fatalf("setup telefrag not prevented: %s", reason)
 	}
 }
 
@@ -94,7 +107,7 @@ func TestGeneratorRejectsConditionLeakageAndUnsupportedComposition(t *testing.T)
 		t.Fatalf("condition leakage accepted: %v", err)
 	}
 	ep.Generator.Distributions["test"] = old
-	ep.Monsters = []string{"monster_soldier"}
+	ep.Monsters = []string{"monster_tank"}
 	if err := ep.validate(); err == nil {
 		t.Fatal("unimplemented composition accepted")
 	}

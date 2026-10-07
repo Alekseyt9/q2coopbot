@@ -1,25 +1,16 @@
 {
-  "version": 1,
-  "id": "infantry-blaster-solo",
-  "revision": 1,
-  "title": "Infantry: Blaster, движение и прицел",
-  "status": "planned",
-  "map": "base1",
-  "scope": "proposed_first_life_combat",
-  "goal": "alive_combat_goal",
-  "monsters": [
-    "monster_infantry"
-  ],
-  "geometry": "pending randomized original-map fixture",
-  "initial_state": "pending native reset contract",
-  "skill": 1,
-  "timescale": 2,
-  "game_frames": 300,
   "modes": [
     "rules",
     "learned"
   ],
-  "ppo_trainable": false,
+  "goal": "alive_native_kills_then_observed_effect",
+  "ppo_trainable": true,
+  "version": 1,
+  "monsters": [
+    "monster_infantry"
+  ],
+  "revision": 2,
+  "initial_state": "Generated poses and player HP80/100, stock Soldier30 or Infantry100 HP, Blaster, fixed release100",
   "splits": {
     "train": {
       "start": 170000,
@@ -38,10 +29,146 @@
       "count": 64
     }
   },
-  "recipe": {
-    "runner": ""
+  "title": "Infantry: Blaster, движение и прицел",
+  "scope": "first_life_combat",
+  "generator": {
+    "kind": "base1-ground-combat-v1",
+    "version": 1,
+    "distributions": {
+      "confirmation": {
+        "primary": {
+          "min": [
+            224,
+            -248,
+            24.125
+          ],
+          "max": [
+            236,
+            -200,
+            24.125
+          ]
+        },
+        "player": {
+          "min": [
+            16,
+            -240,
+            24.125
+          ],
+          "max": [
+            48,
+            -208,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "validation": {
+        "primary": {
+          "min": [
+            176,
+            -248,
+            24.125
+          ],
+          "max": [
+            188,
+            -200,
+            24.125
+          ]
+        },
+        "player": {
+          "min": [
+            16,
+            -240,
+            24.125
+          ],
+          "max": [
+            48,
+            -208,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "train": {
+        "primary": {
+          "min": [
+            140,
+            -248,
+            24.125
+          ],
+          "max": [
+            164,
+            -200,
+            24.125
+          ]
+        },
+        "player": {
+          "min": [
+            16,
+            -240,
+            24.125
+          ],
+          "max": [
+            48,
+            -208,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "test": {
+        "primary": {
+          "min": [
+            200,
+            -248,
+            24.125
+          ],
+          "max": [
+            212,
+            -200,
+            24.125
+          ]
+        },
+        "player": {
+          "min": [
+            16,
+            -240,
+            24.125
+          ],
+          "max": [
+            48,
+            -208,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      }
+    }
   },
-  "missing": [
-    "Native fixture, synchronous reset/goal exporter and data eligibility validation are not implemented for this composition yet"
-  ]
+  "recipe": {
+    "mixed": false,
+    "runner": "combat-baseline",
+    "loadout": "blaster",
+    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
+  },
+  "game_frames": 300,
+  "map": "base1",
+  "skill": 1,
+  "id": "infantry-blaster-solo",
+  "status": "runnable",
+  "timescale": 2,
+  "geometry": "Original base1 BSP arena; generated grounded positions; static hull and floor checks",
+  "missing": []
 }

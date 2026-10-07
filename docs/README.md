@@ -3,6 +3,7 @@
 ## Действующие планы Go UDP-бота
 
 - [Собственная System 1: RL, иерархическая тактика и MCTS](learned_system1_plan.md) — принятое направление с 05.10.2026.
+- [Реестр генераторов учебных боёв](testing/combat_training_registry.md) — Blaster, Machinegun с отдачей, общий PPO batch и продолжение checkpoint.
 - [Общий план и журнал развития бота](system2_strategy_tactics_plan.md).
 
 Описания реконструкции Gladiator ниже относятся к историческим материалам; активный продукт — Go UDP-клиент и харнес.

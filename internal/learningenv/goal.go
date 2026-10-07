@@ -24,14 +24,34 @@ type GoalStop struct {
 }
 
 func VerifyGoalStop(g GoalStop, release *CombatRelease, events []DamageEvent, observed policy.Observation, mixed bool) error {
+	classes := []string{"monster_parasite"}
+	if mixed {
+		classes = append(classes, "monster_gunner")
+	}
+	return VerifyGoalStopForClasses(g, release, events, observed, classes)
+}
+
+// Expected classes come from the frozen fixture, never from the goal receipt.
+func VerifyGoalStopForClasses(g GoalStop, release *CombatRelease, events []DamageEvent, observed policy.Observation, expectedClasses []string) error {
 	fail := func() error { return fmt.Errorf("unverified combat goal stop") }
 	id := observed.Identity
 	if release == nil || g.Version != "combat_goal_stop_v1" || g.Reason != "combat_goal_complete" || id.Life != 1 || id.Connection != 1 || id.Map != "base1" || id.Spawncount != release.Spawncount || g.Spawncount != id.Spawncount || g.Actor != id.Actor || g.ObservedFrame != id.Frame || g.Health != int(observed.Health) || g.Health <= 0 || g.KillFrame <= release.Frame || g.ObservedFrame <= g.KillFrame {
 		return fail()
 	}
-	expected := map[string]bool{"monster_parasite": true}
-	if mixed {
-		expected["monster_gunner"] = true
+	expected := map[string]bool{}
+	for _, class := range expectedClasses {
+		switch class {
+		case "monster_parasite", "monster_gunner", "monster_soldier", "monster_infantry":
+		default:
+			return fail()
+		}
+		if expected[class] {
+			return fail()
+		}
+		expected[class] = true
+	}
+	if len(expected) == 0 || len(expected) > 2 {
+		return fail()
 	}
 	if len(g.Classes) != len(expected) || len(g.Kills) != len(expected) {
 		return fail()

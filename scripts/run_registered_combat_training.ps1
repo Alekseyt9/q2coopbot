@@ -116,7 +116,7 @@ try{
             & "$snapshotRoot/q2episode.exe" --registry $registry --root $repo --episodes ($cfg.evaluation_episodes -join ',') --split validation --mode learned --model "$folder/eval-$label.json" --count $cfg.evaluation_count --out "$folder/eval-$label-plan.json" --artifacts "$folder/evaluation-$label"
             if($LASTEXITCODE){throw 'Validation plan failed'}
             & "$PSScriptRoot/run_registered_combat_episodes.ps1" -Plan "$folder/eval-$label-plan.json" -Port $Port
-            $evaluations+=@{model=$m.id;label=$label;root="$folder/evaluation-$label";weights_sha256=(Get-FileHash $evalModel).Hash.ToLowerInvariant()}
+            $evaluations+=@{model=$m.id;label=$label;root="$folder/evaluation-$label";weights_sha256=(Get-FileHash "$folder/eval-$label.json").Hash.ToLowerInvariant();source_weights_sha256=(Get-FileHash $evalModel).Hash.ToLowerInvariant()}
         }
     }
     if($cfg.include_rules){& "$PSScriptRoot/run_registered_combat_episodes.ps1" -Plan "$snapshotRoot/preflight-rules.json" -Port $Port;$evaluations+=@{model='rules';label='reference';root="$snapshotRoot/rules"}}

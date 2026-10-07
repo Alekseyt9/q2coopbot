@@ -181,7 +181,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 $goal=Get-Content (Join-Path $out 'goal-stop.json') -Raw | ConvertFrom-Json
                 $release=@(Get-Content (Join-Path $out 'server.log') | Select-String '^sv_test_combat spawncount=(-?\d+) server_frame=(\d+) g_test_combat_start game_frame=\d+ ready=1 seed=\d+$')
                 if($release.Count -ne 1){throw 'Goal release proof missing'}
-                $classes=@('monster_parasite');if($episodeMixed){$classes+='monster_gunner'}
+                $classes=if($sample){@($sample.monsters.class)}else{@('monster_parasite')};if(!$sample -and $episodeMixed){$classes+='monster_gunner'}
                 $verified=Get-CombatGoalReceipt $rows[-1] @(Read-DamageEvents (Join-Path $out 'server.log')) @{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value} $classes
                 $goalValid=$verified -and $goal.reason -eq 'combat_goal_complete' -and $goal.kill_frame -eq $verified.kill_frame -and $goal.observed_frame -ge $verified.kill_frame+1 -and $goal.observed_frame -le $rows[-1].observation_frame -and $goal.spawncount -eq $verified.spawncount -and $goal.actor -eq $verified.actor -and (Test-Path (Join-Path $out 'goal.stop'))
                 if(!$goalValid){throw 'Unverified goal stop'}

@@ -51,12 +51,13 @@ func (g *Generator) validate(ep Episode) error {
 	if g.Version != 1 || g.Kind != "base1-ground-combat-v1" || ep.Recipe.Runner != "combat-baseline" || len(g.Distributions) != 4 {
 		return fmt.Errorf("unsupported generator binding")
 	}
-	want := []string{"monster_parasite"}
-	if ep.Recipe.Mixed {
-		want = append(want, "monster_gunner")
-	}
-	if !reflect.DeepEqual(ep.Monsters, want) {
+	if len(ep.Monsters) == 0 || (!ep.Recipe.Mixed && len(ep.Monsters) != 1) || (ep.Recipe.Mixed && !reflect.DeepEqual(ep.Monsters, []string{"monster_parasite", "monster_gunner"})) {
 		return fmt.Errorf("generator composition differs from recipe")
+	}
+	switch ep.Monsters[0] {
+	case "monster_parasite", "monster_soldier", "monster_infantry":
+	default:
+		return fmt.Errorf("unsupported primary monster")
 	}
 	for _, split := range splitNames {
 		d, ok := g.Distributions[split]
@@ -116,7 +117,7 @@ func generate(ep Episode, split string, seed int, world *quake.MapInfo) (Instanc
 		v.Attempts = attempt
 		v.Player = samplePosition(r, d.Player)
 		v.Health = d.Health[r.Intn(len(d.Health))]
-		v.Monsters = []GeneratedMonster{{"monster_parasite", samplePosition(r, d.Primary)}}
+		v.Monsters = []GeneratedMonster{{ep.Monsters[0], samplePosition(r, d.Primary)}}
 		if d.Flank != nil {
 			v.Monsters = append(v.Monsters, GeneratedMonster{"monster_gunner", samplePosition(r, *d.Flank)})
 		}
@@ -158,6 +159,15 @@ func checkStart(v Instance, world *quake.MapInfo) string {
 		for j := 0; j < i; j++ {
 			if math.Abs(p[0]-points[j][0]) < 40 && math.Abs(p[1]-points[j][1]) < 40 && math.Abs(p[2]-points[j][2]) < 64 {
 				return "actor_overlap"
+			}
+		}
+		// Startup entity-lump monsters exist before the player is teleported.
+		// Reserve native spawn hulls to prevent a setup telefrag.
+		if i >= 2 {
+			for _, spawn := range world.Entities {
+				if (spawn.Class == "info_player_start" || spawn.Class == "info_player_coop") && math.Abs(p[0]-spawn.Origin[0]) < 40 && math.Abs(p[1]-spawn.Origin[1]) < 40 && math.Abs(p[2]-spawn.Origin[2]) < 64 {
+					return "native_spawn_overlap"
+				}
 			}
 		}
 	}

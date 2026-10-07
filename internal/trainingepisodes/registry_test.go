@@ -56,7 +56,7 @@ func TestPlanRejectsPlannedSceneAndInvalidSplitBudget(t *testing.T) {
 		id, split     string
 		count, offset int
 	}{
-		{"soldier-blaster-solo", "train", 4, 0},
+		{"soldier-infantry-corner", "train", 4, 0},
 		{"parasite-blaster-solo", "test", 4, 63},
 		{"parasite-blaster-solo", "validation", 36, 0},
 		{"base1-natural-campaign", "train", 4, 0},
