@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "id": "soldier-blaster-solo",
+  "revision": 1,
+  "title": "Soldier: Blaster, движение и прицел",
+  "status": "planned",
+  "map": "base1",
+  "scope": "proposed_first_life_combat",
+  "goal": "alive_combat_goal",
+  "monsters": [
+    "monster_soldier"
+  ],
+  "geometry": "pending randomized original-map fixture",
+  "initial_state": "pending native reset contract",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 300,
+  "modes": [
+    "rules",
+    "learned"
+  ],
+  "ppo_trainable": false,
+  "splits": {
+    "train": {
+      "start": 160000,
+      "count": 4096
+    },
+    "validation": {
+      "start": 260000,
+      "count": 32
+    },
+    "test": {
+      "start": 360000,
+      "count": 64
+    },
+    "confirmation": {
+      "start": 460000,
+      "count": 64
+    }
+  },
+  "recipe": {
+    "runner": ""
+  },
+  "missing": [
+    "Native fixture, synchronous reset/goal exporter and data eligibility validation are not implemented for this composition yet"
+  ]
+}

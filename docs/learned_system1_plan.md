@@ -1,5 +1,7 @@
 # Собственная System 1: иерархическая тактика, RL и MCTS
 
+**07.10.2026, полные base1/base2:** [Update26 против rules, 16 native эпизодов](testing/learned_combat_campaign_comparison_v1.md), 4 инстанса x2, skill1, обычный старт/Blaster. Base1: rules4/4 против learned1/4; base2: rules3/4 против learned0/4. Смерти3 против29, убийства104 против27. На base2 два learned возврата в base1. Перенос с подготовленных боёв на полные карты не принят; live/default остаётся rules.
+
 **07.10.2026, multiweapon Update26:** [MG/Shotgun/Blaster fixtures, ammo40/20 и10/6, native Shotgun proof и CUDA обучение](testing/learned_combat_multiweapon_v1.md). 4 instances x2, diagnostic seeds44600–44603 отдельно от training44700–44703. 310 on-policy rows,26 updates/249 actor steps. Shotgun requests/hits есть, useful choice пока не принят; нужен дальнейший curriculum и fresh paired evaluation.
 
 **07.10.2026, weapon Update25:** [Adam migration Curriculum24 и первый CUDA update новой головы](testing/learned_combat_weapon_resume_v1.md). Счётчики24→25 updates,230→240 actor steps. На8 fresh paired seeds wins4→5/deaths4→3, но explicit weapon switches0: полезный выбор оружия ещё не принят. Далее — multiple loadouts/ammo в существующем харнесе.

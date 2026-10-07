@@ -24,6 +24,7 @@ import (
 type Config struct {
 	CombatMode, CombatProviderFile      string
 	CombatCapture                       bool
+	TestCampaignCombatEvaluation        bool
 	Campaign                            bool
 	CampaignNextMap                     string
 	CampaignRoute                       []string
@@ -144,14 +145,28 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		return fmt.Errorf("unknown combat mode")
 	}
 	var combatProvider policy.Provider
+	if cfg.TestCampaignCombatEvaluation {
+		if err := validateCampaignCombatEvaluation(cfg); err != nil {
+			return err
+		}
+	}
 	if cfg.CombatMode != "rules" {
-		if cfg.Host != "127.0.0.1" || !cfg.FramePaced || !cfg.CombatCapture || cfg.CombatProviderFile == "" || cfg.TestTeleport == "" || cfg.Idle || cfg.TestScenario != "" || cfg.TestSession != "" || cfg.TestWalkTarget != "" || cfg.TestLineCross || cfg.TestCombatBarrier && !cfg.TestSynchronous || cfg.TestHoldPosition || cfg.TestHoldPositionMap != "" || cfg.TestWeaponSwitchFixture != "" && cfg.TestWeaponSwitchFixture != "parasite_blaster" && !(cfg.TestSynchronous && (cfg.TestWeaponSwitchFixture == "parasite_machinegun" || multiWeaponFixture(cfg.TestWeaponSwitchFixture))) {
+		if !cfg.TestCampaignCombatEvaluation && (cfg.Host != "127.0.0.1" || !cfg.FramePaced || !cfg.CombatCapture || cfg.CombatProviderFile == "" || cfg.TestTeleport == "" || cfg.Idle || cfg.TestScenario != "" || cfg.TestSession != "" || cfg.TestWalkTarget != "" || cfg.TestLineCross || cfg.TestCombatBarrier && !cfg.TestSynchronous || cfg.TestHoldPosition || cfg.TestHoldPositionMap != "" || cfg.TestWeaponSwitchFixture != "" && cfg.TestWeaponSwitchFixture != "parasite_blaster" && !(cfg.TestSynchronous && (cfg.TestWeaponSwitchFixture == "parasite_machinegun" || multiWeaponFixture(cfg.TestWeaponSwitchFixture)))) {
 			return fmt.Errorf("direct/shadow combat pilot requires isolated loopback placement, frame pacing, capture, probe and a supported fixed weapon without scripted command overrides")
 		}
 		var err error
-		combatProvider, err = policy.LoadProvider(cfg.CombatProviderFile, cfg.TestSynchronous)
+		if cfg.TestCampaignCombatEvaluation {
+			combatProvider, err = policy.LoadPPO(cfg.CombatProviderFile)
+		} else {
+			combatProvider, err = policy.LoadProvider(cfg.CombatProviderFile, cfg.TestSynchronous)
+		}
 		if err != nil {
 			return fmt.Errorf("combat provider: %w", err)
+		}
+		if cfg.TestCampaignCombatEvaluation {
+			if _, ok := combatProvider.(*policy.PPO); !ok {
+				return fmt.Errorf("campaign combat evaluation requires a local PPO provider")
+			}
 		}
 	} else if cfg.CombatProviderFile != "" {
 		return fmt.Errorf("rules mode does not load a combat provider")
@@ -404,7 +419,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	defer conn.Close()
 	client := &Client{
-		combatControl:      combatControl{mode: cfg.CombatMode, provider: combatProvider},
+		combatControl:      combatControl{mode: cfg.CombatMode, provider: combatProvider, campaignEvaluation: cfg.TestCampaignCombatEvaluation},
 		combatCapture:      cfg.CombatCapture,
 		scenarioResultPath: cfg.TestScenarioResult, scenarioTailFrames: cfg.TestScenarioTailFrames,
 		scenario:                scenario,

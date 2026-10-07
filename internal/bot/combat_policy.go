@@ -10,13 +10,14 @@ import (
 )
 
 type combatControl struct {
-	engagement combatEngagement
-	history    policy.History
-	mode       string
-	provider   policy.Provider
-	last       policy.Identity
-	lastHealth int16
-	life       int
+	campaignEvaluation bool
+	engagement         combatEngagement
+	history            policy.History
+	mode               string
+	provider           policy.Provider
+	last               policy.Identity
+	lastHealth         int16
+	life               int
 }
 
 func (c *Client) combatObservation(now time.Time) policy.Observation {
@@ -70,7 +71,7 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		sel.Fallback = fallback
 		return rules()
 	}
-	if o.Weapon != "Blaster" && !(c.testSynchronous && ((c.testWeaponSwitchFixture == "parasite_machinegun" && machinegunWeapon(o.Weapon)) || multiWeaponFixture(c.testWeaponSwitchFixture) && (machinegunWeapon(o.Weapon) || shotgunWeapon(o.Weapon)))) {
+	if o.Weapon != "Blaster" && !(b.campaignEvaluation && (machinegunWeapon(o.Weapon) || shotgunWeapon(o.Weapon))) && !(c.testSynchronous && ((c.testWeaponSwitchFixture == "parasite_machinegun" && machinegunWeapon(o.Weapon)) || multiWeaponFixture(c.testWeaponSwitchFixture) && (machinegunWeapon(o.Weapon) || shotgunWeapon(o.Weapon)))) {
 		sel.Fallback = "pilot_equip_not_ready"
 		return rules()
 	}

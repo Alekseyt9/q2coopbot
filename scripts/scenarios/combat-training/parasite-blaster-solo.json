@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "id": "parasite-blaster-solo",
+  "revision": 1,
+  "title": "Одиночный Parasite: Blaster",
+  "status": "runnable",
+  "map": "base1",
+  "scope": "first_life_combat",
+  "goal": "alive_native_kills_then_observed_effect",
+  "monsters": [
+    "monster_parasite"
+  ],
+  "geometry": "original BSP/AAS; arena start",
+  "initial_state": "player=32,-224,24; enemy=200,-224,24.125; optional Gunner=96,-200,24.125; release=100; stock monsters; HP100; blaster",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 300,
+  "modes": [
+    "rules",
+    "learned"
+  ],
+  "ppo_trainable": true,
+  "splits": {
+    "train": {
+      "start": 100000,
+      "count": 4096
+    },
+    "validation": {
+      "start": 200000,
+      "count": 32
+    },
+    "test": {
+      "start": 300000,
+      "count": 64
+    },
+    "confirmation": {
+      "start": 400000,
+      "count": 64
+    }
+  },
+  "recipe": {
+    "runner": "combat-baseline",
+    "loadout": "blaster",
+    "mixed": false,
+    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
+  },
+  "missing": []
+}

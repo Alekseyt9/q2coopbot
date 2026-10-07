@@ -51,6 +51,7 @@ type ConfigFile struct {
 		StopFile      string `json:"stop_file"`
 	} `json:"output"`
 	Test struct {
+		CampaignCombatEvaluation     bool   `json:"campaign_combat_evaluation"`
 		CheckpointControl            string `json:"checkpoint_control"`
 		CheckpointRestore            string `json:"checkpoint_restore"`
 		CheckpointMode               string `json:"checkpoint_mode"`
@@ -213,6 +214,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.System1Model, cfg.System2Model = file.Models.System1, file.Models.System2
 	cfg.CombatCapture = file.Output.CombatCapture
 	cfg.CombatMode, cfg.CombatProviderFile = file.Combat.Mode, resolve(file.Combat.ProviderFile)
+	cfg.TestCampaignCombatEvaluation = file.Test.CampaignCombatEvaluation
 	cfg.Idle, cfg.ExitOnReconnect = file.Test.Idle, file.Test.ExitOnReconnect
 	cfg.TestChangeMap, cfg.TestChangeAfter = file.Test.ChangeMap, file.Test.ChangeAfterFrames
 	if cfg.TestChangeAfter == 0 {

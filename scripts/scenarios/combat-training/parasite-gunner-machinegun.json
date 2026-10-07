@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "id": "parasite-gunner-machinegun",
+  "revision": 1,
+  "title": "Parasite + Gunner: Machinegun100",
+  "status": "runnable",
+  "map": "base1",
+  "scope": "first_life_combat",
+  "goal": "alive_native_kills_then_observed_effect",
+  "monsters": [
+    "monster_parasite",
+    "monster_gunner"
+  ],
+  "geometry": "original BSP/AAS; arena start",
+  "initial_state": "player=32,-224,24; enemy=200,-224,24.125; optional Gunner=96,-200,24.125; release=100; stock monsters; HP100; machinegun",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 300,
+  "modes": [
+    "learned"
+  ],
+  "ppo_trainable": true,
+  "splits": {
+    "train": {
+      "start": 120000,
+      "count": 4096
+    },
+    "validation": {
+      "start": 220000,
+      "count": 32
+    },
+    "test": {
+      "start": 320000,
+      "count": 64
+    },
+    "confirmation": {
+      "start": 420000,
+      "count": 64
+    }
+  },
+  "recipe": {
+    "runner": "combat-baseline",
+    "loadout": "machinegun",
+    "mixed": true,
+    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
+  },
+  "missing": []
+}

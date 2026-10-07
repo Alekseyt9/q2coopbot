@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "id": "base2-natural-campaign",
+  "revision": 1,
+  "title": "Полная base2: обычный старт",
+  "status": "runnable",
+  "map": "base2",
+  "scope": "full_map",
+  "goal": "native_forward_map_exit",
+  "monsters": [
+    "original_map_composition"
+  ],
+  "geometry": "original BSP/AAS; doors/buttons/exits",
+  "initial_state": "natural solo start; stock inventory; no give/teleport/invulnerability",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 1800,
+  "modes": [
+    "rules",
+    "learned"
+  ],
+  "ppo_trainable": false,
+  "splits": {
+    "train": {
+      "start": 150000,
+      "count": 4096
+    },
+    "validation": {
+      "start": 250000,
+      "count": 32
+    },
+    "test": {
+      "start": 350000,
+      "count": 64
+    },
+    "confirmation": {
+      "start": 450000,
+      "count": 64
+    }
+  },
+  "recipe": {
+    "runner": "campaign-comparison"
+  },
+  "missing": []
+}

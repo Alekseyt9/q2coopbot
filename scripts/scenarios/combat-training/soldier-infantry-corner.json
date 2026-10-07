@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "id": "soldier-infantry-corner",
+  "revision": 1,
+  "title": "Soldier + Infantry у угла",
+  "status": "planned",
+  "map": "base1",
+  "scope": "proposed_first_life_combat",
+  "goal": "alive_combat_goal",
+  "monsters": [
+    "monster_soldier",
+    "monster_infantry"
+  ],
+  "geometry": "pending randomized original-map fixture",
+  "initial_state": "pending native reset contract",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 300,
+  "modes": [
+    "rules",
+    "learned"
+  ],
+  "ppo_trainable": false,
+  "splits": {
+    "train": {
+      "start": 180000,
+      "count": 4096
+    },
+    "validation": {
+      "start": 280000,
+      "count": 32
+    },
+    "test": {
+      "start": 380000,
+      "count": 64
+    },
+    "confirmation": {
+      "start": 480000,
+      "count": 64
+    }
+  },
+  "recipe": {
+    "runner": ""
+  },
+  "missing": [
+    "Native fixture, synchronous reset/goal exporter and data eligibility validation are not implemented for this composition yet"
+  ]
+}

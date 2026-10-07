@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "files": [
+    "parasite-blaster-solo.json",
+    "parasite-gunner-blaster.json",
+    "parasite-gunner-machinegun.json",
+    "parasite-gunner-weapons.json",
+    "base1-natural-campaign.json",
+    "base2-natural-campaign.json",
+    "soldier-blaster-solo.json",
+    "infantry-blaster-solo.json",
+    "soldier-infantry-corner.json"
+  ]
+}
