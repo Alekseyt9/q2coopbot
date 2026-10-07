@@ -31,7 +31,12 @@ function Get-RuntimeImmutableHash([string]$Path) {
     }
 }
 function Install-RuntimeImmutable([string]$Source, [string]$Target, [string]$PoolRoot = '') {
-    $temporary = $Target + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
+    # Keep atomic replacement in the same directory, without appending a GUID
+    # to an already long filename. Native Quake/tooling still needs MAX_PATH.
+    $temporary = Join-Path (Split-Path -Parent $Target) ('.r' + [guid]::NewGuid().ToString('N') + '.tmp')
+    if ([IO.Path]::GetFullPath($temporary).Length -ge 260) {
+        throw "Immutable runtime temporary path exceeds native Windows limit; use a shorter artifact root: $Target"
+    }
     try {
         # Keep a content-addressed snapshot: build outputs and source AAS may change.
         $digest = Get-RuntimeImmutableHash $Source
@@ -89,6 +94,11 @@ function Install-RuntimeImmutable([string]$Source, [string]$Target, [string]$Poo
 # NTFS permits only 1024 links per file. Shared immutable PAK shards avoid a
 # private 184MB copy per episode once the original archive reaches that limit.
 function Install-RuntimePak([string]$Source, [string]$Target, [string]$PoolRoot) {
+    # A path failure must not trigger copies of 32 shared shards. Shards solve
+    # the NTFS link-count limit, not overlong paths.
+    if ([IO.Path]::GetFullPath($Target).Length -ge 260) {
+        throw "Runtime hard-link path exceeds native Windows limit; use a shorter artifact root: $Target"
+    }
     try {
         New-Item -ItemType HardLink -Path $Target -Target $Source -ErrorAction Stop | Out-Null
         return

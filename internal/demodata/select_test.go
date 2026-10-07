@@ -8,6 +8,46 @@ import (
 	"q2coopbot/internal/quake"
 )
 
+func TestRangedTrackingAllowsStationaryAimButNotSafetyCorrection(t *testing.T) {
+	s, e, c := teacherFixture()
+	s.AppliedAction.Forward = 0
+	c.Applied = s.AppliedAction
+	s.Command.Forward = 0
+	c.AppliedCommand = s.Command
+	s.Observation.Weapon = "Machinegun"
+	s.Next.Weapon = "Machinegun"
+	c.TeacherAimSource = "enemy"
+	c.TeacherAimEntity = 2
+	clear := true
+	s.Observation.Enemies[0].ClearShot = &clear
+	c.LimitReason = "no_movement_goal"
+	got := SelectVersion(s, e, c, "rules", RangedTrackingSelectionVersion)
+	if got.Quality == "rejected" || !got.Heads.Aim || !got.Heads.Attack || got.Heads.Movement {
+		t.Fatal(got)
+	}
+	c.LimitReason = "barrel_blast_risk"
+	got = SelectVersion(s, e, c, "rules", RangedTrackingSelectionVersion)
+	if got.Quality != "rejected" {
+		t.Fatal("copied safety correction", got)
+	}
+}
+
+func TestDeferredTestRequiresDisjointTrainingAndValidationOnly(t *testing.T) {
+	s := Spec{Version: "combat_dataset_spec_v1", SelectionVersion: RangedTrackingSelectionVersion, DeferredTest: true, Condition: Condition{Map: "base1", Synchronous: true}, Episodes: []EpisodeSpec{{Seed: 1, Split: "train"}, {Seed: 2, Split: "validation"}}}
+	if err := s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	s.Episodes = append(s.Episodes, EpisodeSpec{Seed: 3, Split: "test"})
+	if s.Validate() == nil {
+		t.Fatal("deferred test collected examples")
+	}
+	s.Episodes = s.Episodes[:2]
+	s.Episodes[1].Seed = 1
+	if s.Validate() == nil {
+		t.Fatal("seed leakage accepted")
+	}
+}
+
 func teacherFixture() (learningenv.Step, learningenv.ServerOutcome, policy.Capture) {
 	id := policy.Identity{Life: 1, Map: "base1", Connection: 1, Spawncount: 42, Actor: 1, Frame: 10}
 	o := policy.Observation{Version: policy.ObservationVersion, Identity: id, Health: 100, Weapon: "Blaster", OnGround: true, Geometry: &policy.LocalGeometry{}, Enemies: []policy.Enemy{{ID: 2, Class: "monster_parasite"}}}

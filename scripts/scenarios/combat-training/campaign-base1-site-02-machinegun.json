@@ -144,11 +144,12 @@
           100
         ]
       }
-    }
+    },
+    "seed_revision": 1
   },
   "version": 1,
   "id": "campaign-base1-site-02-machinegun",
-  "revision": 1,
+  "revision": 2,
   "title": "base1 encounter 8: monster_infantry / Machinegun recoil",
   "status": "runnable",
   "map": "base1",
@@ -163,6 +164,7 @@
   "timescale": 2,
   "game_frames": 300,
   "modes": [
+    "rules",
     "learned"
   ],
   "ppo_trainable": true,

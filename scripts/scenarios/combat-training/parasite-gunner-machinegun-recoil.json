@@ -21,6 +21,7 @@
     }
   },
   "modes": [
+    "rules",
     "learned"
   ],
   "monsters": [
@@ -211,10 +212,11 @@
           100
         ]
       }
-    }
+    },
+    "seed_revision": 2
   },
   "skill": 1,
-  "revision": 2,
+  "revision": 3,
   "missing": [],
   "game_frames": 300,
   "ppo_trainable": true,

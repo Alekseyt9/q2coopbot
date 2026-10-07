@@ -13,6 +13,7 @@ import (
 const SelectionVersion = "teacher_candidates_v1"
 const ReleaseSelectionVersion = "teacher_candidates_v2"
 const TrackingSelectionVersion = "teacher_tracking_candidates_v3"
+const RangedTrackingSelectionVersion = "teacher_ranged_tracking_candidates_v4"
 const DatasetVersion = "combat_demonstrations_v1"
 
 type Heads struct {
@@ -39,7 +40,7 @@ func SelectVersion(s learningenv.Step, effects learningenv.ServerOutcome, captur
 	if version == VerticalSelectionVersion {
 		return selectVertical(s, effects, capture, mode)
 	}
-	if version != SelectionVersion && version != ReleaseSelectionVersion && version != TrackingSelectionVersion {
+	if version != SelectionVersion && version != ReleaseSelectionVersion && version != TrackingSelectionVersion && version != RangedTrackingSelectionVersion {
 		return Selection{Version: version, Quality: "rejected", Reason: "unsupported_selection_version"}
 	}
 	return selectTeacher(s, effects, capture, mode, version)
@@ -60,7 +61,10 @@ func selectTeacher(s learningenv.Step, effects learningenv.ServerOutcome, captur
 	if s.Execution == nil || !s.Execution.Matched || !s.Execution.WindowExclusive || s.Native == nil || !effects.Available || effects.Version != "server_step_effects_v1" {
 		return deny("unproven_native_transition")
 	}
-	if capture.Changed || capture.LimitReason != "" || capture.MoveLimitReason != "" || len(s.Interventions) > 0 {
+	// A stationary isolated teacher can have no route movement goal while its
+	// aiming/firing commands remain unchanged. This is not a safe movement label.
+	stationaryTracking := version == RangedTrackingSelectionVersion && capture.LimitReason == "no_movement_goal" && aStationary(s.AppliedAction)
+	if capture.Changed || capture.LimitReason != "" && !stationaryTracking || capture.MoveLimitReason != "" || len(s.Interventions) > 0 {
 		return deny("guard_or_command_correction")
 	}
 	if effects.Deaths != 0 || effects.SelfHealthDamage != 0 || effects.TeammateHealthDamage != 0 || effects.ReceivedHealthDamage != 0 {
@@ -99,13 +103,18 @@ func selectTeacher(s learningenv.Step, effects learningenv.ServerOutcome, captur
 	r.Heads.Movement = s.Observation.OnGround && s.Next.OnGround && !s.Observation.Ducked && !s.Next.Ducked && a.Vertical == "release" && (a.Forward != 0 || a.Side != 0) && r.HorizontalDisplacement >= 2
 	// Tracking labels imitate the actual teacher, including its firing convention.
 	// They make no claim that this command caused a delayed projectile hit.
-	if version == TrackingSelectionVersion && s.Observation.Weapon == "Blaster" && s.Next.Weapon == "Blaster" && a.Weapon == "" && capture.TeacherAimSource == "enemy" && capture.TeacherAimEntity != 0 {
+	weaponName := strings.ToLower(s.Observation.Weapon)
+	ranged := weaponName == "blaster" || weaponName == "machinegun" || strings.Contains(weaponName, "/v_blast/") || strings.Contains(weaponName, "/v_machn/")
+	if (version == TrackingSelectionVersion && s.Observation.Weapon == "Blaster" || version == RangedTrackingSelectionVersion && ranged) && s.Next.Weapon == s.Observation.Weapon && a.Weapon == "" && capture.TeacherAimSource == "enemy" && capture.TeacherAimEntity != 0 {
 		for _, enemy := range s.Observation.Enemies {
 			if enemy.ID == capture.TeacherAimEntity && enemy.ClearShot != nil && *enemy.ClearShot {
 				r.Heads.Aim, r.Heads.Attack = true, true
 				r.Heads.Vertical = s.Observation.OnGround && s.Next.OnGround && !s.Observation.Ducked && !s.Next.Ducked && a.Vertical == "release"
 				r.Quality = "teacher_tracking_convention; unreviewed; not projectile hit attribution or tactical acceptance"
 				r.Reason = "blaster_teacher_tracking_convention"
+				if version == RangedTrackingSelectionVersion {
+					r.Reason = "ranged_teacher_tracking_convention"
+				}
 				return r
 			}
 		}
@@ -131,4 +140,8 @@ func selectTeacher(s learningenv.Step, effects learningenv.ServerOutcome, captur
 	r.Quality = "auto_candidate; unreviewed; rules tactical assistance present"
 	r.Reason = "verified_ground_movement_or_shotgun_hitscan_effect"
 	return r
+}
+
+func aStationary(a policy.Action) bool {
+	return a.Forward == 0 && a.Side == 0 && a.Vertical == "release"
 }

@@ -124,3 +124,10 @@ go run ./cmd/q2episode --episodes parasite-blaster-generated `
 Добавлены исполняемые Soldier/Infantry и 16 рецептов на 8 разных участках base1/base2: [точки кампании](campaign_combat_sites_20261007.md). Для этих изолированных боёв отключён поиск выхода с карты, наблюдения боя сохранены.
 
 Следующие адаптеры: составные группы Soldier/Infantry; углы и инвентарь; отложенная геометрия/укрытия с поддержкой reset без видимого primary; проверка native hull/достижимости; scene loss weights и равный опыт архитектур; участки естественных карт с PPO export. Увеличение реестра без исполняемого рецепта и проверки native старта не считается добавленной тренировкой.
+
+## Диагностика и teacher corpus после Update29
+
+[Разбор слабых семейств](combat_failure_diagnosis_20261007.md):20 точно парных rules battles и36 новых rules demonstrations (24 train/12 validation). Rules разрешён для fixed MG. Поле generator.seed_revision отделяет namespace стартовых условий от capability revision; восемь campaign MG recipes revision2 сохраняют seed_revision1 и прежние позиции/HP. Сравнение generated instances и regression test прошли. [Sequence BC adapter и CUDA-обучение](combat_sequence_bc_20261007.md) выполнены: контекст сохраняется, supervised masks отдельно исключают неподходящие кадры. Парная оценка всех20 семейств завершена: full-actor BC36/80→28/80, веса не назначены основными. Контроль только aim/fire heads завершён:29/80. Обе BC ветки экспериментальные; следующий corpus должен покрывать посещаемые learned states.
+
+
+

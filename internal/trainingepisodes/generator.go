@@ -22,6 +22,7 @@ type StartDistribution struct {
 	Health  []int          `json:"health"`
 }
 type Generator struct {
+	SeedRevision  *int                         `json:"seed_revision,omitempty"`
 	Site          *CampaignSite                `json:"site,omitempty"`
 	Version       int                          `json:"version"`
 	Kind          string                       `json:"kind"`
@@ -50,6 +51,9 @@ type Instance struct {
 }
 
 func (g *Generator) validate(ep Episode) error {
+	if g.SeedRevision != nil && (*g.SeedRevision < 1 || *g.SeedRevision > ep.Revision) {
+		return fmt.Errorf("invalid generator seed revision")
+	}
 	if g.Version != 1 || (g.Kind != "base1-ground-combat-v1" && g.Kind != "campaign-ground-combat-v1") || (g.Kind == "base1-ground-combat-v1" && ep.Map != "base1") || ep.Recipe.Runner != "combat-baseline" || len(g.Distributions) != 4 {
 		return fmt.Errorf("unsupported generator binding")
 	}
@@ -120,7 +124,11 @@ func generate(ep Episode, split string, seed int, world *quake.MapInfo) (Instanc
 	if ep.Generator.Site != nil && (ep.Map != world.Name || ep.Generator.Site.BSPSHA256 != world.BSPSHA256) {
 		return Instance{}, fmt.Errorf("campaign geometry changed")
 	}
-	sum := sha256.Sum256([]byte(fmt.Sprintf("combat-generator-v1:%s:%d:%s:%d", ep.ID, ep.Revision, split, seed)))
+	revision := ep.Revision
+	if ep.Generator.SeedRevision != nil {
+		revision = *ep.Generator.SeedRevision
+	}
+	sum := sha256.Sum256([]byte(fmt.Sprintf("combat-generator-v1:%s:%d:%s:%d", ep.ID, revision, split, seed)))
 	gs := int(binary.LittleEndian.Uint32(sum[:4]) & 0x7fffffff)
 	r := rand.New(rand.NewSource(int64(gs)))
 	d := ep.Generator.Distributions[split]

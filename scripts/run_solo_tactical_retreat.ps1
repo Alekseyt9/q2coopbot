@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$GeneratedFixture="",[ValidateSet('standard','remaining-far')][string]$ParasiteFixture='standard',[ValidateSet(0,100)][int]$ReleaseGameFrame=0,[ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$Synchronous,[switch]$StopOnGoal,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','machinegun','weapons','weapons-scarce','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
+param([ValidateRange(0,15)][int]$ClientStartupDelaySeconds=0,[string]$GeneratedFixture="",[ValidateSet('standard','remaining-far')][string]$ParasiteFixture='standard',[ValidateSet(0,100)][int]$ReleaseGameFrame=0,[ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$Synchronous,[switch]$StopOnGoal,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','machinegun','weapons','weapons-scarce','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
 function Measure-BarrelSafety($Rows,$Events) {
     $actor=$Rows[0].self_entity
@@ -25,7 +25,7 @@ if(($ParasiteMixed -or $ParasiteHealthKit) -and !$ParasiteWeapon){throw 'Parasit
 if($RequireMixedDetour -and (!$ParasiteMixed -or $ParasiteMixedClass -ne 'monster_gunner')){throw 'Required mixed detour needs observed Gunner/Parasite fixture'}
 if($Synchronous -and (!$Rules -or !$CombatCapture -or !$ParasiteWeapon -or $ParasiteLoadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce')){throw 'Unsupported synchronous equipment'}
 if($ParasiteLoadout -in 'weapons','weapons-scarce' -and (!$Synchronous -or $CombatMode -ne 'learned' -or $TrainingMonsterHealth)){throw 'Weapon-choice fixture requires synchronous direct learned control'}
-if($ParasiteLoadout -eq 'machinegun' -and (!$Synchronous -or $CombatMode -eq 'rules' -or $TrainingMonsterHealth)){throw 'Fixed Machinegun requires synchronous learned capture without health override'}
+if($ParasiteLoadout -eq 'machinegun' -and (!$Synchronous -or $TrainingMonsterHealth)){throw 'Fixed Machinegun requires synchronous capture without health override'}
 if($ParasiteLoadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){throw 'Fixed Shotgun exercise requires synchronous rules'}
 if($ParasiteFixture -ne 'standard' -and (!$Synchronous -or !$ParasiteWeapon -or $ParasiteMixed -or $ParasiteHealthKit -or $ParasiteHealth -ne 100 -or $TrainingMonsterHealth -or $ParasiteLoadout -ne 'blaster' -or $CombatMode -ne 'learned')){throw 'Remaining-Parasite fixture requires stock isolated direct synchronous Blaster'}
 if(!$Worker){
@@ -77,7 +77,8 @@ if(Test-Path $OutputRoot){throw 'Fresh output required'}
 New-Item -ItemType Directory $OutputRoot|Out-Null
 $resetClock=[Diagnostics.Stopwatch]::StartNew()
 $fixtureMap=if($generated -and $generated.map){$generated.map}else{'base1'}
-$combatOnly=[bool]($generated -and $generated.map)
+$combatOnly=[bool]$generated
+if($ClientStartupDelaySeconds -and (!$Synchronous -or $ReleaseGameFrame -ne 100)){throw 'Delayed startup probe requires fixed synchronous release100'}
 $runtime=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map $fixtureMap -RuntimeRoot (Join-Path $OutputRoot 'runtime')
 if($Recovery){
     # A genuine native 25HP item, introduced before server startup only.
@@ -105,6 +106,7 @@ try{
     if($Synchronous){
         @("set sv_harness_instance learning-$Seed",'set sv_test_trace_client SoloRetreatBot','set sv_test_lockstep_client SoloRetreatBot','set g_test_combat_barrier 1','set g_test_combat_clients 1','set g_test_monster_no_infighting 1',"set g_test_combat_monster_health $TrainingMonsterHealth","set g_test_combat_release_frame $ReleaseGameFrame")|Set-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Encoding ascii
         $args=$args.Replace("+map $fixtureMap","+exec learning-test.cfg +map $fixtureMap")
+        if($ReleaseGameFrame){Add-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Value 'set sv_test_signon_hold_frame 40' -Encoding ascii}
     }
     if($Recovery -or $CornerEscape -or $ParasiteWeapon){$args=$args.Replace("+map $fixtureMap","+set skill $RecoverySkill +map $fixtureMap");$report.skill=$RecoverySkill;$report.initial_health=$(if($CornerEscape){65}elseif($ParasiteWeapon){$ParasiteHealth}else{$RecoveryHealth})}
     $config=Join-Path $OutputRoot 'bot-config.json'
@@ -140,9 +142,11 @@ try{
     }finally{$probe.Dispose()}
     $report.reset_to_udp_ready_seconds=$resetClock.Elapsed.TotalSeconds
     $report.reset_scope='Cold runtime preparation plus native server restart to UDP bind; protocol begin is measured separately by the client'
+    $report.client_startup_delay_seconds=$ClientStartupDelaySeconds
+    if($ClientStartupDelaySeconds){Start-Sleep -Seconds $ClientStartupDelaySeconds}
     $bot=Start-Process $Client -ArgumentList "--config `"$config`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
     if(Get-NetUDPEndpoint -OwningProcess $server.Id|Where-Object LocalAddress -NotIn '127.0.0.1','::1'){throw 'Server not loopback'}
-    $waitMilliseconds=$(if($GameFrames){[int]([math]::Max(25,$GameFrames/(10*$Timescale)+10)*1000)}else{25000});if($StopOnGoal){. "$PSScriptRoot/combat_goal_stop.ps1";$goalClasses=@($enemyClass);if($ParasiteMixed){$goalClasses+=$ParasiteMixedClass};Wait-CombatGoalOrExit $bot $OutputRoot $waitMilliseconds $goalClasses $fixtureMap}else{$null=$bot.WaitForExit($waitMilliseconds)};if(!$bot.HasExited){throw 'Bot timeout'};if($bot.ExitCode){throw 'Bot failed'}
+    $waitMilliseconds=$(if($GameFrames){[int]([math]::Max($(if($Synchronous){60}else{25}),$GameFrames/$(if($Synchronous){10}else{10*$Timescale})+$(if($Synchronous){30}else{10}))*1000)}else{25000});if($StopOnGoal){. "$PSScriptRoot/combat_goal_stop.ps1";$goalClasses=@($enemyClass);if($ParasiteMixed){$goalClasses+=$ParasiteMixedClass};Wait-CombatGoalOrExit $bot $OutputRoot $waitMilliseconds $goalClasses $fixtureMap}else{$null=$bot.WaitForExit($waitMilliseconds)};if(!$bot.HasExited){throw 'Bot timeout'};if($bot.ExitCode){throw 'Bot failed'}
     $rows=@(Get-Content $trace|ForEach-Object {$_|ConvertFrom-Json})
     . "$PSScriptRoot/read_damage_events.ps1"
     $events=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log'))
@@ -381,7 +385,7 @@ try{
     if($Circle -and $report.circle_health_damage -le 0){throw 'Native damage from circle projectiles absent'}
     if($Cover -and $report.cover_window_health_damage -le 0){throw 'Native monster damage in cover firing window absent'};if($ParasiteWeapon){$report.scope="Prepared native Parasite and loaded Shotgun, automatic ranged-weapon selection from observed inventory, actual retreat/fire and native kill; no general group or campaign acceptance"}elseif($CornerEscape){$report.scope="Prepared native Parasite, skill $RecoverySkill at the recorded fatal corner, 65HP as after the used kit; Go bounded escape with actual movement/fire and native kill, no full recovery or general campaign acceptance"}elseif($Recovery){$report.scope="Prepared ${initialHealth}HP solo actor, skill $RecoverySkill vulnerable Parasite and native 25HP kit; Go recovery movement with attributed fire, item heal and resumed combat; no remembered hidden-item or general campaign acceptance"}elseif($GroupRetreat){$report.scope='Prepared two vulnerable infantry: close primary and rear flank, live retreat, actual spacing and attributed bolt damage; no mixed group or general campaign acceptance'}elseif(!$Cover -and !$Circle){$report.scope='Prepared single vulnerable native parasite, ordinary solo campaign commands; model-selected retreat plus shooting and observed movement, not general campaign acceptance'};$report.accepted=$true;$report.reason='accepted'
     if($ParasiteWeapon -and $ParasiteLoadout -eq 'shotgun'){$report.scope='Prepared fixed Shotgun teacher exercise; observed rules aim/fire and native hitscan damage, no learned policy or weapon-choice acceptance'}
-    if($ParasiteWeapon -and $ParasiteLoadout -eq 'machinegun'){$report.scope='Prepared fixed Machinegun with 100 bullets, stock recoil/spread and native ammo depletion; learned movement/aim/fire, no learned weapon-choice acceptance'}
+    if($ParasiteWeapon -and $ParasiteLoadout -eq 'machinegun'){$report.scope='Prepared fixed Machinegun with 100 bullets, stock recoil/spread and native ammo depletion; selected controller movement/aim/fire, no weapon-choice acceptance'}
     if($ParasiteWeapon -and $ParasiteLoadout -in 'weapons','weapons-scarce'){$report.scope='Prepared MG/Shotgun/Blaster inventory with declared ammo; synchronous learned control and native command proof, weapon-choice quality unproven'}
 }catch{
     $report.reason=$_.Exception.Message

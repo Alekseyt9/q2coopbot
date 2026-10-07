@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
+	"q2coopbot/internal/aimquery"
 	"reflect"
 	"sort"
 	"strings"
@@ -32,6 +34,7 @@ type EpisodeSpec struct {
 	Split string `json:"split"`
 }
 type Spec struct {
+	DeferredTest     bool          `json:"deferred_test,omitempty"`
 	Version          string        `json:"version"`
 	SelectionVersion string        `json:"selection_version"`
 	Condition        Condition     `json:"condition"`
@@ -39,8 +42,11 @@ type Spec struct {
 }
 
 func (s Spec) Validate() error {
-	if s.Version != "combat_dataset_spec_v1" || s.SelectionVersion != SelectionVersion && s.SelectionVersion != ReleaseSelectionVersion && s.SelectionVersion != VerticalSelectionVersion && s.SelectionVersion != TrackingSelectionVersion || s.Condition.Map == "" || !s.Condition.Synchronous || len(s.Episodes) == 0 {
+	if s.Version != "combat_dataset_spec_v1" || s.SelectionVersion != SelectionVersion && s.SelectionVersion != ReleaseSelectionVersion && s.SelectionVersion != VerticalSelectionVersion && s.SelectionVersion != TrackingSelectionVersion && s.SelectionVersion != RangedTrackingSelectionVersion && s.SelectionVersion != AimQuerySelectionVersion || s.Condition.Map == "" || !s.Condition.Synchronous || len(s.Episodes) == 0 {
 		return fmt.Errorf("invalid dataset specification")
+	}
+	if s.SelectionVersion == AimQuerySelectionVersion && !s.DeferredTest {
+		return fmt.Errorf("aim query corpus requires deferred final test")
 	}
 	if (s.SelectionVersion == VerticalSelectionVersion) != s.Condition.TeacherVertical {
 		return fmt.Errorf("vertical selector requires explicit vertical condition")
@@ -55,6 +61,12 @@ func (s Spec) Validate() error {
 		splits[e.Split]++
 	}
 	for _, name := range []string{"train", "validation", "test"} {
+		if name == "test" && s.DeferredTest {
+			if splits[name] != 0 {
+				return fmt.Errorf("deferred test must not contain test episodes")
+			}
+			continue
+		}
 		if splits[name] == 0 {
 			return fmt.Errorf("missing split %s", name)
 		}
@@ -80,6 +92,7 @@ type Candidate struct {
 	Selection   Selection          `json:"selection"`
 	Observation policy.Observation `json:"observation"`
 	Target      policy.Action      `json:"target_applied_action"`
+	Query       *aimquery.Label    `json:"counterfactual_aim_query,omitempty"`
 }
 type Counts struct {
 	Episodes        int            `json:"episodes"`
@@ -107,6 +120,7 @@ type Report struct {
 }
 
 type batchManifest struct {
+	StopOnGoal      bool                      `json:"stop_on_goal"`
 	Provenance      bool                      `json:"provenance_valid"`
 	Source          string                    `json:"source_fingerprint"`
 	Native          string                    `json:"native_source_fingerprint"`
@@ -119,12 +133,14 @@ type batchManifest struct {
 	Reward          *learningenv.RewardConfig `json:"reward_config"`
 }
 type episodeResult struct {
-	Seed          int    `json:"seed"`
-	Worker        int    `json:"worker"`
-	Episode       int    `json:"episode"`
-	Root          string `json:"root"`
-	Valid         bool   `json:"capture_valid"`
-	SeedConfirmed bool   `json:"seed_confirmed"`
+	ConfigSHA     string                `json:"provider_config_sha256"`
+	Goal          *learningenv.GoalStop `json:"goal_stop"`
+	Seed          int                   `json:"seed"`
+	Worker        int                   `json:"worker"`
+	Episode       int                   `json:"episode"`
+	Root          string                `json:"root"`
+	Valid         bool                  `json:"capture_valid"`
+	SeedConfirmed bool                  `json:"seed_confirmed"`
 	RuntimeFiles  []struct {
 		Path string `json:"path"`
 		SHA  string `json:"sha256"`
@@ -263,6 +279,9 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 		root := input.Result.Root
 		source := Source{Batch: input.Batch, Seed: assignment.Seed, Split: assignment.Split, Controller: input.Manifest.Source, Native: input.Manifest.Native, Files: map[string]string{}}
 		source.Assistance = "rules tactical controller and fixture placement"
+		if spec.SelectionVersion == AimQuerySelectionVersion {
+			source.Assistance = "learned visitation; offline observed-bbox nominal aim query, not an executed teacher action"
+		}
 		if input.Manifest.Loadout == "shotgun" {
 			source.Assistance += "; test-only fixed Shotgun, automatic weapon selection disabled"
 		}
@@ -270,6 +289,32 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 			source.Assistance += "; explicit scripted vertical_flat_v1 primitive, horizontal/fire hold for first 20 released frames"
 		}
 		paths := map[string]string{"manifest": filepath.Join(input.Batch, "manifest.json"), "report": filepath.Join(input.Batch, "report.json"), "config": filepath.Join(root, "bot-config.json"), "trace": filepath.Join(root, "bot.jsonl"), "server": filepath.Join(root, "server.log"), "steps": filepath.Join(root, "dataset/steps.jsonl"), "effects": filepath.Join(root, "dataset/server_outcomes.jsonl"), "rewards": filepath.Join(root, "dataset/rewards.jsonl"), "initial": filepath.Join(root, "dataset/episode_start.json"), "reset": filepath.Join(root, "reset-expectation.json")}
+		var queryPolicy *policy.PPO
+		if spec.SelectionVersion == AimQuerySelectionVersion {
+			var cfg struct {
+				Combat struct {
+					File string `json:"provider_file"`
+				} `json:"combat"`
+			}
+			if err := readJSON(paths["config"], &cfg); err != nil {
+				return report, err
+			}
+			digest, err := fileSHA(cfg.Combat.File)
+			if err != nil || !strings.EqualFold(digest, input.Result.ConfigSHA) {
+				return report, fmt.Errorf("query behavior model hash differs")
+			}
+			queryPolicy, err = policy.LoadPPO(cfg.Combat.File)
+			if err != nil {
+				return report, err
+			}
+			if queryPolicy.SamplingSeed() != int64(input.Result.Seed) {
+				return report, fmt.Errorf("query behavior sampling seed differs")
+			}
+			paths["behavior_model"] = cfg.Combat.File
+		}
+		if input.Result.Goal != nil {
+			paths["goal"] = filepath.Join(root, "goal-stop.json")
+		}
 		if len(input.Result.RuntimeFiles) == 0 {
 			return report, fmt.Errorf("native runtime hashes missing")
 		}
@@ -299,9 +344,32 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 		count.Episodes++
 		err := verifyEpisode(input, spec.Condition.Map, func(s learningenv.Step, effects learningenv.ServerOutcome, reward learningenv.Reward, c policy.Capture) error {
 			selection := SelectVersion(s, effects, c, input.Manifest.Mode, spec.SelectionVersion)
+			var query *aimquery.Label
+			if spec.SelectionVersion == AimQuerySelectionVersion {
+				if s.Owner == "provider" && s.Observation.Identity.Life == 1 {
+					if s.Sample == nil || s.Provider != queryPolicy.Version() {
+						return fmt.Errorf("query state has no matching behavior sample")
+					}
+					if err := queryPolicy.VerifyMemory(s.Observation, *s.Sample); err != nil {
+						return err
+					}
+					a, lp, value, err := queryPolicy.Review(s.Observation, *s.Sample)
+					if err != nil {
+						return err
+					}
+					if !reflect.DeepEqual(a, s.Action) || math.Abs(lp-s.Sample.LogProbability) > 1e-8 || math.Abs(value-s.Sample.Value) > 1e-8 {
+						return fmt.Errorf("query behavior sample changed")
+					}
+				}
+				var err error
+				selection, query, err = SelectAimQuery(s, c, input.Manifest.Mode)
+				if err != nil {
+					return err
+				}
+			}
 			count.Steps++
 			if selection.Quality != "rejected" {
-				candidate := Candidate{DatasetVersion, source, s.Index, s.Worker, s.Episode, selection, s.Observation, s.AppliedAction}
+				candidate := Candidate{DatasetVersion, source, s.Index, s.Worker, s.Episode, selection, s.Observation, s.AppliedAction, query}
 				if err := encoders[assignment.Split].Encode(candidate); err != nil {
 					return err
 				}
@@ -338,7 +406,8 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 				Step      learningenv.Step          `json:"step"`
 				Effects   learningenv.ServerOutcome `json:"effects"`
 				Reward    learningenv.Reward        `json:"reward"`
-			}{source, selection, s, effects, reward})
+				Query     *aimquery.Label           `json:"counterfactual_aim_query,omitempty"`
+			}{source, selection, s, effects, reward, query})
 		})
 		if err != nil {
 			return report, fmt.Errorf("seed %d: %w", assignment.Seed, err)
@@ -354,6 +423,9 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 		}
 		report.Sources = append(report.Sources, source)
 	}
+	if spec.SelectionVersion == AimQuerySelectionVersion {
+		report.Scope = "Verified learned visitation/actual native execution; separately stored UNEXECUTED nominal observed-bbox aim queries. Actual commands and rewards unchanged. No firing/movement teacher, hit, optimal-target or tactical acceptance claim; final test deferred."
+	}
 	current, err := fileSHA(specPath)
 	if err != nil {
 		return report, err
@@ -365,6 +437,9 @@ func Build(specPath string, batches []string, out string) (Report, error) {
 	report.AttackReady = true
 	report.VerticalReady = true
 	for _, name := range []string{"train", "validation", "test"} {
+		if name == "test" && spec.DeferredTest {
+			continue
+		}
 		if report.Splits[name].Candidates == 0 {
 			report.Ready = false
 		}
@@ -451,6 +526,7 @@ func verifyEpisode(input inputEpisode, mapName string, emit func(learningenv.Ste
 			Mode string `json:"mode"`
 		} `json:"combat"`
 		Test struct {
+			SpawnClass      string `json:"spawn_class"`
 			TeacherVertical bool   `json:"teacher_vertical"`
 			Synchronous     bool   `json:"synchronous"`
 			Fixture         string `json:"weapon_switch_fixture"`
@@ -470,6 +546,10 @@ func verifyEpisode(input inputEpisode, mapName string, emit func(learningenv.Ste
 	case "shotgun":
 		if expected.Weapon != "Shotgun" || expected.Ammo != 20 {
 			return fmt.Errorf("Shotgun reset differs from loadout")
+		}
+	case "machinegun":
+		if expected.Weapon != "Machinegun" || expected.Ammo != 100 {
+			return fmt.Errorf("Machinegun reset differs from loadout")
 		}
 	default:
 		return fmt.Errorf("unsupported synchronous teacher loadout")
@@ -491,6 +571,32 @@ func verifyEpisode(input inputEpisode, mapName string, emit func(learningenv.Ste
 		return err
 	}
 	assembler := learningenv.Assembler{Worker: fmt.Sprintf("worker-%d", input.Result.Worker), Episode: fmt.Sprintf("seed-%d", input.Result.Seed)}
+	goal := input.Result.Goal
+	if goal != nil {
+		if !input.Manifest.StopOnGoal || config.Test.SpawnClass == "" || expected.EnemyClass != config.Test.SpawnClass {
+			return fmt.Errorf("goal fixture not declared")
+		}
+		var receipt learningenv.GoalStop
+		if err := readJSON(filepath.Join(root, "goal-stop.json"), &receipt); err != nil {
+			return err
+		}
+		if !reflect.DeepEqual(receipt, *goal) {
+			return fmt.Errorf("goal receipt changed")
+		}
+		var observed policy.Observation
+		for _, row := range rows {
+			if row.Capture != nil && row.Capture.Observation.Identity.Frame == goal.ObservedFrame {
+				observed = row.Capture.Observation
+			}
+		}
+		classes := []string{config.Test.SpawnClass}
+		if input.Manifest.Mixed {
+			classes = append(classes, "monster_gunner")
+		}
+		if err := learningenv.VerifyGoalStopForClasses(*goal, native.Release, events, observed, classes, mapName); err != nil {
+			return err
+		}
+	}
 	count := 0
 	captures := map[uint32]policy.Capture{}
 	var sent []harness.Trace
@@ -500,6 +606,15 @@ func verifyEpisode(input inputEpisode, mapName string, emit func(learningenv.Ste
 		}
 		if count >= len(steps) || s.Observation.Identity.Map != mapName {
 			return fmt.Errorf("step/map count mismatch")
+		}
+		if goal != nil {
+			if s.Next != nil && s.Next.Identity.Frame == goal.ObservedFrame {
+				if err := learningenv.MarkGoalBoundary(s); err != nil {
+					return err
+				}
+			} else if s.Observation.Identity.Frame >= goal.ObservedFrame {
+				s.Truncated, s.Reason = true, "after_combat_goal"
+			}
 		}
 		if count == 0 {
 			proof := learningenv.VerifyReset(s.Observation, expected)
@@ -551,7 +666,11 @@ func verifyEpisode(input inputEpisode, mapName string, emit func(learningenv.Ste
 			return err
 		}
 	}
-	s, _ := assembler.Close("game_frame_limit")
+	endReason := "game_frame_limit"
+	if goal != nil {
+		endReason = "combat_goal_complete"
+	}
+	s, _ := assembler.Close(endReason)
 	if err := verify(s); err != nil {
 		return err
 	}

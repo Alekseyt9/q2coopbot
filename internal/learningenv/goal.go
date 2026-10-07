@@ -6,6 +6,21 @@ import (
 	"q2coopbot/internal/policy"
 )
 
+// MarkGoalBoundary labels an already supervisor-verified living transition.
+// Verification of native kills is required separately; this never proves a win.
+func MarkGoalBoundary(s *Step) error {
+	if s.Next == nil || s.Terminal || s.Next.Health <= 0 || s.Next.Identity.Life != 1 ||
+		!policy.SameLife(s.Observation.Identity, s.Next.Identity) ||
+		s.Next.Identity.Frame != s.Observation.Identity.Frame+1 ||
+		(s.Truncated && s.Reason != "control_handoff") {
+		return fmt.Errorf("goal boundary lacks a complete living first-life transition")
+	}
+	if !s.Truncated {
+		s.Terminal, s.Reason = true, "combat_goal_complete"
+	}
+	return nil
+}
+
 // GoalStop is supervisor evidence for an offline episode boundary, never a policy input.
 type GoalStop struct {
 	Version       string   `json:"version"`

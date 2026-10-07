@@ -8,6 +8,51 @@ import (
 	"testing"
 )
 
+func TestGeneratorSeedRevisionPreservesPairedConditions(t *testing.T) {
+	root, _ := filepath.Abs(filepath.Join("..", ".."))
+	world, err := loadGenerationWorld(root)
+	if err != nil {
+		t.Skipf("local BSP needed: %v", err)
+	}
+	r, err := Load(filepath.Join(root, "scripts", "scenarios", "combat-training", "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ep Episode
+	for _, candidate := range r.Episodes {
+		if candidate.ID == "parasite-blaster-generated" {
+			ep = candidate
+			break
+		}
+	}
+	original, err := generate(ep, "validation", 700004, &world)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldRevision := ep.Revision
+	g := *ep.Generator
+	ep.Generator = &g
+	ep.Revision++
+	g.SeedRevision = &oldRevision
+	if err := g.validate(ep); err != nil {
+		t.Fatal(err)
+	}
+	paired, err := generate(ep, "validation", 700004, &world)
+	if err != nil || !reflect.DeepEqual(original, paired) {
+		t.Fatalf("capability revision changed paired start: %v", err)
+	}
+	zero := 0
+	g.SeedRevision = &zero
+	if g.validate(ep) == nil {
+		t.Fatal("zero sampling revision accepted")
+	}
+	future := ep.Revision + 1
+	g.SeedRevision = &future
+	if g.validate(ep) == nil {
+		t.Fatal("future sampling revision accepted")
+	}
+}
+
 func TestGeneratedConditionsArePairedAndPlanCannotBeModified(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {

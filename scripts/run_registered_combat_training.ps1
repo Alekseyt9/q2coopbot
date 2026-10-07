@@ -5,7 +5,9 @@ $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 $configPath=(Resolve-Path -LiteralPath $Config).Path
 $cfg=Get-Content -LiteralPath $configPath -Raw|ConvertFrom-Json
-foreach($key in $cfg.PSObject.Properties.Name){if($key -notin @('version','comparison_kind','registry','episodes','evaluation_episodes','models','epochs','episodes_per_scene','evaluation_count','training_seed_offset','training_config','anchor','bank','include_rules','pool_instances')){throw "Unknown training field $key"}}
+foreach($key in $cfg.PSObject.Properties.Name){if($key -notin @('version','comparison_kind','registry','episodes','evaluation_episodes','models','epochs','episodes_per_scene','evaluation_count','evaluation_seed_offset','training_seed_offset','training_config','anchor','bank','include_rules','pool_instances')){throw "Unknown training field $key"}}
+$evaluationOffset=if($null -ne $cfg.evaluation_seed_offset){[int]$cfg.evaluation_seed_offset}else{0}
+if($evaluationOffset -lt 0){throw 'Invalid evaluation seed offset'}
 $poolInstances=if($cfg.pool_instances){[int]$cfg.pool_instances}else{4}
 if($poolInstances -notin 4,8,16,24,32){throw 'Unsupported global pool capacity'}
 function Invoke-RegisteredCapture([string]$PlanPath,[string]$PoolRoot){
@@ -65,14 +67,14 @@ try{
             foreach($task in $p.tasks){if($task.reward_sha256 -ne (Get-Content $trainingConfig -Raw|ConvertFrom-Json).objective_reward_sha256){throw 'Episode reward does not match PPO objective'}}
         }
         $evalPlan="$snapshotRoot/preflight-eval-$($m.id).json"
-        & "$snapshotRoot/q2episode.exe" --registry $registry --root $repo --episodes ($cfg.evaluation_episodes -join ',') --split validation --mode learned --model $model --count $cfg.evaluation_count --out $evalPlan --artifacts "$snapshotRoot/preflight-eval-runtime-$($m.id)"
+        & "$snapshotRoot/q2episode.exe" --registry $registry --root $repo --episodes ($cfg.evaluation_episodes -join ',') --split validation --mode learned --model $model --count $cfg.evaluation_count --seed-offset $evaluationOffset --out $evalPlan --artifacts "$snapshotRoot/preflight-eval-runtime-$($m.id)"
         if($LASTEXITCODE){throw 'Evaluation curriculum cannot be compiled'}
     }
     if($cfg.include_rules){
-        & "$snapshotRoot/q2episode.exe" --registry $registry --root $repo --episodes ($cfg.evaluation_episodes -join ',') --split validation --mode rules --count $cfg.evaluation_count --out "$snapshotRoot/preflight-rules.json" --artifacts "$snapshotRoot/rules"
+        & "$snapshotRoot/q2episode.exe" --registry $registry --root $repo --episodes ($cfg.evaluation_episodes -join ',') --split validation --mode rules --count $cfg.evaluation_count --seed-offset $evaluationOffset --out "$snapshotRoot/preflight-rules.json" --artifacts "$snapshotRoot/rules"
         if($LASTEXITCODE){throw 'Evaluation suite has no rules baseline'}
     }
-    @{version=1;comparison_kind=$cfg.comparison_kind;registry_sha256=(Get-FileHash $registry).Hash.ToLowerInvariant();models=$modelSpecs;episodes=$cfg.episodes;evaluation_episodes=$cfg.evaluation_episodes;epochs=$cfg.epochs;episodes_per_scene=$cfg.episodes_per_scene;workers=4;pool_instances=$poolInstances;timescale=2;budget_unit='same allocated episodes and frame caps; actual first-life transitions reported separately';training_config_sha256=(Get-FileHash $trainingConfig).Hash.ToLowerInvariant();trainer_modules=@(Get-ChildItem "$snapshotRoot/python-sources" -File|ForEach-Object {@{file=$_.Name;sha256=(Get-FileHash $_.FullName).Hash.ToLowerInvariant()}})}|ConvertTo-Json -Depth 9|Set-Content "$snapshotRoot/protocol.json" -Encoding utf8
+    @{version=1;comparison_kind=$cfg.comparison_kind;registry_sha256=(Get-FileHash $registry).Hash.ToLowerInvariant();models=$modelSpecs;episodes=$cfg.episodes;evaluation_episodes=$cfg.evaluation_episodes;epochs=$cfg.epochs;episodes_per_scene=$cfg.episodes_per_scene;workers=4;pool_instances=$poolInstances;evaluation_seed_offset=$evaluationOffset;training_seed_offset=$cfg.training_seed_offset;timescale=2;budget_unit='same allocated episodes and frame caps; actual first-life transitions reported separately';training_config_sha256=(Get-FileHash $trainingConfig).Hash.ToLowerInvariant();trainer_modules=@(Get-ChildItem "$snapshotRoot/python-sources" -File|ForEach-Object {@{file=$_.Name;sha256=(Get-FileHash $_.FullName).Hash.ToLowerInvariant()}})}|ConvertTo-Json -Depth 9|Set-Content "$snapshotRoot/protocol.json" -Encoding utf8
     if($DryRun){@{stage='preflight_complete'}|ConvertTo-Json|Set-Content "$snapshotRoot/progress.json";Write-Output $snapshotRoot;return}
     & $Python -c 'import sys;sys.path.insert(0,sys.argv[1]);from train_combat_bc import training_devices;assert training_devices()==["cuda"]' "$snapshotRoot/python-sources"
     if($LASTEXITCODE){throw 'CUDA-only training unavailable'}
@@ -138,7 +140,7 @@ try{
             $evalWeights=Get-Content $evalModel -Raw|ConvertFrom-Json;$evalWeights.deterministic=$true
             $evalWeights|ConvertTo-Json -Depth 100|Set-Content "$folder/eval-$label.json" -Encoding utf8
             @{stage='validation';model=$m.id;label=$label}|ConvertTo-Json|Set-Content "$snapshotRoot/progress.json"
-            & "$snapshotRoot/q2episode.exe" --registry $registry --root $repo --episodes ($cfg.evaluation_episodes -join ',') --split validation --mode learned --model "$folder/eval-$label.json" --count $cfg.evaluation_count --out "$folder/eval-$label-plan.json" --artifacts "$folder/evaluation-$label"
+            & "$snapshotRoot/q2episode.exe" --registry $registry --root $repo --episodes ($cfg.evaluation_episodes -join ',') --split validation --mode learned --model "$folder/eval-$label.json" --count $cfg.evaluation_count --seed-offset $evaluationOffset --out "$folder/eval-$label-plan.json" --artifacts "$folder/evaluation-$label"
             if($LASTEXITCODE){throw 'Validation plan failed'}
             $evaluationPlans+=@("$folder/eval-$label-plan.json")
             $evaluations+=@{model=$m.id;label=$label;root="$folder/evaluation-$label";weights_sha256=(Get-FileHash "$folder/eval-$label.json").Hash.ToLowerInvariant();source_weights_sha256=(Get-FileHash $evalModel).Hash.ToLowerInvariant()}

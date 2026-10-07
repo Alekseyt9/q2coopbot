@@ -207,8 +207,8 @@ func (e Episode) validate() error {
 			return fmt.Errorf("unsupported reward recipe")
 		}
 		switch e.Recipe.Loadout {
-		case "blaster":
-		case "machinegun", "weapons", "weapons-scarce":
+		case "blaster", "machinegun":
+		case "weapons", "weapons-scarce":
 			if seen["rules"] {
 				return fmt.Errorf("fixed MG/multiweapon teacher is unsupported by current harness")
 			}

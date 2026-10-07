@@ -29,7 +29,7 @@ $ErrorActionPreference='Stop'
 if($Seed -lt 0 -or [long]$Seed+$Workers*$EpisodesPerWorker-1 -gt 2147483647){throw 'Each independent episode needs its own valid 31-bit game seed'}
 if($Synchronous -and $Loadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce'){throw 'Unsupported synchronous loadout'}
 if($Loadout -in 'weapons','weapons-scarce' -and (!$Synchronous -or $CombatMode -ne 'learned' -or $Feedback -or $TrainingMonsterHealth)){throw 'Weapon-choice fixture requires synchronous direct learned control without overrides'}
-if($Loadout -eq 'machinegun' -and (!$Synchronous -or $CombatMode -eq 'rules' -or $Feedback -or $TrainingMonsterHealth)){throw 'Machinegun requires synchronous learned capture without health/feedback overrides'}
+if($Loadout -eq 'machinegun' -and (!$Synchronous -or $Feedback -or $TrainingMonsterHealth)){throw 'Machinegun requires synchronous capture without health/feedback overrides'}
 if($Loadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){throw 'Shotgun exercise requires synchronous rules'}
 if($TeacherVertical -and (!$Synchronous -or $CombatMode -ne 'rules' -or $Loadout -ne 'shotgun' -or $Feedback)){throw 'Vertical exercise requires synchronous fixed Shotgun rules without feedback'}
 if($RewardConfig -and !$Synchronous){throw 'Reward export requires -Synchronous'}

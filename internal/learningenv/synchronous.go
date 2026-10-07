@@ -133,7 +133,7 @@ func readNativeSteps(r io.Reader, events []DamageEvent, requireRelease bool) (*N
 		return nil, err
 	}
 	if pending != nil || len(result.Steps) == 0 || requireRelease && result.Release == nil || eventIndex != len(events) {
-		return nil, fmt.Errorf("incomplete native steps/release/effects")
+		return nil, fmt.Errorf("incomplete native steps/release/effects: pending=%t steps=%d release=%t effects=%d/%d", pending != nil, len(result.Steps), result.Release != nil, eventIndex, len(events))
 	}
 	return result, nil
 }

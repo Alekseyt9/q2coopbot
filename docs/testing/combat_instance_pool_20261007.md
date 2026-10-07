@@ -47,3 +47,31 @@ Go tests продуктовых `cmd/...` и `internal/...` прошли, вкл
 Для остальных восьми рецептов выполнена дополнительная партия на16. В одной группе клиент отправил safety stop без нового кадра при задержке pending native step; сервер правильно отклонил второй шаг. `Client.needsSafetyStop` теперь исключает test synchronous mode: в нём мир уже ожидает подтверждения, дополнительное торможение нарушает контракт. Обычная live safety stop сохранена. Regression test и продуктовые Go tests проходят. Сцена base1 site03 Machinegun повторена для обеих версий в пуле8:8/8 приняты; неудачная и заменённая группы исключены из итога.
 
 Полная проверенная оценка основного CUDA update27→28 теперь содержит128 captures/32 полные группы: [campaign-sites-resume](../../workspace/artifacts/campaign-sites-resume-v1-20261007/report.json). Победы30/64→33/64, смерти31→29. Отдельные source fingerprints, native receipts и SHA всех использованных групп сохранены. Оценка диагностическая, превосходство над rules не доказано. Лимит16 выбран по основной нагрузочной выборке; из этого не следует отсутствие любых сбоев в будущих сценах.
+
+## Рабочий лимит и ожидание подключения
+
+По решению пользователя рабочий глобальный лимит закреплён на **16** серверных инстансах и соответствующих клиентах. Новые замеры на24/32 не запускаются. Пул продолжает распределять разные случаи и модели между четырьмя слотами по четыре независимых боя.
+
+Для isolated synchronous fixtures native server получил опциональный `sv_test_signon_hold_frame=40`: до подключения заданного клиента мир останавливается на кадре40, сетевой signon продолжает обслуживаться. Действуют прежние ограничения isolated loopback harness/cheats/lockstep, combat barrier, один клиент и фиксированный release100; обычные серверы без cvar не меняются. После подключения работает прежний lockstep. Все generated combat fixtures также используют `combat_only`, чтобы не рассчитывать маршрут выхода из карты при подготовке отдельного боя.
+
+Проверка с искусственной задержкой запуска клиента8 секунд: native log подтвердил ожидание на40 и `g_test_combat_start game_frame=100 ready=1`; native стартовые позиции подтверждены, клиент завершился с `frame_gaps=0`, `decode_errors=0`, один монстр убит. Это проверка запуска, не PPO capture. Старый solo gameplay-критерий Shotgun дал accepted=false для Blaster; это не считается успешной оценкой качества модели. Артефакты: `workspace/artifacts/combat-signon-delay-probe-v2-20261007`.
+
+Новая смешанная конфигурация `mixed-campaign-generated-resume-v1.json` включает все20 семейств:16 кампанийных рецептов и4 прежних Parasite/Gunner. Повторный experiment `combat-mixed-registry-resume-v2-20261007` использует80 train battles (offset12) и160 paired validation battles (offset4), pool16 и CUDA-only update. Первая попытка v1 прервана до экспорта/обновления из-за позднего подключения в старых сценах; её данные не использованы для обучения. До завершения v2 вывод о качестве не делается.
+
+Поле `evaluation_seed_offset` в training runner задаёт общий offset validation cohort для обеих версий модели; при отсутствии сохраняется0. Training seeds и evaluation seeds остаются в разных registry splits.
+
+Уточнение после полного mixed capture v2: ожидание signon должно работать только до первого `cs_spawned` клиента данной generation. Иначе после disconnect оно могло удержать мир с последним `pending` шагом без phase=end. Добавлен generation-scoped `test_signon_completed`; после первого подключения signon hold больше не включается. Native executable пересобран. Сообщение Go parser о неполном логе теперь содержит pending/steps/release/effects для диагностики; критерий полноты сохранён. Для synchronous solo runs увеличен wall-time запас до max(60s, frames/10+30s), игровой бюджет и ускорение x2 сохранены.
+
+v2 также остановлена до CUDA-update; частичные captures не использованы. Повтор после этих исправлений: `workspace/artifacts/combat-mixed-registry-resume-v3-20261007`, те же train offset12 и validation offset4. Результат фиксируется только после строгого завершения всех групп.
+
+## Mixed curriculum Update29 и возобновление экспорта
+
+Полный train capture v3 завершён:80/80 боёв,20 семейств,16 инстансов x2,255.50s wall time,55.85 игровых кадров/s. Все группы прошли provenance/native validation. Сохранены общий pool report и отдельные scene/model bindings. После прерывания управляющего процесса export был повторён в свежий `epoch-1/resume-20261007161818`, без повторных боёв и без использования незавершённых экспортов.
+
+`scripts/resume_registered_combat_training.ps1` продолжает полностью собранный одноэпоховый experiment без rules: проверяет frozen registry/objective/trainer modules, initial weights/checkpoint SHA и все capture bindings, затем заново выполняет строгий Go on-policy export/merge и CUDA-only update. Существующий update запрещает повторное обучение тем же скриптом. После update запускается прежняя парная evaluation через pool16. Это ограниченный адаптер возобновления из capture, не произвольное восстановление любой фазы/эпохи.
+
+Update28→29 завершён на RTX5070/CUDA:7509 PPO rows,7513 sequence rows,85 sequences,10 actor steps,279 total actor steps. Архитектура `combat_causal_attention_v1`. Completion receipt подтверждает веса `3cacf9adb1c29c3b19ec5b78b29328bb7c9fad1fb675879591b695fb695e896f`, checkpoint `fdf8622114c9fd6271f7c5c8754716895632898dd42dc86babc9c151de7ebf50`. Парная оценка80+80 пока выполняется; автоматического promotion нет. Веса/checkpoints остаются в игнорируемом `workspace/artifacts/` по решению пользователя.
+
+Проверки: native q2ded build, PowerShell parser, `go test ./cmd/... ./internal/...`, строгий re-export80 боёв и CUDA completion receipts прошли. Полный `go test ./...` сохраняет ранее описанное ограничение старых diagnostic artifact packages.
+
+Парная validation v3 завершена:160/160 captures/40 полных групп, источник неизменён. Итог Update28→29: победы39/80→39/80, смерти39→37, убийства42→42, полученный урон4520→4386. Старые семейства8/16→9/16 побед, кампанийные31/64→30/64. Общего улучшения по победам нет. [Полная разбивка20 семейств](mixed_combat_update29_20261007.md). Новые веса остаются экспериментальными, live/default не переключён.

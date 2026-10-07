@@ -1,5 +1,6 @@
 {
   "modes": [
+    "rules",
     "learned"
   ],
   "goal": "alive_native_kills_then_observed_effect",
@@ -8,7 +9,7 @@
   "monsters": [
     "monster_parasite"
   ],
-  "revision": 1,
+  "revision": 2,
   "initial_state": "Generated per instance, stock monster HP and physics, player HP80/100; Machinegun100 bullets or Blaster",
   "splits": {
     "confirmation": {
@@ -154,7 +155,8 @@
           100
         ]
       }
-    }
+    },
+    "seed_revision": 1
   },
   "recipe": {
     "mixed": false,
