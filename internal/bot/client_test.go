@@ -49,6 +49,11 @@ func TestClientSafetyStopWhenFramesStop(t *testing.T) {
 	if !c.needsSafetyStop(now.Add(301 * time.Millisecond)) {
 		t.Fatal("stalled frame did not trigger safety stop")
 	}
+	c.testSynchronous = true
+	if c.needsSafetyStop(now.Add(time.Second)) {
+		t.Fatal("lockstep world must wait for the outstanding command")
+	}
+	c.testSynchronous = false
 	c.previous = quake.UserCmd{}
 	if c.needsSafetyStop(now.Add(time.Second)) {
 		t.Fatal("neutral command caused repeated safety stop")

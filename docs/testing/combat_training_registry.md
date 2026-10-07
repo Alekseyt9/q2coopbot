@@ -119,6 +119,8 @@ go run ./cmd/q2episode --episodes parasite-blaster-generated `
 
 ## Развитие
 
+Добавлен [общий пул разных сцен и моделей](combat_instance_pool_20261007.md). Проверены лимиты 16/24/32; рабочий — 16. Поле `pool_instances` в training config включает сбор всех моделей текущей эпохи через общую очередь; CUDA updates, опыт и checkpoints остаются отдельными. `pooled-two-models-smoke-v1.json` прошёл полный цикл с двумя версиями Temporal: 16 train captures, 1640 проверенных PPO transitions, два CUDA updates и 32 validation captures. Это проверка инфраструктуры, а не сравнение архитектур.
+
 Добавлены исполняемые Soldier/Infantry и 16 рецептов на 8 разных участках base1/base2: [точки кампании](campaign_combat_sites_20261007.md). Для этих изолированных боёв отключён поиск выхода с карты, наблюдения боя сохранены.
 
 Следующие адаптеры: составные группы Soldier/Infantry; углы и инвентарь; отложенная геометрия/укрытия с поддержкой reset без видимого primary; проверка native hull/достижимости; scene loss weights и равный опыт архитектур; участки естественных карт с PPO export. Увеличение реестра без исполняемого рецепта и проверки native старта не считается добавленной тренировкой.

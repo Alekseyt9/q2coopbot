@@ -438,7 +438,9 @@ func (c *Client) writeWorld() error {
 }
 
 func (c *Client) needsSafetyStop(now time.Time) bool {
-	if !c.begun || !c.framePaced || !c.frameReady || c.latestFrame != c.lastMoveFrame ||
+	// The isolated lockstep world waits for the outstanding command. A second
+	// command before its next frame breaks the one-command/one-tick contract.
+	if c.testSynchronous || !c.begun || !c.framePaced || !c.frameReady || c.latestFrame != c.lastMoveFrame ||
 		c.planner.World.Updated.IsZero() || now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
 		return false
 	}

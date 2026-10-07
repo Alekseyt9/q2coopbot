@@ -107,12 +107,6 @@ try{
         $args=$args.Replace("+map $fixtureMap","+exec learning-test.cfg +map $fixtureMap")
     }
     if($Recovery -or $CornerEscape -or $ParasiteWeapon){$args=$args.Replace("+map $fixtureMap","+set skill $RecoverySkill +map $fixtureMap");$report.skill=$RecoverySkill;$report.initial_health=$(if($CornerEscape){65}elseif($ParasiteWeapon){$ParasiteHealth}else{$RecoveryHealth})}
-    $server=Start-Process (Join-Path $runtime 'q2ded.exe') -ArgumentList $args -WorkingDirectory $runtime -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'server.log') -RedirectStandardError (Join-Path $OutputRoot 'server.err')
-    $deadline=(Get-Date).AddSeconds(15)
-    do{Start-Sleep -Milliseconds 100;if($server.HasExited -or (Get-Date) -gt $deadline){throw 'Server startup failed'}}while(!(Get-NetUDPEndpoint -OwningProcess $server.Id -LocalPort $Port -ErrorAction SilentlyContinue))
-    if(Get-NetUDPEndpoint -OwningProcess $server.Id|Where-Object LocalAddress -NotIn '127.0.0.1','::1'){throw 'Server not loopback'}
-    $report.reset_to_udp_ready_seconds=$resetClock.Elapsed.TotalSeconds
-    $report.reset_scope='Cold runtime preparation plus native server restart to UDP bind; protocol begin is measured separately by the client'
     $config=Join-Path $OutputRoot 'bot-config.json'
     $placement=if($ParasiteWeapon -and $ParasiteLoadout -eq 'rail'){'32,-352,24.125'}elseif($CornerEscape){'-40.375,-426,24.125'}elseif($Cover){'240,-416,24.125'}elseif($GroupRetreat){'128,-304,24'}else{'32,-224,24'}
     $enemyClass=if($Cover -or $Circle -or $GroupRetreat){'monster_infantry'}else{'monster_parasite'}
@@ -122,7 +116,32 @@ try{
     $report.parasite_fixture=$ParasiteFixture
     $initialHealth=if($ParasiteWeapon){$ParasiteHealth}elseif($CornerEscape){65}elseif($Recovery){$RecoveryHealth}elseif($Group -or $GroupRetreat){100}elseif($Cover -or $Circle){25}else{0}
     @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};combat=@{mode=$CombatMode;provider_file=$ProviderFile};run=@{duration=$(if($GameFrames){'60s'}else{'15s'});game_frames=$GameFrames;frame_paced=$true;mode='campaign';next_map=$(if($fixtureMap -eq 'base2'){'base3'}else{'base2'})};test=@{combat_only=$combatOnly;teleport_map=$fixtureMap;teleport=$placement;spawn_map=$fixtureMap;spawn_soldier=$enemyOrigin;spawn_class=$enemyClass;teacher_vertical=[bool]$TeacherVertical;synchronous=[bool]$Synchronous;combat_barrier=[bool]$Synchronous;setup_hold_frames=$(if($Cover -or $Circle -or $GroupRetreat -or $Recovery -or $CornerEscape -or $ParasiteWeapon){10}else{0});initial_health=$initialHealth;weapon_switch_fixture=$(if($ParasiteWeapon){"parasite_$ParasiteLoadout"}else{""})};output=@{stop_file=$(if($StopOnGoal){Join-Path $OutputRoot 'goal.stop'}else{''});trace_jsonl=$trace;combat_capture=[bool]$CombatCapture}}|ConvertTo-Json -Depth 6|Set-Content $config
+    $server=Start-Process (Join-Path $runtime 'q2ded.exe') -ArgumentList $args -WorkingDirectory $runtime -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'server.log') -RedirectStandardError (Join-Path $OutputRoot 'server.err')
+    # A CIM endpoint query can delay client launch past the fixed frame-100
+    # release when many instances boot together. Probe this server directly.
+    $probe=[Net.Sockets.UdpClient]::new()
+    try{
+        $probe.Connect('127.0.0.1',$Port)
+        $probe.Client.ReceiveTimeout=150
+        $request=[byte[]](255,255,255,255)+[Text.Encoding]::ASCII.GetBytes("getchallenge`n")
+        $deadline=[DateTime]::UtcNow.AddSeconds(15);$ready=$false
+        do{
+            if($server.HasExited -or [DateTime]::UtcNow -gt $deadline){throw 'Server startup failed'}
+            $null=$probe.Send($request,$request.Length)
+            try{
+                $remote=[Net.IPEndPoint]::new([Net.IPAddress]::Any,0)
+                $response=$probe.Receive([ref]$remote)
+                $ready=$response.Length -gt 4 -and [Text.Encoding]::ASCII.GetString($response,4,$response.Length-4).StartsWith('challenge ')
+            }catch [Net.Sockets.SocketException]{
+                if($_.Exception.SocketErrorCode -notin [Net.Sockets.SocketError]::TimedOut,[Net.Sockets.SocketError]::ConnectionReset,[Net.Sockets.SocketError]::ConnectionRefused){throw}
+                Start-Sleep -Milliseconds 50
+            }
+        }while(!$ready)
+    }finally{$probe.Dispose()}
+    $report.reset_to_udp_ready_seconds=$resetClock.Elapsed.TotalSeconds
+    $report.reset_scope='Cold runtime preparation plus native server restart to UDP bind; protocol begin is measured separately by the client'
     $bot=Start-Process $Client -ArgumentList "--config `"$config`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
+    if(Get-NetUDPEndpoint -OwningProcess $server.Id|Where-Object LocalAddress -NotIn '127.0.0.1','::1'){throw 'Server not loopback'}
     $waitMilliseconds=$(if($GameFrames){[int]([math]::Max(25,$GameFrames/(10*$Timescale)+10)*1000)}else{25000});if($StopOnGoal){. "$PSScriptRoot/combat_goal_stop.ps1";$goalClasses=@($enemyClass);if($ParasiteMixed){$goalClasses+=$ParasiteMixedClass};Wait-CombatGoalOrExit $bot $OutputRoot $waitMilliseconds $goalClasses $fixtureMap}else{$null=$bot.WaitForExit($waitMilliseconds)};if(!$bot.HasExited){throw 'Bot timeout'};if($bot.ExitCode){throw 'Bot failed'}
     $rows=@(Get-Content $trace|ForEach-Object {$_|ConvertFrom-Json})
     . "$PSScriptRoot/read_damage_events.ps1"

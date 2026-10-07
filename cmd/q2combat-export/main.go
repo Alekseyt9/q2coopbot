@@ -195,10 +195,10 @@ func run() error {
 		}
 		if *goalFrame > 0 {
 			if s.Next != nil && s.Next.Identity.Frame == *goalFrame {
-				if s.Truncated || s.Terminal || s.Next.Health <= 0 || s.Next.Identity.Life != 1 {
-					return fmt.Errorf("goal boundary lacks a complete living first-life transition")
+				if err := markGoalBoundary(s); err != nil {
+					return err
 				}
-				s.Terminal, s.Reason, goalMarked = true, "combat_goal_complete", true
+				goalMarked = true
 			} else if s.Observation.Identity.Frame >= *goalFrame {
 				// Preserve dispatch auditing while excluding supervisor stop latency from PPO.
 				s.Truncated, s.Reason = true, "after_combat_goal"

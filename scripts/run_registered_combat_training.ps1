@@ -5,7 +5,13 @@ $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 $configPath=(Resolve-Path -LiteralPath $Config).Path
 $cfg=Get-Content -LiteralPath $configPath -Raw|ConvertFrom-Json
-foreach($key in $cfg.PSObject.Properties.Name){if($key -notin @('version','comparison_kind','registry','episodes','evaluation_episodes','models','epochs','episodes_per_scene','evaluation_count','training_seed_offset','training_config','anchor','bank','include_rules')){throw "Unknown training field $key"}}
+foreach($key in $cfg.PSObject.Properties.Name){if($key -notin @('version','comparison_kind','registry','episodes','evaluation_episodes','models','epochs','episodes_per_scene','evaluation_count','training_seed_offset','training_config','anchor','bank','include_rules','pool_instances')){throw "Unknown training field $key"}}
+$poolInstances=if($cfg.pool_instances){[int]$cfg.pool_instances}else{4}
+if($poolInstances -notin 4,8,16,24,32){throw 'Unsupported global pool capacity'}
+function Invoke-RegisteredCapture([string]$PlanPath,[string]$PoolRoot){
+    if($poolInstances -eq 4){& "$PSScriptRoot/run_registered_combat_episodes.ps1" -Plan $PlanPath -Port $Port}
+    else{& "$PSScriptRoot/run_registered_combat_pool.ps1" -Plans @($PlanPath) -MaxInstances $poolInstances -Port $Port -OutputRoot $PoolRoot}
+}
 if($cfg.version -ne 1 -or $cfg.comparison_kind -notin @('architecture','continuation') -or !$cfg.models.Count -or !$cfg.episodes.Count -or !$cfg.evaluation_episodes.Count -or $cfg.epochs -lt 1 -or $cfg.epochs -gt 20 -or $cfg.episodes_per_scene -lt 4 -or $cfg.episodes_per_scene -gt 80 -or $cfg.episodes_per_scene%4 -or $cfg.evaluation_count -lt 4 -or $cfg.evaluation_count%4 -or $cfg.training_seed_offset -lt 0){throw 'Invalid registered training configuration'}
 function Resolve-RepoFile([string]$Path){return (Resolve-Path -LiteralPath $(if([IO.Path]::IsPathRooted($Path)){$Path}else{Join-Path $repo $Path})).Path}
 $registry=Resolve-RepoFile $cfg.registry
@@ -66,24 +72,38 @@ try{
         & "$snapshotRoot/q2episode.exe" --registry $registry --root $repo --episodes ($cfg.evaluation_episodes -join ',') --split validation --mode rules --count $cfg.evaluation_count --out "$snapshotRoot/preflight-rules.json" --artifacts "$snapshotRoot/rules"
         if($LASTEXITCODE){throw 'Evaluation suite has no rules baseline'}
     }
-    @{version=1;comparison_kind=$cfg.comparison_kind;registry_sha256=(Get-FileHash $registry).Hash.ToLowerInvariant();models=$modelSpecs;episodes=$cfg.episodes;evaluation_episodes=$cfg.evaluation_episodes;epochs=$cfg.epochs;episodes_per_scene=$cfg.episodes_per_scene;workers=4;timescale=2;budget_unit='same allocated episodes and frame caps; actual first-life transitions reported separately';training_config_sha256=(Get-FileHash $trainingConfig).Hash.ToLowerInvariant();trainer_modules=@(Get-ChildItem "$snapshotRoot/python-sources" -File|ForEach-Object {@{file=$_.Name;sha256=(Get-FileHash $_.FullName).Hash.ToLowerInvariant()}})}|ConvertTo-Json -Depth 9|Set-Content "$snapshotRoot/protocol.json" -Encoding utf8
+    @{version=1;comparison_kind=$cfg.comparison_kind;registry_sha256=(Get-FileHash $registry).Hash.ToLowerInvariant();models=$modelSpecs;episodes=$cfg.episodes;evaluation_episodes=$cfg.evaluation_episodes;epochs=$cfg.epochs;episodes_per_scene=$cfg.episodes_per_scene;workers=4;pool_instances=$poolInstances;timescale=2;budget_unit='same allocated episodes and frame caps; actual first-life transitions reported separately';training_config_sha256=(Get-FileHash $trainingConfig).Hash.ToLowerInvariant();trainer_modules=@(Get-ChildItem "$snapshotRoot/python-sources" -File|ForEach-Object {@{file=$_.Name;sha256=(Get-FileHash $_.FullName).Hash.ToLowerInvariant()}})}|ConvertTo-Json -Depth 9|Set-Content "$snapshotRoot/protocol.json" -Encoding utf8
     if($DryRun){@{stage='preflight_complete'}|ConvertTo-Json|Set-Content "$snapshotRoot/progress.json";Write-Output $snapshotRoot;return}
     & $Python -c 'import sys;sys.path.insert(0,sys.argv[1]);from train_combat_bc import training_devices;assert training_devices()==["cuda"]' "$snapshotRoot/python-sources"
     if($LASTEXITCODE){throw 'CUDA-only training unavailable'}
-    $records=@();$evaluations=@()
+    $records=@();$evaluations=@();$states=@()
     foreach($m in $modelSpecs){
         $folder="$snapshotRoot/$($m.id)";New-Item -ItemType Directory -Path $folder|Out-Null
         Copy-Item -LiteralPath $m.model -Destination "$folder/initial.json";$current="$folder/initial.json"
         $checkpoint='';if($m.checkpoint){Copy-Item -LiteralPath $m.checkpoint -Destination "$folder/initial-checkpoint.pt";$checkpoint="$folder/initial-checkpoint.pt"}
-        foreach($epoch in 1..$cfg.epochs){
+        $states+=@{spec=$m;folder=$folder;current=$current;checkpoint=$checkpoint}
+    }
+    foreach($epoch in 1..$cfg.epochs){
+        $capturePlans=@()
+        foreach($state in $states){
+            $m=$state.spec;$folder=$state.folder;$current=$state.current
             $step="$folder/epoch-$epoch";New-Item -ItemType Directory -Path $step|Out-Null
             @{stage='capture';model=$m.id;epoch=$epoch;episodes=$cfg.episodes}|ConvertTo-Json|Set-Content "$snapshotRoot/progress.json"
             & "$snapshotRoot/q2episode.exe" --registry $registry --root $repo --episodes ($cfg.episodes -join ',') --split train --mode learned --model $current --count $cfg.episodes_per_scene --seed-offset ($cfg.training_seed_offset+($epoch-1)*$cfg.episodes_per_scene) --out "$step/plan.json" --artifacts "$step/capture"
             if($LASTEXITCODE){throw 'Training plan failed'}
-            & "$PSScriptRoot/run_registered_combat_episodes.ps1" -Plan "$step/plan.json" -Port $Port
+            $capturePlans+=@("$step/plan.json")
+        }
+        if($poolInstances -eq 4){foreach($plan in $capturePlans){Invoke-RegisteredCapture $plan ''}}
+        else{& "$PSScriptRoot/run_registered_combat_pool.ps1" -Plans $capturePlans -MaxInstances $poolInstances -Port $Port -OutputRoot "$snapshotRoot/epoch-$epoch-pool"}
+        foreach($state in $states){
+            $m=$state.spec;$folder=$state.folder;$current=$state.current;$checkpoint=$state.checkpoint;$step="$folder/epoch-$epoch"
+            $captureReport=Get-Content "$step/capture/report.json" -Raw|ConvertFrom-Json
+            if($captureReport.state -ne 'complete'){throw 'Incomplete curriculum capture'}
             $exports=@()
             foreach($episodeID in $cfg.episodes){
-                $batch="$step/capture/$episodeID-learned"
+                $binding=@($captureReport.records|Where-Object {$_.episode_id -eq $episodeID -and $_.mode -eq 'learned'})
+                if($binding.Count -ne 1 -or (Get-FileHash (Join-Path $binding[0].artifacts 'report.json')).Hash.ToLowerInvariant() -ne $binding[0].report_sha256){throw 'Missing or changed curriculum binding'}
+                $batch=$binding[0].artifacts
                 $export="$step/rollout-$episodeID"
                 & "$snapshotRoot/q2ppo-data.exe" --batch $batch --model $current --out $export
                 if($LASTEXITCODE){throw 'Verified on-policy export failed'}
@@ -107,7 +127,12 @@ try{
             $current="$step/update/weights.json";$checkpoint="$step/update/checkpoint.pt"
             $records+=@{model=$m.id;epoch=$epoch;episodes=$cfg.episodes;allocated_episodes=($cfg.episodes_per_scene*$cfg.episodes.Count);eligible_transitions=$update.rows;actor_steps=$update.actor_steps;updates_completed=$update.updates_completed;total_actor_steps=$update.total_actor_steps;weights_sha256=$update.weights_sha256;checkpoint=$checkpoint;members=(Get-Content "$step/rollout/report.json" -Raw|ConvertFrom-Json).members}
             $records|ConvertTo-Json -Depth 7|Set-Content "$snapshotRoot/training-updates.json" -Encoding utf8
+            $state.current=$current;$state.checkpoint=$checkpoint
         }
+    }
+    $evaluationPlans=@()
+    foreach($state in $states){
+        $m=$state.spec;$folder=$state.folder;$current=$state.current
         foreach($label in @('before','after')){
             $evalModel=if($label -eq 'before'){"$folder/initial.json"}else{$current}
             $evalWeights=Get-Content $evalModel -Raw|ConvertFrom-Json;$evalWeights.deterministic=$true
@@ -115,11 +140,13 @@ try{
             @{stage='validation';model=$m.id;label=$label}|ConvertTo-Json|Set-Content "$snapshotRoot/progress.json"
             & "$snapshotRoot/q2episode.exe" --registry $registry --root $repo --episodes ($cfg.evaluation_episodes -join ',') --split validation --mode learned --model "$folder/eval-$label.json" --count $cfg.evaluation_count --out "$folder/eval-$label-plan.json" --artifacts "$folder/evaluation-$label"
             if($LASTEXITCODE){throw 'Validation plan failed'}
-            & "$PSScriptRoot/run_registered_combat_episodes.ps1" -Plan "$folder/eval-$label-plan.json" -Port $Port
+            $evaluationPlans+=@("$folder/eval-$label-plan.json")
             $evaluations+=@{model=$m.id;label=$label;root="$folder/evaluation-$label";weights_sha256=(Get-FileHash "$folder/eval-$label.json").Hash.ToLowerInvariant();source_weights_sha256=(Get-FileHash $evalModel).Hash.ToLowerInvariant()}
         }
     }
-    if($cfg.include_rules){& "$PSScriptRoot/run_registered_combat_episodes.ps1" -Plan "$snapshotRoot/preflight-rules.json" -Port $Port;$evaluations+=@{model='rules';label='reference';root="$snapshotRoot/rules"}}
+    if($poolInstances -eq 4){foreach($plan in $evaluationPlans){Invoke-RegisteredCapture $plan ''}}
+    else{& "$PSScriptRoot/run_registered_combat_pool.ps1" -Plans $evaluationPlans -MaxInstances $poolInstances -Port $Port -OutputRoot "$snapshotRoot/evaluation-pool"}
+    if($cfg.include_rules){Invoke-RegisteredCapture "$snapshotRoot/preflight-rules.json" "$snapshotRoot/rules-pool";$evaluations+=@{model='rules';label='reference';root="$snapshotRoot/rules"}}
     $board=@()
     foreach($evaluation in $evaluations){
         $runs=Get-Content "$($evaluation.root)/report.json" -Raw|ConvertFrom-Json
