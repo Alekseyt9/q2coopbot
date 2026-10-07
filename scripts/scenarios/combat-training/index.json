@@ -13,6 +13,22 @@
     "parasite-blaster-generated.json",
     "parasite-gunner-blaster-generated.json",
     "parasite-machinegun-recoil.json",
-    "parasite-gunner-machinegun-recoil.json"
+    "parasite-gunner-machinegun-recoil.json",
+    "campaign-base1-site-01-blaster.json",
+    "campaign-base1-site-01-machinegun.json",
+    "campaign-base1-site-02-blaster.json",
+    "campaign-base1-site-02-machinegun.json",
+    "campaign-base1-site-03-blaster.json",
+    "campaign-base1-site-03-machinegun.json",
+    "campaign-base1-site-04-blaster.json",
+    "campaign-base1-site-04-machinegun.json",
+    "campaign-base2-site-01-blaster.json",
+    "campaign-base2-site-01-machinegun.json",
+    "campaign-base2-site-02-blaster.json",
+    "campaign-base2-site-02-machinegun.json",
+    "campaign-base2-site-03-blaster.json",
+    "campaign-base2-site-03-machinegun.json",
+    "campaign-base2-site-04-blaster.json",
+    "campaign-base2-site-04-machinegun.json"
   ]
 }

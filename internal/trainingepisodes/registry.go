@@ -200,7 +200,7 @@ func (e Episode) validate() error {
 	}
 	switch e.Recipe.Runner {
 	case "combat-baseline":
-		if e.Map != "base1" || e.GameFrames < 150 || e.GameFrames > 500 || !e.PPOTrainable {
+		if (e.Map != "base1" && e.Generator == nil) || e.GameFrames < 150 || e.GameFrames > 500 || !e.PPOTrainable {
 			return fmt.Errorf("unsupported synchronous recipe")
 		}
 		if e.Recipe.RewardConfig != "scripts/scenarios/combat-reward-recoil-v5.json" {
@@ -304,7 +304,7 @@ func Build(r *Registry, root string, ids []string, split, mode, model, out strin
 			t.Seeds = append(t.Seeds, s.Start+offset+i)
 		}
 		if ep.Generator != nil {
-			world, err := loadGenerationWorld(root)
+			world, err := loadGenerationWorld(root, ep.Map)
 			if err != nil {
 				return nil, err
 			}

@@ -51,3 +51,34 @@ func TestNativeGoalStopEvidence(t *testing.T) {
 		})
 	}
 }
+
+func TestGoalStopUsesFrozenFixtureClass(t *testing.T) {
+	for _, class := range []string{"monster_soldier", "monster_infantry"} {
+		var goal GoalStop
+		text := `{"version":"combat_goal_stop_v1","reason":"combat_goal_complete","spawncount":42,"actor":1,"classes":["` + class + `"],"kill_frame":15,"observed_frame":16,"health":80,"kills":[{"frame":15,"target":352,"target_class":"` + class + `"}]}`
+		if err := json.Unmarshal([]byte(text), &goal); err != nil {
+			t.Fatal(err)
+		}
+		observed := policy.Observation{Identity: policy.Identity{Map: "base1", Spawncount: 42, Actor: 1, Connection: 1, Life: 1, Frame: 16}, Health: 80}
+		release := &CombatRelease{Spawncount: 42, Frame: 10}
+		events := []DamageEvent{{Map: "base1", Spawncount: 42, Frame: 15, Attacker: 1, AttackerClass: "player", Target: 352, TargetClass: class, Mod: 1, HealthBefore: 7, HealthAfter: -3}}
+		if err := VerifyGoalStopForClasses(goal, release, events, observed, []string{class}); err != nil {
+			t.Fatal(err)
+		}
+		if err := VerifyGoalStopForClasses(goal, release, events, observed, []string{"monster_parasite"}); err == nil {
+			t.Fatal("receipt changed the expected fixture class")
+		}
+		observed.Identity.Map = "base2"
+		events[0].Map = "base2"
+		if err := VerifyGoalStopForClasses(goal, release, events, observed, []string{class}, "base2"); err != nil {
+			t.Fatal(err)
+		}
+		if err := VerifyGoalStopForClasses(goal, release, events, observed, []string{class}, "base1"); err == nil {
+			t.Fatal("receipt changed frozen map")
+		}
+		events[0].Mod = 21
+		if err := VerifyGoalStopForClasses(goal, release, events, observed, []string{class}); err == nil {
+			t.Fatal("setup telefrag counted as learned kill")
+		}
+	}
+}

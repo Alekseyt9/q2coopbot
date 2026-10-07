@@ -39,6 +39,7 @@ type Config struct {
 	TestProjectileComparison            bool
 	TestCombatBarrier                   bool
 	TestSynchronous                     bool
+	TestCombatOnly                      bool
 	TestTeacherVertical                 bool
 	TestLight                           *int
 	TestInvulnerable                    bool
@@ -210,8 +211,11 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	if cfg.CheckpointControl != "" && (!cfg.FramePaced || cfg.Host != "127.0.0.1") {
 		return fmt.Errorf("checkpoint control requires frame-paced IPv4 loopback harness")
 	}
-	if cfg.TestCombatBarrier && (!cfg.FramePaced || cfg.TestTeleport == "" || cfg.TestTeleportMap != "base1") {
-		return fmt.Errorf("combat barrier requires frame pacing and base1 teleport")
+	if cfg.TestCombatBarrier && (!cfg.FramePaced || cfg.TestTeleport == "" || cfg.TestTeleportMap != "base1" && !(cfg.TestSynchronous && cfg.TestTeleportMap == "base2")) {
+		return fmt.Errorf("combat barrier requires frame pacing and a supported fixture map teleport")
+	}
+	if cfg.TestCombatOnly && !cfg.TestSynchronous {
+		return fmt.Errorf("combat-only fixture requires synchronous isolated capture")
 	}
 	if cfg.TestSynchronous && (cfg.Host != "127.0.0.1" || !cfg.CombatCapture || !cfg.FramePaced || !cfg.TestCombatBarrier || cfg.TestWeaponSwitchFixture != "parasite_blaster" && cfg.TestWeaponSwitchFixture != "parasite_shotgun" && cfg.TestWeaponSwitchFixture != "parasite_machinegun" && !multiWeaponFixture(cfg.TestWeaponSwitchFixture)) {
 		return fmt.Errorf("synchronous learning fixture requires loopback, capture, frame pacing, barrier and supported equipment")
@@ -403,7 +407,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	if cfg.TestSpawnClass == "" {
 		cfg.TestSpawnClass = "monster_soldier_light"
 	}
-	if cfg.TestSpawnClass != "monster_soldier_light" && cfg.TestSpawnClass != "monster_soldier_ss" && cfg.TestSpawnClass != "monster_infantry" && cfg.TestSpawnClass != "monster_tank" && cfg.TestSpawnClass != "monster_flyer" && cfg.TestSpawnClass != "monster_parasite" {
+	if cfg.TestSpawnClass != "monster_soldier" && cfg.TestSpawnClass != "monster_soldier_light" && cfg.TestSpawnClass != "monster_soldier_ss" && cfg.TestSpawnClass != "monster_infantry" && cfg.TestSpawnClass != "monster_tank" && cfg.TestSpawnClass != "monster_flyer" && cfg.TestSpawnClass != "monster_parasite" {
 		return fmt.Errorf("unsupported test spawn class %q", cfg.TestSpawnClass)
 	}
 	if cfg.AASDir == "" {
@@ -467,6 +471,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		testButtonAutoGoal:       cfg.TestButtonAutoGoal,
 	}
 	client.planner.TestDisableSearch = cfg.TestDisableSearch
+	client.planner.testCombatOnly = cfg.TestCombatOnly
 	client.planner.testDoorPassSpeed = float64(cfg.TestDoorPassSpeed)
 	client.planner.TestDisableProbe = cfg.TestDisableProbe
 	client.planner.testCampaignGoals = testCampaignGoals

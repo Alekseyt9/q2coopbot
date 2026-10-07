@@ -91,6 +91,7 @@ type Planner struct {
 	jump                      *jumpFlight
 	TestDisableProbe          bool
 	testSetupHold             bool
+	testCombatOnly            bool
 	TestDisableSearch         bool
 	Nav                       *quake.Navigator
 	AASDir                    string
@@ -426,6 +427,15 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	standalonePickup := false
 	campaign := p.Campaign && s.Teammate == nil
 	p.World.Campaign = nil
+	if p.testCombatOnly {
+		// Isolated combat recipes have no level-exit objective. Retain all
+		// observed geometry/enemies/items, but avoid full-map route searches
+		// during setup, combat, and diagnostic frames after a first-life end.
+		p.World.Goal = "combat_fixture"
+		p.World.Navigation = "combat_fixture"
+		p.routeKnown = false
+		return
+	}
 	goal := quake.Vec3{}
 	if campaign {
 		var ok bool

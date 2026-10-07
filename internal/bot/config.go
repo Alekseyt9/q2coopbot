@@ -58,6 +58,7 @@ type ConfigFile struct {
 		DisableProjectileLead        bool   `json:"disable_projectile_lead"`
 		ProjectileComparison         bool   `json:"projectile_comparison"`
 		CombatBarrier                bool   `json:"combat_barrier"`
+		CombatOnly                   bool   `json:"combat_only"`
 		Synchronous                  bool   `json:"synchronous"`
 		TeacherVertical              bool   `json:"teacher_vertical"`
 		Light                        *int   `json:"light"`
@@ -235,6 +236,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestProjectileComparison = file.Test.ProjectileComparison
 	cfg.TestCombatBarrier = file.Test.CombatBarrier
 	cfg.TestSynchronous = file.Test.Synchronous
+	cfg.TestCombatOnly = file.Test.CombatOnly
 	cfg.TestTeacherVertical = file.Test.TeacherVertical
 	cfg.TestLight = file.Test.Light
 	cfg.TestInvulnerable = file.Test.Invulnerable

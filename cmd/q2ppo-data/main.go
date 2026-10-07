@@ -189,7 +189,8 @@ func run() error {
 		seen[r.Seed] = true
 		var cfg struct {
 			Test struct {
-				SpawnClass string `json:"spawn_class"`
+				SpawnClass  string `json:"spawn_class"`
+				TeleportMap string `json:"teleport_map"`
 			} `json:"test"`
 			Combat struct {
 				File string `json:"provider_file"`
@@ -271,7 +272,7 @@ func run() error {
 			if r.Mixed {
 				expectedClasses = append(expectedClasses, "monster_gunner")
 			}
-			if err = learningenv.VerifyGoalStopForClasses(goal, native.Release, events, observed, expectedClasses); err != nil {
+			if err = learningenv.VerifyGoalStopForClasses(goal, native.Release, events, observed, expectedClasses, cfg.Test.TeleportMap); err != nil {
 				return err
 			}
 			for i := range args {

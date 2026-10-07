@@ -32,10 +32,20 @@ func VerifyGoalStop(g GoalStop, release *CombatRelease, events []DamageEvent, ob
 }
 
 // Expected classes come from the frozen fixture, never from the goal receipt.
-func VerifyGoalStopForClasses(g GoalStop, release *CombatRelease, events []DamageEvent, observed policy.Observation, expectedClasses []string) error {
+func VerifyGoalStopForClasses(g GoalStop, release *CombatRelease, events []DamageEvent, observed policy.Observation, expectedClasses []string, maps ...string) error {
 	fail := func() error { return fmt.Errorf("unverified combat goal stop") }
+	expectedMap := "base1"
+	if len(maps) > 1 {
+		return fail()
+	}
+	if len(maps) == 1 {
+		expectedMap = maps[0]
+	}
+	if expectedMap != "base1" && expectedMap != "base2" {
+		return fail()
+	}
 	id := observed.Identity
-	if release == nil || g.Version != "combat_goal_stop_v1" || g.Reason != "combat_goal_complete" || id.Life != 1 || id.Connection != 1 || id.Map != "base1" || id.Spawncount != release.Spawncount || g.Spawncount != id.Spawncount || g.Actor != id.Actor || g.ObservedFrame != id.Frame || g.Health != int(observed.Health) || g.Health <= 0 || g.KillFrame <= release.Frame || g.ObservedFrame <= g.KillFrame {
+	if release == nil || g.Version != "combat_goal_stop_v1" || g.Reason != "combat_goal_complete" || id.Life != 1 || id.Connection != 1 || id.Map != expectedMap || id.Spawncount != release.Spawncount || g.Spawncount != id.Spawncount || g.Actor != id.Actor || g.ObservedFrame != id.Frame || g.Health != int(observed.Health) || g.Health <= 0 || g.KillFrame <= release.Frame || g.ObservedFrame <= g.KillFrame {
 		return fail()
 	}
 	expected := map[string]bool{}

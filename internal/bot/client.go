@@ -804,6 +804,15 @@ func (c *Client) run(ctx context.Context) error {
 				if directCombat && combatSelection.Candidate.Weapon != "" {
 					weaponRequest = "use " + combatSelection.Candidate.Weapon
 				}
+				// Equipment is a frozen reset condition until native release. A
+				// rules weapon preference must not prevent a Blaster fixture from
+				// becoming ready when its primary enemy is Soldier or Infantry.
+				if c.testSynchronous && !c.testCombatGo && c.testWeaponSwitchFixture == "parasite_blaster" {
+					weaponRequest = ""
+					if c.planner.World.Snapshot.Weapon != "Blaster" {
+						weaponRequest = "use Blaster"
+					}
+				}
 				if weaponRequest != "" {
 					if err := c.command(weaponRequest); err != nil {
 						return err

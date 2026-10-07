@@ -74,6 +74,10 @@ func TestEverySupportedGeneratorSplitProducesValidStarts(t *testing.T) {
 		if ep.Generator == nil {
 			continue
 		}
+		world, err = loadGenerationWorld(root, ep.Map)
+		if err != nil {
+			t.Fatal(err)
+		}
 		for _, split := range splitNames {
 			for i := 0; i < 4; i++ {
 				v, err := generate(ep, split, ep.Splits[split].Start+i, &world)

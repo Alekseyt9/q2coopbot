@@ -76,18 +76,20 @@ if(Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue){throw 'Por
 if(Test-Path $OutputRoot){throw 'Fresh output required'}
 New-Item -ItemType Directory $OutputRoot|Out-Null
 $resetClock=[Diagnostics.Stopwatch]::StartNew()
-$runtime=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map base1 -RuntimeRoot (Join-Path $OutputRoot 'runtime')
+$fixtureMap=if($generated -and $generated.map){$generated.map}else{'base1'}
+$combatOnly=[bool]($generated -and $generated.map)
+$runtime=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map $fixtureMap -RuntimeRoot (Join-Path $OutputRoot 'runtime')
 if($Recovery){
     # A genuine native 25HP item, introduced before server startup only.
-    [IO.File]::AppendAllText((Join-Path $runtime 'baseq2/maps/base1.ent'),"`n{`n`"classname`" `"item_health_large`"`n`"origin`" `"32 -352 24`"`n}`n",[Text.Encoding]::ASCII)
+    [IO.File]::AppendAllText((Join-Path $runtime "baseq2/maps/$fixtureMap.ent"),"`n{`n`"classname`" `"item_health_large`"`n`"origin`" `"32 -352 24`"`n}`n",[Text.Encoding]::ASCII)
 }
 if($ParasiteHealthKit){
-    [IO.File]::AppendAllText((Join-Path $runtime 'baseq2/maps/base1.ent'),"`n{`n`"classname`" `"item_health_large`"`n`"origin`" `"32 -424 24`"`n}`n",[Text.Encoding]::ASCII)
+    [IO.File]::AppendAllText((Join-Path $runtime "baseq2/maps/$fixtureMap.ent"),"`n{`n`"classname`" `"item_health_large`"`n`"origin`" `"32 -424 24`"`n}`n",[Text.Encoding]::ASCII)
 }
 if($Group -or $GroupRetreat -or $ParasiteMixed){
     # The second vulnerable native actor is a startup fixture, not a later
     # gameplay intervention. Original BSP/AAS and mover physics are unchanged.
-    $entityPath=Join-Path $runtime 'baseq2/maps/base1.ent'
+    $entityPath=Join-Path $runtime "baseq2/maps/$fixtureMap.ent"
     # Keep fixed-release actors above the floor plane. Their deferred native
     # startup skips the level.time < 1 droptofloor path; z=24 starts solid.
     $flankOrigin=if($ParasiteMixed){'96 -200 24.125'}elseif($GroupRetreat){'32 -352 24'}else{'200 -320 24'}
@@ -98,13 +100,13 @@ if($Group -or $GroupRetreat -or $ParasiteMixed){
 $server=$null;$bot=$null;$trace=Join-Path $OutputRoot 'bot.jsonl';$report=@{accepted=$false;reason='not_run';seed=$Seed}
 try{
     $env:Q2COOPBOT_TEST_RCON=[guid]::NewGuid().ToString('N')
-    $args="-portable +set ip 127.0.0.1 +set noipx 1 +set dedicated 1 +set coop 1 +set deathmatch 0 +set cheats 1 +set maxclients 4 +set port $Port +set timescale $Timescale +set rcon_password $env:Q2COOPBOT_TEST_RCON +set sv_test_unlimited_loopback 1 +set g_test_damage 1 +set g_test_seed $Seed +map base1"
-    if($CombatCapture -and !$Synchronous){$args=$args.Replace('+map base1','+set sv_test_trace_client SoloRetreatBot +map base1')}
+    $args="-portable +set ip 127.0.0.1 +set noipx 1 +set dedicated 1 +set coop 1 +set deathmatch 0 +set cheats 1 +set maxclients 4 +set port $Port +set timescale $Timescale +set rcon_password $env:Q2COOPBOT_TEST_RCON +set sv_test_unlimited_loopback 1 +set g_test_damage 1 +set g_test_seed $Seed +map $fixtureMap"
+    if($CombatCapture -and !$Synchronous){$args=$args.Replace("+map $fixtureMap","+set sv_test_trace_client SoloRetreatBot +map $fixtureMap")}
     if($Synchronous){
         @("set sv_harness_instance learning-$Seed",'set sv_test_trace_client SoloRetreatBot','set sv_test_lockstep_client SoloRetreatBot','set g_test_combat_barrier 1','set g_test_combat_clients 1','set g_test_monster_no_infighting 1',"set g_test_combat_monster_health $TrainingMonsterHealth","set g_test_combat_release_frame $ReleaseGameFrame")|Set-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Encoding ascii
-        $args=$args.Replace('+map base1','+exec learning-test.cfg +map base1')
+        $args=$args.Replace("+map $fixtureMap","+exec learning-test.cfg +map $fixtureMap")
     }
-    if($Recovery -or $CornerEscape -or $ParasiteWeapon){$args=$args.Replace('+map base1',"+set skill $RecoverySkill +map base1");$report.skill=$RecoverySkill;$report.initial_health=$(if($CornerEscape){65}elseif($ParasiteWeapon){$ParasiteHealth}else{$RecoveryHealth})}
+    if($Recovery -or $CornerEscape -or $ParasiteWeapon){$args=$args.Replace("+map $fixtureMap","+set skill $RecoverySkill +map $fixtureMap");$report.skill=$RecoverySkill;$report.initial_health=$(if($CornerEscape){65}elseif($ParasiteWeapon){$ParasiteHealth}else{$RecoveryHealth})}
     $server=Start-Process (Join-Path $runtime 'q2ded.exe') -ArgumentList $args -WorkingDirectory $runtime -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'server.log') -RedirectStandardError (Join-Path $OutputRoot 'server.err')
     $deadline=(Get-Date).AddSeconds(15)
     do{Start-Sleep -Milliseconds 100;if($server.HasExited -or (Get-Date) -gt $deadline){throw 'Server startup failed'}}while(!(Get-NetUDPEndpoint -OwningProcess $server.Id -LocalPort $Port -ErrorAction SilentlyContinue))
@@ -119,9 +121,9 @@ try{
     if($generated){$placement=Format-GeneratedPosition $generated.player;$enemyOrigin=Format-GeneratedPosition $generated.monsters[0].position;$enemyClass=$generated.monsters[0].class}
     $report.parasite_fixture=$ParasiteFixture
     $initialHealth=if($ParasiteWeapon){$ParasiteHealth}elseif($CornerEscape){65}elseif($Recovery){$RecoveryHealth}elseif($Group -or $GroupRetreat){100}elseif($Cover -or $Circle){25}else{0}
-    @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};combat=@{mode=$CombatMode;provider_file=$ProviderFile};run=@{duration=$(if($GameFrames){'60s'}else{'15s'});game_frames=$GameFrames;frame_paced=$true;mode='campaign';next_map='base2'};test=@{teleport_map='base1';teleport=$placement;spawn_map='base1';spawn_soldier=$enemyOrigin;spawn_class=$enemyClass;teacher_vertical=[bool]$TeacherVertical;synchronous=[bool]$Synchronous;combat_barrier=[bool]$Synchronous;setup_hold_frames=$(if($Cover -or $Circle -or $GroupRetreat -or $Recovery -or $CornerEscape -or $ParasiteWeapon){10}else{0});initial_health=$initialHealth;weapon_switch_fixture=$(if($ParasiteWeapon){"parasite_$ParasiteLoadout"}else{""})};output=@{stop_file=$(if($StopOnGoal){Join-Path $OutputRoot 'goal.stop'}else{''});trace_jsonl=$trace;combat_capture=[bool]$CombatCapture}}|ConvertTo-Json -Depth 6|Set-Content $config
+    @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};combat=@{mode=$CombatMode;provider_file=$ProviderFile};run=@{duration=$(if($GameFrames){'60s'}else{'15s'});game_frames=$GameFrames;frame_paced=$true;mode='campaign';next_map=$(if($fixtureMap -eq 'base2'){'base3'}else{'base2'})};test=@{combat_only=$combatOnly;teleport_map=$fixtureMap;teleport=$placement;spawn_map=$fixtureMap;spawn_soldier=$enemyOrigin;spawn_class=$enemyClass;teacher_vertical=[bool]$TeacherVertical;synchronous=[bool]$Synchronous;combat_barrier=[bool]$Synchronous;setup_hold_frames=$(if($Cover -or $Circle -or $GroupRetreat -or $Recovery -or $CornerEscape -or $ParasiteWeapon){10}else{0});initial_health=$initialHealth;weapon_switch_fixture=$(if($ParasiteWeapon){"parasite_$ParasiteLoadout"}else{""})};output=@{stop_file=$(if($StopOnGoal){Join-Path $OutputRoot 'goal.stop'}else{''});trace_jsonl=$trace;combat_capture=[bool]$CombatCapture}}|ConvertTo-Json -Depth 6|Set-Content $config
     $bot=Start-Process $Client -ArgumentList "--config `"$config`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
-    $waitMilliseconds=$(if($GameFrames){[int]([math]::Max(25,$GameFrames/(10*$Timescale)+10)*1000)}else{25000});if($StopOnGoal){. "$PSScriptRoot/combat_goal_stop.ps1";$goalClasses=@($enemyClass);if($ParasiteMixed){$goalClasses+=$ParasiteMixedClass};Wait-CombatGoalOrExit $bot $OutputRoot $waitMilliseconds $goalClasses}else{$null=$bot.WaitForExit($waitMilliseconds)};if(!$bot.HasExited){throw 'Bot timeout'};if($bot.ExitCode){throw 'Bot failed'}
+    $waitMilliseconds=$(if($GameFrames){[int]([math]::Max(25,$GameFrames/(10*$Timescale)+10)*1000)}else{25000});if($StopOnGoal){. "$PSScriptRoot/combat_goal_stop.ps1";$goalClasses=@($enemyClass);if($ParasiteMixed){$goalClasses+=$ParasiteMixedClass};Wait-CombatGoalOrExit $bot $OutputRoot $waitMilliseconds $goalClasses $fixtureMap}else{$null=$bot.WaitForExit($waitMilliseconds)};if(!$bot.HasExited){throw 'Bot timeout'};if($bot.ExitCode){throw 'Bot failed'}
     $rows=@(Get-Content $trace|ForEach-Object {$_|ConvertFrom-Json})
     . "$PSScriptRoot/read_damage_events.ps1"
     $events=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log'))

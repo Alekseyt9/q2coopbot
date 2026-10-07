@@ -98,9 +98,11 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
         $episodeFixture=if($episodeMixed){'standard'}else{$using:SoloFixture}
         $out=Join-Path $using:OutputRoot "worker-$worker-episode-$episode"
         $sample=$null;$samplePath=''
+		$captureMap='base1'
         if($using:GeneratedFixtures){
             . "$using:repo/scripts/generated_combat_fixture.ps1"
             $sample=(Get-Content -LiteralPath $using:GeneratedFixtures -Raw|ConvertFrom-Json).instances[$index]
+			if($sample.map){$captureMap=$sample.map}
             $samplePath=Join-Path $using:OutputRoot "fixture-$index.json"
             $sample|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $samplePath -Encoding utf8NoBOM
             $null=Read-GeneratedCombatFixture $samplePath ($using:Seed+$index) $using:Loadout $episodeMixed
@@ -182,7 +184,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 $release=@(Get-Content (Join-Path $out 'server.log') | Select-String '^sv_test_combat spawncount=(-?\d+) server_frame=(\d+) g_test_combat_start game_frame=\d+ ready=1 seed=\d+$')
                 if($release.Count -ne 1){throw 'Goal release proof missing'}
                 $classes=if($sample){@($sample.monsters.class)}else{@('monster_parasite')};if(!$sample -and $episodeMixed){$classes+='monster_gunner'}
-                $verified=Get-CombatGoalReceipt $rows[-1] @(Read-DamageEvents (Join-Path $out 'server.log')) @{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value} $classes
+                $verified=Get-CombatGoalReceipt $rows[-1] @(Read-DamageEvents (Join-Path $out 'server.log')) @{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value} $classes $captureMap
                 $goalValid=$verified -and $goal.reason -eq 'combat_goal_complete' -and $goal.kill_frame -eq $verified.kill_frame -and $goal.observed_frame -ge $verified.kill_frame+1 -and $goal.observed_frame -le $rows[-1].observation_frame -and $goal.spawncount -eq $verified.spawncount -and $goal.actor -eq $verified.actor -and (Test-Path (Join-Path $out 'goal.stop'))
                 if(!$goalValid){throw 'Unverified goal stop'}
             }
@@ -240,11 +242,12 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             $p99=$(if($latencies.Count){$latencies[[math]::Ceiling(.99*$latencies.Count)-1]}else{$null})
             $dispatchValid=($using:CombatMode -eq 'rules') -or (($using:CombatMode -eq 'learned') -and ($controlled -gt 0)) -or (($using:CombatMode -eq 'learned-shadow') -and ($shadow -gt 0) -and ($controlled -eq 0))
             # The extra Gunner is in the fixture entity lump; verify the actual native input.
-            $entities=Get-Content -LiteralPath (Join-Path $out 'runtime/baseq2/maps/base1.ent') -Raw
+            $captureMap=if($sample -and $sample.map){$sample.map}else{'base1'}
+            $entities=Get-Content -LiteralPath (Join-Path $out "runtime/baseq2/maps/$captureMap.ent") -Raw
             $gunnerCount=[regex]::Matches($entities,'"classname"\s+"monster_gunner"').Count
             if($gunnerCount -ne [int]$episodeMixed){throw 'Episode composition differs from declared pattern'}
             $life=Get-Content -LiteralPath (Join-Path $out 'combat-first-life.json') -Raw | ConvertFrom-Json
-            $files=@('q2ded.exe','baseq2/game.dll','baseq2/maps/base1.ent','baseq2/maps/base1.aas') | ForEach-Object {
+            $files=@('q2ded.exe','baseq2/game.dll',"baseq2/maps/$captureMap.ent","baseq2/maps/$captureMap.aas") | ForEach-Object {
                 $path=Join-Path (Join-Path $out 'runtime') $_
                 if(Test-Path -LiteralPath $path){@{path=$_;sha256=(Get-FileHash -LiteralPath $path).Hash}}
             }

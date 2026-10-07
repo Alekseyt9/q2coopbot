@@ -103,3 +103,5 @@ Two external sources are used throughout and are cited by path:
   cross-check rather than a source. Not vendored; clone it separately.
 
 Both are reference material. Where they disagree with the HLIL, the HLIL wins.
+
+- [Тренировочные бои на 8 разных участках base1/base2](testing/campaign_combat_sites_20261007.md) — 16 рецептов Blaster/Machinegun для реестра.

@@ -22,6 +22,7 @@ type StartDistribution struct {
 	Health  []int          `json:"health"`
 }
 type Generator struct {
+	Site          *CampaignSite                `json:"site,omitempty"`
 	Version       int                          `json:"version"`
 	Kind          string                       `json:"kind"`
 	Distributions map[string]StartDistribution `json:"distributions"`
@@ -31,6 +32,7 @@ type GeneratedMonster struct {
 	Position quake.Vec3 `json:"position"`
 }
 type Instance struct {
+	Map            string             `json:"map,omitempty"`
 	Version        int                `json:"version"`
 	EpisodeID      string             `json:"episode_id"`
 	Split          string             `json:"split"`
@@ -48,8 +50,11 @@ type Instance struct {
 }
 
 func (g *Generator) validate(ep Episode) error {
-	if g.Version != 1 || g.Kind != "base1-ground-combat-v1" || ep.Recipe.Runner != "combat-baseline" || len(g.Distributions) != 4 {
+	if g.Version != 1 || (g.Kind != "base1-ground-combat-v1" && g.Kind != "campaign-ground-combat-v1") || (g.Kind == "base1-ground-combat-v1" && ep.Map != "base1") || ep.Recipe.Runner != "combat-baseline" || len(g.Distributions) != 4 {
 		return fmt.Errorf("unsupported generator binding")
+	}
+	if g.Kind == "campaign-ground-combat-v1" && (g.Site == nil || g.Site.Map != ep.Map || len(g.Site.BSPSHA256) != 64 || len(g.Site.WallDistances) != 8) {
+		return fmt.Errorf("missing campaign site binding")
 	}
 	if len(ep.Monsters) == 0 || (!ep.Recipe.Mixed && len(ep.Monsters) != 1) || (ep.Recipe.Mixed && !reflect.DeepEqual(ep.Monsters, []string{"monster_parasite", "monster_gunner"})) {
 		return fmt.Errorf("generator composition differs from recipe")
@@ -103,16 +108,26 @@ func samplePosition(r *rand.Rand, b PositionRange) quake.Vec3 {
 	}
 	return p
 }
-func loadGenerationWorld(root string) (quake.MapInfo, error) {
-	return quake.LoadMap(filepath.Join(root, "workspace", "runtime", "q2go", "baseq2"), "base1")
+func loadGenerationWorld(root string, maps ...string) (quake.MapInfo, error) {
+	name := "base1"
+	if len(maps) == 1 {
+		name = maps[0]
+	}
+	return quake.LoadMap(filepath.Join(root, "workspace", "runtime", "q2go", "baseq2"), name)
 }
 
 func generate(ep Episode, split string, seed int, world *quake.MapInfo) (Instance, error) {
+	if ep.Generator.Site != nil && (ep.Map != world.Name || ep.Generator.Site.BSPSHA256 != world.BSPSHA256) {
+		return Instance{}, fmt.Errorf("campaign geometry changed")
+	}
 	sum := sha256.Sum256([]byte(fmt.Sprintf("combat-generator-v1:%s:%d:%s:%d", ep.ID, ep.Revision, split, seed)))
 	gs := int(binary.LittleEndian.Uint32(sum[:4]) & 0x7fffffff)
 	r := rand.New(rand.NewSource(int64(gs)))
 	d := ep.Generator.Distributions[split]
 	v := Instance{Version: 1, EpisodeID: ep.ID, Split: split, EngineSeed: seed, GenerationSeed: gs, Loadout: ep.Recipe.Loadout, Skill: ep.Skill, GeometrySource: world.BSPSource, GeometrySHA256: world.BSPSHA256, Rejections: map[string]int{}}
+	if ep.Generator.Kind == "campaign-ground-combat-v1" {
+		v.Map = ep.Map
+	}
 	for attempt := 1; attempt <= 128; attempt++ {
 		v.Attempts = attempt
 		v.Player = samplePosition(r, d.Player)
@@ -142,6 +157,34 @@ func checkStart(v Instance, world *quake.MapInfo) string {
 		}
 		lo[2] -= 24
 		hi[2] += 32
+		if v.Map != "" {
+			// Inline solid brushes are outside world collision traces. Reserve
+			// their initial bounds, including the player's teleport headroom.
+			for _, entity := range world.Entities {
+				switch entity.Class {
+				case "func_wall", "func_door", "func_door_rotating", "func_plat", "func_train", "func_rotating", "func_button", "func_explosive", "trigger_hurt", "trigger_changelevel", "trigger_teleport":
+				default:
+					continue
+				}
+				b, ok := world.TouchBounds(entity)
+				if !ok {
+					continue
+				}
+				overlap := true
+				for axis := 0; axis < 3; axis++ {
+					top := hi[axis]
+					if i == 0 && axis == 2 {
+						top += 10
+					}
+					if top < b.Min[axis] || lo[axis] > b.Max[axis] {
+						overlap = false
+					}
+				}
+				if overlap {
+					return "inline_brush_start_overlap"
+				}
+			}
+		}
 		clear, valid := world.ProjectileBoxClear(lo, hi)
 		if !valid || !clear {
 			return "static_hull_collision"
@@ -150,6 +193,11 @@ func checkStart(v Instance, world *quake.MapInfo) string {
 			return "unsupported_floor"
 		}
 		if i == 0 {
+			raised := p
+			raised[2] += 10
+			if !world.PlayerMoveClear(p, raised) {
+				return "player_clip_collision"
+			}
 			hi[2] += 10
 			clear, valid = world.ProjectileBoxClear(lo, hi)
 			if !valid || !clear {
@@ -178,6 +226,13 @@ func checkStart(v Instance, world *quake.MapInfo) string {
 	tr := world.TraceProjectile(eye, target)
 	if !tr.Valid || tr.StartSolid || tr.Fraction < 1 {
 		return "primary_occluded"
+	}
+	if v.Map != "" {
+		upper := v.Monsters[0].Position
+		upper[2] += 22
+		if !world.ClearShot(eye, upper) || world.DoorShotBlocked(nil, eye, upper) {
+			return "primary_reset_line_blocked"
+		}
 	}
 	return ""
 }

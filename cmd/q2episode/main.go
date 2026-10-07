@@ -30,7 +30,29 @@ func run() error {
 	root := flag.String("root", ".", "repository root")
 	out := flag.String("out", "", "fresh execution plan JSON")
 	artifacts := flag.String("artifacts", "", "fresh runtime output root")
+	campaign := flag.Int("campaign-sites", 0, "generate this many distinct original encounter sites per base1/base2 map into out")
 	flag.Parse()
+	if *campaign != 0 {
+		abs, err := filepath.Abs(*root)
+		if err != nil {
+			return err
+		}
+		episodes, err := trainingepisodes.CampaignRecipes(abs, *campaign)
+		if err != nil {
+			return err
+		}
+		f, err := os.OpenFile(*out, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		e := json.NewEncoder(f)
+		e.SetIndent("", "  ")
+		return e.Encode(struct {
+			Version  int                        `json:"version"`
+			Episodes []trainingepisodes.Episode `json:"episodes"`
+		}{1, episodes})
+	}
 	if *verify != "" {
 		abs, err := filepath.Abs(*root)
 		if err != nil {
