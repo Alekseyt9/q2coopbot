@@ -57,7 +57,7 @@ func validateMemory(f *GRUFile, actor, value []DenseLayer) error {
 	}
 	for i, c := range []GRUCell{f.Actor, f.Value} {
 		base := actor
-		outputs := 8
+		outputs := len(actor[len(actor)-1].Bias)
 		if i == 1 {
 			base = value
 			outputs = 1

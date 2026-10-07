@@ -25,6 +25,7 @@ type PPOFile struct {
 	Memory          *GRUFile             `json:"memory,omitempty"`
 	Attention       *AttentionFile       `json:"attention,omitempty"`
 	EntityAttention *EntityAttentionFile `json:"entity_attention,omitempty"`
+	WeaponHead      string               `json:"weapon_head,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
@@ -35,6 +36,7 @@ type Sample struct {
 	Latent         [4]float64    `json:"latent"`
 	Attack         bool          `json:"attack"`
 	Vertical       int           `json:"vertical"`
+	Weapon         int           `json:"weapon,omitempty"`
 	LogProbability float64       `json:"log_probability"`
 	Value          float64       `json:"value"`
 	Memory         *MemorySample `json:"memory,omitempty"`
@@ -66,10 +68,17 @@ func LoadPPO(path string) (*PPO, error) {
 	if d.Decode(new(any)) != io.EOF {
 		return nil, fmt.Errorf("trailing PPO data")
 	}
-	if f.Kind != PPOKind || (f.Features != FeatureVersion && f.Features != AimFeatureVersion && f.Features != BBoxFeatureVersion && f.Features != TypedFeatureVersion && f.Features != RecoilFeatureVersion) || f.SamplingSeed < 0 {
+	if f.Kind != PPOKind || (f.Features != FeatureVersion && f.Features != AimFeatureVersion && f.Features != BBoxFeatureVersion && f.Features != TypedFeatureVersion && f.Features != RecoilFeatureVersion && f.Features != WeaponFeatureVersion) || f.SamplingSeed < 0 {
 		return nil, fmt.Errorf("invalid PPO header")
 	}
-	if e = validateFeatureLayers(f.Actor, 8, f.Features); e != nil {
+	outputs := 8
+	if f.WeaponHead != "" {
+		if f.WeaponHead != WeaponHeadVersion || f.Features != WeaponFeatureVersion || f.EntityAttention != nil {
+			return nil, fmt.Errorf("invalid PPO weapon contract")
+		}
+		outputs += len(weaponNames)
+	}
+	if e = validateFeatureLayers(f.Actor, outputs, f.Features); e != nil {
 		return nil, e
 	}
 	if e = validateFeatureLayers(f.Value, 1, f.Features); e != nil {
@@ -134,6 +143,9 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	if s.Version != p.version || s.Vertical < 0 || s.Vertical > 2 {
 		return Action{}, 0, 0, fmt.Errorf("PPO sample version/category")
 	}
+	if p.file.WeaponHead == "" && s.Weapon != 0 {
+		return Action{}, 0, 0, fmt.Errorf("weapon sample on legacy policy")
+	}
 	x, value, _, e := p.memoryRaw(o, s.Memory)
 	if e != nil {
 		return Action{}, 0, 0, e
@@ -153,11 +165,22 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	}
 	max := math.Max(x[5], math.Max(x[6], x[7]))
 	sum := 0.0
-	for _, v := range x[5:] {
+	for _, v := range x[5:8] {
 		sum += math.Exp(v - max)
 	}
 	lp += x[5+s.Vertical] - max - math.Log(sum)
 	a := Action{Version: ActionVersion, Identity: o.Identity, Forward: math.Tanh(s.Latent[0]), Side: math.Tanh(s.Latent[1]), YawDelta: 180 * math.Tanh(s.Latent[2]), PitchDelta: 180 * math.Tanh(s.Latent[3]), Attack: s.Attack, Vertical: []string{"release", "jump", "crouch"}[s.Vertical]}
+	if p.file.WeaponHead != "" {
+		probs, err := weaponLogProbabilities(o, x[8:])
+		if err != nil {
+			return Action{}, 0, 0, err
+		}
+		if s.Weapon < 0 || s.Weapon >= len(probs) || math.IsInf(probs[s.Weapon], -1) {
+			return Action{}, 0, 0, fmt.Errorf("unavailable weapon sample")
+		}
+		lp += probs[s.Weapon]
+		a.Weapon = weaponNames[s.Weapon]
+	}
 	_, e = Command(o, a, [3]int16{})
 	return a, lp, value, e
 }
@@ -189,15 +212,40 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		s.Attack = p.rng.Float64() < math.Exp(-softplus(-x[4]))
 		max := math.Max(x[5], math.Max(x[6], x[7]))
 		sum := 0.0
-		for _, v := range x[5:] {
+		for _, v := range x[5:8] {
 			sum += math.Exp(v - max)
 		}
 		u := p.rng.Float64() * sum
-		for i, v := range x[5:] {
+		for i, v := range x[5:8] {
 			u -= math.Exp(v - max)
 			if u <= 0 {
 				s.Vertical = i
 				break
+			}
+		}
+	}
+	if p.file.WeaponHead != "" {
+		probs, err := weaponProbabilities(o, x[8:])
+		if err != nil {
+			return Action{}, err
+		}
+		if p.file.Deterministic {
+			for i, probability := range probs {
+				if probability > probs[s.Weapon] {
+					s.Weapon = i
+				}
+			}
+		} else {
+			u := p.rng.Float64()
+			for i, probability := range probs {
+				if probability == 0 {
+					continue
+				}
+				s.Weapon = i
+				u -= probability
+				if u <= 0 {
+					break
+				}
 			}
 		}
 	}

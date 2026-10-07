@@ -31,7 +31,7 @@ func validateAttention(f *AttentionFile, g *GRUFile, actor, value []DenseLayer) 
 	}
 	for i, c := range []AttentionCell{f.Actor, f.Value} {
 		base := actor
-		out := 8
+		out := len(actor[len(actor)-1].Bias)
 		if i == 1 {
 			base = value
 			out = 1

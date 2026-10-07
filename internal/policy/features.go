@@ -49,7 +49,7 @@ func ObservedAimDirection(o Observation, e Enemy) (quake.Vec3, bool, error) {
 // slots: valid mask, sin/cos yaw error, sin/cos pitch error to the observed
 // enemy origin from the current eye. This is geometry, not an action or teacher.
 func FeaturesForVersion(o Observation, version string) ([]float64, error) {
-	if version != FeatureVersion && version != AimFeatureVersion && version != BBoxFeatureVersion && version != TypedFeatureVersion && version != RecoilFeatureVersion {
+	if version != FeatureVersion && version != AimFeatureVersion && version != BBoxFeatureVersion && version != TypedFeatureVersion && version != RecoilFeatureVersion && version != WeaponFeatureVersion {
 		return nil, fmt.Errorf("unsupported features %q", version)
 	}
 	v, err := Features(o)
@@ -81,7 +81,7 @@ func FeaturesForVersion(o Observation, version string) ([]float64, error) {
 		pitch := -math.Atan2(z, math.Hypot(r[0], r[1])) - degrees(o.ViewAngles[0])*math.Pi/180
 		v = append(v, 1, math.Sin(yaw), math.Cos(yaw), math.Sin(pitch), math.Cos(pitch))
 	}
-	if version == BBoxFeatureVersion || version == TypedFeatureVersion || version == RecoilFeatureVersion {
+	if version == BBoxFeatureVersion || version == TypedFeatureVersion || version == RecoilFeatureVersion || version == WeaponFeatureVersion {
 		for i := 0; i < 8; i++ {
 			if i >= len(enemies) {
 				v = append(v, 0, 0, 0, 0, 0)
@@ -100,14 +100,14 @@ func FeaturesForVersion(o Observation, version string) ([]float64, error) {
 			v = append(v, 1, math.Sin(yaw), math.Cos(yaw), math.Sin(pitch), math.Cos(pitch))
 		}
 	}
-	if version == TypedFeatureVersion || version == RecoilFeatureVersion {
+	if version == TypedFeatureVersion || version == RecoilFeatureVersion || version == WeaponFeatureVersion {
 		extra, err := typedFeatures(o, enemies)
 		if err != nil {
 			return nil, err
 		}
 		v = append(v, extra...)
 	}
-	if version == RecoilFeatureVersion {
+	if version == RecoilFeatureVersion || version == WeaponFeatureVersion {
 		if o.KickAngles == nil {
 			v = append(v, 0, 0, 0, 0)
 		} else {
@@ -119,6 +119,13 @@ func FeaturesForVersion(o Observation, version string) ([]float64, error) {
 				v = append(v, angle/32)
 			}
 		}
+	}
+	if version == WeaponFeatureVersion {
+		extra, _, err := weaponFeatures(o)
+		if err != nil {
+			return nil, err
+		}
+		v = append(v, extra...)
 	}
 	return v, nil
 }

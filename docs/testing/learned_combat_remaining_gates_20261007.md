@@ -1,0 +1,20 @@
+# Оставшиеся gates learned combat, 07.10.2026
+
+Сверка текущего fixed-MG этапа с `docs/learned_system1_plan.md`. Это запись конкретных незакрытых требований, а не заявление о завершении R0–R9. Предыдущий goal turn дал прогресс: подтверждённый parent и новый curriculum checkpoint, native evidence и выбор на32 свежих evaluation seeds; текущий turn проверяет перенос результата на другую выборку.
+
+| Требование | Текущее доказательство | Незакрытая часть / следующее доказательство |
+|---|---|---|
+| Управление движением, прицелом, огнём и вертикальным действием сетью | `internal/policy/mlp.go`, `ppo.go`: восемь actor outputs; четыре continuous latents, attack, три vertical logits. Native dispatch/rollout receipts сохранены в актуальных pilot roots | Польза jump/crouch/air-control по разным боевым условиям отдельно не установлена |
+| Мир и состав монстров в наблюдениях | `typed_features.go`: slots per enemy, типы, bbox/skin/animation и composition; v5 добавляет observed camera kick | Текущие оценки охватывают ограниченный Parasite/Gunner fixture, перенос на другие группы и геометрию не доказан |
+| Бой до завершения группы и выживание | Native first-life kills/goal receipts; fresh cohorts в mobile reports | Даже лучший checkpoint ещё часто погибает; сохранение прежних побед неполное. Нужны independent evaluation и дальнейшее обучение |
+| Выбор оружия из текущего инвентаря | `contract.go` допускает `Action.Weapon`, проверяет наличие предмета и inventory age≤20 | `ppo.go` проверяет actor8 outputs, `Sample` не содержит weapon categorical; `mlp.go` формирует action без weapon. `ppo_recurrent.py` scope прямо исключает learned weapon choice. Нужен отдельный новый контракт/head/mask, а не только выдача MG |
+| Признаки инвентаря для learned weapon choice | Observation содержит inventory и возраст; текущий feature prefix включает только известность/возраст inventory и limited equipped-weapon признаки | Нужны версионированные количества доступного оружия/боеприпасов и explicit unknown/freshness/availability masks, проверенные только по UDP-visible информации |
+| Старые модели после расширения actor/features | Существуют versioned feature/layer validation и Go/Python PPO replay | До новых weapon runs проверить prefix-preserving migration, unknown inventory, joint logprob parity и checkpoint compatibility. Не менять reward/GAE одновременно с расширением weapon representation |
+| Действительное исполнение weapon request | Go contract умеет выдавать допустимый request, stale/unavailable requests отклоняются | Native command/weapon effect proof в fresh mixed-loadout runs; cooldown/equip delay, расход ammo и полезность выбора должны проверяться отдельно |
+| Ресурсы и разные условия R5 | Сейчас fixed MG100, skill1, stock monster HP, moving Solo/Mixed, no-infighting fixture | Разные HP/ammo/оружие/составы и условия; fixed MG100 не проверяет выбор оружия или стратегию экономии |
+| Кооп и включение R6 | В roadmap указаны teammate/fireline/узкие проходы и rollout с откатом | Текущий barrier имеет один клиент. Нет доказательства безопасного learned co-op в этих pilot; live/default не переключены |
+| R7–R9 расширенные этапы | Требования сохранены в активном плане | Pilot System1 не является выполнением model/MCTS/full-campaign этапов; каждый требует собственного authoritative evidence |
+
+Рабочий порядок: завершить текущую независимую проверку Curriculum24; зафиксировать подтверждённый parent; затем отдельным изменением расширять weapon representation/action masks и Go/Python parity. Исторические eval traces не превращать в новый loss с повторной оценкой на тех же seeds. Обучение только CUDA; харнес остаётся Go,4 instances x2, отдельный seed каждого эпизода. Не изменять Go/PS source во время пары evaluations с frozen fingerprints.
+
+Полезная последующая оптимизация харнеса: failed first-life episodes сейчас продолжаются до300 active frames, хотя PPO использует первую жизнь. Early stop по подтверждённой первой смерти требует отдельного receipt, terminal/reward closure и native validation; просто сократить GameFrames нельзя, это изменит horizon и выборку. Эта оптимизация пока не реализована.

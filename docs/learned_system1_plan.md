@@ -1,5 +1,13 @@
 # Собственная System 1: иерархическая тактика, RL и MCTS
 
+**07.10.2026, inventory V6:** [845 признаков, маски доступного оружия и совместимость Curriculum24](testing/learned_combat_inventory_v6_validation_v1.md). 4 live instances x2, seeds44000–44003,441 verified PPO transitions и CUDA replay. Старые действия сохранены; categorical weapon head и Adam migration остаются следующей работой. Обучаемый выбор оружия ещё не включён.
+
+**07.10.2026, fresh confirmation Curriculum24:** [32 новых paired seeds,64 captures](testing/learned_combat_mobile_curriculum24_validation_v1.md),4 инстанса x2, frozen weights. Wins7→9, deaths25→22, kills25→31. Curriculum24 подтверждён для дальнейшего обучения;Expanded20 сохранён reference. Live/default не переключён.
+
+**07.10.2026, Parasite curriculum v2:** [Mixed/Solo/Mixed от Expanded20](testing/learned_combat_mobile_parasite_curriculum_v2.md),48 training episodes,4 CUDA updates,32 paired Mixed evaluation на модель,112 accepted captures. Wins5→13, deaths24→18. Curriculum24 выбран кандидатом для независимой проверки. Live/default не переключён.
+
+**07.10.2026, fresh confirmation expanded20:** [32 новых paired seeds,64 captures](testing/learned_combat_mobile_expanded_validation_v1.md),4 инстанса x2, frozen weights. Wins6→8, deaths26→23, kills22→24. Expanded20 подтверждён для дальнейшего обучения;16 сохранён reference. Live/default не переключён.
+
 **07.10.2026, expanded Mixed batch завершён:** [64 training +32 paired evaluation на модель](testing/learned_combat_mobile_mixed_expanded_v1.md),128 принятых captures,4 CUDA updates от16 с Adam resume,4 инстанса x2. Fresh32: wins4→10, kills12→26, deaths26→22. Кандидат выбран для дальнейшего обучения;16 остаётся reference. Death−5, live/default не переключён.
 
 **07.10.2026, расширенная проверка control:** [32 новых paired Mixed seeds,64 native captures](testing/learned_combat_mobile_control_validation_v1.md) приняты,4 инстанса x2, веса заморожены. Parent16:3 победы/28 смертей/11 убийств; control candidate:2 победы/30 смертей/10 убийств. Предварительный выбор control из16-seed pilot отменён; training baseline остаётся checkpoint16, death−5. Немного лучшие aim/ammo proxy не компенсируют потерю полных побед. Следующий этап — расширить on-policy Mixed обучение от16 с оптимизацией только на GPU и новой независимой оценкой. Live/default не переключён.

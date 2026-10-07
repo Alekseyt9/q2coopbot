@@ -1,5 +1,7 @@
 # Mixed: увеличенный учебный batch, 07.10.2026
 
+**Независимая проверка завершена:** [ещё32 paired seeds](learned_combat_mobile_expanded_validation_v1.md): parent6 wins/26 deaths, expanded20 —8 wins/23 deaths. Кандидат подтвердил записанное правило и выбран основой дальнейшего обучения. Reference16 сохранён, live/default не переключён. Это bounded confirmation; качество прицела и сохранение прежних побед остаются отдельными проблемами.
+
 Новый цикл начинается от checkpoint16 после отрицательной расширенной проверки fresh-Adam control. Цель — проверить больший объём свежих Mixed данных на update. Веса и Adam возобновляются из checkpoint16; death penalty остаётся−5, все PPO/reward параметры прежние. Это расширение batch8→16 эпизодов относительно предыдущего Mixed-only resumed-Adam pilot, а не controlled fresh-Adam death-penalty comparison. Сиды другие, поэтому причинный эффект размера batch сам по себе не изолирован.
 
 Четыре CUDA updates, четыре инстанса x2, четыре независимых эпизода на worker:64 training seeds40000–40063. Separate paired before/after evaluation:32 fresh seeds40400–40431, восемь эпизодов на worker. Максимум четыре одновременно работающих сервера/клиента. Бои Mixed Parasite+Gunner, fixed stock MG100 bullets, skill1, stock HP, z24.125, native no-infighting с dead-owner splash fix. Ранняя остановка после двух подтверждённых убийств первой жизни; не после одной цели.
