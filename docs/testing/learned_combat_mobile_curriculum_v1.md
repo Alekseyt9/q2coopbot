@@ -62,3 +62,12 @@ Evidence: ignored `workspace/artifacts/combat-mobile-machinegun-curriculum-v1r2-
 
 
 07.10.2026: следующий controlled pilot `combat-mobile-machinegun-mixed-v1-20261007` продолжает checkpoint16/Adam. Четыре CUDA updates,4 инстанса x2,2 независимых эпизода на инстанс в каждом batch:32 training seeds36000–36031, все Mixed. Это сохраняет число Mixed эпизодов предыдущего curriculum, убирая16 Solo эпизодов. Архитектура, objective aim_potential0.5, stock equipment/positions/skill и early goal stop прежние. Paired before/after evaluation на16 новых Mixed seeds36400–36415. Приоритет — полные победы и выживание; live/default promotion не выполняется по одному удачному эпизоду.
+
+
+Дополнительная offline aim диагностика того же paired batch35400–35415:817→857 alive first-life Machinegun attack-command observations. Sample-weighted угол до nearest known clear-shot target с observed camera kick19.24°→16.66°, минимальный угол до любой known clear-shot цели16.38°→15.39°. Exact geometry используется из Go policy. Не является bullet hit rate: камера показывает также damage/fall punch, выборка frames различается по времени жизни/числу выстрелов, bbox center proxy не равен попаданию в объём. Evidence: aim-paired.json; diagnostic helper сохранён в recoil-aim pilot.
+
+
+Offline survival diagnostics той же paired оценки: native incoming health damage от Parasite844→556, от Gunner725→1022. Число policy movement command frames1773→1409; actual next-frame movement steps1056→695. Длительности жизней/достижение целей различаются; эти totals не доказывают причинность или отдельный навык уклонения. Evidence: survival-diagnostics.json. Смена фокуса на Mixed в следующем опыте проверяется свежим paired batch.
+
+
+Mixed-only pilot завершён:4 updates,2755 rows,64 captures; paired36400–36415 wins2→2, kills6→8, damage2490→2656, deaths13→14. Checkpoint20 не выбран как новый training baseline; остаётся checkpoint16. Полная таблица и diagnostics: [Mixed-only pilot](learned_combat_mobile_mixed_v1.md).
