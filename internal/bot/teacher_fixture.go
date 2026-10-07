@@ -8,6 +8,10 @@ func synchronousFixtureWeaponReady(fixture string, s quake.Snapshot) bool {
 	if !s.InventoryKnown || s.InventoryAgeFrames < 0 || s.InventoryAgeFrames > 2 {
 		return false
 	}
+	if multiWeaponFixture(fixture) {
+		bullets, shells := multiWeaponStock(fixture)
+		return machinegunWeapon(s.Weapon) && int(s.Ammo) == bullets && inventoryCount(s, "Bullets") == bullets && inventoryCount(s, "Shells") == shells && inventoryCount(s, "Machinegun") > 0 && inventoryCount(s, "Shotgun") > 0 && inventoryCount(s, "Blaster") > 0
+	}
 	switch fixture {
 	case "parasite_blaster":
 		return s.Weapon == "Blaster"

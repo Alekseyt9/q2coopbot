@@ -70,7 +70,7 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		sel.Fallback = fallback
 		return rules()
 	}
-	if o.Weapon != "Blaster" && !(c.testSynchronous && c.testWeaponSwitchFixture == "parasite_machinegun" && machinegunWeapon(o.Weapon)) {
+	if o.Weapon != "Blaster" && !(c.testSynchronous && ((c.testWeaponSwitchFixture == "parasite_machinegun" && machinegunWeapon(o.Weapon)) || multiWeaponFixture(c.testWeaponSwitchFixture) && (machinegunWeapon(o.Weapon) || shotgunWeapon(o.Weapon)))) {
 		sel.Fallback = "pilot_equip_not_ready"
 		return rules()
 	}
@@ -143,7 +143,7 @@ func machinegunWeapon(weapon string) bool {
 	return weapon == "Machinegun" || weapon == "models/weapons/v_machn/tris.md2"
 }
 
-// The isolated pilot supports stock Blaster/Machinegun and checked ground motion.
+// The isolated pilot supports stock Blaster/Machinegun/Shotgun and checked ground motion.
 // Constraints stop components; they never aim, create a route or add firing.
 func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.UserCmd, []policy.Intervention) {
 	changes := []policy.Intervention{}
@@ -190,7 +190,7 @@ func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.
 		stopMove("unsupported_motion_guard")
 	}
 	if cmd.Buttons&1 != 0 {
-		if s.Weapon != "Blaster" && !machinegunWeapon(s.Weapon) {
+		if s.Weapon != "Blaster" && !machinegunWeapon(s.Weapon) && !shotgunWeapon(s.Weapon) {
 			stopFire("pilot_fixed_weapon")
 		} else {
 			yaw := float64(int16(uint16(cmd.Yaw)+uint16(s.DeltaAngles[1]))) * 2 * math.Pi / 65536
@@ -206,6 +206,9 @@ func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.
 			}
 			if machinegunWeapon(s.Weapon) && (s.Teammate != nil || s.LastTeammate != nil && s.TeammateAgeFrames != nil && *s.TeammateAgeFrames <= 10) {
 				stopFire("machinegun_partner_guard")
+			}
+			if shotgunWeapon(s.Weapon) && (s.Teammate != nil || s.LastTeammate != nil && s.TeammateAgeFrames != nil && *s.TeammateAgeFrames <= 10) {
+				stopFire("shotgun_partner_guard")
 			}
 			recentPartner := s.LastTeammate != nil && s.TeammateAgeFrames != nil && *s.TeammateAgeFrames <= 10 && teammateBlocksShot(from, to, *s.LastTeammate)
 			if s.Teammate != nil && teammateBlocksShot(from, to, *s.Teammate) || recentPartner || p.teammateEntersProjectile(s, from, to) {

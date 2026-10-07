@@ -614,6 +614,9 @@ func (c *Client) run(ctx context.Context) error {
 					setup = []string{"give Shotgun", "give Shells 20", "use Blaster"}
 					if c.testWeaponSwitchFixture == "parasite_machinegun" {
 						setup = []string{"give Machinegun", "give Bullets 100", "use Machinegun"}
+					} else if multiWeaponFixture(c.testWeaponSwitchFixture) {
+						bullets, shells := multiWeaponStock(c.testWeaponSwitchFixture)
+						setup = []string{"give Machinegun", fmt.Sprintf("give Bullets %d", bullets), "give Shotgun", fmt.Sprintf("give Shells %d", shells), "use Machinegun"}
 					} else if c.testWeaponSwitchFixture == "parasite_shotgun" {
 						setup = []string{"give Shotgun", "give Shells 20", "use Shotgun"}
 					}
@@ -778,7 +781,7 @@ func (c *Client) run(ctx context.Context) error {
 			weaponRequest := ""
 			observeInventory := !c.idle || c.scenario != nil && c.scenario.Scenario.ActorInventory
 			if !safetyStop && observeInventory && (!c.planner.testSetupHold || c.testWalkThenPlan) && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
-				if !directCombat && !c.planner.testSetupHold && !c.idle && !pairSetup && !c.testProjectileComparison && c.testWeaponSwitchFixture != "parasite_shotgun" && c.testWeaponSwitchFixture != "parasite_machinegun" && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
+				if !directCombat && !c.planner.testSetupHold && !c.idle && !pairSetup && !c.testProjectileComparison && !multiWeaponFixture(c.testWeaponSwitchFixture) && c.testWeaponSwitchFixture != "parasite_shotgun" && c.testWeaponSwitchFixture != "parasite_machinegun" && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
 					if !c.planner.grenadeThrowPending(c.planner.World.Snapshot) && !c.planner.grenadeSelectionPending(c.planner.World.Snapshot) {
 						buttonWeapon := c.planner.button != nil && c.planner.button.action == "shoot"
 						if buttonWeapon {

@@ -4,6 +4,7 @@ sys.pycache_prefix=str(pathlib.Path(__file__).resolve().parents[1]/'workspace'/'
 # Shared F: cache configuration is set before importing torch.
 from train_combat_bc import torch, nn, sha, training_devices
 from combat_retention_bank import read as read_bank, validate as validate_bank, pin_bank
+from combat_weapon_head import distribution as weapon_distribution
 
 def network(layers):
     blocks=[]
@@ -75,13 +76,18 @@ def log_prob(actor,std,x,z,attack,vertical):
     entropy=normal.entropy().sum(1)+bern.entropy()+cat.entropy()
     return lp,entropy
 
-def anchor_kl(raw,std,teacher,teacher_std,weights=None):
-    """KL(anchor || policy) across all stochastic heads, per fresh state."""
+def anchor_kl(raw,std,teacher,teacher_std,weights=None,weapon_mask=None):
+    """KL(anchor || policy); legacy 8-output anchors retain legacy heads only."""
+    if raw.shape[1] not in (8,20) or teacher.shape[1] not in (8,20):raise ValueError('Unknown anchor action width')
+    if teacher.shape[1]==20 and raw.shape[1]!=20:raise ValueError('Weapon anchor requires weapon policy')
     distributions=torch.distributions
     normal=distributions.kl_divergence(distributions.Normal(teacher[:,:4],teacher_std.exp()),distributions.Normal(raw[:,:4],std.exp())).sum(1)
     attack=distributions.kl_divergence(distributions.Bernoulli(logits=teacher[:,4]),distributions.Bernoulli(logits=raw[:,4]))
-    vertical=distributions.kl_divergence(distributions.Categorical(logits=teacher[:,5:]),distributions.Categorical(logits=raw[:,5:]))
-    terms=(normal+attack+vertical).clamp_min(0)
+    vertical=distributions.kl_divergence(distributions.Categorical(logits=teacher[:,5:8]),distributions.Categorical(logits=raw[:,5:8]))
+    terms=normal+attack+vertical
+    if teacher.shape[1]==20:
+        terms=terms+distributions.kl_divergence(weapon_distribution(teacher[:,8:20],weapon_mask),weapon_distribution(raw[:,8:20],weapon_mask))
+    terms=terms.clamp_min(0)
     return terms.mean() if weights is None else (terms*weights).sum()
 
 def retention_schedule(anchor_sha,initial,horizon,updates,previous=None,mode='linear'):
@@ -156,6 +162,7 @@ def main():
     assert not any(model.get(k) for k in ('memory','attention','entity_attention')), 'Architecture models require ppo_recurrent.py'
     validate_objective(config,meta)
     assert model['kind']=='combat_ppo_v1' and not model['deterministic'] and meta['version']=='combat_ppo_rollout_v1' and sha(model_path)==meta['model_sha256']
+    assert not model.get('weapon_head') and len(model['actor'][-1]['bias'])==8, 'Weapon PPO currently uses the recurrent trainer'
     assert meta.get('feature_version','combat_features_v1')==model['feature_version'], 'Rollout feature version differs'
     assert sha(root/'rollout.jsonl')==meta['rollout_sha256']
     for path,digest in meta['source_sha256'].items():assert sha(pathlib.Path(path))==digest, f'Changed rollout input {path}'

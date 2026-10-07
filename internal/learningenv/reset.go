@@ -9,19 +9,20 @@ import (
 
 const ResetVersion = "observed_fixture_reset_v1"
 
-// This verifies the exposed starting fields, not inventory/RNG/monster AI or
+// This verifies exposed starting fields and optionally listed inventory, not RNG/monster AI or
 // complete server reset equivalence. The expectation is an offline fixture.
 type ResetExpectation struct {
-	Seed          *int       `json:"seed,omitempty"`
-	Version       string     `json:"version"`
-	Map           string     `json:"map"`
-	Position      quake.Vec3 `json:"position"`
-	Health        int16      `json:"health"`
-	Armor         int16      `json:"armor"`
-	Weapon        string     `json:"weapon"`
-	Ammo          int16      `json:"ammo"`
-	EnemyClass    string     `json:"enemy_class"`
-	EnemyPosition quake.Vec3 `json:"enemy_position"`
+	Seed          *int                  `json:"seed,omitempty"`
+	Version       string                `json:"version"`
+	Map           string                `json:"map"`
+	Position      quake.Vec3            `json:"position"`
+	Health        int16                 `json:"health"`
+	Armor         int16                 `json:"armor"`
+	Weapon        string                `json:"weapon"`
+	Ammo          int16                 `json:"ammo"`
+	EnemyClass    string                `json:"enemy_class"`
+	EnemyPosition quake.Vec3            `json:"enemy_position"`
+	Inventory     []quake.InventoryItem `json:"inventory,omitempty"`
 }
 
 type ResetProof struct {
@@ -63,6 +64,24 @@ func VerifyReset(o policy.Observation, expected ResetExpectation) ResetProof {
 	}
 	if r.Reason != "" {
 		return r
+	}
+	if len(expected.Inventory) > 0 {
+		if o.Inventory == nil || o.InventoryAgeFrames == nil || *o.InventoryAgeFrames < 0 || *o.InventoryAgeFrames > 2 {
+			r.Reason = "reset_inventory_unknown_or_stale"
+			return r
+		}
+		counts := map[string]int{}
+		for _, item := range *o.Inventory {
+			counts[item.Name] = item.Count
+		}
+		for _, item := range expected.Inventory {
+			count, known := counts[item.Name]
+			if item.Name == "" || item.Count < 0 || !known || count != item.Count {
+				r.Reason = "reset_inventory_mismatch"
+				return r
+			}
+		}
+		r.Unverified = []string{"unlisted_inventory", "server_rng", "monster_ai_state", "entity_generation", "complete_world_reset"}
 	}
 	found := false
 	for _, e := range o.Enemies {

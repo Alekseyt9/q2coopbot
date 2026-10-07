@@ -10,7 +10,7 @@ import (
 // not assumed to protect from splash. Custom damage and unseen barrels remain
 // outside this observed-state check.
 func (p *Planner) guardBarrelShot(s quake.Snapshot, cmd quake.UserCmd) quake.UserCmd {
-	if s.Health <= 0 || (s.Weapon != "Blaster" && !machinegunWeapon(s.Weapon)) || cmd.Buttons&1 == 0 {
+	if s.Health <= 0 || (s.Weapon != "Blaster" && !machinegunWeapon(s.Weapon) && !shotgunWeapon(s.Weapon)) || cmd.Buttons&1 == 0 {
 		return cmd
 	}
 	yaw := float64(int16(uint16(cmd.Yaw)+uint16(s.DeltaAngles[1]))) * 2 * math.Pi / 65536
@@ -20,16 +20,16 @@ func (p *Planner) guardBarrelShot(s quake.Snapshot, cmd quake.UserCmd) quake.Use
 	start[2] += s.EyePoint()[2] - s.Self[2] - 8
 	end := start
 	rangeLimit := 1000.0
-	if machinegunWeapon(s.Weapon) {
+	if machinegunWeapon(s.Weapon) || shotgunWeapon(s.Weapon) {
 		rangeLimit = 8192
 	}
 	for i := range start {
-		if !machinegunWeapon(s.Weapon) {
+		if !machinegunWeapon(s.Weapon) && !shotgunWeapon(s.Weapon) {
 			start[i] += 24 * f[i]
 		}
 		end[i] = start[i] + rangeLimit*f[i]
 	}
-	if p.World.Geometry != nil && !machinegunWeapon(s.Weapon) {
+	if p.World.Geometry != nil && !machinegunWeapon(s.Weapon) && !shotgunWeapon(s.Weapon) {
 		tr := p.World.Geometry.TraceProjectile(start, end)
 		if tr.Valid {
 			end = tr.End
@@ -37,7 +37,7 @@ func (p *Planner) guardBarrelShot(s quake.Snapshot, cmd quake.UserCmd) quake.Use
 	}
 	for index, barrel := range s.Barrels {
 		intersects := barrelRay(s.Self, start, barrel.Origin) || barrelRay(start, end, barrel.Origin)
-		if machinegunWeapon(s.Weapon) {
+		if machinegunWeapon(s.Weapon) || shotgunWeapon(s.Weapon) {
 			intersects = barrelRay(s.Self, start, barrel.Origin) || machinegunBarrelCone(start, end, barrel.Origin)
 		}
 		if !intersects {
@@ -99,6 +99,8 @@ func barrelRay(from, to, at quake.Vec3) bool {
 
 // Stock Machinegun kick is bounded at 13.5 degrees; bullet spread and yaw
 // kick fit within this conservative 18-degree cone. The barrel sphere encloses
+// Stock Shotgun 1000/500 spread at range8192 and 2-degree kick also fit;
+// the wider Machinegun envelope is intentionally retained for its pellets.
 // its padded observed box; the extra 12 covers muzzle offset/quantization.
 // This neither corrects aim nor assumes central-ray walls block spread rays.
 func machinegunBarrelCone(from, to, at quake.Vec3) bool {

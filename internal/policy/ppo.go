@@ -108,12 +108,13 @@ func LoadPPO(path string) (*PPO, error) {
 	p.critic = &MLP{file: MLPFile{Features: f.Features, Layers: f.Value}}
 	return p, nil
 }
-func (p *PPO) Version() string        { return p.version }
-func (p *PPO) FeatureVersion() string { return p.file.Features }
-func (p *PPO) SamplingSeed() int64    { return p.file.SamplingSeed }
-func (p *PPO) IsStochastic() bool     { return !p.file.Deterministic }
-func (p *PPO) LastSample() *Sample    { return p.last }
-func (p *PPO) IsRecurrent() bool      { return p.file.Memory != nil || p.file.Attention != nil }
+func (p *PPO) Version() string           { return p.version }
+func (p *PPO) FeatureVersion() string    { return p.file.Features }
+func (p *PPO) WeaponHeadVersion() string { return p.file.WeaponHead }
+func (p *PPO) SamplingSeed() int64       { return p.file.SamplingSeed }
+func (p *PPO) IsStochastic() bool        { return !p.file.Deterministic }
+func (p *PPO) LastSample() *Sample       { return p.last }
+func (p *PPO) IsRecurrent() bool         { return p.file.Memory != nil || p.file.Attention != nil }
 func (p *PPO) MemoryVersion() string {
 	if p.file.Attention != nil {
 		return AttentionVersion

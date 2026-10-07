@@ -308,7 +308,7 @@ func run() error {
 				return e
 			}
 			weapon := "Blaster"
-			if manifest.Loadout == "machinegun" {
+			if manifest.Loadout == "machinegun" || manifest.Loadout == "weapons" || manifest.Loadout == "weapons-scarce" {
 				weapon = "Machinegun"
 			}
 			proofErr = learningenv.VerifyPostFrameRNG(logFile, r.Seed, manifest.ReleaseFrame, weapon)

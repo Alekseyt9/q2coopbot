@@ -1,5 +1,11 @@
 # Собственная System 1: иерархическая тактика, RL и MCTS
 
+**07.10.2026, multiweapon Update26:** [MG/Shotgun/Blaster fixtures, ammo40/20 и10/6, native Shotgun proof и CUDA обучение](testing/learned_combat_multiweapon_v1.md). 4 instances x2, diagnostic seeds44600–44603 отдельно от training44700–44703. 310 on-policy rows,26 updates/249 actor steps. Shotgun requests/hits есть, useful choice пока не принят; нужен дальнейший curriculum и fresh paired evaluation.
+
+**07.10.2026, weapon Update25:** [Adam migration Curriculum24 и первый CUDA update новой головы](testing/learned_combat_weapon_resume_v1.md). Счётчики24→25 updates,230→240 actor steps. На8 fresh paired seeds wins4→5/deaths4→3, но explicit weapon switches0: полезный выбор оружия ещё не принят. Далее — multiple loadouts/ammo в существующем харнесе.
+
+**07.10.2026, masked weapon head:** [Go actor20, CUDA joint likelihood и native MG→Blaster switch](testing/learned_combat_weapon_head_v1.md). 4 instances x2 на seeds44100–44103 + отдельный release-fire probe44200–44203. 377 stochastic rows с Go/Python replay; switch подтверждён в4 probe captures. Голова пока не обучена; следующий шаг — Adam migration и расширение loadouts.
+
 **07.10.2026, inventory V6:** [845 признаков, маски доступного оружия и совместимость Curriculum24](testing/learned_combat_inventory_v6_validation_v1.md). 4 live instances x2, seeds44000–44003,441 verified PPO transitions и CUDA replay. Старые действия сохранены; categorical weapon head и Adam migration остаются следующей работой. Обучаемый выбор оружия ещё не включён.
 
 **07.10.2026, fresh confirmation Curriculum24:** [32 новых paired seeds,64 captures](testing/learned_combat_mobile_curriculum24_validation_v1.md),4 инстанса x2, frozen weights. Wins7→9, deaths25→22, kills25→31. Curriculum24 подтверждён для дальнейшего обучения;Expanded20 сохранён reference. Live/default не переключён.

@@ -60,3 +60,34 @@ func TestMachinegunResetRejectsWrongAmmo(t *testing.T) {
 		t.Fatal("wrong bullet count accepted", r)
 	}
 }
+
+func TestResetRequiresDeclaredFreshInventory(t *testing.T) {
+	o := damageStep(10).Observation
+	o.Version = policy.ObservationVersion
+	o.Health, o.Ammo, o.OnGround = 100, 40, true
+	o.Weapon = "Machinegun"
+	o.Position = quake.Vec3{32, -224, 24.125}
+	visible := true
+	o.Enemies = []policy.Enemy{{Class: "monster_parasite", Relative: quake.Vec3{168, 0, -.125}, ClearShot: &visible}}
+	items := []quake.InventoryItem{{Name: "Shotgun", Count: 1}, {Name: "Shells", Count: 20}}
+	age := 1
+	o.Inventory, o.InventoryAgeFrames = &items, &age
+	expected := ResetExpectation{Version: ResetVersion, Map: "base1", Position: quake.Vec3{32, -224, 24}, Health: 100, Ammo: 40, Weapon: "Machinegun", EnemyClass: "monster_parasite", EnemyPosition: quake.Vec3{200, -224, 24}, Inventory: append([]quake.InventoryItem(nil), items...)}
+	if !VerifyReset(o, expected).ObservedFieldsConfirmed {
+		t.Fatal("declared inventory rejected")
+	}
+	items[1].Count = 19
+	if VerifyReset(o, expected).ObservedFieldsConfirmed {
+		t.Fatal("HUD-only reset bypassed shell mismatch")
+	}
+	items[1].Count = 20
+	age = 3
+	if VerifyReset(o, expected).ObservedFieldsConfirmed {
+		t.Fatal("stale inventory accepted")
+	}
+	age = 1
+	o.Inventory = nil
+	if VerifyReset(o, expected).ObservedFieldsConfirmed {
+		t.Fatal("unknown inventory accepted")
+	}
+}

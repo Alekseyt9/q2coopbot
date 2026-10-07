@@ -3,6 +3,7 @@ import argparse,copy,json,math,os,pathlib,time
 from ppo_combat import torch,nn,network,layers,sha,training_devices,advantages,validate_objective,anchor_kl,guarded_actor_step
 from combat_retention_bank import read as read_bank,validate as validate_bank
 from combat_attention import CausalAttention,EntityAttention,initialize_attention,TEMPORAL,ENTITY
+from combat_weapon_head import probabilities,feature_mask,HEAD_VERSION
 
 VERSION='combat_residual_gru_v1'
 read=lambda p:json.loads(pathlib.Path(p).read_text(encoding='utf-8-sig'))
@@ -102,12 +103,6 @@ def sequence(model,prepared,bptt=32,check_states=False,name='actor'):
     output=torch.cat(outputs,1);result=output[indices[:,0],indices[:,1]][inverse]
     return result,max(errors,default=0.)
 
-def probabilities(raw,std,z,attack,vertical):
-    d=torch.distributions
-    distributions=(d.Normal(raw[:,:4],std.exp()),d.Bernoulli(logits=raw[:,4]),d.Categorical(logits=raw[:,5:]))
-    a,b,c=distributions
-    return a.log_prob(z).sum(1)+b.log_prob(attack)+c.log_prob(vertical),a.entropy().sum(1)+b.entropy()+c.entropy()
-
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--model',required=True,type=pathlib.Path);ap.add_argument('--out',required=True,type=pathlib.Path)
     ap.add_argument('--init',action='store_true');ap.add_argument('--architecture',choices=('gru','attention','entity'),default='gru');ap.add_argument('--width',type=int,default=64);ap.add_argument('--data',type=pathlib.Path);ap.add_argument('--config',type=pathlib.Path);ap.add_argument('--resume',type=pathlib.Path)
@@ -120,11 +115,17 @@ def main():
     torch.backends.cudnn.allow_tf32=False;torch.backends.cuda.matmul.allow_tf32=False
     torch.backends.cuda.enable_flash_sdp(False);torch.backends.cuda.enable_mem_efficient_sdp(False);torch.backends.cuda.enable_math_sdp(True)
     model=read(args.model);assert model['kind']=='combat_ppo_v1' and not model['deterministic']
+    weapon_head=model.get('weapon_head')
+    if weapon_head:
+        assert weapon_head==HEAD_VERSION and model['feature_version']=='combat_features_v6' and not model.get('entity_attention')
+        assert len(model['actor'][-1]['bias'])==20
+    else:assert len(model['actor'][-1]['bias'])==8
     if args.init:
         args.out.mkdir(exist_ok=False);updated=initialize(model,args.width) if args.architecture=='gru' else initialize_attention(model,args.architecture=='entity')
         (args.out/'weights.json').write_text(json.dumps(updated,allow_nan=False))
         return
     config=read(args.config);meta=read(args.data/'report.json');validate_objective(config,meta)
+    assert meta['feature_version']==model['feature_version'], 'Rollout feature contract differs'
     key=next(k for k in ('memory','attention','entity_attention') if model.get(k));spec=model[key];entity=key=='entity_attention'
     expected_version={'memory':VERSION,'attention':TEMPORAL,'entity_attention':ENTITY}[key];assert spec['version']==expected_version
     if not entity:assert meta['recurrent_version']==expected_version
@@ -144,6 +145,9 @@ def main():
         return module.to(device)
     actor=build('actor');value=build('value')
     x=torch.tensor([r['features'] for r in rows],dtype=torch.float32,device=device)
+    mask=feature_mask(x) if weapon_head else None
+    weapon=torch.tensor([r['sample'].get('weapon',0) for r in rows],dtype=torch.long,device=device) if weapon_head else None
+    if not weapon_head:assert all(r['sample'].get('weapon',0)==0 for r in rows)
     def compute(module,check=False,name='actor'):
         return (module.single(x),0.) if entity else sequence(module,prepared,bptt,check,name)
     std=nn.Parameter(torch.tensor(model['log_std'],device=device));adv,returns=advantages(rows,config['gamma'],config['lambda'])
@@ -151,7 +155,7 @@ def main():
     old=torch.tensor([r['sample']['log_probability'] for r in rows],device=device);ad=torch.tensor(adv,device=device);ret=torch.tensor(returns,device=device)
     with torch.no_grad():
         raw,actor_state_error=compute(actor,True,'actor');v,value_state_error=compute(value,True,'value')
-        lp,_=probabilities(raw,std,z,attack,vertical)
+        lp,_=probabilities(raw,std,z,attack,vertical,weapon,mask)
         log_error=float((lp-old).abs().max());value_error=float((v[:,0]-torch.tensor([r['sample']['value'] for r in rows],device=device)).abs().max())
         assert log_error<.003 and value_error<1e-4 and max(actor_state_error,value_state_error)<2e-5,(log_error,value_error,actor_state_error,value_state_error)
     bank_tensors={}
@@ -167,17 +171,18 @@ def main():
                     bank_tensors[split]=(bx,bw,anchor_net(bx))
         del anchor_net
     def bank_loss(split='train'):
-        bx,bw,bt=bank_tensors[split];return anchor_kl(actor.single(bx),std,bt,teacher_std,bw)
+        bx,bw,bt=bank_tensors[split];return anchor_kl(actor.single(bx),std,bt,teacher_std,bw,feature_mask(bx) if weapon_head else None)
     def objective():
-        raw,_=compute(actor);lp,entropy=probabilities(raw,std,z,attack,vertical);ratio=(lp-old).exp()
+        raw,_=compute(actor);lp,entropy=probabilities(raw,std,z,attack,vertical,weapon,mask);ratio=(lp-old).exp()
         loss=-torch.minimum(ratio*ad,ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*entropy.mean()
-        if args.retention_weight:loss=loss+args.retention_weight*anchor_kl(raw,std,teacher,teacher_std)
+        if args.retention_weight:loss=loss+args.retention_weight*anchor_kl(raw,std,teacher,teacher_std,weapon_mask=mask)
         if args.bank_weight:loss=loss+args.bank_weight*bank_loss()
         return loss,((ratio-1)-(lp-old)).mean()
     actor_opt=torch.optim.Adam(list(actor.parameters())+[std],lr=config['actor_lr']);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
-    consumed=[];updates=0;total=0
+    consumed=[];updates=0;total=0;migrations=[]
     if args.resume:
         cp=torch.load(args.resume,map_location='cpu',weights_only=True)
+        migrations=cp.get('model_migrations',[])
         assert cp['version']=='combat_architecture_checkpoint_v1' and cp['architecture']==expected_version and cp['weights_sha256']==sha(args.model) and cp['config']==config
         assert cp['anchor_sha256']==sha(args.anchor_model) and cp['bank_sha256']==sha(args.retention_bank)
         assert cp.get('retention_weights',[1.,1.])==[args.retention_weight,args.bank_weight]
@@ -212,10 +217,14 @@ def main():
     args.out.mkdir(exist_ok=False);durable_json(args.out/'weights.json',updated)
     cp={'version':'combat_architecture_checkpoint_v1','architecture':expected_version,'weights_sha256':sha(args.out/'weights.json'),'config':config,'anchor_sha256':sha(args.anchor_model),'bank_sha256':sha(args.retention_bank),'actor':actor.state_dict(),'value':value.state_dict(),'log_std':std.detach(),'actor_optimizer':actor_opt.state_dict(),'value_optimizer':value_opt.state_dict(),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all(),'consumed_rollouts':consumed+[meta['rollout_sha256']],'updates_completed':updates+1,'total_actor_steps':total+done}
     cp['retention_weights']=[args.retention_weight,args.bank_weight]
+    if migrations:cp['model_migrations']=migrations
     durable_write(args.out/'checkpoint.pt',lambda output:torch.save(cp,output))
     durable_write(args.out/'trainer.py',lambda output:output.write(pathlib.Path(__file__).read_bytes()))
     report={'architecture':expected_version,'device':'cuda','torch':torch.__version__,'rows':len(rows),'sequence_rows':len(context),'sequences':len(prepared[3]) if prepared else 0,'bptt_steps':bptt if key=='memory' else None,'actor_steps':done,'total_actor_steps':total+done,'updates_completed':updates+1,'actor_trials':trials,'final_approx_kl':float(kl),'old_log_probability_max_error':log_error,'old_value_max_error':value_error,'old_actor_memory_max_error':actor_state_error,'old_value_memory_max_error':value_state_error,'bank_kl_before':initial_bank,'bank_kl_after':final_bank,'seconds':seconds,'weights_sha256':sha(args.out/'weights.json'),'behavior_sha256':sha(args.model),'rollout_sha256':meta['rollout_sha256'],'sequence_sha256':meta.get('sequence_sha256'),'trainer_sha256':sha(pathlib.Path(__file__)),'config_sha256':sha(args.config),'resume_sha256':sha(args.resume) if args.resume else None,'anchor_sha256':sha(args.anchor_model),'bank_sha256':sha(args.retention_bank),'actor_parameters':sum(p.numel() for p in actor.parameters())+std.numel(),'critic_parameters':sum(p.numel() for p in value.parameters()),'scope':'Fresh on-policy architecture PPO. GRU replays all provider context with current-model prefixes, detached every32 frames. Temporal attention is causal/window32; entity attention uses only current v4 values. Loss only on native eligible rows. Bank has no histories: retention measured at zero memory. No learned weapon choice or live promotion.'}
     report['retention_weight']=args.retention_weight;report['bank_weight']=args.bank_weight
+    report['weapon_head']=weapon_head
+    report['model_migrations']=migrations
+    report['scope']=report['scope'].replace('No learned weapon choice or live promotion.','Masked weapon likelihood enabled only with the explicit V6 weapon head; weapon learning acceptance and live promotion are not established.')
     durable_json(args.out/'report.json',report)
     durable_json(args.out/'complete.json',{'version':'combat_update_complete_v1','weights_sha256':sha(args.out/'weights.json'),'checkpoint_sha256':sha(args.out/'checkpoint.pt'),'report_sha256':sha(args.out/'report.json')})
     print(json.dumps(report,indent=2))
