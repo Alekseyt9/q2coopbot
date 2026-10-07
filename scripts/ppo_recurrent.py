@@ -1,11 +1,22 @@
 """Residual GRU PPO: Go inference, full provider context, CUDA-only TBPTT."""
-import argparse,copy,json,math,pathlib,time
+import argparse,copy,json,math,os,pathlib,time
 from ppo_combat import torch,nn,network,layers,sha,training_devices,advantages,validate_objective,anchor_kl,guarded_actor_step
 from combat_retention_bank import read as read_bank,validate as validate_bank
 from combat_attention import CausalAttention,EntityAttention,initialize_attention,TEMPORAL,ENTITY
 
 VERSION='combat_residual_gru_v1'
 read=lambda p:json.loads(pathlib.Path(p).read_text(encoding='utf-8-sig'))
+
+def durable_write(path, writer):
+    """Flush a new artifact before publishing its final name."""
+    path=pathlib.Path(path);pending=path.with_name(path.name+'.partial')
+    with pending.open('xb') as output:
+        writer(output);output.flush();os.fsync(output.fileno())
+    os.replace(pending,path)
+
+def durable_json(path,value):
+    encoded=json.dumps(value,indent=2,allow_nan=False).encode('utf-8')
+    durable_write(path,lambda output:output.write(encoded))
 
 class Recurrent(nn.Module):
     def __init__(self,base,cell):
@@ -198,12 +209,15 @@ def main():
     for path,digest in meta['source_sha256'].items():assert sha(pathlib.Path(path))==digest
     if not entity:assert sha(args.data/'sequence.jsonl')==meta['sequence_sha256']
     assert sha(args.data/'rollout.jsonl')==meta['rollout_sha256']
-    args.out.mkdir(exist_ok=False);(args.out/'weights.json').write_text(json.dumps(updated,allow_nan=False))
+    args.out.mkdir(exist_ok=False);durable_json(args.out/'weights.json',updated)
     cp={'version':'combat_architecture_checkpoint_v1','architecture':expected_version,'weights_sha256':sha(args.out/'weights.json'),'config':config,'anchor_sha256':sha(args.anchor_model),'bank_sha256':sha(args.retention_bank),'actor':actor.state_dict(),'value':value.state_dict(),'log_std':std.detach(),'actor_optimizer':actor_opt.state_dict(),'value_optimizer':value_opt.state_dict(),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all(),'consumed_rollouts':consumed+[meta['rollout_sha256']],'updates_completed':updates+1,'total_actor_steps':total+done}
     cp['retention_weights']=[args.retention_weight,args.bank_weight]
-    torch.save(cp,args.out/'checkpoint.pt');(args.out/'trainer.py').write_bytes(pathlib.Path(__file__).read_bytes())
+    durable_write(args.out/'checkpoint.pt',lambda output:torch.save(cp,output))
+    durable_write(args.out/'trainer.py',lambda output:output.write(pathlib.Path(__file__).read_bytes()))
     report={'architecture':expected_version,'device':'cuda','torch':torch.__version__,'rows':len(rows),'sequence_rows':len(context),'sequences':len(prepared[3]) if prepared else 0,'bptt_steps':bptt if key=='memory' else None,'actor_steps':done,'total_actor_steps':total+done,'updates_completed':updates+1,'actor_trials':trials,'final_approx_kl':float(kl),'old_log_probability_max_error':log_error,'old_value_max_error':value_error,'old_actor_memory_max_error':actor_state_error,'old_value_memory_max_error':value_state_error,'bank_kl_before':initial_bank,'bank_kl_after':final_bank,'seconds':seconds,'weights_sha256':sha(args.out/'weights.json'),'behavior_sha256':sha(args.model),'rollout_sha256':meta['rollout_sha256'],'sequence_sha256':meta.get('sequence_sha256'),'trainer_sha256':sha(pathlib.Path(__file__)),'config_sha256':sha(args.config),'resume_sha256':sha(args.resume) if args.resume else None,'anchor_sha256':sha(args.anchor_model),'bank_sha256':sha(args.retention_bank),'actor_parameters':sum(p.numel() for p in actor.parameters())+std.numel(),'critic_parameters':sum(p.numel() for p in value.parameters()),'scope':'Fresh on-policy architecture PPO. GRU replays all provider context with current-model prefixes, detached every32 frames. Temporal attention is causal/window32; entity attention uses only current v4 values. Loss only on native eligible rows. Bank has no histories: retention measured at zero memory. No learned weapon choice or live promotion.'}
     report['retention_weight']=args.retention_weight;report['bank_weight']=args.bank_weight
-    (args.out/'report.json').write_text(json.dumps(report,indent=2,allow_nan=False));print(json.dumps(report,indent=2))
+    durable_json(args.out/'report.json',report)
+    durable_json(args.out/'complete.json',{'version':'combat_update_complete_v1','weights_sha256':sha(args.out/'weights.json'),'checkpoint_sha256':sha(args.out/'checkpoint.pt'),'report_sha256':sha(args.out/'report.json')})
+    print(json.dumps(report,indent=2))
 
 if __name__=='__main__':main()

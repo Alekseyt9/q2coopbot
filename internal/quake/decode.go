@@ -655,8 +655,8 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 				if e != nil {
 					return frames, e
 				}
-			} else if effect == 3 {
-				// TE_RAILTRAIL: two packed positions.
+			} else if effect == 3 || effect == 11 {
+				// TE_RAILTRAIL and TE_BUBBLETRAIL: two packed positions.
 				if e = r.skip(12); e != nil {
 					return frames, e
 				}
