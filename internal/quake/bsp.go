@@ -1,6 +1,7 @@
 package quake
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -27,6 +28,7 @@ type MapEntity struct {
 	Map        string  `json:"map,omitempty"`
 }
 type MapInfo struct {
+	BSPSHA256     string      `json:"bsp_sha256"`
 	Name          string      `json:"name"`
 	BSPSource     string      `json:"bsp_source"`
 	Planes        int         `json:"planes"`
@@ -860,5 +862,6 @@ func LoadMap(root, name string) (MapInfo, error) {
 	info := MapInfo{Name: name, BSPSource: source, Planes: len(planes) / 20, Nodes: len(nodes) / 28, Leaves: len(leaves) / 28, Brushes: len(brushes) / 12, Entities: coopMapEntities(parseMapEntities(string(entities))), Models: modelBounds, collision: c, lighting: lighting, LightingError: lightError,
 		visibility: parseBSPVisibility(visibilityData, nodes, leaves, c.planes)}
 	info.initStaticLasers()
+	info.BSPSHA256 = fmt.Sprintf("%x", sha256.Sum256(data))
 	return info, nil
 }

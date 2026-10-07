@@ -1,0 +1,173 @@
+{
+  "modes": [
+    "learned"
+  ],
+  "goal": "alive_native_kills_then_observed_effect",
+  "ppo_trainable": true,
+  "version": 1,
+  "monsters": [
+    "monster_parasite"
+  ],
+  "revision": 1,
+  "initial_state": "Generated per instance, stock monster HP and physics, player HP80/100; Machinegun100 bullets or Blaster",
+  "splits": {
+    "confirmation": {
+      "count": 64,
+      "start": 920000
+    },
+    "validation": {
+      "count": 32,
+      "start": 720000
+    },
+    "train": {
+      "count": 4096,
+      "start": 620000
+    },
+    "test": {
+      "count": 64,
+      "start": 820000
+    }
+  },
+  "title": "Machinegun: штатная отдача и удержание прицела",
+  "scope": "first_life_combat",
+  "generator": {
+    "kind": "base1-ground-combat-v1",
+    "version": 1,
+    "distributions": {
+      "confirmation": {
+        "primary": {
+          "min": [
+            224,
+            -248,
+            24.125
+          ],
+          "max": [
+            236,
+            -200,
+            24.125
+          ]
+        },
+        "player": {
+          "min": [
+            16,
+            -240,
+            24.125
+          ],
+          "max": [
+            48,
+            -208,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "validation": {
+        "primary": {
+          "min": [
+            176,
+            -248,
+            24.125
+          ],
+          "max": [
+            188,
+            -200,
+            24.125
+          ]
+        },
+        "player": {
+          "min": [
+            16,
+            -240,
+            24.125
+          ],
+          "max": [
+            48,
+            -208,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "train": {
+        "primary": {
+          "min": [
+            140,
+            -248,
+            24.125
+          ],
+          "max": [
+            164,
+            -200,
+            24.125
+          ]
+        },
+        "player": {
+          "min": [
+            16,
+            -240,
+            24.125
+          ],
+          "max": [
+            48,
+            -208,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "test": {
+        "primary": {
+          "min": [
+            200,
+            -248,
+            24.125
+          ],
+          "max": [
+            212,
+            -200,
+            24.125
+          ]
+        },
+        "player": {
+          "min": [
+            16,
+            -240,
+            24.125
+          ],
+          "max": [
+            48,
+            -208,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      }
+    }
+  },
+  "recipe": {
+    "mixed": false,
+    "runner": "combat-baseline",
+    "loadout": "machinegun",
+    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
+  },
+  "game_frames": 300,
+  "map": "base1",
+  "skill": 1,
+  "id": "parasite-machinegun-recoil",
+  "status": "runnable",
+  "timescale": 2,
+  "geometry": "Original base1 BSP arena; generated grounded positions; static hull and floor checks",
+  "missing": []
+}

@@ -9,6 +9,10 @@
     "base2-natural-campaign.json",
     "soldier-blaster-solo.json",
     "infantry-blaster-solo.json",
-    "soldier-infantry-corner.json"
+    "soldier-infantry-corner.json",
+    "parasite-blaster-generated.json",
+    "parasite-gunner-blaster-generated.json",
+    "parasite-machinegun-recoil.json",
+    "parasite-gunner-machinegun-recoil.json"
   ]
 }

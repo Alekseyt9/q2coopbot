@@ -1,0 +1,222 @@
+{
+  "version": 1,
+  "map": "base1",
+  "initial_state": "Generated per instance, stock monster HP and physics, player HP80/100; Machinegun100 bullets or Blaster",
+  "splits": {
+    "confirmation": {
+      "count": 64,
+      "start": 930000
+    },
+    "validation": {
+      "count": 32,
+      "start": 730000
+    },
+    "train": {
+      "count": 4096,
+      "start": 630000
+    },
+    "test": {
+      "count": 64,
+      "start": 830000
+    }
+  },
+  "modes": [
+    "learned"
+  ],
+  "monsters": [
+    "monster_parasite",
+    "monster_gunner"
+  ],
+  "recipe": {
+    "mixed": true,
+    "runner": "combat-baseline",
+    "loadout": "machinegun",
+    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
+  },
+  "status": "runnable",
+  "id": "parasite-gunner-machinegun-recoil",
+  "scope": "first_life_combat",
+  "title": "Machinegun: группа со штатной отдачей",
+  "geometry": "Original base1 BSP arena; generated grounded positions; static hull and floor checks",
+  "timescale": 2,
+  "generator": {
+    "kind": "base1-ground-combat-v1",
+    "version": 1,
+    "distributions": {
+      "confirmation": {
+        "primary": {
+          "min": [
+            224,
+            -248,
+            24.125
+          ],
+          "max": [
+            236,
+            -200,
+            24.125
+          ]
+        },
+        "flank": {
+          "min": [
+            88,
+            -304,
+            24.125
+          ],
+          "max": [
+            120,
+            -272,
+            24.125
+          ]
+        },
+        "player": {
+          "min": [
+            16,
+            -240,
+            24.125
+          ],
+          "max": [
+            48,
+            -208,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "validation": {
+        "primary": {
+          "min": [
+            176,
+            -248,
+            24.125
+          ],
+          "max": [
+            188,
+            -200,
+            24.125
+          ]
+        },
+        "flank": {
+          "min": [
+            88,
+            -304,
+            24.125
+          ],
+          "max": [
+            120,
+            -272,
+            24.125
+          ]
+        },
+        "player": {
+          "min": [
+            16,
+            -240,
+            24.125
+          ],
+          "max": [
+            48,
+            -208,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "train": {
+        "primary": {
+          "min": [
+            140,
+            -248,
+            24.125
+          ],
+          "max": [
+            164,
+            -200,
+            24.125
+          ]
+        },
+        "flank": {
+          "min": [
+            88,
+            -304,
+            24.125
+          ],
+          "max": [
+            120,
+            -272,
+            24.125
+          ]
+        },
+        "player": {
+          "min": [
+            16,
+            -240,
+            24.125
+          ],
+          "max": [
+            48,
+            -208,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "test": {
+        "primary": {
+          "min": [
+            200,
+            -248,
+            24.125
+          ],
+          "max": [
+            212,
+            -200,
+            24.125
+          ]
+        },
+        "flank": {
+          "min": [
+            88,
+            -304,
+            24.125
+          ],
+          "max": [
+            120,
+            -272,
+            24.125
+          ]
+        },
+        "player": {
+          "min": [
+            16,
+            -240,
+            24.125
+          ],
+          "max": [
+            48,
+            -208,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      }
+    }
+  },
+  "skill": 1,
+  "revision": 1,
+  "missing": [],
+  "game_frames": 300,
+  "ppo_trainable": true,
+  "goal": "alive_native_kills_then_observed_effect"
+}

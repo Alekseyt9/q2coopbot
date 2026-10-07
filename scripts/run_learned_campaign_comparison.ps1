@@ -1,12 +1,14 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][string]$Model,
+    [string]$Model='',
     [Parameter(Mandatory)][string]$OutputRoot,
     [int]$Seed=44900,[int]$Port=34100,
     [ValidateRange(1,8)][int]$Workers=4,
     [ValidateRange(100,10000)][int]$GameFrames=1800,
     [ValidateRange(0,3)][int]$Skill=1,
-    [ValidateSet('base1','base2')][string[]]$Maps=@('base1','base2')
+    [ValidateSet('base1','base2')][string[]]$Maps=@('base1','base2'),
+    [ValidateRange(1,128)][int]$EpisodesPerMap=4,
+    [ValidateSet('rules','learned')][string[]]$Modes=@('rules','learned')
 )
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
@@ -18,19 +20,23 @@ $runtimes=@{}
 foreach($map in $Maps){
     $runtimes[$map]=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map $map -KeepMonsters
 }
-$sourceModel=(Resolve-Path -LiteralPath $Model).Path
-$modelHash=(Get-FileHash -LiteralPath $sourceModel).Hash.ToLowerInvariant()
-$weights=Get-Content -LiteralPath $sourceModel -Raw|ConvertFrom-Json -AsHashtable
-$weights.deterministic=$true
-$evalModel=Join-Path $OutputRoot 'deterministic-weights.json'
-$weights|ConvertTo-Json -Depth 100 -Compress|Set-Content -LiteralPath $evalModel -Encoding utf8
+$sourceModel='';$modelHash='';$evalModel=''
+if('learned' -in $Modes -and !$Model){throw 'Learned campaign needs a model'}
+if($Model){
+    $sourceModel=(Resolve-Path -LiteralPath $Model).Path
+    $modelHash=(Get-FileHash -LiteralPath $sourceModel).Hash.ToLowerInvariant()
+    $weights=Get-Content -LiteralPath $sourceModel -Raw|ConvertFrom-Json -AsHashtable
+    $weights.deterministic=$true
+    $evalModel=Join-Path $OutputRoot 'deterministic-weights.json'
+    $weights|ConvertTo-Json -Depth 100 -Compress|Set-Content -LiteralPath $evalModel -Encoding utf8
+}
 $client=Join-Path $OutputRoot 'q2coopbot.exe'
 Push-Location $repo
 try{go build -o $client ./cmd/q2coopbot;if($LASTEXITCODE){throw 'Build failed'}}finally{Pop-Location}
 $tasks=@()
 foreach($map in $Maps){
-    foreach($mode in @('rules','learned')){
-        foreach($index in 0..($Workers-1)){
+    foreach($mode in $Modes){
+        foreach($index in 0..($EpisodesPerMap-1)){
             $taskPort=$Port+$tasks.Count
             if(Get-NetUDPEndpoint -LocalPort $taskPort -ErrorAction SilentlyContinue){throw "Occupied port $taskPort"}
             $runSeed=$Seed+$index+$(if($map -eq 'base2'){100}else{0})
@@ -49,7 +55,7 @@ foreach($map in $Maps){
         }
     }
 }
-@{source_model=$sourceModel;source_model_sha256=$modelHash;evaluation_model_sha256=(Get-FileHash $evalModel).Hash.ToLowerInvariant();deterministic=$true;source_fingerprint=$fingerprint;workers=$Workers;timescale=2;skill=$Skill;game_frames=$GameFrames;tasks=$tasks}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $OutputRoot 'manifest.json') -Encoding utf8
+@{source_model=$sourceModel;source_model_sha256=$modelHash;evaluation_model_sha256=$(if($evalModel){(Get-FileHash $evalModel).Hash.ToLowerInvariant()}else{''});deterministic=$true;source_fingerprint=$fingerprint;workers=$Workers;timescale=2;skill=$Skill;game_frames=$GameFrames;tasks=$tasks}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $OutputRoot 'manifest.json') -Encoding utf8
 $worker={
     param($task,$client,$evalModel,$frames,$skill,$scriptRoot)
     $ErrorActionPreference='Stop'

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"q2coopbot/internal/learningenv"
 	"q2coopbot/internal/policy"
+	"q2coopbot/internal/trainingepisodes"
 	"reflect"
 	"strings"
 )
@@ -74,9 +75,13 @@ func main() {
 }
 func run() error {
 	batch := flag.String("batch", "", "fresh synchronous learned PPO batch")
+	merge := flag.String("merge", "", "comma-separated verified rollout directories from the same frozen policy")
 	out := flag.String("out", "", "fresh directory")
 	model := flag.String("model", "", "frozen original PPO model")
 	flag.Parse()
+	if *merge != "" {
+		return trainingepisodes.MergeRollouts(strings.Split(*merge, ","), *out)
+	}
 	var manifest struct {
 		Provider       string                   `json:"provider"`
 		Kind           string                   `json:"provider_kind"`

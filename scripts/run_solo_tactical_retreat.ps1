@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet('standard','remaining-far')][string]$ParasiteFixture='standard',[ValidateSet(0,100)][int]$ReleaseGameFrame=0,[ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$Synchronous,[switch]$StopOnGoal,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','machinegun','weapons','weapons-scarce','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
+param([string]$GeneratedFixture="",[ValidateSet('standard','remaining-far')][string]$ParasiteFixture='standard',[ValidateSet(0,100)][int]$ReleaseGameFrame=0,[ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$Synchronous,[switch]$StopOnGoal,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','machinegun','weapons','weapons-scarce','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
 function Measure-BarrelSafety($Rows,$Events) {
     $actor=$Rows[0].self_entity
@@ -64,6 +64,13 @@ if(!$Worker){
     "Solo tactical retreat: $OutputRoot";if(!$accepted){throw 'Solo tactical retreat rejected'};return
 }
 if($TrainingMonsterHealth -and (!$Synchronous -or !$ParasiteWeapon -or $ParasiteLoadout -ne 'blaster' -or $ParasiteMixed -or $ParasiteHealthKit)){throw 'Unsupported curriculum fixture'}
+$generated=$null
+if($GeneratedFixture){
+    if(!$Worker -or !$Synchronous -or !$ParasiteWeapon -or $ReleaseGameFrame -ne 100 -or $TrainingMonsterHealth -or $ParasiteHealthKit -or $ParasiteFixture -ne 'standard'){throw 'Unsupported generated worker binding'}
+    . "$PSScriptRoot/generated_combat_fixture.ps1"
+    $generated=Read-GeneratedCombatFixture $GeneratedFixture $Seed $ParasiteLoadout ([bool]$ParasiteMixed)
+    $ParasiteHealth=[int]$generated.health
+}
 if($Rules){$System1=''}
 if(Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue){throw 'Port occupied'}
 if(Test-Path $OutputRoot){throw 'Fresh output required'}
@@ -85,6 +92,7 @@ if($Group -or $GroupRetreat -or $ParasiteMixed){
     # startup skips the level.time < 1 droptofloor path; z=24 starts solid.
     $flankOrigin=if($ParasiteMixed){'96 -200 24.125'}elseif($GroupRetreat){'32 -352 24'}else{'200 -320 24'}
     $flankClass=if($ParasiteMixed){$ParasiteMixedClass}else{'monster_infantry'}
+    if($generated){$flankOrigin=Format-GeneratedPosition $generated.monsters[1].position ' '}
     [IO.File]::AppendAllText($entityPath,"`n{`n`"classname`" `"$flankClass`"`n`"origin`" `"$flankOrigin`"`n}`n",[Text.Encoding]::ASCII)
 }
 $server=$null;$bot=$null;$trace=Join-Path $OutputRoot 'bot.jsonl';$report=@{accepted=$false;reason='not_run';seed=$Seed}
@@ -108,6 +116,7 @@ try{
     $enemyClass=if($Cover -or $Circle -or $GroupRetreat){'monster_infantry'}else{'monster_parasite'}
     $enemyOrigin=if($ParasiteWeapon -and $ParasiteLoadout -eq 'rail'){'240,-160,24'}elseif($CornerEscape){'67.125,-316.875,24'}elseif($Cover){"$CoverTargetX,-224,24"}elseif($GroupRetreat){'192,-304,24'}else{'200,-224,24.125'}
     if($ParasiteFixture -eq 'remaining-far'){$placement='-48,16,24';$enemyOrigin='200,-224,24'}
+    if($generated){$placement=Format-GeneratedPosition $generated.player;$enemyOrigin=Format-GeneratedPosition $generated.monsters[0].position}
     $report.parasite_fixture=$ParasiteFixture
     $initialHealth=if($ParasiteWeapon){$ParasiteHealth}elseif($CornerEscape){65}elseif($Recovery){$RecoveryHealth}elseif($Group -or $GroupRetreat){100}elseif($Cover -or $Circle){25}else{0}
     @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};combat=@{mode=$CombatMode;provider_file=$ProviderFile};run=@{duration=$(if($GameFrames){'60s'}else{'15s'});game_frames=$GameFrames;frame_paced=$true;mode='campaign';next_map='base2'};test=@{teleport_map='base1';teleport=$placement;spawn_map='base1';spawn_soldier=$enemyOrigin;spawn_class=$enemyClass;teacher_vertical=[bool]$TeacherVertical;synchronous=[bool]$Synchronous;combat_barrier=[bool]$Synchronous;setup_hold_frames=$(if($Cover -or $Circle -or $GroupRetreat -or $Recovery -or $CornerEscape -or $ParasiteWeapon){10}else{0});initial_health=$initialHealth;weapon_switch_fixture=$(if($ParasiteWeapon){"parasite_$ParasiteLoadout"}else{""})};output=@{stop_file=$(if($StopOnGoal){Join-Path $OutputRoot 'goal.stop'}else{''});trace_jsonl=$trace;combat_capture=[bool]$CombatCapture}}|ConvertTo-Json -Depth 6|Set-Content $config

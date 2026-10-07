@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+
+	"q2coopbot/internal/policy"
 )
 
 type Manifest struct {
@@ -28,6 +30,7 @@ type Recipe struct {
 	RewardConfig string `json:"reward_config,omitempty"`
 }
 type Episode struct {
+	Generator    *Generator       `json:"generator,omitempty"`
 	Version      int              `json:"version"`
 	ID           string           `json:"id"`
 	Revision     int              `json:"revision"`
@@ -190,6 +193,11 @@ func (e Episode) validate() error {
 	if len(e.Missing) != 0 {
 		return fmt.Errorf("runnable episode still has missing support")
 	}
+	if e.Generator != nil {
+		if err := e.Generator.validate(e); err != nil {
+			return err
+		}
+	}
 	switch e.Recipe.Runner {
 	case "combat-baseline":
 		if e.Map != "base1" || e.GameFrames < 150 || e.GameFrames > 500 || !e.PPOTrainable {
@@ -218,14 +226,15 @@ func (e Episode) validate() error {
 }
 
 type Task struct {
-	Episode       Episode  `json:"episode"`
-	EpisodeSHA256 string   `json:"episode_sha256"`
-	Split         string   `json:"split"`
-	Seeds         []int    `json:"seeds"`
-	Modes         []string `json:"modes"`
-	RunnerPath    string   `json:"runner_path"`
-	RunnerSHA256  string   `json:"runner_sha256"`
-	RewardSHA256  string   `json:"reward_sha256,omitempty"`
+	Instances     []Instance `json:"instances,omitempty"`
+	Episode       Episode    `json:"episode"`
+	EpisodeSHA256 string     `json:"episode_sha256"`
+	Split         string     `json:"split"`
+	Seeds         []int      `json:"seeds"`
+	Modes         []string   `json:"modes"`
+	RunnerPath    string     `json:"runner_path"`
+	RunnerSHA256  string     `json:"runner_sha256"`
+	RewardSHA256  string     `json:"reward_sha256,omitempty"`
 }
 type Plan struct {
 	Version        int    `json:"version"`
@@ -294,6 +303,19 @@ func Build(r *Registry, root string, ids []string, split, mode, model, out strin
 		for i := 0; i < count; i++ {
 			t.Seeds = append(t.Seeds, s.Start+offset+i)
 		}
+		if ep.Generator != nil {
+			world, err := loadGenerationWorld(root)
+			if err != nil {
+				return nil, err
+			}
+			for _, seed := range t.Seeds {
+				v, err := generate(ep, split, seed, &world)
+				if err != nil {
+					return nil, err
+				}
+				t.Instances = append(t.Instances, v)
+			}
+		}
 		script := "run_learned_combat_baseline.ps1"
 		if ep.Recipe.Runner == "campaign-comparison" {
 			script = "run_learned_campaign_comparison.ps1"
@@ -327,8 +349,9 @@ func Build(r *Registry, root string, ids []string, split, mode, model, out strin
 			return nil, e
 		}
 		var header struct {
-			Kind       string `json:"kind"`
-			WeaponHead string `json:"weapon_head"`
+			Kind          string `json:"kind"`
+			WeaponHead    string `json:"weapon_head"`
+			Deterministic bool   `json:"deterministic"`
 		}
 		b, e := os.ReadFile(p.ModelPath)
 		if e != nil {
@@ -339,6 +362,12 @@ func Build(r *Registry, root string, ids []string, split, mode, model, out strin
 		}
 		if header.Kind != "combat_ppo_v1" {
 			return nil, fmt.Errorf("current registered learned adapters require PPO weights")
+		}
+		if split == "train" && header.Deterministic {
+			return nil, fmt.Errorf("on-policy training requires stochastic weights")
+		}
+		if _, e = policy.LoadPPO(p.ModelPath); e != nil {
+			return nil, fmt.Errorf("model cannot run through the current Go inference adapter: %w", e)
 		}
 		for _, t := range p.Tasks {
 			if (t.Episode.Recipe.Loadout == "weapons" || t.Episode.Recipe.Loadout == "weapons-scarce") && header.WeaponHead != "combat_masked_weapon_v1" {

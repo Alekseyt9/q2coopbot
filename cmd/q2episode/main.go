@@ -20,6 +20,7 @@ func main() {
 func run() error {
 	registry := flag.String("registry", "scripts/scenarios/combat-training/index.json", "training episode registry")
 	list := flag.Bool("list", false, "validate and list available/planned episodes")
+	verify := flag.String("verify-plan", "", "recompute and verify a frozen generated execution plan")
 	ids := flag.String("episodes", "", "comma-separated episode IDs")
 	split := flag.String("split", "validation", "train, validation, test or confirmation")
 	mode := flag.String("mode", "both", "rules, learned or both")
@@ -30,6 +31,13 @@ func run() error {
 	out := flag.String("out", "", "fresh execution plan JSON")
 	artifacts := flag.String("artifacts", "", "fresh runtime output root")
 	flag.Parse()
+	if *verify != "" {
+		abs, err := filepath.Abs(*root)
+		if err != nil {
+			return err
+		}
+		return trainingepisodes.VerifyPlan(*verify, abs)
+	}
 	r, err := trainingepisodes.Load(*registry)
 	if err != nil {
 		return err

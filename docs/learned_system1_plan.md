@@ -1,5 +1,7 @@
 # Собственная System 1: иерархическая тактика, RL и MCTS
 
+**07.10.2026, требование к учебному реестру:** [этап 3 плана превосходства](learned_system1_superiority_plan_20261007.md) дополнен общим реестром **генераторов новых боёв**: распределения составов монстров, стартов, оружия/ресурсов и геометрии; свежие PPO-прогоны каждой модели; обучение новой архитектуры и resume существующей; независимые условия оценки и учёт фактического опыта. Генераторы и общая смешанная PPO-партия — планируемые доработки, не уже подтверждённые возможности текущего runner. [Сравнение с OpenAI Five и AlphaGo](learned_system1_training_architecture_comparison_20261007.md).
+
 **07.10.2026, полные base1/base2:** [Update26 против rules, 16 native эпизодов](testing/learned_combat_campaign_comparison_v1.md), 4 инстанса x2, skill1, обычный старт/Blaster. Base1: rules4/4 против learned1/4; base2: rules3/4 против learned0/4. Смерти3 против29, убийства104 против27. На base2 два learned возврата в base1. Перенос с подготовленных боёв на полные карты не принят; live/default остаётся rules.
 
 **07.10.2026, multiweapon Update26:** [MG/Shotgun/Blaster fixtures, ammo40/20 и10/6, native Shotgun proof и CUDA обучение](testing/learned_combat_multiweapon_v1.md). 4 instances x2, diagnostic seeds44600–44603 отдельно от training44700–44703. 310 on-policy rows,26 updates/249 actor steps. Shotgun requests/hits есть, useful choice пока не принят; нужен дальнейший curriculum и fresh paired evaluation.

@@ -22,6 +22,7 @@ param(
     [ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',
     [string]$ProviderFile='',
     [string]$RewardConfig='',
+    [string]$GeneratedFixtures='',
     [string]$OutputRoot=''
 )
 $ErrorActionPreference='Stop'
@@ -38,6 +39,17 @@ if($EpisodePattern -ne 'uniform' -and (!$Mixed -or $EpisodesPerWorker -ne 3 -or 
 if($SoloFixture -ne 'standard' -and (!$Synchronous -or $Loadout -ne 'blaster' -or $CombatMode -ne 'learned' -or $Feedback -or $HealthKit -or $TrainingMonsterHealth -or ($Mixed -and $EpisodePattern -eq 'uniform'))){throw 'Remaining-Parasite fixture requires isolated direct synchronous Blaster Solo episodes without health overrides'}
 if($StopOnGoal -and (!$Synchronous -or $Feedback)){throw 'Goal stop requires synchronous capture without a live feedback relay'}
 $repo=Split-Path $PSScriptRoot -Parent
+if($GeneratedFixtures){
+    if(!$Synchronous -or $ReleaseGameFrame -ne 100 -or $Feedback -or $HealthKit -or $TrainingMonsterHealth -or $SoloFixture -ne 'standard' -or $EpisodePattern -ne 'uniform'){throw 'Generated fixtures require the standard synchronous fixed release without overrides'}
+    $GeneratedFixtures=(Resolve-Path -LiteralPath $GeneratedFixtures).Path
+    $sampled=Get-Content -LiteralPath $GeneratedFixtures -Raw|ConvertFrom-Json
+    if($sampled.instances.Count -ne $Workers*$EpisodesPerWorker){throw 'Wrong generated fixture count'}
+    . "$PSScriptRoot/generated_combat_fixture.ps1"
+    for($i=0;$i -lt $sampled.instances.Count;$i++){
+        $temp=$sampled.instances[$i]
+        if($temp.engine_seed -ne $Seed+$i -or $temp.loadout -ne $Loadout -or $temp.skill -ne $Skill){throw 'Generated conditions differ from batch'}
+    }
+}
 . "$PSScriptRoot/harness_manifest.ps1"
 if(!$OutputRoot){$OutputRoot=Join-Path $repo ('workspace/artifacts/learned-combat-baseline-'+(Get-Date -Format yyyyMMdd-HHmmss-fff))}
 if(Test-Path -LiteralPath $OutputRoot){throw 'Fresh output directory required'}
@@ -72,6 +84,7 @@ Push-Location $repo;try{go build -o $exporter ./cmd/q2combat-export;if($LASTEXIT
 $relay=Join-Path $OutputRoot 'q2learning-relay.exe'
 if($Feedback){Push-Location $repo;try{go build -o $relay ./cmd/q2learning-relay;if($LASTEXITCODE){throw 'Relay build failed'}}finally{Pop-Location}}
 $probeHash=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{''})
+$generatedHash=$(if($GeneratedFixtures){(Get-FileHash -LiteralPath $GeneratedFixtures).Hash}else{''})
 $hostExe=(Get-Process -Id $PID).Path
 $runner=Join-Path $PSScriptRoot 'run_solo_tactical_retreat.ps1'
 $feedbackAudit=Join-Path $PSScriptRoot 'audit_learning_feedback.ps1'
@@ -84,6 +97,14 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
         $episodeMixed=[bool]$using:Mixed -and ($using:EpisodePattern -eq 'uniform' -or $episode -ne 1)
         $episodeFixture=if($episodeMixed){'standard'}else{$using:SoloFixture}
         $out=Join-Path $using:OutputRoot "worker-$worker-episode-$episode"
+        $sample=$null;$samplePath=''
+        if($using:GeneratedFixtures){
+            . "$using:repo/scripts/generated_combat_fixture.ps1"
+            $sample=(Get-Content -LiteralPath $using:GeneratedFixtures -Raw|ConvertFrom-Json).instances[$index]
+            $samplePath=Join-Path $using:OutputRoot "fixture-$index.json"
+            $sample|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $samplePath -Encoding utf8NoBOM
+            $null=Read-GeneratedCombatFixture $samplePath ($using:Seed+$index) $using:Loadout $episodeMixed
+        }
 		$episodeProvider=$using:ProviderFile
 		if($using:remoteProvider -or $using:ppoProvider){
 			$template=Get-Content -LiteralPath $using:ProviderFile -Raw|ConvertFrom-Json
@@ -111,6 +132,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
         $arguments+=@('-ReleaseGameFrame',$using:ReleaseGameFrame)
         $arguments+=@('-RecoverySkill',$using:Skill)
         $arguments+=@('-ParasiteFixture',$episodeFixture)
+        if($samplePath){$arguments+=@('-GeneratedFixture',$samplePath)}
         if($using:Synchronous){$arguments+='-Synchronous'};if($using:StopOnGoal){$arguments+='-StopOnGoal'}
         if($using:TeacherVertical){$arguments+='-TeacherVertical'}
         if($episodeMixed){$arguments+=@('-ParasiteMixed','-ParasiteMixedClass','monster_gunner')}
@@ -167,6 +189,8 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             $frameBudgetValid=$field.game_frames -eq $using:GameFrames -or ($goalValid -and $field.game_frames -gt 0 -and $field.game_frames -lt $using:GameFrames)
             $dataset=Join-Path $out 'dataset'
             $config=Get-Content -LiteralPath (Join-Path $out 'bot-config.json') -Raw|ConvertFrom-Json
+            $generatedProof=$null
+            if($sample){$generatedProof=Confirm-GeneratedCombatStart $sample (Join-Path $out 'server.log')}
             if($episodeFixture -eq 'remaining-far' -and ($config.test.teleport -ne '-48,16,24' -or $config.test.spawn_soldier -ne '200,-224,24' -or $config.test.initial_health -ne 100 -or $config.test.spawn_class -ne 'monster_parasite')){throw 'Remaining-Parasite config differs from declared fixture'}
             $resetExpectation=Join-Path $out 'reset-expectation.json'
             @{version='observed_fixture_reset_v1';map=$config.test.teleport_map;seed=$(if($using:Synchronous){$using:Seed+$index}else{$null})
@@ -227,6 +251,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             [pscustomobject]@{
                 worker=$worker;episode=$episode;seed=($using:Seed+$index);port=($using:Port+$worker);seed_confirmed=$seedAck
                 curriculum_init=$curriculumProof;fixture_mixed=$episodeMixed;fixture_gunner_count=$gunnerCount;solo_fixture=$episodeFixture
+                generated_fixture=$sample;generated_start=$generatedProof
                 harness_accepted=[bool]$report.accepted;harness_reason=$report.reason;worker_exit_code=$process.ExitCode
                 capture_valid=($captures.Count -eq $rows.Count -and $mismatches -eq 0 -and $field.decode_errors -eq 0 -and $frameBudgetValid -and $seedAck -and $dispatchValid -and $datasetReport.command_proof.accepted -and $datasetReport.observed_reset_confirmed -and (!$episodeProvider -or $episodeProviderHash -eq (Get-FileHash -LiteralPath $episodeProvider).Hash))
                 goal_stop=$goal;actual_game_frames=$field.game_frames;frame_budget_valid=[bool]$frameBudgetValid
@@ -260,12 +285,14 @@ $valid=($fingerprint -eq (Get-HarnessFingerprint (Get-HarnessSourceRecords $repo
 $valid=$valid -and $nativeFingerprint -eq (Get-HarnessFingerprint (Get-HarnessNativeSourceRecords $nativeRepo))
 if($ProviderFile){$valid=$valid -and $probeHash -eq (Get-FileHash -LiteralPath $ProviderFile).Hash}
 if($RewardConfig){$valid=$valid -and $rewardHash -eq (Get-FileHash -LiteralPath $RewardConfig).Hash}
+if($GeneratedFixtures){$valid=$valid -and $generatedHash -eq (Get-FileHash -LiteralPath $GeneratedFixtures).Hash}
 $usable=@($results | Where-Object capture_valid)
 $manifest=[ordered]@{
     version=2;stage=$(if($ppoProvider){'R4b PPO rollout pilot'}elseif($trainedProvider){'R4a BC control pilot'}else{'R1 dispatch and R2 transition pilot'});provider=$CombatMode;provider_kind=$providerKind;model_weights=$(if($trainedProvider){$ProviderFile}else{$null});model_weights_sha256=$(if($trainedProvider){$probeHash}else{$null});probe_sha256=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{$null});exporter_sha256=(Get-FileHash -LiteralPath $exporter).Hash
     remote_peer=[bool]$remoteProvider
     feedback=[bool]$Feedback;feedback_version=$(if($Feedback){'combat_feedback_v1'}else{$null});relay_sha256=$(if($Feedback){(Get-FileHash -LiteralPath $relay).Hash}else{$null})
     training_monster_health=$TrainingMonsterHealth
+    generated_fixtures_sha256=$generatedHash
     post_frame_rng_reset=[bool]$Synchronous
     release_game_frame=$ReleaseGameFrame
     fixed_world_hold=[bool]$ReleaseGameFrame

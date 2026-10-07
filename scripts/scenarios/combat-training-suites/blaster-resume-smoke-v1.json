@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "comparison_kind": "continuation",
+  "registry": "scripts/scenarios/combat-training/index.json",
+  "episodes": ["parasite-blaster-solo", "parasite-gunner-blaster"],
+  "evaluation_episodes": ["parasite-blaster-solo", "parasite-gunner-blaster"],
+  "models": [{"id": "temporal26", "model": "workspace/artifacts/combat-multiweapon-v1-20261007/update-26/weights.json", "checkpoint": "workspace/artifacts/combat-multiweapon-v1-20261007/update-26/checkpoint.pt"}],
+  "epochs": 1,
+  "episodes_per_scene": 4,
+  "evaluation_count": 4,
+  "training_seed_offset": 0,
+  "training_config": "scripts/scenarios/combat-ppo-recoil-v5.json",
+  "anchor": "workspace/artifacts/combat-mobile-mixed-expanded-v1-20261007/cycle/anchor.json",
+  "bank": "workspace/artifacts/combat-mobile-mixed-expanded-v1-20261007/cycle/bank.json",
+  "include_rules": true
+}
