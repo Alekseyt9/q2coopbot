@@ -9,11 +9,14 @@ def build(model,name):
     elif model.get('attention'):
         spec=model['attention'];module=CausalAttention(model[name],spec[name],spec['heads'],spec['window'])
     else:module=network(model[name])
+    if name=='actor' and model.get('spatial_aim'):
+        from combat_spatial_aim import wrap
+        module=wrap(module,model)
     return module.to('cuda')
 
 def forward(module,x):
-    if isinstance(module,(Recurrent,CausalAttention)):return module(x)[0]
-    return module(x)
+    output=module(x)
+    return output[0] if isinstance(output,tuple) else output
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--protocol',type=pathlib.Path,required=True);ap.add_argument('--out',type=pathlib.Path,required=True);ap.add_argument('--compiler',type=pathlib.Path,required=True)

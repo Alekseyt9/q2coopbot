@@ -75,6 +75,7 @@ type Observation struct {
 }
 
 type Action struct {
+	AimMode      int      `json:"aim_mode,omitempty"`
 	TargetEntity int      `json:"target_entity,omitempty"`
 	TargetTrack  int      `json:"target_track,omitempty"`
 	Version      string   `json:"version"`

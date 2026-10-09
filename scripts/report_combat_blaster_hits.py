@@ -1,6 +1,7 @@
 """Actual first-life blaster projectile outcomes, with unknown endings explicit."""
 import argparse,json,pathlib,re,collections
 from process_combat_architecture_pool import read,sha,save
+from native_projectile_window import records
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--root',type=pathlib.Path,required=True);a=ap.parse_args()
@@ -19,18 +20,17 @@ def main():
                 for line in stream:
                     s=json.loads(line);o=s['observation'];n=s.get('native_step')
                     if n and o['identity']['life']==1 and o['identity']['frame']>100 and o['health']>0 and s.get('server_execution',{}).get('matched'):
-                        valid.add((n['spawncount'],n['begin_frame'],n['actor']))
+                        valid.add((n['spawncount'],n['begin_frame'],n['actor'],n['sequence']))
             shots={};contacts={};ready=False
             with log.open(encoding='utf-8-sig') as stream:
-                for line in stream:
-                    line=line.strip()
+                for window,line in records(stream):
                     if line=='g_test_projectile ready version=1':ready=True
                     match=pattern.match(line)
                     if match:
                         generation,frame,event,shot,entity,tail=match.groups();generation,frame,shot,entity=map(int,(generation,frame,shot,entity));key=(generation,shot);fields=dict(v.split('=',1) for v in tail.split())
                         if event=='spawn':
                             assert key not in shots
-                            shots[key]=dict(entity=entity,attacker=int(fields['attacker']),mod=int(fields['mod']),frame=frame,eligible=(generation,frame,int(fields['attacker'])) in valid,outcome='unresolved',target=0)
+                            shots[key]=dict(entity=entity,attacker=int(fields['attacker']),mod=int(fields['mod']),frame=frame,eligible=window in valid and window[0]==generation and window[2]==int(fields['attacker']),outcome='unresolved',target=0)
                         else:
                             assert key in shots and shots[key]['outcome']=='unresolved' and shots[key]['entity']==entity
                             shots[key].update(outcome=fields['outcome'],target=int(fields['target']),end_frame=frame)
@@ -54,7 +54,7 @@ def main():
             sources.append(dict(server_log=str(log),server_sha256=sha(log),steps_sha256=sha(steps)))
         counts['unknown']=counts['unresolved']+counts['freed'];shots=counts['shots'];hits=counts['live_monster_hits'];unknown=counts['unknown']
         groups[entry['model']+'-'+entry['label']]=dict(counts=counts,live_monster_hit_fraction=hits/shots if shots and not unknown else None,confirmed_hit_fraction_lower=hits/shots if shots else None,possible_hit_fraction_upper=min(1,(hits+unknown)/shots) if shots else None)
-    save(a.root/'blaster-projectile-hits.json',dict(protocol_sha256=sha(a.root/'protocol.json'),groups=groups,sources=sources,scope='Actual native mod1 projectile IDs joined to first-life alive dispatch after frame100. Outcomes may close after firing window. Unknown unresolved/freed remain explicit; definitive fraction only when none unknown. No machinegun denominator, no selected-target credit, no policy observation from server data.'))
+    save(a.root/'blaster-projectile-hits.json',dict(join_version='native_ordered_window_v2',protocol_sha256=sha(a.root/'protocol.json'),groups=groups,sources=sources,scope='Actual native mod1 projectile IDs joined by ordered begin/end and exact sequence to first-life alive dispatch after frame100. Outcomes may close after firing window. Unknown unresolved/freed remain explicit; definitive fraction only when none unknown. No machinegun denominator, no selected-target credit, no policy observation from server data.'))
     print(json.dumps(groups),flush=True)
 
 if __name__=='__main__':main()

@@ -160,7 +160,8 @@ def main():
         bc=json.loads(pathlib.Path(a.init_bc).read_text());assert bc['kind']=='combat_bc_mlp_v1'
         critic=copy.deepcopy(bc['layers']);critic[-1]={'weight':[[0.0]*len(critic[-1]['weight'][0])],'bias':[0.0]}
         model={'kind':'combat_ppo_v1','feature_version':bc['feature_version'],'actor':bc['layers'],'value':critic,'log_std':config['log_std'],'sampling_seed':0,'deterministic':False}
-        (out/'weights.json').write_text(json.dumps(model,allow_nan=False))
+        export_spatial(updated,actor)
+    (out/'weights.json').write_text(json.dumps(model,allow_nan=False))
         (out/'report.json').write_text(json.dumps({'scope':'BC initialized stochastic actor, zero value; no PPO update yet','bc_sha256':sha(pathlib.Path(a.init_bc)),'config_sha256':sha(pathlib.Path(a.config))},indent=2));return
     assert a.model and a.data
     model_path=pathlib.Path(a.model);root=pathlib.Path(a.data);model=json.loads(model_path.read_text());meta=json.loads((root/'report.json').read_text())
@@ -194,7 +195,8 @@ def main():
     mode=torch.tensor([r['sample'].get('aim_mode',0) for r in rows],dtype=torch.long,device='cuda') if model.get('aim_mode_head') else None
     if mode is None:assert all(r['sample'].get('aim_mode',0)==0 for r in rows)
     if not target_head:assert all(r['sample'].get('target',0)==0 for r in rows)
-    actor=network(model['actor']).to('cuda');value=network(model['value']).to('cuda');std=nn.Parameter(torch.tensor(model['log_std'],device='cuda'))
+    from combat_spatial_aim import wrap as wrap_spatial,export as export_spatial
+    actor=wrap_spatial(network(model['actor']),model).to('cuda');value=network(model['value']).to('cuda');std=nn.Parameter(torch.tensor(model['log_std'],device='cuda'))
     checkpoint=None;consumed=[];updates=0;total_steps=0;resume_sha=sha(pathlib.Path(a.resume)) if a.resume else None
     if a.resume:checkpoint,consumed,updates,total_steps=restore_checkpoint(a.resume,model_path,config,actor,value,std,meta['rollout_sha256'])
     anchor_sha=sha(a.anchor_model) if a.anchor_model else None
@@ -221,7 +223,7 @@ def main():
         assert log_error<1e-3 and value_error<1e-4, (log_error,value_error)
     benchmarks={}
     for device in training_devices():
-        probe=network(model['actor']).to(device);pstd=nn.Parameter(torch.tensor(model['log_std'],device=device));px,pz,pa,pv,po,pad,pret=[t.to(device) for t in data];opt=torch.optim.Adam(list(probe.parameters())+[pstd],lr=config['actor_lr'])
+        probe=wrap_spatial(network(model['actor']),model).to(device);pstd=nn.Parameter(torch.tensor(model['log_std'],device=device));px,pz,pa,pv,po,pad,pret=[t.to(device) for t in data];opt=torch.optim.Adam(list(probe.parameters())+[pstd],lr=config['actor_lr'])
         def step():
             opt.zero_grad();plp,ent=log_prob(probe,pstd,px,pz,pa,pv,weapon,target,mode);ratio=(plp-po).exp();loss=-torch.minimum(ratio*pad,ratio.clamp(1-config['clip'],1+config['clip'])*pad).mean()-config['entropy']*ent.mean()
             if teacher is not None:loss=loss+retention_weight*anchor_kl(probe(px),pstd,teacher.to(device),teacher_std.to(device),weapon_mask=feature_mask(px) if weapon_head else None)

@@ -28,6 +28,7 @@ type PPOFile struct {
 	WeaponHead      string               `json:"weapon_head,omitempty"`
 	TargetHead      string               `json:"target_head,omitempty"`
 	AimModeHead     string               `json:"aim_mode_head,omitempty"`
+	SpatialAim      *SpatialAimFile      `json:"spatial_aim,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
@@ -97,6 +98,12 @@ func LoadPPO(path string) (*PPO, error) {
 		outputs = PrecisionOutputWidth
 	}
 	if e = validateFeatureLayers(f.Actor, outputs, f.Features); e != nil {
+		return nil, e
+	}
+	if f.SpatialAim != nil && f.AimModeHead != PrecisionHeadVersion {
+		return nil, fmt.Errorf("spatial aim requires precision head")
+	}
+	if e = validateSpatialAim(f.SpatialAim); e != nil {
 		return nil, e
 	}
 	if e = validateFeatureLayers(f.Value, 1, f.Features); e != nil {
@@ -175,6 +182,10 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	if e != nil {
 		return Action{}, 0, 0, e
 	}
+	x, e = p.spatialRaw(o, x)
+	if e != nil {
+		return Action{}, 0, 0, e
+	}
 	lp := 0.0
 	means := [4]float64{x[0], x[1], x[2], x[3]}
 	if p.file.TargetHead != "" {
@@ -222,6 +233,7 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	lp += x[5+s.Vertical] - max - math.Log(sum)
 	a := Action{Version: ActionVersion, Identity: o.Identity, Forward: math.Tanh(s.Latent[0]), Side: math.Tanh(s.Latent[1]), YawDelta: 180 * math.Tanh(s.Latent[2]), PitchDelta: 180 * math.Tanh(s.Latent[3]), Attack: s.Attack, Vertical: []string{"release", "jump", "crouch"}[s.Vertical]}
 	if s.AimMode == 1 {
+		a.AimMode = s.AimMode
 		a.YawDelta = PrecisionFineDegrees * math.Tanh(s.Latent[2])
 		a.PitchDelta = PrecisionFineDegrees * math.Tanh(s.Latent[3])
 	}
@@ -253,6 +265,10 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 	p.last = nil
 	before := p.beforeMemory(o)
 	x, _, after, e := p.memoryRaw(o, before)
+	if e != nil {
+		return Action{}, e
+	}
+	x, e = p.spatialRaw(o, x)
 	if e != nil {
 		return Action{}, e
 	}

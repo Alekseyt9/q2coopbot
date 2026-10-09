@@ -6,7 +6,9 @@ Distance/512 и relative coordinates уже есть в восьми enemy slots
 
 На sealed64-battle precision-v1 evaluation CUDA-аудит533 first-life blaster выстрелов сопоставил native projectile spawn с точным dispatch frame/actor/spawncount. Формула center-hand muzzle: observed position+24×native projectile direction+(0,0,viewheight−8). Максимальная ошибка позиции0.000817 units. Native velocity используется только в offline audit, не в model inputs.
 
-В531/533 выстрелах направление соответствует текущему observed angle; два исключения сохранены в отчёте, оба в rules. Следующий observed angle в среднем отличается сильнее. Нельзя считать новый угол команды текущего кадра направлением мгновенно выпущенного снаряда. Не заявлена универсальная weapon-phase схема или исправление задержки firing. Записи прошлых запусков не имеют явного cvar receipt `aimfix`; аудит подтверждает фактическую геометрию. В следующих synchronous harness cfg теперь явно `set aimfix 0`; hand=2 уже задаёт ConnectRequest.
+**Исправление аудита:** прежний same-frame join был неверен: native event prefix F+1 относится к команде F внутри её begin/end окна. Исправленный `native_ordered_window_v2` связывает события по порядку строк и exact sequence. На первом cohort533shots, на втором658shots (terminal death orientation excluded): mismatch0, направление соответствует post-command observed angle, muzzle соответствует post-command position с ошибкой0.000817units. Средний vector error нового угла около0.0000005, прежнего около0.028. Предыдущий вывод о задержке прицела отменён. Старые JSON сохранены как `*-frame-join-v1-superseded.json`; победы и quality reports не менялись.
+
+Исходники ClientThink подтверждают порядок: Pmove → position/viewangle → Think_Weapon при attack edge; обычный Think_Weapon в ClientBeginServerFrame происходит после ClientThink. Следовательно, instantaneous query от **предыдущей** own position не учитывает перемещение этой команды. В следующих synchronous harness cfg явно `set aimfix 0`; hand=2 задаёт ConnectRequest.
 
 ## Новые метки
 
@@ -34,22 +36,22 @@ Opt-in exporter `--center-muzzle`, query version `observed_center_blaster_muzzle
 
 | Вариант в новом cohort | Победы | Смерти | Firing applied-ray error | Native live-monster blaster hits |
 | --- | ---: | ---: | ---: | ---: |
-| Before81 | 7/16 | 9 | 11.371° | 99/141=70.21% |
-| Muzzle after81 | 7/16 | 9 | 11.861° | 95/142=66.90% |
-| Eye after81 | 7/16 | 9 | 13.223° | 96/141=68.09% |
-| Legacy FireBC | 7/16 | 9 | explicit target не объявлен | 99/141=70.21% |
-| Rules | 8/16 | 5 | explicit target не объявлен | 93/93=100% |
+| Before81 | 7/16 | 9 | 11.371° | 100/142=70.42% |
+| Muzzle after81 | 7/16 | 9 | 11.861° | 97/144=67.36% |
+| Eye after81 | 7/16 | 9 | 13.223° | 97/142=68.31% |
+| Legacy FireBC | 7/16 | 9 | explicit target не объявлен | 100/142=70.42% |
+| Rules | 8/16 | 5 | explicit target не объявлен | 94/94=100% |
 
 Unknown projectile outcomes0 у всех. Показатели projectile hits объединяют blaster выстрелы всех16 случаев, включая смену оружия; не machinegun hit rate. Победы всех learned вариантов совпадают по16 seeds. Разные длины траекторий и число выстрелов; pooled ratios не доказательство статистического превосходства. Ray metric без lead/recoil correction. **Muzzle after не принят как улучшение:** геометрический ray ближе, чем у eye-after, но фактических попаданий меньше и побед больше не стало.
 
 Часть controls изменила урон/число shots относительно предыдущего cohort, несмотря на одинаковые веса: явно pin aimfix0 и новый harness/source fingerprint означают новый cohort. Причина межcohort различий отдельно не установлена. Сравнивать варианты внутри текущих пар, не выдавать разницу между cohort за чистый эффект новых меток.
 
-Следующий приоритет: выяснить weapon firing phase относительно ClientThink/нового usercmd и player movement, сохранить unknown masks для несовпавших случаев, затем строить observed-only correction queries с подтверждённой задержкой. Проверять actual projectile hit metrics вместе с победами. Простое улучшение instantaneous geometric labels не устраняет временную ошибку. Явный selected-target distance block остаётся отдельной абляцией; текущая модель уже видит raw range во всех enemy slots.
+Следующий приоритет уточнён после исправления join: учитывать own movement этой команды в corrective labels, не вводить ложную задержку угла. Проверять actual projectile hit metrics вместе с победами. Instantaneous labels от предыдущей позиции не учитывают Pmove этой команды. Postmove абляция также не дала улучшения; результаты в `combat_postmove_queries_20261010.md`. Явный selected-target distance block остаётся отдельной абляцией; текущая модель уже видит raw range во всех enemy slots.
 
 ## Настоящие projectile hits
 
 Новый `report_combat_blaster_hits.py` использует native shot IDs, end events и damage contacts. Denominator — mod1 projectiles, выпущенные в first-life alive matched dispatch после frame100. Hit — подтверждённый положительный health damage живому monster. Unknown unresolved/freed остаются явными; итоговый hit fraction отсутствует при unknown. Это не machinegun hit rate и не попадание обязательно в выбранную цель. Server facts только для оценки.
 
-Для предыдущего sealed precision-v1 cohort: before99/141=70.21%, eye-after105/148=70.95%, legacy FireBC111/150=74.00%, rules92/94=97.87%; unknown0 у всех. Разные траектории и число выстрелов, pooled ratios не доверительный интервал. Эта диагностика дополняет победы7/16,7/16,7/16,8/16.
+Для предыдущего sealed precision-v1 cohort после исправления ordered-window join: before100/142=70.42%, eye-after106/149=71.14%, legacy FireBC112/151=74.17%, rules93/95=97.89%; unknown0 у всех. Разные траектории и число выстрелов, pooled ratios не доверительный интервал. Эта диагностика дополняет победы7/16,7/16,7/16,8/16. Подробности исправления и следующей абляции: `combat_postmove_queries_20261010.md`.
 
 Артефакты: `precision-eval-v1-20261010/{blaster-muzzle-audit,blaster-projectile-hits}.json`, `muzzle-queries-v2-20261010/{report,cuda-query-audit,cuda-ballistic-audit}.json`, `precision-muzzle-v2-20261010/`, `precision-muzzle-eval-v2-20261010/` под `workspace/artifacts/`.

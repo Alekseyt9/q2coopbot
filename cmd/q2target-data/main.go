@@ -9,11 +9,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"q2coopbot/internal/aimquery"
 	"q2coopbot/internal/learningenv"
 	"q2coopbot/internal/policy"
+	"q2coopbot/internal/quake"
 )
 
 type member struct {
@@ -23,14 +25,16 @@ type member struct {
 	SHA   string `json:"steps_sha256"`
 }
 type sample struct {
-	Features []float64                `json:"features"`
-	Targets  [4]float64               `json:"targets"`
-	Mask     [4]bool                  `json:"mask"`
-	Attack   bool                     `json:"attack"`
-	Identity policy.Identity          `json:"identity"`
-	Seed     int                      `json:"seed"`
-	Step     int                      `json:"step"`
-	Labels   []aimquery.TargetedLabel `json:"target_queries"`
+	Features    []float64                `json:"features"`
+	Targets     [4]float64               `json:"targets"`
+	Mask        [4]bool                  `json:"mask"`
+	Attack      bool                     `json:"attack"`
+	Identity    policy.Identity          `json:"identity"`
+	Seed        int                      `json:"seed"`
+	Step        int                      `json:"step"`
+	Labels      []aimquery.TargetedLabel `json:"target_queries"`
+	QueryMove   *quake.Vec3              `json:"query_move_label,omitempty"`
+	QueryDucked *bool                    `json:"query_ducked_label,omitempty"`
 }
 
 func hash(path string) (string, error) {
@@ -45,7 +49,11 @@ func run() error {
 	in := flag.String("spec", "", "Frozen native member steps and hashes")
 	out := flag.String("out", "", "Fresh compressed observation/query dataset")
 	center := flag.Bool("center-muzzle", false, "Verified center-hand blaster/aimfix0 instantaneous muzzle queries")
+	postMove := flag.Bool("post-move-labels", false, "Offline labels conditional on achieved client-observed movement; inputs stay pre-command")
 	flag.Parse()
+	if *postMove && !*center {
+		return fmt.Errorf("post-move labels require center-muzzle")
+	}
 	b, e := os.ReadFile(*in)
 	if e != nil {
 		return e
@@ -116,13 +124,42 @@ func run() error {
 					return e
 				}
 				labels, e := aimquery.Targeted(o)
+				var queryMove *quake.Vec3
+				var queryDucked *bool
 				if *center {
 					labels, e = aimquery.CenterMuzzle(o)
+				}
+				moveKnown := !*postMove
+				if *postMove {
+					labels = nil
+					if step.Next != nil && step.Next.Health > 0 && policy.SameLife(o.Identity, step.Next.Identity) && step.Next.Identity.Frame == o.Identity.Frame+1 {
+						delta := quake.Vec3{}
+						for axis := range delta {
+							delta[axis] = step.Next.Position[axis] - o.Position[axis]
+							if math.IsNaN(delta[axis]) || math.IsInf(delta[axis], 0) {
+								return fmt.Errorf("invalid observed movement label")
+							}
+						}
+						post := o
+						post.Enemies = append([]policy.Enemy(nil), o.Enemies...)
+						for i := range post.Enemies {
+							for axis := range delta {
+								post.Enemies[i].Relative[axis] -= delta[axis]
+							}
+						}
+						post.Ducked = step.Next.Ducked
+						labels, e = aimquery.CenterMuzzle(post)
+						for i := range labels {
+							labels[i].Version = "observed_center_blaster_postmove_query_v3"
+						}
+						queryMove, queryDucked = &delta, &post.Ducked
+						moveKnown = true
+					}
 				}
 				if e != nil {
 					return e
 				}
-				blocked := !proven
+				blocked := !proven || !moveKnown
 				if !proven {
 					masked[split]++
 				}
@@ -135,7 +172,7 @@ func run() error {
 				for _, v := range labels {
 					valid = valid || v.LeadKnown && v.RecoilKnown
 				}
-				if e = enc.Encode(sample{Features: x, Identity: o.Identity, Seed: m.Seed, Step: step.Index, Labels: labels, Mask: [4]bool{false, !blocked && len(labels) > 0, false, false}}); e != nil {
+				if e = enc.Encode(sample{Features: x, Identity: o.Identity, Seed: m.Seed, Step: step.Index, Labels: labels, QueryMove: queryMove, QueryDucked: queryDucked, Mask: [4]bool{false, !blocked && len(labels) > 0, false, false}}); e != nil {
 					return e
 				}
 				counts[split]++
@@ -180,6 +217,12 @@ func run() error {
 	if *center {
 		report["target_query_version"] = aimquery.CenterMuzzleVersion
 		report["scope"] = "Client-only center-hand blaster muzzle24forward/viewheight-8, aimfix0 instantaneous intercept queries. No firing delay, future movement, acceleration, hits or server position enter labels/features. Machinegun recoil unknown. Native proof and context masks preserved. Gzip streams."
+	}
+	if *postMove {
+		report["target_query_version"] = "observed_center_blaster_postmove_query_v3"
+		report["future_client_observation_labels"] = true
+		report["future_model_inputs"] = false
+		report["scope"] = "Offline center-hand blaster queries conditional on achieved prior-policy client-observed displacement/stance. Original observed target/velocity; no future target or server positions. Features remain pre-command V7/854. Teacher labels may use next client position, which is never a policy input. Factual movement is not a counterfactual corrected-angle rollout; native comparison required. Missing/dead/cross-life next context masked."
 	}
 	r, e := os.Create(filepath.Join(*out, "report.json"))
 	if e != nil {

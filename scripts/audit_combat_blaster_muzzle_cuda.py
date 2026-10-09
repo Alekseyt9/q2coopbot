@@ -2,6 +2,7 @@
 import argparse,json,pathlib,re
 from process_combat_architecture_pool import read,sha,save
 from train_combat_bc import torch
+from native_projectile_window import records
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--root',type=pathlib.Path,required=True);ap.add_argument('--out',type=pathlib.Path,required=True);a=ap.parse_args()
@@ -18,15 +19,16 @@ def main():
                 for line in f:
                     s=json.loads(line);n=s.get('native_step');o=s['observation']
                     if n and o['identity']['life']==1 and o['identity']['frame']>100 and o['health']>0 and s.get('server_execution',{}).get('matched'):
-                        indexed[(n['spawncount'],n['begin_frame'],n['actor'])]=s
+                        indexed[(n['spawncount'],n['begin_frame'],n['actor'],n['sequence'])]=s
             with log.open(encoding='utf-8-sig') as f:
-                for line in f:
-                    m=pattern.match(line.strip())
+                for window,line in records(f):
+                    m=pattern.match(line)
                     if not m:continue
-                    s=indexed.get(tuple(map(int,m.groups()[:3])))
+                    s=indexed.get(window)
                     if not s:continue
                     o=s['observation'];next_o=s['next_observation']
-                    rows.append(dict(group=entry['model']+'-'+entry['label'],position=o['position'],angles=o['view_angles'][:2],next_angles=next_o['view_angles'][:2],ducked=o['ducked'],start=list(map(float,m.groups()[3:6])),velocity=list(map(float,m.groups()[6:9]))))
+                    if next_o['health']<=0:continue
+                    rows.append(dict(group=entry['model']+'-'+entry['label'],position=next_o['position'],angles=o['view_angles'][:2],next_angles=next_o['view_angles'][:2],ducked=next_o['ducked'],start=list(map(float,m.groups()[3:6])),velocity=list(map(float,m.groups()[6:9]))))
             sources.append(dict(steps=str(steps),steps_sha256=sha(steps),server=str(log),server_sha256=sha(log)))
     assert rows
     def tensor(key):return torch.tensor([r[key] for r in rows],device='cuda')
@@ -37,8 +39,8 @@ def main():
     height=torch.where(tensor('ducked').bool(),-2.,22.)-8
     predicted=position+24*(velocity/1000);predicted[:,2]+=height
     direction_error=(velocity/1000-d).norm(dim=-1);next_error=(velocity/1000-next_d).norm(dim=-1);muzzle_error=(start-predicted).norm(dim=-1)
-    bad=(direction_error>=.001).nonzero().flatten().tolist()
-    report=dict(mismatch_count=len(bad),state='passed' if bool(((velocity.norm(dim=-1)-1000).abs()<.01).all() & (muzzle_error<.2).all()) else 'mismatch',device='cuda',shots=len(rows),direction_vector_max_error=float(direction_error.max()),muzzle_position_max_error=float(muzzle_error.max()),next_observation_direction_mean_error=float(next_error.mean()),current_observation_direction_mean_error=float(direction_error.mean()),sources=sources,protocol_sha256=sha(a.root/'protocol.json'),scope='Native blaster mod1, first-life shots joined by exact dispatch frame/actor/spawncount. Center-hand muzzle24native_direction +viewheight-8 validated against observed origin. Native velocity is diagnostic only. Current observation angle usually matches firing direction; mismatch_count preserves exceptions, no universal phase claim. No Go model inference. Distinguish native firing angle from newly applied command; no immediate shot attribution assumed.')
+    bad=(next_error>=.001).nonzero().flatten().tolist()
+    report=dict(join_version='native_ordered_window_v2',mismatch_count=len(bad),state='passed' if bool(((velocity.norm(dim=-1)-1000).abs()<.01).all() & (muzzle_error<.2).all() & (next_error<.001).all()) else 'mismatch',device='cuda',shots=len(rows),direction_vector_max_error=float(direction_error.max()),muzzle_position_max_error=float(muzzle_error.max()),next_observation_direction_mean_error=float(next_error.mean()),current_observation_direction_mean_error=float(direction_error.mean()),sources=sources,protocol_sha256=sha(a.root/'protocol.json'),scope='Native mod1 first-life shots bound by ordered begin/end and exact sequence. Center muzzle agrees with post-command position and angle. Terminal death orientation excluded. Previous same-frame lookup was incorrect and is superseded. No server facts in policy inputs or Go model inference.')
     save(a.out,report);print(json.dumps({k:v for k,v in report.items() if k!='sources'}),flush=True)
     assert report['state']=='passed'
 

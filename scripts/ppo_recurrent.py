@@ -77,13 +77,14 @@ def prepare_context(context,rows,device):
 
 def sequence(model,prepared,bptt=32,check_states=False,name='actor'):
     x,indices,inverse,segments=prepared;outputs=[];h=None;errors=[]
-    if isinstance(model,CausalAttention):
+    core=getattr(model,'base',model)
+    if isinstance(core,CausalAttention):
         output,tokens=model(x)
         if check_states:
             for b,segment in enumerate(segments):
                 for t,c in enumerate(segment):
                     assert c['memory'].get('position',0)==t
-                    observed=tokens[b,max(0,t-model.window+1):t].flatten()
+                    observed=tokens[b,max(0,t-core.window+1):t].flatten()
                     expected=torch.tensor(c['memory'][name],dtype=torch.float32,device=x.device)
                     assert observed.shape==expected.shape
                     if len(expected):errors.append(float((observed-expected).abs().max()))
@@ -150,6 +151,9 @@ def main():
         if key=='memory':module=Recurrent(model[name],spec[name])
         elif entity:module=EntityAttention(model[name],spec[name],spec['heads'])
         else:module=CausalAttention(model[name],spec[name],spec['heads'],spec['window'])
+        if name=='actor' and model.get('spatial_aim'):
+            from combat_spatial_aim import wrap
+            module=wrap(module,model)
         return module.to(device)
     actor=build('actor');value=build('value')
     x=torch.tensor([r['features'] for r in rows],dtype=torch.float32,device=device)
@@ -230,6 +234,8 @@ def main():
     assert torch.isfinite(kl) and float(kl)<=config['target_kl']+1e-6
     base_a,cell_a=actor.export();base_v,cell_v=value.export()
     updated={**model,'actor':base_a,'value':base_v,'log_std':std.detach().cpu().tolist(),key:{**spec,'actor':cell_a,'value':cell_v}}
+    from combat_spatial_aim import export as export_spatial
+    export_spatial(updated,actor)
     done=sum(t['accepted'] for t in trials)
     for path,digest in meta['source_sha256'].items():assert sha(pathlib.Path(path))==digest
     if not entity:assert sha(args.data/'sequence.jsonl')==meta['sequence_sha256']

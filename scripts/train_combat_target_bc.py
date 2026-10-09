@@ -6,9 +6,10 @@ from ppo_combat import torch,layers
 from train_combat_sequence_bc import sequences
 from combat_target_head import availability,distribution,selected_means,validate_model
 
-def annotations(x,query_version='observed_target_aim_query_v1'):
-    assert query_version in ('observed_target_aim_query_v1','observed_center_blaster_muzzle_query_v2')
-    center=query_version=='observed_center_blaster_muzzle_query_v2'
+def annotations(x,query_version='observed_target_aim_query_v1',query_move=None,query_ducked=None):
+    assert query_version in ('observed_target_aim_query_v1','observed_center_blaster_muzzle_query_v2','observed_center_blaster_postmove_query_v3')
+    center=query_version!='observed_target_aim_query_v1'
+    post=query_version=='observed_center_blaster_postmove_query_v3'
     assert x.is_cuda and x.shape[-1]==854
     n=len(x);points=x[:,73:169].reshape(n,8,12)[:,:,2:5]*512
     velocity=x[:,73:169].reshape(n,8,12)[:,:,6:9]*400
@@ -16,7 +17,14 @@ def annotations(x,query_version='observed_target_aim_query_v1'):
     box=x[:,466:786].reshape(n,8,40)[:,:,36:40]
     bottom,top=box[:,:,2]*64,box[:,:,3]*64
     height=torch.where(top-bottom<16,(top+bottom)/2,torch.minimum(torch.maximum(torch.full_like(bottom,22),bottom+8),top-8))
-    points=points.clone();points[:,:,2]+=height-torch.where(x[:,3:4]==1,-2.,22.)
+    points=points.clone()
+    duck=x[:,3:4]==1
+    if post:
+        assert query_move is not None and query_move.shape==(n,3) and query_move.is_cuda and query_ducked.shape==(n,) and query_ducked.is_cuda
+        assert bool(torch.isfinite(query_move).all())
+        local=torch.stack((query_move[:,0]*x[:,7]+query_move[:,1]*x[:,6],-query_move[:,0]*x[:,6]+query_move[:,1]*x[:,7],query_move[:,2]),-1)
+        points-=local[:,None,:];duck=query_ducked[:,None].bool()
+    points[:,:,2]+=height-torch.where(duck,-2.,22.)
     if center:points[:,:,2]+=8
     aa=velocity.square().sum(-1)-1000000;bb=2*(points*velocity).sum(-1);cc=points.square().sum(-1)
     if center:bb=bb-48000;cc=cc-576
@@ -44,12 +52,17 @@ def annotations(x,query_version='observed_target_aim_query_v1'):
 def prepare(rows,query_version='observed_target_aim_query_v1'):
     groups=sequences(rows);x=torch.zeros(len(groups),max(map(len,groups)),854,device='cuda')
     eligible=torch.zeros(x.shape[:2],dtype=torch.bool,device='cuda')
+    query_move=torch.zeros(*x.shape[:2],3,device='cuda');query_ducked=torch.zeros(x.shape[:2],dtype=torch.bool,device='cuda')
     for i,group in enumerate(groups):
         base=torch.tensor([r['features'] for r in group],device='cuda');assert base.shape[1] in (845,854)
         x[i,:len(group),:base.shape[1]]=base
         if base.shape[1]==845:x[i,:len(group),845]=1
+        if query_version=='observed_center_blaster_postmove_query_v3':
+            assert all('query_move_label' in r and 'query_ducked_label' in r or not r['mask'][1] for r in group)
+            query_move[i,:len(group)]=torch.tensor([r.get('query_move_label',[0,0,0]) for r in group],device='cuda')
+            query_ducked[i,:len(group)]=torch.tensor([r.get('query_ducked_label',bool(r['features'][3])) for r in group],device='cuda')
         eligible[i,:len(group)]=torch.tensor([r['mask'][1] for r in group],dtype=torch.bool,device='cuda')
-    flat=x.reshape(-1,854);angles,mask,target=annotations(flat,query_version)
+    flat=x.reshape(-1,854);angles,mask,target=annotations(flat,query_version,query_move.reshape(-1,3),query_ducked.flatten())
     mask &= eligible.flatten()[:,None]
     choice=eligible.flatten() & (target>0)
     assert mask.any() and choice.any()

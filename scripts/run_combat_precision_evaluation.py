@@ -4,7 +4,7 @@ from process_combat_architecture_pool import read,save,sha,run
 from run_combat_target_refresh import compile_plan,pool
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--model-root',type=pathlib.Path,required=True);ap.add_argument('--out',type=pathlib.Path,required=True);ap.add_argument('--comparison-model',type=pathlib.Path);a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--model-root',type=pathlib.Path,required=True);ap.add_argument('--out',type=pathlib.Path,required=True);ap.add_argument('--comparison-model',type=pathlib.Path);ap.add_argument('--comparison-name',choices=['precision-eye','precision-muzzle'],default='precision-eye');a=ap.parse_args()
     repo=pathlib.Path(__file__).resolve().parents[1];out=a.out.resolve();out.mkdir(exist_ok=False)
     os.environ['GOCACHE']=str(repo/'workspace/build/go-cache');os.environ['GOTOOLCHAIN']='auto'
     python=pathlib.Path(__import__('sys').executable);pwsh=repo/'workspace/tools/dev_tools/powershell-7.5.3/runtime/pwsh.exe';compiler=repo/'workspace/build/q2episode-precision-v1.exe'
@@ -12,7 +12,7 @@ def main():
     legacy=next(e for e in reference['evaluations'] if e['model']=='firebc');template=read(legacy['plan']);registry=template['registry_path'];families=reference['families']
     plans=[];entries=[]
     variants=[('precision','before',a.model_root/'before-weights.json'),('precision','after',a.model_root/'weights.json'),('firebc','baseline',pathlib.Path(template['model_path'])),('rules','baseline',None)]
-    if a.comparison_model:variants.append(('precision-eye','baseline',a.comparison_model))
+    if a.comparison_model:variants.append((a.comparison_name,'baseline',a.comparison_model))
     for name,label,source in variants:
         weight=None
         if source:
@@ -22,13 +22,14 @@ def main():
         plan=compile_plan(compiler,registry,repo,weight,branch,'validation',families,28);plans.append(plan)
         entries.append(dict(model=name,label=label,root=str(branch/'capture'),plan=str(plan),plan_sha256=sha(plan),source_weights_sha256=sha(source) if source else None,deterministic_weights_sha256=sha(weight) if weight else None))
     training=read(a.model_root/'report.json')
-    save(out/'protocol.json',dict(version='combat_precision_validation_v1',evaluations=entries,families=families,total_episodes=16*len(variants),episodes_per_model=16,slots=16,timescale=2,comparison_reference='firebc-baseline',training_report_sha256=sha(a.model_root/'report.json'),target_query_version=training.get('target_query_version','observed_target_aim_query_v1'),scope='Fine/mode rows only; old45/encoder frozen. Same validation28 conditions reused for development. Before81 deterministic coarse reproduces strong45 parent. Blaster geometric query bootstrap with version pinned in protocol; machinegun labels unknown. Optional eye-origin fine comparison uses the same seeds. Final test deferred.'))
+    save(out/'protocol.json',dict(version='combat_precision_validation_v1',evaluations=entries,families=families,total_episodes=16*len(variants),episodes_per_model=16,slots=16,timescale=2,comparison_reference='firebc-baseline',training_report_sha256=sha(a.model_root/'report.json'),target_query_version=training.get('target_query_version','observed_target_aim_query_v1'),comparison_variant=a.comparison_name if a.comparison_model else None,scope='Fine/mode rows only; old45/encoder frozen. Same validation28 conditions reused for development. Before81 deterministic coarse reproduces strong45 parent. Blaster geometric query bootstrap with version pinned in protocol; machinegun labels unknown. Optional comparison variant uses the same seeds. Final test deferred.'))
     save(out/'progress.json',dict(stage='paired_native_evaluation',episodes=16*len(variants)))
     pool(repo,pwsh,plans,out/'pool',out/'evaluation.log')
     first=read(out/'precision-before/capture/case-0-learned/s-700028/manifest.json')
     run([python,repo/'scripts/verify_combat_evaluation_members.py','--root',out,'--source-fingerprint',first['source_fingerprint'],'--native-fingerprint',first['native_source_fingerprint']],out/'verify.log')
     run([python,repo/'scripts/report_combat_architecture_evaluation.py','--root',out,'--member-proof',out/'recovery/verified-members.json'],out/'report.log')
     run([python,repo/'scripts/report_combat_selected_target_aim.py','--root',out],out/'selected-target.log')
+    run([python,repo/'scripts/report_combat_blaster_hits.py','--root',out],out/'blaster-hits.log')
     save(out/'progress.json',dict(stage='complete',quality_report_sha256=sha(out/'quality-report.json')))
 
 if __name__=='__main__':main()
