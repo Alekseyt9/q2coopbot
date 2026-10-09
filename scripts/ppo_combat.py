@@ -137,8 +137,8 @@ def restore_checkpoint(path,model_path,config,actor,value,std,rollout_sha):
     for key,module in [('actor',actor),('value',value)]:
         expected=module.state_dict();actual=checkpoint[key]
         assert expected.keys()==actual.keys()
-        assert all(torch.equal(v.cpu(),actual[k].cpu()) for k,v in expected.items()), 'Checkpoint tensors differ from JSON weights'
-    assert torch.equal(std.detach().cpu(),checkpoint['log_std'].cpu()), 'Checkpoint standard deviation differs'
+        assert all(v.device.type=='cuda' and torch.equal(v,actual[k].to(v.device)) for k,v in expected.items()), 'Checkpoint tensors differ from JSON weights on CUDA'
+    assert std.device.type=='cuda' and torch.equal(std.detach(),checkpoint['log_std'].to(std.device)), 'Checkpoint standard deviation differs on CUDA'
     return checkpoint,consumed,updates,steps
 
 def validate_objective(config,meta):
@@ -160,8 +160,7 @@ def main():
         bc=json.loads(pathlib.Path(a.init_bc).read_text());assert bc['kind']=='combat_bc_mlp_v1'
         critic=copy.deepcopy(bc['layers']);critic[-1]={'weight':[[0.0]*len(critic[-1]['weight'][0])],'bias':[0.0]}
         model={'kind':'combat_ppo_v1','feature_version':bc['feature_version'],'actor':bc['layers'],'value':critic,'log_std':config['log_std'],'sampling_seed':0,'deterministic':False}
-        export_spatial(updated,actor)
-    (out/'weights.json').write_text(json.dumps(model,allow_nan=False))
+        (out/'weights.json').write_text(json.dumps(model,allow_nan=False))
         (out/'report.json').write_text(json.dumps({'scope':'BC initialized stochastic actor, zero value; no PPO update yet','bc_sha256':sha(pathlib.Path(a.init_bc)),'config_sha256':sha(pathlib.Path(a.config))},indent=2));return
     assert a.model and a.data
     model_path=pathlib.Path(a.model);root=pathlib.Path(a.data);model=json.loads(model_path.read_text());meta=json.loads((root/'report.json').read_text())
@@ -287,6 +286,7 @@ def main():
         if sha(a.retention_bank)!=bank_spec['sha256']:raise ValueError('Bank changed during update')
         validate_bank(bank,anchor_sha,model['feature_version'],x.shape[1],{r['seed'] for r in rows})
     with torch.no_grad():final_bank_kl={s:float(bank_loss(s)) for s in bank_tensors}
+    export_spatial(updated,actor)
     (out/'weights.json').write_text(json.dumps(updated,allow_nan=False))
     # Save optimizer/RNG with the checkpoint; future rollout still needs fresh seeds.
     checkpoint_output={'version':'combat_ppo_checkpoint_v2','weights_sha256':sha(out/'weights.json'),'consumed_rollouts':consumed+[meta['rollout_sha256']],'updates_completed':updates+1,'total_actor_steps':total_steps+done,'actor':actor.state_dict(),'value':value.state_dict(),'log_std':std.detach(),'actor_optimizer':actor_opt.state_dict(),'value_optimizer':value_opt.state_dict(),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,'config':config,'retention':retention}

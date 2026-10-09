@@ -87,7 +87,7 @@ def main():
             'source_fingerprint':next(iter(source_fingerprints)),
             'execution_diagnostics_scope':'Guard events/provider frames/frame gaps are full native capture totals, not unique first-life collision counts. Selection latency is measured under pool load; synchronous lockstep throughput is separate from realtime behavior.'}
     save(root/'quality-report.json',report); save(root/'quality-episodes.json',allrows)
-    lines=['# Парное сравнение архитектур, 2026-10-09','',report['scope'],'',
+    lines=['# Парное сравнение архитектур','',report['scope'],'',
            '| Вариант | Победы | Смерти | Урон монстрам, средний | Полученный урон, средний |',
            '| --- | ---: | ---: | ---: | ---: |']
     for v in variants: lines.append(f"| {v['variant']} | {v['wins']}/{v['episodes']} | {v['deaths']} | {v['mean_outgoing_damage']:.1f} | {v['mean_received_damage']:.1f} |")
