@@ -40,6 +40,20 @@ def member(root, seed):
     return root,report,manifest
 
 
+def update_receipt(binding,plan,directory):
+    seal=read(directory/'complete.json');update=read(directory/'report.json')
+    for filename,field in [('weights.json','weights_sha256'),('checkpoint.pt','checkpoint_sha256'),('report.json','report_sha256')]:
+        assert sha(directory/filename)==seal[field],'Sealed CUDA update changed'
+    assert update['device']=='cuda' and update['behavior_sha256']==sha(binding['model'])
+    assert update['updates_completed']==binding.get('parent_updates_completed',0)+1
+    assert update['resume_sha256']==binding.get('resume_checkpoint_sha256')
+    return dict(model=binding['id'],architecture=binding['architecture'],initialization_seed=binding.get('initialization_seed'),
+        allocated_episodes=sum(len(t['seeds']) for t in plan['tasks']),eligible_transitions=update['rows'],actor_steps=update['actor_steps'],
+        device=update['device'],weights=str(directory/'weights.json'),weights_sha256=update['weights_sha256'],
+        checkpoint=str(directory/'checkpoint.pt'),updates_completed=update['updates_completed'],total_actor_steps=update['total_actor_steps'],
+        resume_checkpoint_sha256=update['resume_sha256'])
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--capture-root',type=pathlib.Path,required=True)
@@ -112,7 +126,16 @@ def main():
                 selected[key]=member(selected_root,key[2])
             assert selected.keys()==expected.keys(),'Resume needs complete selected captures'
             retries=read(out/'retry-receipts.json') if (out/'retry-receipts.json').exists() else []
-            results=read(out/'training-updates.json')
+            results=read(out/'training-updates.json') if (out/'training-updates.json').exists() else []
+            # A process can stop after the update seal is durable but before its
+            # summary is saved. Restore only a verified contiguous prefix.
+            for p in range(len(results),len(models)):
+                directory=out/models[p]['id']/'update'
+                if not (directory/'complete.json').exists():break
+                receipt=update_receipt(models[p],plans[p],directory)
+                assert read(directory/'report.json')['rollout_sha256']==read(out/models[p]['id']/'rollout/report.json')['rollout_sha256']
+                results.append(receipt)
+            save(out/'training-updates.json',results)
             assert len({x['model'] for x in results})==len(results)
             for p,entry in enumerate(results):
                 assert entry['model']==models[p]['id'] and entry['device']=='cuda'
@@ -207,12 +230,7 @@ def main():
             save(model_root/'update/complete.json',dict(version='combat_update_complete_v1',
                 weights_sha256=sha(model_root/'update/weights.json'),checkpoint_sha256=sha(model_root/'update/checkpoint.pt'),
                 report_sha256=sha(model_root/'update/report.json')))
-            results.append(dict(model=binding['id'],architecture=binding['architecture'],initialization_seed=binding['initialization_seed'],
-                allocated_episodes=sum(len(t['seeds']) for t in plans[p]['tasks']),eligible_transitions=update['rows'],
-                actor_steps=update['actor_steps'],device=update['device'],weights=str(model_root/'update/weights.json'),
-                weights_sha256=update['weights_sha256'],checkpoint=str(model_root/'update/checkpoint.pt'),
-                updates_completed=update['updates_completed'],total_actor_steps=update['total_actor_steps'],
-                resume_checkpoint_sha256=update['resume_sha256']))
+            results.append(update_receipt(binding,plans[p],model_root/'update'))
             save(out/'training-updates.json',results)
             print(json.dumps(results[-1]),flush=True)
         assert sha(capture/'pool/report.json')==protocol['pool_sha256']
