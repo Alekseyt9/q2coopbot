@@ -78,11 +78,11 @@ $client=Join-Path $OutputRoot 'q2coopbot.exe'
 $env:GOCACHE=Join-Path $repo 'workspace/build/gocache'
 $env:GOTOOLCHAIN='auto'
 Push-Location $repo
-try{go build -o $client ./cmd/q2coopbot;if($LASTEXITCODE){throw 'Client build failed'}}finally{Pop-Location}
+try{go build -buildvcs=false -o $client ./cmd/q2coopbot;if($LASTEXITCODE){throw 'Client build failed'}}finally{Pop-Location}
 $exporter=Join-Path $OutputRoot 'q2combat-export.exe'
-Push-Location $repo;try{go build -o $exporter ./cmd/q2combat-export;if($LASTEXITCODE){throw 'Exporter build failed'}}finally{Pop-Location}
+Push-Location $repo;try{go build -buildvcs=false -o $exporter ./cmd/q2combat-export;if($LASTEXITCODE){throw 'Exporter build failed'}}finally{Pop-Location}
 $relay=Join-Path $OutputRoot 'q2learning-relay.exe'
-if($Feedback){Push-Location $repo;try{go build -o $relay ./cmd/q2learning-relay;if($LASTEXITCODE){throw 'Relay build failed'}}finally{Pop-Location}}
+if($Feedback){Push-Location $repo;try{go build -buildvcs=false -o $relay ./cmd/q2learning-relay;if($LASTEXITCODE){throw 'Relay build failed'}}finally{Pop-Location}}
 $probeHash=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{''})
 $generatedHash=$(if($GeneratedFixtures){(Get-FileHash -LiteralPath $GeneratedFixtures).Hash}else{''})
 $hostExe=(Get-Process -Id $PID).Path
