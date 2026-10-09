@@ -32,4 +32,14 @@ base1 включает четыре исходных семейства и во�
 
 Все пять завершённых400-eval веток JSONL сжаты прозрачным WOF LZX:1453014379 logical bytes хранятся в114332716 bytes по compact summaries. Это объём хранения, не новое освобождённое место: отдельные захваты могли уже быть сжаты. Пять representative steps SHA проверены против native hit report до сжатия, quality report SHA не изменился. Receipt `stream-storage-audit.json`. Пути/логические байты сохраняются, читатели продолжают открывать обычные JSONL.
 
+Дополнительный разбор `selected-target-distance.json` выявил недостаточное покрытие дальних условий. Диапазоны observed enemy-origin distance: near до128, medium128..512, far свыше512. Средняя геометрическая угловая ошибка applied ray на firing frames:
+
+| Вариант | Near frames / error | Medium frames / error | Far frames / error |
+| --- | ---: | ---: | ---: |
+| Before | 3062 /29.31° | 1300 /22.37° | 0 /unknown |
+| Instant BC | 1872 /19.39° | 1399 /7.21° | 0 /unknown |
+| Postmove BC | 1716 /19.48° | 1611 /10.28° | 12 /86.23° |
+
+All/firing frame totals сверены с прежним `selected-target-aim.json` для всех пяти вариантов. FireBC/rules не имеют declared target в этом диагностическом формате, поэтому их отсутствие измерений не означает отсутствие выстрелов. Двенадцать far firing frames недостаточны для оценки дальнего боя. Эти ошибки без поправки на упреждение/recoil/muzzle, не hit rate и не причинное сравнение на одинаковых кадрах: модели создают разные траектории и распределения дистанций. Следующий curriculum должен включать проверенные near/medium/far начальные геометрии и отдельные blaster/machinegun условия; новые дальние fixtures пока не созданы и не проверены.
+
 Артефакты: `workspace/artifacts/spatial-broad-eval-v2-20261010/`. Quality SHA256 `9811b0bef73db2b49d227cd27db6f2b4537c6108e9271a7b640c05f190062fb2`; protocol SHA256 `1f811db3194fd12005dcdbfc53f81a85bcd3831cb4d9f6c465d3c016490e2b57`. Полная разбивка — `quality-strata.{json,md}`, proof — `recovery/verified-members.json`, blaster shots — `blaster-projectile-hits.json`. Подробнее об архитектуре и пилоте: [combat_spatial_aim_20261010.md](combat_spatial_aim_20261010.md).
