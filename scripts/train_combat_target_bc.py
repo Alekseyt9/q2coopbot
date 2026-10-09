@@ -6,7 +6,9 @@ from ppo_combat import torch,layers
 from train_combat_sequence_bc import sequences
 from combat_target_head import availability,distribution,selected_means,validate_model
 
-def annotations(x):
+def annotations(x,query_version='observed_target_aim_query_v1'):
+    assert query_version in ('observed_target_aim_query_v1','observed_center_blaster_muzzle_query_v2')
+    center=query_version=='observed_center_blaster_muzzle_query_v2'
     assert x.is_cuda and x.shape[-1]==854
     n=len(x);points=x[:,73:169].reshape(n,8,12)[:,:,2:5]*512
     velocity=x[:,73:169].reshape(n,8,12)[:,:,6:9]*400
@@ -15,7 +17,9 @@ def annotations(x):
     bottom,top=box[:,:,2]*64,box[:,:,3]*64
     height=torch.where(top-bottom<16,(top+bottom)/2,torch.minimum(torch.maximum(torch.full_like(bottom,22),bottom+8),top-8))
     points=points.clone();points[:,:,2]+=height-torch.where(x[:,3:4]==1,-2.,22.)
+    if center:points[:,:,2]+=8
     aa=velocity.square().sum(-1)-1000000;bb=2*(points*velocity).sum(-1);cc=points.square().sum(-1)
+    if center:bb=bb-48000;cc=cc-576
     disc=bb.square()-4*aa*cc
     # Speeds near projectile speed use the linear equation; no guessed root.
     denom=torch.where(aa.abs()>1e-6,2*aa,torch.ones_like(aa))
@@ -24,6 +28,7 @@ def annotations(x):
     linear=-cc/torch.where(bb.abs()>1e-6,bb,torch.ones_like(bb))
     t=torch.where(aa.abs()<1e-6,torch.where((bb.abs()>1e-6)&(linear>0),linear,inf),t)
     lead=(disc>=0)&known_velocity&(t<=2)&(x[:,17:18]==1)
+    if center:lead &= cc>0
     moved=points+velocity*torch.where(lead,t,torch.zeros_like(t))[:,:,None]
     yaw=torch.atan2(moved[:,:,1],moved[:,:,0]);pitch=-torch.atan2(moved[:,:,2],moved[:,:,:2].norm(dim=-1))-torch.atan2(x[:,8:9],x[:,9:10])
     angles=torch.stack((yaw,torch.atan2(pitch.sin(),pitch.cos())),2)/math.pi
@@ -36,7 +41,7 @@ def annotations(x):
     target=torch.where(previous_valid,previous,target)
     return angles,label_mask,target
 
-def prepare(rows):
+def prepare(rows,query_version='observed_target_aim_query_v1'):
     groups=sequences(rows);x=torch.zeros(len(groups),max(map(len,groups)),854,device='cuda')
     eligible=torch.zeros(x.shape[:2],dtype=torch.bool,device='cuda')
     for i,group in enumerate(groups):
@@ -44,7 +49,7 @@ def prepare(rows):
         x[i,:len(group),:base.shape[1]]=base
         if base.shape[1]==845:x[i,:len(group),845]=1
         eligible[i,:len(group)]=torch.tensor([r['mask'][1] for r in group],dtype=torch.bool,device='cuda')
-    flat=x.reshape(-1,854);angles,mask,target=annotations(flat)
+    flat=x.reshape(-1,854);angles,mask,target=annotations(flat,query_version)
     mask &= eligible.flatten()[:,None]
     choice=eligible.flatten() & (target>0)
     assert mask.any() and choice.any()
@@ -71,7 +76,7 @@ def main():
         with gzip.open(path,'rt',encoding='utf-8') if compressed else path.open(encoding='utf-8') as stream:
             rows[split]=[json.loads(s) for s in stream]
     assert not {r['seed'] for r in rows['train']} & {r['seed'] for r in rows['validation']}
-    data={split:prepare(values) for split,values in rows.items()};results=[]
+    data={split:prepare(values,meta.get('target_query_version','observed_target_aim_query_v1')) for split,values in rows.items()};results=[]
     paths=[a.models/name/'weights.json' for name in a.names.split(',')] if a.names else sorted(a.models.glob('m[0-7]/weights.json'))
     assert paths
     for path in paths:

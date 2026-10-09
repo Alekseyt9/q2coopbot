@@ -31,7 +31,7 @@ def main():
         path=a.data/(split+'.jsonl.gz');assert sha(path)==meta['data_sha256'][split]
         with gzip.open(path,'rt',encoding='utf-8') as f:rows[split]=[json.loads(s) for s in f]
     assert not {r['seed'] for r in rows['train']} & {r['seed'] for r in rows['validation']}
-    data={s:prepare(r) for s,r in rows.items()}
+    data={s:prepare(r,meta.get('target_query_version','observed_target_aim_query_v1')) for s,r in rows.items()}
     parent=read(a.model);model=migrate(parent);actor=build(model,'actor');validate_precision_model(model)
     original={k:v.detach().clone() for k,v in actor.state_dict().items()}
     with torch.no_grad():
@@ -61,7 +61,7 @@ def main():
     else:updated['actor']=layers(actor)
     a.out.mkdir(exist_ok=False);save(a.out/'before-weights.json',model);save(a.out/'weights.json',updated)
     torch.save(dict(version='combat_precision_bc_checkpoint_v1',actor=actor.state_dict(),optimizer=opt.state_dict(),weights_sha256=sha(a.out/'weights.json'),parent_sha256=sha(a.model),epochs=a.epochs),a.out/'checkpoint.pt')
-    report=dict(device='cuda',gpu=torch.cuda.get_device_name(),epochs=a.epochs,seconds=time.perf_counter()-start,before=before,after=after,parent_sha256=sha(a.model),weights_sha256=sha(a.out/'weights.json'),checkpoint_sha256=sha(a.out/'checkpoint.pt'),data_report_sha256=sha(a.data/'report.json'),trainer_sha256=sha(pathlib.Path(__file__)),parent_parameters_preserved=True,scope='Only new fine/mode rows trained. Observed unexecuted blaster intercept labels; fine when both corrections <=15 degrees. No machinegun recoil labels, no hit-rate or native quality claim. All previous 45 rows and encoders frozen. New BC optimizer.')
+    report=dict(device='cuda',gpu=torch.cuda.get_device_name(),epochs=a.epochs,seconds=time.perf_counter()-start,before=before,after=after,parent_sha256=sha(a.model),weights_sha256=sha(a.out/'weights.json'),checkpoint_sha256=sha(a.out/'checkpoint.pt'),data_report_sha256=sha(a.data/'report.json'),trainer_sha256=sha(pathlib.Path(__file__)),target_query_version=meta.get('target_query_version','observed_target_aim_query_v1'),parent_parameters_preserved=True,scope='Only new fine/mode rows trained. Observed unexecuted blaster intercept labels; fine when both corrections <=15 degrees. No machinegun recoil labels, no hit-rate or native quality claim. All previous 45 rows and encoders frozen. New BC optimizer.')
     save(a.out/'report.json',report);print(json.dumps(report,ensure_ascii=False),flush=True)
 
 if __name__=='__main__':main()

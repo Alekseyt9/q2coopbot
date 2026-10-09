@@ -12,7 +12,7 @@ def main():
         path=a.data/(split+'.jsonl.gz');assert sha(path)==meta['data_sha256'][split]
         with gzip.open(path,'rt',encoding='utf-8') as stream:rows=[json.loads(line) for line in stream]
         assert len(rows)==meta['counts'][split];seeds[split]={r['seed'] for r in rows}
-        x=torch.tensor([r['features'] for r in rows],device='cuda');angles,mask,target=annotations(x)
+        x=torch.tensor([r['features'] for r in rows],device='cuda');angles,mask,target=annotations(x,meta.get('target_query_version','observed_target_aim_query_v1'))
         prior=x[:,845:854];assert bool(((prior==0)|(prior==1)).all()) and bool((prior.sum(1)==1).all())
         indices=[];expected=[];lead_masks=[]
         for i,row in enumerate(rows):

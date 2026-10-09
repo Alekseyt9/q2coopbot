@@ -44,6 +44,7 @@ func hash(path string) (string, error) {
 func run() error {
 	in := flag.String("spec", "", "Frozen native member steps and hashes")
 	out := flag.String("out", "", "Fresh compressed observation/query dataset")
+	center := flag.Bool("center-muzzle", false, "Verified center-hand blaster/aimfix0 instantaneous muzzle queries")
 	flag.Parse()
 	b, e := os.ReadFile(*in)
 	if e != nil {
@@ -115,6 +116,9 @@ func run() error {
 					return e
 				}
 				labels, e := aimquery.Targeted(o)
+				if *center {
+					labels, e = aimquery.CenterMuzzle(o)
+				}
 				if e != nil {
 					return e
 				}
@@ -172,6 +176,11 @@ func run() error {
 		return e
 	}
 	report := map[string]any{"version": "combat_target_sequence_v1", "feature_version": policy.TargetFeatureVersion, "test_deferred": true, "counts": counts, "aim_rows": aim, "masked_unproven_context": masked, "data_sha256": hashes, "spec_sha256": specSHA, "seed_splits": seeds, "scope": "Own-policy native matched first-life context, actual prior target intent. Unproven final context remains masked. Unexecuted observed eye-origin blaster interception queries; machinegun recoil unknown, no hit/reward credit or optimal-target claim. Gzip streams."}
+	report["target_query_version"] = aimquery.TargetedVersion
+	if *center {
+		report["target_query_version"] = aimquery.CenterMuzzleVersion
+		report["scope"] = "Client-only center-hand blaster muzzle24forward/viewheight-8, aimfix0 instantaneous intercept queries. No firing delay, future movement, acceleration, hits or server position enter labels/features. Machinegun recoil unknown. Native proof and context masks preserved. Gzip streams."
+	}
 	r, e := os.Create(filepath.Join(*out, "report.json"))
 	if e != nil {
 		return e
