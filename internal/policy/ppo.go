@@ -27,6 +27,7 @@ type PPOFile struct {
 	EntityAttention *EntityAttentionFile `json:"entity_attention,omitempty"`
 	WeaponHead      string               `json:"weapon_head,omitempty"`
 	TargetHead      string               `json:"target_head,omitempty"`
+	AimModeHead     string               `json:"aim_mode_head,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
@@ -39,6 +40,7 @@ type Sample struct {
 	Vertical       int           `json:"vertical"`
 	Weapon         int           `json:"weapon,omitempty"`
 	Target         int           `json:"target,omitempty"`
+	AimMode        int           `json:"aim_mode,omitempty"`
 	LogProbability float64       `json:"log_probability"`
 	Value          float64       `json:"value"`
 	Memory         *MemorySample `json:"memory,omitempty"`
@@ -87,6 +89,12 @@ func LoadPPO(path string) (*PPO, error) {
 		outputs = TargetOutputWidth
 	} else if f.Features == TargetFeatureVersion {
 		return nil, fmt.Errorf("target features require target head")
+	}
+	if f.AimModeHead != "" {
+		if f.AimModeHead != PrecisionHeadVersion || f.TargetHead != TargetHeadVersion {
+			return nil, fmt.Errorf("invalid PPO precision contract")
+		}
+		outputs = PrecisionOutputWidth
 	}
 	if e = validateFeatureLayers(f.Actor, outputs, f.Features); e != nil {
 		return nil, e
@@ -160,6 +168,9 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	if p.file.TargetHead == "" && s.Target != 0 {
 		return Action{}, 0, 0, fmt.Errorf("target sample on legacy policy")
 	}
+	if s.AimMode < 0 || s.AimMode > 1 || (p.file.AimModeHead == "" && s.AimMode != 0) {
+		return Action{}, 0, 0, fmt.Errorf("invalid aim mode sample")
+	}
 	x, value, _, e := p.memoryRaw(o, s.Memory)
 	if e != nil {
 		return Action{}, 0, 0, e
@@ -174,11 +185,22 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 		if s.Target < 0 || s.Target >= len(probs) || math.IsInf(probs[s.Target], -1) {
 			return Action{}, 0, 0, fmt.Errorf("unavailable target sample")
 		}
-		means, err = targetMeans(x, s.Target)
+		means, err = targetMeans(x[:TargetOutputWidth], s.Target)
 		if err != nil {
 			return Action{}, 0, 0, err
 		}
 		lp += probs[s.Target]
+	}
+	if p.file.AimModeHead != "" {
+		probs, err := precisionLogProbabilities(x, s.Target)
+		if err != nil {
+			return Action{}, 0, 0, err
+		}
+		means, err = precisionMeans(x, s.Target, s.AimMode)
+		if err != nil {
+			return Action{}, 0, 0, err
+		}
+		lp += probs[s.AimMode]
 	}
 	for i, z := range s.Latent {
 		if math.IsNaN(z) || math.IsInf(z, 0) {
@@ -199,6 +221,10 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	}
 	lp += x[5+s.Vertical] - max - math.Log(sum)
 	a := Action{Version: ActionVersion, Identity: o.Identity, Forward: math.Tanh(s.Latent[0]), Side: math.Tanh(s.Latent[1]), YawDelta: 180 * math.Tanh(s.Latent[2]), PitchDelta: 180 * math.Tanh(s.Latent[3]), Attack: s.Attack, Vertical: []string{"release", "jump", "crouch"}[s.Vertical]}
+	if s.AimMode == 1 {
+		a.YawDelta = PrecisionFineDegrees * math.Tanh(s.Latent[2])
+		a.PitchDelta = PrecisionFineDegrees * math.Tanh(s.Latent[3])
+	}
 	if p.file.TargetHead != "" && s.Target > 0 {
 		enemy := TargetEnemies(o)[s.Target-1]
 		a.TargetEntity = enemy.ID
@@ -256,7 +282,24 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 				}
 			}
 		}
-		means, err = targetMeans(x, s.Target)
+		means, err = targetMeans(x[:TargetOutputWidth], s.Target)
+		if err != nil {
+			return Action{}, err
+		}
+	}
+	if p.file.AimModeHead != "" {
+		probs, err := precisionLogProbabilities(x, s.Target)
+		if err != nil {
+			return Action{}, err
+		}
+		if p.file.Deterministic {
+			if probs[1] > probs[0] {
+				s.AimMode = 1
+			}
+		} else if p.rng.Float64() >= math.Exp(probs[0]) {
+			s.AimMode = 1
+		}
+		means, err = precisionMeans(x, s.Target, s.AimMode)
 		if err != nil {
 			return Action{}, err
 		}

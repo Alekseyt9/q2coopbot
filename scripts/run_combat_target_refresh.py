@@ -40,8 +40,8 @@ def main():
     registry=template['registry_path'];families=[t['episode']['id'] for t in template['tasks']];assert len(families)==20
     # New training seeds beyond the old FireBC rounds; validation never joins train.
     train=compile_plan(compiler,registry,repo,weights,out/'train','train',families,104)
-    valid=compile_plan(compiler,registry,repo,weights,out/'validation','validation',families[:4],32)
-    save(out/'protocol.json',dict(version='combat_target_refresh_v1',parent_sha256=sha(source),migration_sha256=sha(weights),train_seed_offset=104,validation_seed_offset=32,train_episodes=80,validation_episodes=16,slots=16,timescale=2,training_device='cuda',intent_columns=True,final_test_deferred=True))
+    valid=compile_plan(compiler,registry,repo,weights,out/'validation','validation',families[:4],28)
+    save(out/'protocol.json',dict(version='combat_target_refresh_v1',parent_sha256=sha(source),migration_sha256=sha(weights),train_seed_offset=104,validation_seed_offset=28,train_episodes=80,validation_episodes=16,slots=16,timescale=2,training_device='cuda',intent_columns=True,final_test_deferred=True))
     save(out/'progress.json',dict(stage='capturing_own_policy',episodes=96))
     closed=pool(repo,pwsh,[train,valid],out/'collect-pool',out/'collect.log')
     members=[];fingerprints=set();native=set()
@@ -67,12 +67,12 @@ def main():
         branch=evaluation/(name+'-'+label);weight=None
         if sourcepath:
             frozen=read(sourcepath);frozen.update(deterministic=True,sampling_seed=0);weight=evaluation/(name+'-'+label+'-weights.json');save(weight,frozen)
-        plan=compile_plan(compiler,registry,repo,weight,branch,'validation',families[:4],32);plans.append(plan)
+        plan=compile_plan(compiler,registry,repo,weight,branch,'validation',families[:4],28);plans.append(plan)
         entries.append(dict(model=name,label=label,root=str(branch/'capture'),plan=str(plan),plan_sha256=sha(plan),source_weights_sha256=sha(sourcepath) if sourcepath else None,deterministic_weights_sha256=sha(weight) if weight else None))
-    save(evaluation/'protocol.json',dict(version='combat_target_refresh_validation_v1',evaluations=entries,families=families[:4],total_episodes=64,episodes_per_model=16,slots=16,timescale=2,comparison_reference='firebc-baseline',scope='Strong FireBC V6 control vs migrated target head before/after fresh own-policy corrective BC with learned intent columns. Validation32 reused by BC; not final test. Shared weight rows frozen, intent input can alter shared outputs despite retention penalty.'))
+    save(evaluation/'protocol.json',dict(version='combat_target_refresh_validation_v1',evaluations=entries,families=families[:4],total_episodes=64,episodes_per_model=16,slots=16,timescale=2,comparison_reference='firebc-baseline',scope='Strong FireBC V6 control vs migrated target head before/after fresh own-policy corrective BC with learned intent columns. Validation28 reused by BC; not final test. Shared weight rows frozen, intent input can alter shared outputs despite retention penalty.'))
     save(out/'progress.json',dict(stage='paired_native_evaluation',episodes=64))
     pool(repo,pwsh,plans,evaluation/'pool',out/'evaluation.log')
-    first=read(evaluation/'firebc-target-before/capture/case-0-learned/s-700032/manifest.json')
+    first=read(evaluation/'firebc-target-before/capture/case-0-learned/s-700028/manifest.json')
     run([python,repo/'scripts/verify_combat_evaluation_members.py','--root',evaluation,'--source-fingerprint',first['source_fingerprint'],'--native-fingerprint',first['native_source_fingerprint']],out/'verify.log')
     run([python,repo/'scripts/report_combat_architecture_evaluation.py','--root',evaluation,'--member-proof',evaluation/'recovery/verified-members.json'],out/'report.log')
     run([python,repo/'scripts/report_combat_selected_target_aim.py','--root',evaluation],out/'selected-target.log')

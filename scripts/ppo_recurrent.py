@@ -118,7 +118,10 @@ def main():
     weapon_head=model.get('weapon_head')
     target_head=model.get('target_head')
     if target_head:
-        from combat_target_head import validate_model
+        if model.get('aim_mode_head'):
+            from combat_precision_head import validate_precision_model as validate_model
+        else:
+            from combat_target_head import validate_model
         validate_model(model)
         assert not args.retention_weight and not args.bank_weight, 'Target-aware retention objective not implemented'
     elif weapon_head:
@@ -153,7 +156,12 @@ def main():
     mask=feature_mask(x[:,:845]) if weapon_head else None
     target=torch.tensor([r['sample'].get('target',0) for r in rows],dtype=torch.long,device=device) if target_head else None
     if not target_head:assert all(r['sample'].get('target',0)==0 for r in rows)
+    mode=torch.tensor([r['sample'].get('aim_mode',0) for r in rows],dtype=torch.long,device=device) if model.get('aim_mode_head') else None
+    if mode is None:assert all(r['sample'].get('aim_mode',0)==0 for r in rows)
     def likelihood(raw,std,z,attack,vertical,weapon,mask):
+        if mode is not None:
+            from combat_precision_head import probabilities as precision_probabilities
+            return precision_probabilities(raw,std,z,attack,vertical,weapon,x,target,mode)
         if target_head:
             from combat_target_head import probabilities as target_probabilities
             return target_probabilities(raw,std,z,attack,vertical,weapon,x,target)

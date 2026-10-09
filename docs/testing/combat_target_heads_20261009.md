@@ -52,3 +52,5 @@ RMSE усредняет yaw/pitch по наблюдаемым геометрич
 - `workspace/artifacts/target-eval-v1-20261009/{protocol,plans,cuda-audit,driver-process}.json`
 - `scripts/combat_target_head.py`, `train_combat_target_bc.py`, `prepare_combat_target_heads.py`, `prepare_combat_target_evaluation.py`, `report_combat_selected_target_aim.py`
 - `internal/policy/target_head.go`, `internal/aimquery/targeted.go` (offline query API; native BC bootstrap currently derives annotations on CUDA from the same feature geometry).
+
+**Итог 2026-10-10:**288/288 проверены, лучший candidate2/16 против FireBC9/16, promotion нет. Новые labels не улучшили бой на слабых старых priors. [Все варианты, selected-target metrics и следующий этап на сильном FireBC](combat_target_refresh_20261010.md).

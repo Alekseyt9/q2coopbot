@@ -235,3 +235,11 @@ Temporal+GRU сейчас не поддерживается совместно. 
 **Итог coupling:**400/400 native captures, FireBC49/80, joint30, coupling1 31, coupling16 42, rules69. Ни одна ветка не принята. [Результаты](testing/combat_coupling_results_20261009.md).
 
 **Общие target heads:**V7/854 +45-output target-conditioned actor для всех8 MLP/GRU/temporal-attention моделей. CUDA migration/masking/checkpoints и 64/64 native smoke прошли. Все8 получили50 epochs CUDA bootstrap только новых target/aim rows (518/179 blaster pairs), shared combat rows заморожены; RMSE не равен hit rate. Previous-target feature добавлена, её обучение при замороженном encoder пока отложено. Запущено288 native before/after+controls validation battles, pool16/x2; улучшение качества ещё не доказано. [Контракт, метки, проверки и полный следующий этап](testing/combat_target_heads_20261009.md).
+
+**Target pilot завершён:**288/288, candidate best2/16, FireBC9/16, rules8/16; все8 BC branches отвергнуты. Проверяется происхождение слабых m0..m7 и запускается strong-FireBC fresh own-policy corrective pipeline:80train+16validation, gzipV7 contexts,50 CUDA BC epochs с actual previous-intent columns и raw-output retention, затем64 native paired cases. Старые shared weights frozen, shared outputs могут меняться через intent input; native validation обязательна. [Итог, метрики и контракты](testing/combat_target_refresh_20261010.md).
+# Обновление 2026-10-10: precision ablation
+
+Fresh FireBC own-policy corpus96 боёв завершён;64/64 paired native validation проверены. Intent BC ухудшил победы7→6 из16: отклонён. Результаты в `docs/testing/combat_target_refresh_20261010.md`.
+
+Реализован следующий общий этап для MLP/GRU/temporal attention:81-output coarse/fine head от сильного before45, диапазоны±180°/±15°, sampled mode с условной вероятностью в PPO. Прежние45 rows и encoder фиксированы.100 CUDA epochs закончены; на536 validation fine queries RMSE6.88→6.05°.64/64 paired native trial проверены: before/after7/16 побед, applied firing-ray error11.37°→13.65°. After не принят. Подробности: `docs/testing/combat_precision_heads_20261010.md`.16 slots/x2, validation28, final test отложен. Следующий этап — diagnostics mode/weapon и подтверждённая связь aim/firing/hits на own-policy trajectories; machinegun burst-phase/recoil labels требуют отдельного подтверждения.
+
