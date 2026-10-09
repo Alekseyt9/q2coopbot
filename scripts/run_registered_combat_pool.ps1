@@ -2,8 +2,13 @@
 param([Parameter(Mandatory)][string[]]$Plans,
  [ValidateSet(4,8,16,24,32)][int]$MaxInstances=16,
  [ValidateRange(1024,65500)][int]$Port=34800,
- [Parameter(Mandatory)][string]$OutputRoot,[switch]$DryRun)
+ [Parameter(Mandatory)][string]$OutputRoot,
+ [ValidateSet('episode','cohort')][string]$Scheduler='episode',[switch]$DryRun)
 $ErrorActionPreference='Stop'
+if($Scheduler -eq 'episode'){
+    & "$PSScriptRoot/run_registered_combat_episode_pool.ps1" -Plans $Plans -MaxInstances $MaxInstances -Port $Port -OutputRoot $OutputRoot -DryRun:$DryRun
+    return
+}
 $repo=Split-Path $PSScriptRoot -Parent
 $root=[IO.Path]::GetFullPath($(if([IO.Path]::IsPathRooted($OutputRoot)){$OutputRoot}else{Join-Path $repo $OutputRoot}))
 if(Test-Path -LiteralPath $root){throw 'Fresh pool output required'}

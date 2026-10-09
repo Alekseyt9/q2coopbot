@@ -204,3 +204,14 @@ Temporal+GRU сейчас не поддерживается совместно. 
 
 
 **Итог coordinated joint labels:** native paired47/80→30/80, branch не принята. Добавлена явная differentiable world-input coupling loss с CUDA basis/gradient verification и двумя CUDA pilot weights1/16. Go replay checks прекращены по инструкции пользователя; GPU-only training сохраняется. Coupled branch требует live проверки; увеличение encoder/GRU128 по-прежнему следующий architecture experiment. [Результаты](testing/combat_coordinated_query_20261007.md).
+
+
+**Architecture этап начат:** все8 fresh CUDA priors (MLP64, attention64, attention128, GRU128 ×2 seeds) подготовлены через одинаковый300epoch FireBC distillation на6987train/6531validationcontexts. Source/hash/export/causal checks только CUDA; validation не используется для gradients. Actor размерattention128196008, GRU128229032 без4std parameters. Лучшее среднее воспроизведение actor уattention128, но gameplay превосходство не проверено. [Protocol и результаты](testing/combat_architecture_priors_20261007.md). Новый independent episode pool16 сейчас проверяется на32 battles всех8 priors.
+
+
+**Pool этап:** independent per-episode queue16 заменяет ожидание целой4instance группы. Live smoke32/32 прошёл; запущены640fresh own-policy battles всех20families и8priors,train48. Source/native receipts сохраняются; architecture PPO updates ещё впереди. [Pool evidence](testing/combat_episode_pool_20261007.md).
+
+
+**MLP20 adapter готов:** masked weapon likelihood/gradient/retention KL на CUDA, native smoke363transitions/10acceptedsteps завершён; diagnostic weights не меняют initial actors640party. Пул продолжает сбор; один пока невалидный goal capture будет повторён после terminal состояния. [CUDA adapter и export integration](testing/combat_mlp_weapon_cuda_20261007.md).
+
+**Architecture PPO этап завершён:**640валидных собственных battles,8/8CUDA updates после проверенного resume, по80episodes/10actor steps на модель. Interrupted assembly сохранена; готовые checkpoints не повторялись. Исправленная публикация exporter проверена live smoke72/72. Запущена парная validation1440battles:8models×before/after плюс FireBC/rules, exact identical starts/validation24,pool16/x2. Результаты качества пока не получены; final test отложен. [Полные receipts и область проверки](testing/combat_episode_pool_20261007.md).

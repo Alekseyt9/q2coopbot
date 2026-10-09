@@ -9,6 +9,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. "$PSScriptRoot/shared_aas.ps1"
 # Replace the directory entry, not the contents of a potentially shared hard link.
 # Live sessions may still be using the previous AAS through another path.
 function Get-RuntimeImmutableHash([string]$Path) {
@@ -31,6 +32,10 @@ function Get-RuntimeImmutableHash([string]$Path) {
     }
 }
 function Install-RuntimeImmutable([string]$Source, [string]$Target, [string]$PoolRoot = '') {
+    if([IO.Path]::GetExtension($Target) -eq '.aas') {
+        Install-SharedAAS $Source $Target
+        return
+    }
     # Keep atomic replacement in the same directory, without appending a GUID
     # to an already long filename. Native Quake/tooling still needs MAX_PATH.
     $temporary = Join-Path (Split-Path -Parent $Target) ('.r' + [guid]::NewGuid().ToString('N') + '.tmp')

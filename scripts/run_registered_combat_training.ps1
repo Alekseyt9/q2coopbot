@@ -42,7 +42,6 @@ try{
         $weights=Get-Content -LiteralPath $model -Raw|ConvertFrom-Json
         if($weights.kind -ne 'combat_ppo_v1' -or $weights.deterministic){throw 'Training requires stochastic PPO weights'}
         $key=if($weights.memory){'gru'}elseif($weights.attention){'attention'}elseif($weights.entity_attention){'entity'}else{'mlp'}
-        if($key -eq 'mlp' -and $weights.weapon_head){throw 'MLP weapon-head trainer is not implemented yet; choose the common 8-action curriculum or add its validated adapter'}
         $thisContract="$($weights.feature_version):$($weights.actor[-1].bias.Count):$($weights.weapon_head)"
         if($cfg.comparison_kind -eq 'architecture' -and $contract -and $contract -ne $thisContract){throw 'Architecture comparison requires identical feature/action contracts'};$contract=$thisContract
         if($cfg.comparison_kind -eq 'architecture' -and $m.checkpoint){throw 'Architecture benchmark starts fresh optimizers; use continuation to resume existing checkpoints'}
@@ -113,6 +112,7 @@ try{
             }
             & "$snapshotRoot/q2ppo-data.exe" --merge ($exports -join ',') --out "$step/rollout"
             if($LASTEXITCODE){throw 'Joint curriculum export failed'}
+            & "$PSScriptRoot/compress_completed_combat_streams.ps1" -Root $step
             $trainer=if($m.architecture -eq 'mlp'){'ppo_combat.py'}else{'ppo_recurrent.py'}
             $argsList=@("$snapshotRoot/python-sources/$trainer",'--model',$current,'--data',"$step/rollout",'--config',$trainingConfig,'--out',"$step/update",'--retention-weight','0','--bank-weight','0')
             if($m.architecture -ne 'mlp'){$argsList+=@('--anchor-model',$anchor,'--retention-bank',$bank)}

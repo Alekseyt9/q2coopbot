@@ -3,6 +3,11 @@
 /workspace/runtime/
 /workspace/artifacts/
 /workspace/tools/dev_tools/
+# Local storage-maintenance receipts and logs
+/workspace/cleanup-inventory-*.json
+/workspace/export-cleanup-*.json
+/workspace/artifact-maintenance-*
+/workspace/ntfs-compression-*.log
 /config.local.json
 
 # Legacy output paths, in case an old script recreates them

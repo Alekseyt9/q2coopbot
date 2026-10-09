@@ -4,7 +4,7 @@ sys.pycache_prefix=str(pathlib.Path(__file__).resolve().parents[1]/'workspace'/'
 # Shared F: cache configuration is set before importing torch.
 from train_combat_bc import torch, nn, sha, training_devices
 from combat_retention_bank import read as read_bank, validate as validate_bank, pin_bank
-from combat_weapon_head import distribution as weapon_distribution
+from combat_weapon_head import distribution as weapon_distribution, probabilities as action_probabilities, feature_mask, HEAD_VERSION
 
 def network(layers):
     blocks=[]
@@ -68,13 +68,12 @@ def guarded_actor_step(parameters,optimizer,objective,loss_before,base_lr,target
             result.update(accepted=True,retry=retry,accepted_grad_dot_delta=float(dot));return result
     restore();return result
 
-def log_prob(actor,std,x,z,attack,vertical):
-    raw=actor(x);normal=torch.distributions.Normal(raw[:,:4],std.exp())
-    bern=torch.distributions.Bernoulli(logits=raw[:,4]);cat=torch.distributions.Categorical(logits=raw[:,5:])
-    # PPO uses pre-tanh latent likelihood; fixed map Jacobian cancels in ratio.
-    lp=normal.log_prob(z).sum(1)+bern.log_prob(attack)+cat.log_prob(vertical)
-    entropy=normal.entropy().sum(1)+bern.entropy()+cat.entropy()
-    return lp,entropy
+def log_prob(actor,std,x,z,attack,vertical,weapon=None):
+    raw=actor(x)
+    # Keep vertical logits separate from the optional 12-way weapon head.
+    # PPO uses pre-tanh latent likelihood; fixed Jacobian cancels in ratio.
+    return action_probabilities(raw,std,z,attack,vertical,weapon,
+                                feature_mask(x) if raw.shape[1]==20 else None)
 
 def anchor_kl(raw,std,teacher,teacher_std,weights=None,weapon_mask=None):
     """KL(anchor || policy); legacy 8-output anchors retain legacy heads only."""
@@ -162,7 +161,9 @@ def main():
     assert not any(model.get(k) for k in ('memory','attention','entity_attention')), 'Architecture models require ppo_recurrent.py'
     validate_objective(config,meta)
     assert model['kind']=='combat_ppo_v1' and not model['deterministic'] and meta['version']=='combat_ppo_rollout_v1' and sha(model_path)==meta['model_sha256']
-    assert not model.get('weapon_head') and len(model['actor'][-1]['bias'])==8, 'Weapon PPO currently uses the recurrent trainer'
+    weapon_head=model.get('weapon_head')
+    if weapon_head:assert weapon_head==HEAD_VERSION and model['feature_version']=='combat_features_v6' and len(model['actor'][-1]['bias'])==20
+    else:assert len(model['actor'][-1]['bias'])==8
     assert meta.get('feature_version','combat_features_v1')==model['feature_version'], 'Rollout feature version differs'
     assert sha(root/'rollout.jsonl')==meta['rollout_sha256']
     for path,digest in meta['source_sha256'].items():assert sha(pathlib.Path(path))==digest, f'Changed rollout input {path}'
@@ -170,8 +171,12 @@ def main():
     assert all(r['sample']['version']==meta['policy_version'] for r in rows)
     adv,ret=advantages(rows,config['gamma'],config['lambda'])
     data=(torch.tensor([r['features'] for r in rows],dtype=torch.float32),torch.tensor([r['sample']['latent'] for r in rows]),torch.tensor([float(r['sample']['attack']) for r in rows]),torch.tensor([r['sample']['vertical'] for r in rows],dtype=torch.long),torch.tensor([r['sample']['log_probability'] for r in rows]),torch.tensor(adv),torch.tensor(ret))
+    assert torch.cuda.is_available(),'CUDA required'
+    data=tuple(t.to('cuda') for t in data)
     x,z,attack,vertical,old,ad,returns=data
-    actor=network(model['actor']);value=network(model['value']);std=nn.Parameter(torch.tensor(model['log_std']))
+    weapon=torch.tensor([r['sample'].get('weapon',0) for r in rows],dtype=torch.long,device='cuda') if weapon_head else None
+    if not weapon_head:assert all(r['sample'].get('weapon',0)==0 for r in rows)
+    actor=network(model['actor']).to('cuda');value=network(model['value']).to('cuda');std=nn.Parameter(torch.tensor(model['log_std'],device='cuda'))
     checkpoint=None;consumed=[];updates=0;total_steps=0;resume_sha=sha(pathlib.Path(a.resume)) if a.resume else None
     if a.resume:checkpoint,consumed,updates,total_steps=restore_checkpoint(a.resume,model_path,config,actor,value,std,meta['rollout_sha256'])
     anchor_sha=sha(a.anchor_model) if a.anchor_model else None
@@ -180,8 +185,8 @@ def main():
     if a.anchor_model:
         anchor=json.loads(a.anchor_model.read_text())
         if anchor['kind']!='combat_ppo_v1' or anchor['feature_version']!=model['feature_version']:raise ValueError('Anchor feature contract differs')
-        with torch.no_grad():teacher=network(anchor['actor'])(x)
-        teacher_std=torch.tensor(anchor['log_std'])
+        with torch.no_grad():teacher=network(anchor['actor']).to('cuda')(x)
+        teacher_std=torch.tensor(anchor['log_std'],device='cuda')
     bank=None;bank_tensors={}
     if a.retention_bank and checkpoint and checkpoint.get('retention') and not checkpoint.get('retention_bank'):raise ValueError('Cannot add a bank to an already started retention branch')
     bank_spec=pin_bank(sha(a.retention_bank) if a.retention_bank else None,a.bank_weight,checkpoint.get('retention_bank') if checkpoint else None)
@@ -189,21 +194,21 @@ def main():
         if not a.anchor_model:raise ValueError('Retention bank requires an anchor')
         bank=validate_bank(read_bank(a.retention_bank),anchor_sha,model['feature_version'],x.shape[1],{r['seed'] for r in rows})
         with torch.no_grad():
-            teacher_network=network(anchor['actor'])
+            teacher_network=network(anchor['actor']).to('cuda')
             for split in ('train','validation'):
-                bx=torch.tensor([r['features'] for r in bank[split]],dtype=torch.float32);bw=torch.tensor([r['weight'] for r in bank[split]],dtype=torch.float32)
+                bx=torch.tensor([r['features'] for r in bank[split]],dtype=torch.float32,device='cuda');bw=torch.tensor([r['weight'] for r in bank[split]],dtype=torch.float32,device='cuda')
                 bank_tensors[split]=(bx,bw,teacher_network(bx))
     with torch.no_grad():
-        lp,_=log_prob(actor,std,x,z,attack,vertical);log_error=float((lp-old).abs().max());value_error=float((value(x).squeeze(1)-torch.tensor([r['sample']['value'] for r in rows])).abs().max())
+        lp,_=log_prob(actor,std,x,z,attack,vertical,weapon);log_error=float((lp-old).abs().max());value_error=float((value(x).squeeze(1)-torch.tensor([r['sample']['value'] for r in rows],device='cuda')).abs().max())
         assert log_error<1e-3 and value_error<1e-4, (log_error,value_error)
     benchmarks={}
     for device in training_devices():
         probe=network(model['actor']).to(device);pstd=nn.Parameter(torch.tensor(model['log_std'],device=device));px,pz,pa,pv,po,pad,pret=[t.to(device) for t in data];opt=torch.optim.Adam(list(probe.parameters())+[pstd],lr=config['actor_lr'])
         def step():
-            opt.zero_grad();plp,ent=log_prob(probe,pstd,px,pz,pa,pv);ratio=(plp-po).exp();loss=-torch.minimum(ratio*pad,ratio.clamp(1-config['clip'],1+config['clip'])*pad).mean()-config['entropy']*ent.mean()
-            if teacher is not None:loss=loss+retention_weight*anchor_kl(probe(px),pstd,teacher.to(device),teacher_std.to(device))
+            opt.zero_grad();plp,ent=log_prob(probe,pstd,px,pz,pa,pv,weapon);ratio=(plp-po).exp();loss=-torch.minimum(ratio*pad,ratio.clamp(1-config['clip'],1+config['clip'])*pad).mean()-config['entropy']*ent.mean()
+            if teacher is not None:loss=loss+retention_weight*anchor_kl(probe(px),pstd,teacher.to(device),teacher_std.to(device),weapon_mask=feature_mask(px) if weapon_head else None)
             if bank is not None:
-                bx,bw,bt=bank_tensors['train'];loss=loss+a.bank_weight*anchor_kl(probe(bx.to(device)),pstd,bt.to(device),teacher_std.to(device),bw.to(device))
+                bx,bw,bt=bank_tensors['train'];loss=loss+a.bank_weight*anchor_kl(probe(bx.to(device)),pstd,bt.to(device),teacher_std.to(device),bw.to(device),feature_mask(bx.to(device)) if weapon_head else None)
             loss.backward();opt.step()
         for _ in range(10):step()
         if device=='cuda':torch.cuda.synchronize()
@@ -216,9 +221,9 @@ def main():
     bank_tensors={s:tuple(t.to(device) for t in tensors) for s,tensors in bank_tensors.items()}
     def bank_loss(split='train'):
         if bank is None:return torch.zeros((),device=device)
-        bx,bw,bt=bank_tensors[split];return anchor_kl(actor(bx),std,bt,teacher_std,bw)
+        bx,bw,bt=bank_tensors[split];return anchor_kl(actor(bx),std,bt,teacher_std,bw,feature_mask(bx) if weapon_head else None)
     def retention_loss():
-        return anchor_kl(actor(x),std,teacher,teacher_std) if teacher is not None else torch.zeros((),device=device)
+        return anchor_kl(actor(x),std,teacher,teacher_std,weapon_mask=feature_mask(x) if weapon_head else None) if teacher is not None else torch.zeros((),device=device)
     with torch.no_grad():initial_anchor_kl=float(retention_loss())
     with torch.no_grad():initial_bank_kl={s:float(bank_loss(s)) for s in bank_tensors}
     ad=(ad-ad.mean())/(ad.std(unbiased=False)+1e-8)
@@ -232,7 +237,7 @@ def main():
             torch.cuda.set_rng_state_all([s.cpu() for s in checkpoint['cuda_rng']])
     done=0;backtracks=0;rejected_steps=0;actor_trials=[];start=time.perf_counter()
     for _ in range(config['actor_steps']):
-        lp,entropy=log_prob(actor,std,x,z,attack,vertical);ratio=(lp-old).exp();kl=((ratio-1)-(lp-old)).mean()
+        lp,entropy=log_prob(actor,std,x,z,attack,vertical,weapon);ratio=(lp-old).exp();kl=((ratio-1)-(lp-old)).mean()
         if float(kl.detach())>config['target_kl']:break
         loss=-torch.minimum(ratio*ad,ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*entropy.mean()
         loss=loss+retention_weight*retention_loss()+a.bank_weight*bank_loss()
@@ -240,7 +245,7 @@ def main():
         # Checking KL only before the next step can leave an excessive proposal
         # published. Restore the optimizer too and retry a smaller step.
         def candidate_objective():
-                candidate_lp,candidate_entropy=log_prob(actor,std,x,z,attack,vertical);candidate_ratio=(candidate_lp-old).exp()
+                candidate_lp,candidate_entropy=log_prob(actor,std,x,z,attack,vertical,weapon);candidate_ratio=(candidate_lp-old).exp()
                 candidate_kl=((candidate_ratio-1)-(candidate_lp-old)).mean()
                 candidate_loss=-torch.minimum(candidate_ratio*ad,candidate_ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*candidate_entropy.mean()
                 candidate_loss=candidate_loss+retention_weight*retention_loss()+a.bank_weight*bank_loss()
@@ -254,7 +259,7 @@ def main():
         vloss=((value(x).squeeze(1)-returns)**2).mean();assert torch.isfinite(vloss);value_opt.zero_grad();vloss.backward();nn.utils.clip_grad_norm_(value.parameters(),config['max_grad_norm']);value_opt.step()
     if device=='cuda':torch.cuda.synchronize()
     with torch.no_grad():
-        lp,_=log_prob(actor,std,x,z,attack,vertical);ratio=(lp-old).exp();final_kl=float(((ratio-1)-(lp-old)).mean());value_loss=float(((value(x).squeeze(1)-returns)**2).mean())
+        lp,_=log_prob(actor,std,x,z,attack,vertical,weapon);ratio=(lp-old).exp();final_kl=float(((ratio-1)-(lp-old)).mean());value_loss=float(((value(x).squeeze(1)-returns)**2).mean())
     updated={**model,'actor':layers(actor),'value':layers(value),'log_std':std.detach().cpu().tolist()}
     with torch.no_grad():final_anchor_kl=float(retention_loss())
     if a.anchor_model and sha(a.anchor_model)!=anchor_sha:raise ValueError('Anchor changed during update')
@@ -273,6 +278,7 @@ def main():
     report.update(retention=retention,retention_weight=retention_weight,initial_anchor_kl=initial_anchor_kl,final_anchor_kl=final_anchor_kl)
     if bank_spec is not None:report.update(retention_bank=bank_spec,bank_kl_before=initial_bank_kl,bank_kl_after=final_bank_kl,bank_rows={s:len(bank[s]) for s in bank_tensors})
     if bank_spec is not None:report['bank_helper_sha256']=sha(pathlib.Path(__file__).with_name('combat_retention_bank.py'))
+    report.update(weapon_head=weapon_head,actor_parameters=sum(p.numel() for p in actor.parameters())+std.numel(),critic_parameters=sum(p.numel() for p in value.parameters()))
     report.update(actor_step_guard='uphill_first_moment_v1',actor_trials=actor_trials,direction_fallbacks=sum(t['direction_fallback'] for t in actor_trials))
     if a.resume:assert sha(pathlib.Path(a.resume))==report['resume_sha256']
     (out/'trainer.py').write_bytes(pathlib.Path(__file__).read_bytes())

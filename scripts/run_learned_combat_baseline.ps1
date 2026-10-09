@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateRange(2,4)][int]$Workers=4,
+    [ValidateRange(1,4)][int]$Workers=4,
     [ValidateRange(1,20)][int]$EpisodesPerWorker=2,
     [ValidateSet(1,2)][int]$Timescale=2,
     [ValidateRange(20,500)][int]$GameFrames=300,
@@ -335,5 +335,9 @@ if(!$KeepRuntimeAssets){
             & "$PSScriptRoot/cleanup_completed_runtime_paks.ps1" -RuntimeRoot (Join-Path $result.root 'runtime')
         }
     }
+}
+$streamBoundary=[IO.Path]::GetFullPath((Join-Path $repo 'workspace/artifacts')).TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
+if([IO.Path]::GetFullPath($OutputRoot).StartsWith($streamBoundary,[StringComparison]::OrdinalIgnoreCase)){
+    & "$PSScriptRoot/compress_completed_combat_streams.ps1" -Root $OutputRoot
 }
 if(!$report.capture_complete){throw 'Baseline capture/provenance incomplete; inspect preserved reports'}
