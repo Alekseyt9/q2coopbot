@@ -68,8 +68,11 @@ def guarded_actor_step(parameters,optimizer,objective,loss_before,base_lr,target
             result.update(accepted=True,retry=retry,accepted_grad_dot_delta=float(dot));return result
     restore();return result
 
-def log_prob(actor,std,x,z,attack,vertical,weapon=None):
+def log_prob(actor,std,x,z,attack,vertical,weapon=None,target=None):
     raw=actor(x)
+    if raw.shape[1]==45:
+        from combat_target_head import probabilities
+        return probabilities(raw,std,z,attack,vertical,weapon,x,target)
     # Keep vertical logits separate from the optional 12-way weapon head.
     # PPO uses pre-tanh latent likelihood; fixed Jacobian cancels in ratio.
     return action_probabilities(raw,std,z,attack,vertical,weapon,
@@ -162,7 +165,12 @@ def main():
     validate_objective(config,meta)
     assert model['kind']=='combat_ppo_v1' and not model['deterministic'] and meta['version']=='combat_ppo_rollout_v1' and sha(model_path)==meta['model_sha256']
     weapon_head=model.get('weapon_head')
-    if weapon_head:assert weapon_head==HEAD_VERSION and model['feature_version']=='combat_features_v6' and len(model['actor'][-1]['bias'])==20
+    target_head=model.get('target_head')
+    if target_head:
+        from combat_target_head import validate_model
+        validate_model(model)
+        assert not a.anchor_model and not a.retention_bank, 'Target-head retention requires a target-aware anchor objective'
+    elif weapon_head:assert weapon_head==HEAD_VERSION and model['feature_version']=='combat_features_v6' and len(model['actor'][-1]['bias'])==20
     else:assert len(model['actor'][-1]['bias'])==8
     assert meta.get('feature_version','combat_features_v1')==model['feature_version'], 'Rollout feature version differs'
     assert sha(root/'rollout.jsonl')==meta['rollout_sha256']
@@ -176,6 +184,8 @@ def main():
     x,z,attack,vertical,old,ad,returns=data
     weapon=torch.tensor([r['sample'].get('weapon',0) for r in rows],dtype=torch.long,device='cuda') if weapon_head else None
     if not weapon_head:assert all(r['sample'].get('weapon',0)==0 for r in rows)
+    target=torch.tensor([r['sample'].get('target',0) for r in rows],dtype=torch.long,device='cuda') if target_head else None
+    if not target_head:assert all(r['sample'].get('target',0)==0 for r in rows)
     actor=network(model['actor']).to('cuda');value=network(model['value']).to('cuda');std=nn.Parameter(torch.tensor(model['log_std'],device='cuda'))
     checkpoint=None;consumed=[];updates=0;total_steps=0;resume_sha=sha(pathlib.Path(a.resume)) if a.resume else None
     if a.resume:checkpoint,consumed,updates,total_steps=restore_checkpoint(a.resume,model_path,config,actor,value,std,meta['rollout_sha256'])
@@ -199,13 +209,13 @@ def main():
                 bx=torch.tensor([r['features'] for r in bank[split]],dtype=torch.float32,device='cuda');bw=torch.tensor([r['weight'] for r in bank[split]],dtype=torch.float32,device='cuda')
                 bank_tensors[split]=(bx,bw,teacher_network(bx))
     with torch.no_grad():
-        lp,_=log_prob(actor,std,x,z,attack,vertical,weapon);log_error=float((lp-old).abs().max());value_error=float((value(x).squeeze(1)-torch.tensor([r['sample']['value'] for r in rows],device='cuda')).abs().max())
+        lp,_=log_prob(actor,std,x,z,attack,vertical,weapon,target);log_error=float((lp-old).abs().max());value_error=float((value(x).squeeze(1)-torch.tensor([r['sample']['value'] for r in rows],device='cuda')).abs().max())
         assert log_error<1e-3 and value_error<1e-4, (log_error,value_error)
     benchmarks={}
     for device in training_devices():
         probe=network(model['actor']).to(device);pstd=nn.Parameter(torch.tensor(model['log_std'],device=device));px,pz,pa,pv,po,pad,pret=[t.to(device) for t in data];opt=torch.optim.Adam(list(probe.parameters())+[pstd],lr=config['actor_lr'])
         def step():
-            opt.zero_grad();plp,ent=log_prob(probe,pstd,px,pz,pa,pv,weapon);ratio=(plp-po).exp();loss=-torch.minimum(ratio*pad,ratio.clamp(1-config['clip'],1+config['clip'])*pad).mean()-config['entropy']*ent.mean()
+            opt.zero_grad();plp,ent=log_prob(probe,pstd,px,pz,pa,pv,weapon,target);ratio=(plp-po).exp();loss=-torch.minimum(ratio*pad,ratio.clamp(1-config['clip'],1+config['clip'])*pad).mean()-config['entropy']*ent.mean()
             if teacher is not None:loss=loss+retention_weight*anchor_kl(probe(px),pstd,teacher.to(device),teacher_std.to(device),weapon_mask=feature_mask(px) if weapon_head else None)
             if bank is not None:
                 bx,bw,bt=bank_tensors['train'];loss=loss+a.bank_weight*anchor_kl(probe(bx.to(device)),pstd,bt.to(device),teacher_std.to(device),bw.to(device),feature_mask(bx.to(device)) if weapon_head else None)
@@ -237,7 +247,7 @@ def main():
             torch.cuda.set_rng_state_all([s.cpu() for s in checkpoint['cuda_rng']])
     done=0;backtracks=0;rejected_steps=0;actor_trials=[];start=time.perf_counter()
     for _ in range(config['actor_steps']):
-        lp,entropy=log_prob(actor,std,x,z,attack,vertical,weapon);ratio=(lp-old).exp();kl=((ratio-1)-(lp-old)).mean()
+        lp,entropy=log_prob(actor,std,x,z,attack,vertical,weapon,target);ratio=(lp-old).exp();kl=((ratio-1)-(lp-old)).mean()
         if float(kl.detach())>config['target_kl']:break
         loss=-torch.minimum(ratio*ad,ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*entropy.mean()
         loss=loss+retention_weight*retention_loss()+a.bank_weight*bank_loss()
@@ -245,7 +255,7 @@ def main():
         # Checking KL only before the next step can leave an excessive proposal
         # published. Restore the optimizer too and retry a smaller step.
         def candidate_objective():
-                candidate_lp,candidate_entropy=log_prob(actor,std,x,z,attack,vertical,weapon);candidate_ratio=(candidate_lp-old).exp()
+                candidate_lp,candidate_entropy=log_prob(actor,std,x,z,attack,vertical,weapon,target);candidate_ratio=(candidate_lp-old).exp()
                 candidate_kl=((candidate_ratio-1)-(candidate_lp-old)).mean()
                 candidate_loss=-torch.minimum(candidate_ratio*ad,candidate_ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*candidate_entropy.mean()
                 candidate_loss=candidate_loss+retention_weight*retention_loss()+a.bank_weight*bank_loss()
@@ -259,7 +269,7 @@ def main():
         vloss=((value(x).squeeze(1)-returns)**2).mean();assert torch.isfinite(vloss);value_opt.zero_grad();vloss.backward();nn.utils.clip_grad_norm_(value.parameters(),config['max_grad_norm']);value_opt.step()
     if device=='cuda':torch.cuda.synchronize()
     with torch.no_grad():
-        lp,_=log_prob(actor,std,x,z,attack,vertical,weapon);ratio=(lp-old).exp();final_kl=float(((ratio-1)-(lp-old)).mean());value_loss=float(((value(x).squeeze(1)-returns)**2).mean())
+        lp,_=log_prob(actor,std,x,z,attack,vertical,weapon,target);ratio=(lp-old).exp();final_kl=float(((ratio-1)-(lp-old)).mean());value_loss=float(((value(x).squeeze(1)-returns)**2).mean())
     updated={**model,'actor':layers(actor),'value':layers(value),'log_std':std.detach().cpu().tolist()}
     with torch.no_grad():final_anchor_kl=float(retention_loss())
     if a.anchor_model and sha(a.anchor_model)!=anchor_sha:raise ValueError('Anchor changed during update')

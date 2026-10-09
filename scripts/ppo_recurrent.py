@@ -116,7 +116,12 @@ def main():
     torch.backends.cuda.enable_flash_sdp(False);torch.backends.cuda.enable_mem_efficient_sdp(False);torch.backends.cuda.enable_math_sdp(True)
     model=read(args.model);assert model['kind']=='combat_ppo_v1' and not model['deterministic']
     weapon_head=model.get('weapon_head')
-    if weapon_head:
+    target_head=model.get('target_head')
+    if target_head:
+        from combat_target_head import validate_model
+        validate_model(model)
+        assert not args.retention_weight and not args.bank_weight, 'Target-aware retention objective not implemented'
+    elif weapon_head:
         assert weapon_head==HEAD_VERSION and model['feature_version']=='combat_features_v6' and not model.get('entity_attention')
         assert len(model['actor'][-1]['bias'])==20
     else:assert len(model['actor'][-1]['bias'])==8
@@ -145,7 +150,14 @@ def main():
         return module.to(device)
     actor=build('actor');value=build('value')
     x=torch.tensor([r['features'] for r in rows],dtype=torch.float32,device=device)
-    mask=feature_mask(x) if weapon_head else None
+    mask=feature_mask(x[:,:845]) if weapon_head else None
+    target=torch.tensor([r['sample'].get('target',0) for r in rows],dtype=torch.long,device=device) if target_head else None
+    if not target_head:assert all(r['sample'].get('target',0)==0 for r in rows)
+    def likelihood(raw,std,z,attack,vertical,weapon,mask):
+        if target_head:
+            from combat_target_head import probabilities as target_probabilities
+            return target_probabilities(raw,std,z,attack,vertical,weapon,x,target)
+        return probabilities(raw,std,z,attack,vertical,weapon,mask)
     weapon=torch.tensor([r['sample'].get('weapon',0) for r in rows],dtype=torch.long,device=device) if weapon_head else None
     if not weapon_head:assert all(r['sample'].get('weapon',0)==0 for r in rows)
     def compute(module,check=False,name='actor'):
@@ -155,7 +167,7 @@ def main():
     old=torch.tensor([r['sample']['log_probability'] for r in rows],device=device);ad=torch.tensor(adv,device=device);ret=torch.tensor(returns,device=device)
     with torch.no_grad():
         raw,actor_state_error=compute(actor,True,'actor');v,value_state_error=compute(value,True,'value')
-        lp,_=probabilities(raw,std,z,attack,vertical,weapon,mask)
+        lp,_=likelihood(raw,std,z,attack,vertical,weapon,mask)
         log_error=float((lp-old).abs().max());value_error=float((v[:,0]-torch.tensor([r['sample']['value'] for r in rows],device=device)).abs().max())
         assert log_error<.003 and value_error<1e-4 and max(actor_state_error,value_state_error)<2e-5,(log_error,value_error,actor_state_error,value_state_error)
     bank_tensors={}
@@ -173,7 +185,7 @@ def main():
     def bank_loss(split='train'):
         bx,bw,bt=bank_tensors[split];return anchor_kl(actor.single(bx),std,bt,teacher_std,bw,feature_mask(bx) if weapon_head else None)
     def objective():
-        raw,_=compute(actor);lp,entropy=probabilities(raw,std,z,attack,vertical,weapon,mask);ratio=(lp-old).exp()
+        raw,_=compute(actor);lp,entropy=likelihood(raw,std,z,attack,vertical,weapon,mask);ratio=(lp-old).exp()
         loss=-torch.minimum(ratio*ad,ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*entropy.mean()
         if args.retention_weight:loss=loss+args.retention_weight*anchor_kl(raw,std,teacher,teacher_std,weapon_mask=mask)
         if args.bank_weight:loss=loss+args.bank_weight*bank_loss()
@@ -187,8 +199,8 @@ def main():
         assert cp['anchor_sha256']==sha(args.anchor_model) and cp['bank_sha256']==sha(args.retention_bank)
         assert cp.get('retention_weights',[1.,1.])==[args.retention_weight,args.bank_weight]
         for module_name,module in [('actor',actor),('value',value)]:
-            assert all(torch.equal(v.cpu(),cp[module_name][k].cpu()) for k,v in module.state_dict().items())
-        assert torch.equal(std.detach().cpu(),cp['log_std'].cpu())
+            assert all(torch.equal(v,cp[module_name][k].to(device=v.device)) for k,v in module.state_dict().items())
+        assert torch.equal(std.detach(),cp['log_std'].to(device=std.device))
         consumed=cp['consumed_rollouts'];assert meta['rollout_sha256'] not in consumed
         updates=cp['updates_completed'];total=cp['total_actor_steps']
         actor_opt.load_state_dict(cp['actor_optimizer']);value_opt.load_state_dict(cp['value_optimizer'])

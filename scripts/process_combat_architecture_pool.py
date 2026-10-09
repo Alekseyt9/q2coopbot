@@ -64,6 +64,15 @@ def main():
     expected={}
     plans={}
     for p,binding in enumerate(models):
+        if binding.get('resume_checkpoint'):
+            assert binding['architecture']['architecture']!='mlp','Continuation adapter currently supports recurrent/attention checkpoints'
+            assert sha(binding['resume_checkpoint'])==binding['resume_checkpoint_sha256']
+            parent=read(binding['resume_report'])
+            assert sha(binding['resume_report'])==binding['resume_report_sha256']
+            assert parent['weights_sha256']==sha(binding['model']) and parent['device']=='cuda'
+            assert parent['updates_completed']==binding['parent_updates_completed']>=1
+            for source,field in [(args.config,'config_sha256'),(args.anchor,'anchor_sha256'),(args.bank,'bank_sha256')]:
+                assert sha(source)==parent[field],'Continuation training contract differs'
         path=pathlib.Path(binding['plan']); plan=read(path); plans[p]=plan
         receipt=next(x for x in pool['plans'] if pathlib.Path(x['path']).resolve()==path.resolve())
         assert sha(path)==receipt['sha256'] and sha(binding['model'])==receipt['model_sha256']==plan['model_sha256']
@@ -111,7 +120,7 @@ def main():
                 for filename,field in [('weights.json','weights_sha256'),('checkpoint.pt','checkpoint_sha256'),('report.json','report_sha256')]:
                     assert sha(update_root/filename)==seal[field],'Completed update changed'
                 update=read(update_root/'report.json')
-                assert update['device']=='cuda' and update['updates_completed']==1 and entry['weights_sha256']==seal['weights_sha256']
+                assert update['device']=='cuda' and update['updates_completed']==models[p].get('parent_updates_completed',0)+1 and entry['weights_sha256']==seal['weights_sha256']
                 assert entry['eligible_transitions']==update['rows'] and entry['actor_steps']==update['actor_steps']
             receipt=out/('resume-'+str(time.time_ns())+'.json')
             save(receipt,dict(completed_models=[x['model'] for x in results],driver_sha256=sha(__file__),
@@ -190,16 +199,20 @@ def main():
             command=[sys.executable,snapshots/trainer,'--model',binding['model'],'--data',model_root/'rollout',
                 '--config',out/'config.json','--out',model_root/'update','--retention-weight','0','--bank-weight','0']
             if trainer=='ppo_recurrent.py':command+=['--anchor-model',out/'anchor.json','--retention-bank',out/'bank.json']
+            if binding.get('resume_checkpoint'):command+=['--resume',binding['resume_checkpoint']]
             run(command,model_root/'train.log')
             update=read(model_root/'update/report.json')
-            assert update['device']=='cuda' and update['updates_completed']==1 and sha(model_root/'update/weights.json')==update['weights_sha256']
+            assert update['device']=='cuda' and update['updates_completed']==binding.get('parent_updates_completed',0)+1 and sha(model_root/'update/weights.json')==update['weights_sha256']
+            assert update['resume_sha256']==binding.get('resume_checkpoint_sha256')
             save(model_root/'update/complete.json',dict(version='combat_update_complete_v1',
                 weights_sha256=sha(model_root/'update/weights.json'),checkpoint_sha256=sha(model_root/'update/checkpoint.pt'),
                 report_sha256=sha(model_root/'update/report.json')))
             results.append(dict(model=binding['id'],architecture=binding['architecture'],initialization_seed=binding['initialization_seed'],
                 allocated_episodes=sum(len(t['seeds']) for t in plans[p]['tasks']),eligible_transitions=update['rows'],
                 actor_steps=update['actor_steps'],device=update['device'],weights=str(model_root/'update/weights.json'),
-                weights_sha256=update['weights_sha256'],checkpoint=str(model_root/'update/checkpoint.pt')))
+                weights_sha256=update['weights_sha256'],checkpoint=str(model_root/'update/checkpoint.pt'),
+                updates_completed=update['updates_completed'],total_actor_steps=update['total_actor_steps'],
+                resume_checkpoint_sha256=update['resume_sha256']))
             save(out/'training-updates.json',results)
             print(json.dumps(results[-1]),flush=True)
         assert sha(capture/'pool/report.json')==protocol['pool_sha256']

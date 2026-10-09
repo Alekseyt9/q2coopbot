@@ -69,7 +69,7 @@ def analyze(root):
                 outgoing=dict(outgoing),incoming=dict(incoming),native_damage_shot_ids=len(hits),kills=kills,
                 final_health=live[-1]['health'],goal_stop=(root/'goal-stop.json').exists(),
                 trace_sha256=hashlib.sha256((root/'bot.jsonl').read_bytes()).hexdigest(),
-                scope='First life after fixed release; command yaw to nearest clear observed enemy, horizontal only, without lead/pitch. Not hit accuracy. Low displacement is a stall proxy, not a proven wall collision.')
+                scope='First life after fixed release; minimum command yaw error to any clear observed enemy, horizontal only, without lead/pitch. Not hit accuracy. Low displacement is a stall proxy, not a proven wall collision.')
 
 def batch(path,label,episode):
     p=pathlib.Path(path);report=read(p/'report.json')

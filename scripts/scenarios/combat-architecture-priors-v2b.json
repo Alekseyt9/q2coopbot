@@ -1,0 +1,18 @@
+{
+  "version": "combat_architecture_prior_v2",
+  "seeds": [20261007, 20261008],
+  "epochs": 1000,
+  "learning_rate": 0.0003,
+  "movement_weight": 4.0,
+  "aim_weight": 1.0,
+  "aim_scale_degrees": 30.0,
+  "fire_weight": 10.0,
+  "pose_weight": 3.0,
+  "weapon_weight": 1.0,
+  "value_weight": 0.01,
+  "balance_discrete_heads": true,
+  "arms": [
+    {"id": "attention64-identity", "architecture": "attention", "width": 64, "initialization": "teacher_copy", "frozen_control": true},
+    {"id": "attention128-balanced", "architecture": "attention", "width": 128}
+  ]
+}

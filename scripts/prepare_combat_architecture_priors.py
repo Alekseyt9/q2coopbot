@@ -8,6 +8,7 @@ from ppo_combat import torch, nn, layers, network, sha
 from ppo_recurrent import Recurrent, initialize, VERSION, durable_json, durable_write
 from combat_attention import CausalAttention, attention_cell, TEMPORAL
 from train_combat_sequence_bc import read, tensors
+from combat_weapon_head import feature_mask
 
 
 class FeedForward(nn.Module):
@@ -66,7 +67,11 @@ def main():
     assert torch.cuda.is_available(), 'CUDA required'
     assert not args.out.exists(), 'Fresh output required'
     config, parent, meta = read(args.config), read(args.parent), read(args.data/'report.json')
-    assert config['version'] == 'combat_architecture_prior_v1' and meta['test_deferred']
+    assert config['version'] in ('combat_architecture_prior_v1','combat_architecture_prior_v2') and meta['test_deferred']
+    control_loss = config['version'] == 'combat_architecture_prior_v2'
+    if control_loss:
+        assert config['aim_scale_degrees']>0
+        assert all(config[k]>=0 for k in ('movement_weight','aim_weight','fire_weight','pose_weight','weapon_weight','value_weight'))
     assert parent['feature_version'] == meta['feature_version'] and parent.get('attention')
     assert len(set(config['seeds'])) == len(config['seeds']) >= 2
     assert 1 <= config['epochs'] <= 2000 and config['learning_rate'] > 0
@@ -97,7 +102,11 @@ def main():
         for arm in config['arms']:
             torch.manual_seed(seed)
             torch.cuda.manual_seed_all(seed)
-            model = fresh_model(parent, arm['architecture'], arm['width'])
+            if arm.get('initialization') == 'teacher_copy':
+                assert arm['architecture']=='attention' and arm['width']==len(parent['actor'][1]['bias'])
+                model=copy.deepcopy(parent);model['sampling_seed']=0;model['deterministic']=False
+            else:
+                model = fresh_model(parent, arm['architecture'], arm['width'])
             modules = {name: build(model, name) for name in ('actor', 'value')}
             parameters = [p for module in modules.values() for p in module.parameters()]
             optimizer = torch.optim.Adam(parameters, lr=config['learning_rate'])
@@ -107,7 +116,33 @@ def main():
                 predicted = {n: output(m, x) for n, m in modules.items()}
                 actor_error = predicted['actor'][valid]-targets[split]['actor'][valid]
                 value_error = predicted['value'][valid]-targets[split]['value'][valid]
-                objective = actor_error.square().mean()+config['value_weight']*value_error.square().mean()
+                student=predicted['actor'][valid];teacher_raw=targets[split]['actor'][valid]
+                move_error=student[:,:2].tanh()-teacher_raw[:,:2].tanh()
+                aim_error=student[:,2:4].tanh()-teacher_raw[:,2:4].tanh()
+                wrapped_aim=torch.stack(((aim_error[:,0]+1).remainder(2)-1,aim_error[:,1]),-1)
+                pose_teacher=teacher_raw[:,5:8].softmax(-1)
+                pose_kl=nn.functional.kl_div(student[:,5:8].log_softmax(-1),pose_teacher,reduction='batchmean')
+                fire_ce=nn.functional.binary_cross_entropy_with_logits(student[:,4],teacher_raw[:,4].sigmoid())
+                if control_loss and config.get('balance_discrete_heads'):
+                    fire_rows=nn.functional.binary_cross_entropy_with_logits(student[:,4],teacher_raw[:,4].sigmoid(),reduction='none')
+                    positive=teacher_raw[:,4]>=0
+                    if positive.any() and (~positive).any():fire_ce=.5*(fire_rows[positive].mean()+fire_rows[~positive].mean())
+                    pose_rows=nn.functional.kl_div(student[:,5:8].log_softmax(-1),pose_teacher,reduction='none').sum(-1)
+                    classes=teacher_raw[:,5:8].argmax(-1)
+                    pose_kl=torch.stack([pose_rows[classes==i].mean() for i in range(3) if (classes==i).any()]).mean()
+                weapon_kl=student.sum()*0;weapon_disagreement=None
+                if student.shape[-1]==20:
+                    mask=feature_mask(x[valid])
+                    sl=student[:,8:20].masked_fill(~mask,-1e9);tl=teacher_raw[:,8:20].masked_fill(~mask,-1e9)
+                    weapon_kl=nn.functional.kl_div(sl.log_softmax(-1),tl.softmax(-1),reduction='batchmean')
+                    weapon_disagreement=float((sl.argmax(-1)!=tl.argmax(-1)).float().mean())
+                if control_loss:
+                    objective=(config['movement_weight']*move_error.square().mean()+
+                        config['aim_weight']*(wrapped_aim*180/config['aim_scale_degrees']).square().mean()+
+                        config['fire_weight']*fire_ce+config['pose_weight']*pose_kl+
+                        config['weapon_weight']*weapon_kl+config['value_weight']*value_error.square().mean())
+                else:
+                    objective = actor_error.square().mean()+config['value_weight']*value_error.square().mean()
                 metrics = dict(actor_raw_rmse=float(actor_error.detach().square().mean().sqrt()),
                     value_rmse=float(value_error.detach().square().mean().sqrt()),
                     movement_rmse=float((predicted['actor'][..., :2].tanh()[valid]-
@@ -115,21 +150,28 @@ def main():
                     aim_rmse_degrees=float((predicted['actor'][..., 2:4].tanh()[valid]-
                                             targets[split]['actor'][..., 2:4].tanh()[valid]).square().mean().sqrt()*180),
                     fire_probability_rmse=float((predicted['actor'][...,4].sigmoid()[valid]-
-                                                  targets[split]['actor'][...,4].sigmoid()[valid]).square().mean().sqrt()))
+                                                  targets[split]['actor'][...,4].sigmoid()[valid]).square().mean().sqrt()),
+                    wrapped_aim_rmse_degrees=float(wrapped_aim.detach().square().mean().sqrt()*180),
+                    fire_choice_disagreement=float(((student[:,4]>=0)!=(teacher_raw[:,4]>=0)).float().mean()),
+                    pose_choice_disagreement=float((student[:,5:8].argmax(-1)!=teacher_raw[:,5:8].argmax(-1)).float().mean()),
+                    weapon_choice_disagreement=weapon_disagreement)
                 return objective, metrics
 
             with torch.no_grad():
                 before = {s: loss(s)[1] for s in data}
             start = time.perf_counter()
             curve = []
-            for epoch in range(config['epochs']):
+            training_epochs=0 if arm.get('frozen_control') else config['epochs']
+            for epoch in range(training_epochs):
                 optimizer.zero_grad()
                 objective, _ = loss('train')
                 assert torch.isfinite(objective)
                 objective.backward()
-                nn.utils.clip_grad_norm_(parameters, 1.)
+                if control_loss:
+                    for module in modules.values():nn.utils.clip_grad_norm_(module.parameters(),1.)
+                else:nn.utils.clip_grad_norm_(parameters, 1.)
                 optimizer.step()
-                if epoch % 50 == 0 or epoch+1 == config['epochs']:
+                if epoch % 50 == 0 or epoch+1 == training_epochs:
                     with torch.no_grad():
                         curve.append(dict(epoch=epoch+1, **{s: loss(s)[1] for s in data}))
             torch.cuda.synchronize()
@@ -158,14 +200,14 @@ def main():
             durable_write(arm_root/'initialization.pt', lambda f: torch.save(dict(
                 version='combat_distilled_prior_checkpoint_v1', architecture=arm['architecture'],
                 actor=modules['actor'].state_dict(), value=modules['value'].state_dict(),
-                optimizer=optimizer.state_dict(), epochs=config['epochs'],
+                optimizer=optimizer.state_dict(), epochs=training_epochs,
                 parent_sha256=receipts[str(args.parent)], weights_sha256=sha(arm_root/'weights.json'),
                 data_sha256=meta['data_sha256'], ppo_updates_completed=0,
                 scope='Distillation checkpoint; not a PPO resume checkpoint'), f))
             report = dict(version='combat_distilled_prior_v1', arm=arm, seed=seed, device='cuda',
                 actor_parameters=sum(p.numel() for p in modules['actor'].parameters()),
                 value_parameters=sum(p.numel() for p in modules['value'].parameters()),
-                epochs=config['epochs'], training_contexts=meta['counts']['train'],
+                epochs=training_epochs, requested_epochs=config['epochs'], frozen_control=bool(arm.get('frozen_control')), training_contexts=meta['counts']['train'],
                 validation_contexts=meta['counts']['validation'], before=before, after=after,
                 curve=curve, checks=checks, seconds=seconds, source_sha256=receipts,
                 ppo_updates_completed=0, weights_sha256=sha(arm_root/'weights.json'),

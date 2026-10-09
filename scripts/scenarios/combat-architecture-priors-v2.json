@@ -1,0 +1,17 @@
+{
+  "version": "combat_architecture_prior_v2",
+  "seeds": [20261007, 20261008],
+  "epochs": 500,
+  "learning_rate": 0.0001,
+  "movement_weight": 4.0,
+  "aim_weight": 1.0,
+  "aim_scale_degrees": 10.0,
+  "fire_weight": 1.0,
+  "pose_weight": 1.0,
+  "weapon_weight": 1.0,
+  "value_weight": 0.01,
+  "arms": [
+    {"id": "attention64-copy", "architecture": "attention", "width": 64, "initialization": "teacher_copy"},
+    {"id": "attention128-control", "architecture": "attention", "width": 128}
+  ]
+}

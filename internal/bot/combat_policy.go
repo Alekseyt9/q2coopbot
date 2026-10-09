@@ -18,6 +18,8 @@ type combatControl struct {
 	last               policy.Identity
 	lastHealth         int16
 	life               int
+	previousTarget     *policy.TargetIntent
+	observation        *policy.Observation
 }
 
 func (c *Client) combatObservation(now time.Time) policy.Observation {
@@ -33,10 +35,22 @@ func (c *Client) combatObservation(now time.Time) policy.Observation {
 	}
 	id.Life = b.life
 	b.last, b.lastHealth = id, s.Health
+	// Recurrent actions are cached per frame. Repeated callbacks must use the
+	// same history/tracks/previous intent too, rather than advancing History
+	// twice and invalidating the target of an already sampled action.
+	if b.observation != nil && b.observation.Identity == id {
+		o := *b.observation
+		o.AgeMS = now.Sub(c.planner.World.Updated).Milliseconds()
+		return o
+	}
 	o := policy.Observe(s, id, c.previous)
 	o.AgeMS = now.Sub(c.planner.World.Updated).Milliseconds()
 	policy.EnrichEnvironment(&o, s, c.planner.World.Geometry)
 	b.history.Enrich(&o)
+	if b.previousTarget != nil && policy.SameLife(b.previousTarget.Identity, id) && b.previousTarget.Identity.Frame+1 == id.Frame {
+		o.PreviousTarget = b.previousTarget
+	}
+	b.observation = &o
 	return o
 }
 
@@ -46,6 +60,7 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 	b := &c.combatControl
 	sel := &policy.Selection{Mode: b.mode, Owner: "rules"}
 	rules := func() (quake.UserCmd, quake.UserCmd, *policy.Selection, bool) {
+		b.previousTarget = nil
 		cmd := c.planner.command(c.previous)
 		return cmd, c.planner.World.Command.proposedCommand, sel, false
 	}
@@ -120,6 +135,10 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		return rules()
 	}
 	sel.Owner = "provider"
+	b.previousTarget = nil
+	if a.TargetEntity > 0 {
+		b.previousTarget = &policy.TargetIntent{Identity: o.Identity, Entity: a.TargetEntity, Track: a.TargetTrack}
+	}
 	c.planner.World.Command = CommandDecision{MoveSource: "policy", AimSource: "policy", proposedCommand: proposed}
 	for _, change := range changes {
 		if change.Component == "movement" {

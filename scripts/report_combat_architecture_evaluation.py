@@ -39,7 +39,11 @@ def main():
                      'kills':sum(x.get('monster_kills',0) for x in damage.get('by_mod',[])),
                      'outgoing_damage':sum(x.get('monster_health_damage',0) for x in damage.get('by_mod',[])),
                      'received_damage':damage['received_health_damage'],'frames':result['actual_game_frames'],
-                     'reward':result['dataset'].get('reward_sum'), 'report_sha256':sha(member/'report.json')}
+                     'reward':result['dataset'].get('reward_sum'), 'report_sha256':sha(member/'report.json'),
+                     'capture_guard_interventions':result['guard_interventions'],
+                     'capture_provider_controlled_frames':result['provider_controlled_frames'],
+                     'capture_frame_gaps':result['frame_gaps'],
+                     'selection_p95_us':result['selection_p95_us']}
                 rows.append(row); allrows.append(row)
         assert len(rows)==protocol['episodes_per_model']
         wins=sum(x['win'] for x in rows); deaths=sum(x['death'] for x in rows)
@@ -47,29 +51,59 @@ def main():
         for family in protocol['families']:
             selected=[x for x in rows if x['episode']==family]
             per_family[family]={'wins':sum(x['win'] for x in selected),'episodes':len(selected)}
+        latency=[x['selection_p95_us'] for x in rows if x['selection_p95_us'] is not None]
         variants.append({'variant':label,'episodes':len(rows),'wins':wins,'win_rate':wins/len(rows),'deaths':deaths,
+                         'mean_capture_guard_interventions':sum(x['capture_guard_interventions'] for x in rows)/len(rows),
+                         'capture_provider_controlled_frames':sum(x['capture_provider_controlled_frames'] for x in rows),
+                         'capture_frame_gaps':sum(x['capture_frame_gaps'] for x in rows),
+                         'mean_selection_p95_us':sum(latency)/len(latency) if latency else None,
                          'mean_kills':sum(x['kills'] for x in rows)/len(rows),
                          'mean_outgoing_damage':sum(x['outgoing_damage'] for x in rows)/len(rows),
                          'mean_received_damage':sum(x['received_damage'] for x in rows)/len(rows),'families':per_family})
         paired[label]={(x['episode'],x['seed']):x['win'] for x in rows}
     assert len(source_fingerprints)==1,'Mixed harness cohort'
     comparisons=[]
-    for model in [f'm{i}' for i in range(8)]:
+    models=sorted({e['model'] for e in protocol['evaluations'] if e['label'] in ('before','after')})
+    for model in models:
         before=paired[model+'-before']; after=paired[model+'-after']; assert before.keys()==after.keys()
         comparisons.append({'model':model,'gained_wins':sum(after[k] and not before[k] for k in before),
                             'lost_wins':sum(before[k] and not after[k] for k in before),
                             'win_delta':sum(after.values())-sum(before.values())})
+    reference_comparisons=[]
+    if protocol.get('comparison_reference'):
+        reference_label=protocol['comparison_reference'];reference=paired[reference_label]
+        for label,results in paired.items():
+            if label==reference_label:continue
+            assert reference.keys()==results.keys(),'Reference conditions differ'
+            reference_comparisons.append(dict(variant=label,reference=reference_label,
+                gained_wins=sum(results[k] and not reference[k] for k in reference),
+                lost_wins=sum(reference[k] and not results[k] for k in reference),
+                win_delta=sum(results.values())-sum(reference.values())))
     report={'state':'complete','episodes':len(allrows),'variants':variants,'paired_changes':comparisons,
+            'reference_comparisons':reference_comparisons,
             'protocol_sha256':sha(root/'protocol.json'),'pool_sha256':sha(pool_path),'member_proof':str(pool_path),
-            'scope':'Native paired validation on reused validation seeds; not untouched final-test superiority. Victory requires verified goal-stop.',
-            'source_fingerprint':next(iter(source_fingerprints))}
+            'scope':protocol.get('scope','Native paired validation on reused validation seeds; not untouched final-test superiority. Victory requires verified goal-stop.'),
+            'comparison_stage':protocol.get('comparison_stage','cuda_ppo'),
+            'source_fingerprint':next(iter(source_fingerprints)),
+            'execution_diagnostics_scope':'Guard events/provider frames/frame gaps are full native capture totals, not unique first-life collision counts. Selection latency is measured under pool load; synchronous lockstep throughput is separate from realtime behavior.'}
     save(root/'quality-report.json',report); save(root/'quality-episodes.json',allrows)
     lines=['# Парное сравнение архитектур, 2026-10-09','',report['scope'],'',
-           '| Вариант | Победы / 80 | Смерти | Урон монстрам, средний | Полученный урон, средний |',
+           '| Вариант | Победы | Смерти | Урон монстрам, средний | Полученный урон, средний |',
            '| --- | ---: | ---: | ---: | ---: |']
     for v in variants: lines.append(f"| {v['variant']} | {v['wins']}/{v['episodes']} | {v['deaths']} | {v['mean_outgoing_damage']:.1f} | {v['mean_received_damage']:.1f} |")
     lines+=['','| Модель | Изменение побед | Новые победы | Потерянные победы |','| --- | ---: | ---: | ---: |']
     for c in comparisons: lines.append(f"| {c['model']} | {c['win_delta']:+d} | {c['gained_wins']} | {c['lost_wins']} |")
+    if reference_comparisons:
+        lines+=['',f"Парные изменения относительно {protocol['comparison_reference']}:",'',
+                '| Вариант | Изменение побед | Новые победы | Потерянные победы |','| --- | ---: | ---: | ---: |']
+        for c in reference_comparisons:
+            lines.append(f"| {c['variant']} | {c['win_delta']:+d} | {c['gained_wins']} | {c['lost_wins']} |")
+    lines+=['',report['execution_diagnostics_scope'],'',
+            '| Вариант | Guard events, среднее / capture | Provider frames, всего | Frame gaps, всего | Mean selection p95, ms |',
+            '| --- | ---: | ---: | ---: | ---: |']
+    for v in variants:
+        latency='—' if v['mean_selection_p95_us'] is None else f"{v['mean_selection_p95_us']/1000:.2f}"
+        lines.append(f"| {v['variant']} | {v['mean_capture_guard_interventions']:.1f} | {v['capture_provider_controlled_frames']} | {v['capture_frame_gaps']} | {latency} |")
     (root/'quality-report.md').write_text('\n'.join(lines)+'\n',encoding='utf-8')
     save(root/'progress.json',{'stage':'quality_report_complete','episodes':len(allrows)})
     print(json.dumps({'state':'complete','episodes':len(allrows),'report':str(root/'quality-report.md')}))

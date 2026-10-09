@@ -44,6 +44,7 @@ type Enemy struct {
 // Tracks describe uninterrupted visible observations, not server generations.
 // Client/BSP-derived features are separate from offline server reward telemetry.
 type Observation struct {
+	PreviousTarget     *TargetIntent          `json:"previous_target_intent,omitempty"`
 	Composition        *[]MonsterCount        `json:"visible_monster_composition,omitempty"`
 	Geometry           *LocalGeometry         `json:"local_geometry"`
 	Projectiles        *[]Enemy               `json:"visible_projectiles"`
@@ -74,15 +75,17 @@ type Observation struct {
 }
 
 type Action struct {
-	Version    string   `json:"version"`
-	Identity   Identity `json:"identity"`
-	Forward    float64  `json:"forward"`
-	Side       float64  `json:"side"`
-	YawDelta   float64  `json:"yaw_delta_degrees"`
-	PitchDelta float64  `json:"pitch_delta_degrees"`
-	Attack     bool     `json:"attack"`
-	Vertical   string   `json:"vertical"` // release, jump, crouch
-	Weapon     string   `json:"weapon"`   // empty keeps the current weapon
+	TargetEntity int      `json:"target_entity,omitempty"`
+	TargetTrack  int      `json:"target_track,omitempty"`
+	Version      string   `json:"version"`
+	Identity     Identity `json:"identity"`
+	Forward      float64  `json:"forward"`
+	Side         float64  `json:"side"`
+	YawDelta     float64  `json:"yaw_delta_degrees"`
+	PitchDelta   float64  `json:"pitch_delta_degrees"`
+	Attack       bool     `json:"attack"`
+	Vertical     string   `json:"vertical"` // release, jump, crouch
+	Weapon       string   `json:"weapon"`   // empty keeps the current weapon
 }
 
 // Provider supplies actions directly, without calling the rules controller.
@@ -180,6 +183,21 @@ func Command(o Observation, a Action, deltaAngles [3]int16) (quake.UserCmd, erro
 	}
 	if a.Vertical != "release" && a.Vertical != "jump" && a.Vertical != "crouch" {
 		return quake.UserCmd{}, fmt.Errorf("unknown vertical action")
+	}
+	if a.TargetEntity != 0 || a.TargetTrack != 0 {
+		valid := false
+		for _, e := range TargetEnemies(o) {
+			_, known, err := ObservedAimDirection(o, e)
+			if err != nil {
+				return quake.UserCmd{}, err
+			}
+			if known && e.ID == a.TargetEntity && a.TargetEntity > 0 && (e.Track == nil && a.TargetTrack == 0 || e.Track != nil && *e.Track == a.TargetTrack) {
+				valid = true
+			}
+		}
+		if !valid {
+			return quake.UserCmd{}, fmt.Errorf("target not currently observed or track changed")
+		}
 	}
 	if a.Weapon != "" {
 		allowed := false

@@ -60,7 +60,7 @@ def main():
     proof={'version':'verified_evaluation_members_v1','state':'complete','source_unchanged':True,'jobs':jobs,'members':members,
            'protocol_sha256':sha(root/'protocol.json'),'source_fingerprint':next(iter(source_ids)),
            'native_source_fingerprint':next(iter(native_ids)),'binary_build_infos':buildinfos,
-           'scope':'1440 individual capture receipts validated; original aggregate failure retained. All actual binary hashes verified. Distinct build infos differ only in VCS dirty metadata.'}
+           'scope':f'{len(members)} individual capture receipts validated; original aggregate state retained. All actual binary hashes verified. Any distinct build infos were checked for differences beyond VCS dirty metadata.'}
     save(recovery/'verified-members.json',proof)
     print(json.dumps({'verified':len(members),'binary_variants':len(buildinfos),'proof':str(recovery/'verified-members.json')}))
 
