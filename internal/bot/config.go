@@ -32,6 +32,7 @@ type ConfigFile struct {
 		AASDir        string `json:"aas_dir"`
 	} `json:"client"`
 	Run struct {
+		CampaignLeader   bool     `json:"campaign_leader"`
 		CampaignRoute    []string `json:"campaign_route"`
 		CampaignUnitMaps []string `json:"campaign_unit_maps"`
 		Mode             string   `json:"mode"`
@@ -62,6 +63,7 @@ type ConfigFile struct {
 		CombatBarrier                bool   `json:"combat_barrier"`
 		CombatOnly                   bool   `json:"combat_only"`
 		Synchronous                  bool   `json:"synchronous"`
+		HitscanGuardProbe            bool   `json:"hitscan_guard_probe"`
 		TeacherVertical              bool   `json:"teacher_vertical"`
 		Light                        *int   `json:"light"`
 		WeaponSwitchFixture          string `json:"weapon_switch_fixture"`
@@ -182,6 +184,10 @@ func LoadConfig(path string) (Config, error) {
 		return cfg, fmt.Errorf("run.mode must be companion or campaign")
 	}
 	cfg.Campaign = file.Run.Mode == "campaign"
+	cfg.CampaignLeader = file.Run.CampaignLeader
+	if cfg.CampaignLeader && !cfg.Campaign {
+		return cfg, fmt.Errorf("run.campaign_leader requires campaign mode")
+	}
 	cfg.CampaignNextMap = file.Run.NextMap
 	cfg.CampaignRoute = append([]string(nil), file.Run.CampaignRoute...)
 	cfg.CampaignUnitMaps = append([]string(nil), file.Run.CampaignUnitMaps...)
@@ -236,6 +242,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestHideHealthFrames = file.Test.HideHealthFrames
 	cfg.TestInitialHealth = file.Test.InitialHealth
 	cfg.TestWeaponSwitchFixture = file.Test.WeaponSwitchFixture
+	cfg.TestHitscanGuardProbe = file.Test.HitscanGuardProbe
 	cfg.TestDisableProjectileLead = file.Test.DisableProjectileLead
 	cfg.TestProjectileComparison = file.Test.ProjectileComparison
 	cfg.TestCombatBarrier = file.Test.CombatBarrier

@@ -8,6 +8,7 @@ import (
 )
 
 type CampaignDecision struct {
+	Leader              bool                    `json:"leader,omitempty"`
 	RememberedOpenDoors map[int]quake.Mover     `json:"remembered_open_doors,omitempty"`
 	Objective           string                  `json:"objective"`
 	State               string                  `json:"state"`
@@ -21,6 +22,12 @@ type CampaignDecision struct {
 	TestGoalIndex       int                     `json:"test_goal_index,omitempty"`
 	Button              *CampaignButtonDecision `json:"button,omitempty"`
 	ButtonEffects       []ButtonEffect          `json:"button_effects,omitempty"`
+}
+
+// Leading preserves the observed teammate for combat safety while keeping
+// route ownership. The default campaign still yields to a present teammate.
+func (p *Planner) campaignActive(s quake.Snapshot) bool {
+	return p.Campaign && (p.CampaignLeader || s.Teammate == nil)
 }
 
 // A route explicitly resolves forward exits, including maps with return exits.
@@ -44,13 +51,13 @@ func validateCampaignRoute(route []string) error {
 // Before the exit, improve health using known useful kits. This is bounded
 // by the ordinary route/progress budget, not an obligation to reach full HP.
 func (p *Planner) preparingForExit(s quake.Snapshot) bool {
-	return !p.exitPreparationDone() && p.Campaign && s.Teammate == nil && s.Health > 0 && s.Health < 75 &&
+	return !p.exitPreparationDone() && p.campaignActive(s) && s.Health > 0 && s.Health < 75 &&
 		p.World.Campaign != nil && p.World.Campaign.Exit != nil &&
 		quake.Horizontal(s.Self, p.World.Campaign.Exit.Center) < 768
 }
 
 func (p *Planner) preparingSuppliesForExit(s quake.Snapshot) bool {
-	if p.exitPreparationDone() || !p.Campaign || s.Teammate != nil || s.Health < 45 || p.World.Campaign == nil || p.World.Campaign.Exit == nil || quake.Horizontal(s.Self, p.World.Campaign.Exit.Center) >= 768 {
+	if p.exitPreparationDone() || !p.campaignActive(s) || s.Health < 45 || p.World.Campaign == nil || p.World.Campaign.Exit == nil || quake.Horizontal(s.Self, p.World.Campaign.Exit.Center) >= 768 {
 		return false
 	}
 	for _, enemy := range s.Enemies {
@@ -63,7 +70,7 @@ func (p *Planner) preparingSuppliesForExit(s quake.Snapshot) bool {
 
 // Ambiguous destinations require next_map; do not guess a return transition.
 func (p *Planner) campaignGoal(s quake.Snapshot) (quake.Vec3, bool) {
-	d := &CampaignDecision{Objective: "complete_level", State: "exit_unknown"}
+	d := &CampaignDecision{Leader: p.CampaignLeader, Objective: "complete_level", State: "exit_unknown"}
 	p.campaignDoorMovers(s)
 	d.RememberedOpenDoors = p.campaignOpenedDoors
 	p.World.Campaign = d

@@ -1,9 +1,11 @@
 [CmdletBinding()]
 param(
+    [switch]$WithCampaignTeammate,
+    [switch]$Stochastic,
     [string]$Model='',
     [Parameter(Mandatory)][string]$OutputRoot,
     [int]$Seed=44900,[int]$Port=34100,
-    [ValidateRange(1,8)][int]$Workers=4,
+    [ValidateRange(1,16)][int]$Workers=4,
     [ValidateRange(100,10000)][int]$GameFrames=1800,
     [ValidateRange(0,3)][int]$Skill=1,
     [ValidateSet('base1','base2')][string[]]$Maps=@('base1','base2'),
@@ -26,7 +28,7 @@ if($Model){
     $sourceModel=(Resolve-Path -LiteralPath $Model).Path
     $modelHash=(Get-FileHash -LiteralPath $sourceModel).Hash.ToLowerInvariant()
     $weights=Get-Content -LiteralPath $sourceModel -Raw|ConvertFrom-Json -AsHashtable
-    $weights.deterministic=$true
+    $weights.deterministic=!$Stochastic
     $evalModel=Join-Path $OutputRoot 'deterministic-weights.json'
     $weights|ConvertTo-Json -Depth 100 -Compress|Set-Content -LiteralPath $evalModel -Encoding utf8
 }
@@ -51,20 +53,20 @@ foreach($map in $Maps){
                 New-Item -ItemType Directory -Path (Split-Path $dest -Parent) -Force|Out-Null
                 New-Item -ItemType HardLink -Path $dest -Target $asset.FullName -ErrorAction Stop|Out-Null
             }
-            $tasks+=@{map=$map;mode=$mode;seed=$runSeed;port=$taskPort;dir=$dir;runtime=$runtime}
+            $tasks+=@{map=$map;mode=$mode;seed=$runSeed;port=$taskPort;dir=$dir;runtime=$runtime;with_teammate=[bool]$WithCampaignTeammate}
         }
     }
 }
-@{source_model=$sourceModel;source_model_sha256=$modelHash;evaluation_model_sha256=$(if($evalModel){(Get-FileHash $evalModel).Hash.ToLowerInvariant()}else{''});deterministic=$true;source_fingerprint=$fingerprint;workers=$Workers;timescale=2;skill=$Skill;game_frames=$GameFrames;tasks=$tasks}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $OutputRoot 'manifest.json') -Encoding utf8
+@{source_model=$sourceModel;source_model_sha256=$modelHash;evaluation_model_sha256=$(if($evalModel){(Get-FileHash $evalModel).Hash.ToLowerInvariant()}else{''});deterministic=(!$Stochastic);with_campaign_teammate=[bool]$WithCampaignTeammate;source_fingerprint=$fingerprint;workers=$Workers;timescale=2;skill=$Skill;game_frames=$GameFrames;tasks=$tasks}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $OutputRoot 'manifest.json') -Encoding utf8
 $worker={
     param($task,$client,$evalModel,$frames,$skill,$scriptRoot)
     $ErrorActionPreference='Stop'
     . "$scriptRoot/read_damage_events.ps1"
-    $server=$null;$bot=$null
+    $server=$null;$bot=$null;$teammate=$null
     $trace=Join-Path $task.dir 'bot.jsonl'
     $stop=Join-Path $task.dir 'stop.txt'
     $watch=[diagnostics.stopwatch]::StartNew()
-    $report=@{map=$task.map;mode=$task.mode;seed=$task.seed;infrastructure_ok=$false;completed=$false;reason='not_started'}
+    $report=@{map=$task.map;mode=$task.mode;seed=$task.seed;with_campaign_teammate=$task.with_teammate;infrastructure_ok=$false;completed=$false;reason='not_started'}
     try{
         $next=if($task.map -eq 'base1'){'base2'}else{'base3'}
         $serverArgs="-portable +set ip 127.0.0.1 +set noipx 1 +set dedicated 1 +set coop 1 +set deathmatch 0 +set cheats 0 +set maxclients 4 +set port $($task.port) +set timescale 2 +set skill $skill +set g_test_seed $($task.seed) +set g_test_damage 1 +set sv_test_unlimited_loopback 1 +map $($task.map)"
@@ -75,11 +77,31 @@ $worker={
         $combat=@{mode=$task.mode}
         if($task.mode -eq 'learned'){$combat.provider_file=$evalModel}
         $config=Join-Path $task.dir 'config.json'
-        @{server=@{host='127.0.0.1';port=$task.port};client=@{name='CampaignBot';game_dir=(Join-Path $task.runtime 'baseq2')};combat=$combat;run=@{mode='campaign';campaign_route=@($task.map,$next);frame_paced=$true;game_frames=$frames;duration='240s'};output=@{trace_jsonl=$trace;combat_capture=$true;record_demo=$false;stop_file=$stop};test=@{campaign_combat_evaluation=$true}}|ConvertTo-Json -Depth 8|Set-Content $config -Encoding utf8
+        $botConfig=@{server=@{host='127.0.0.1';port=$task.port};client=@{name='CampaignBot';game_dir=(Join-Path $task.runtime 'baseq2')};combat=$combat;run=@{mode='campaign';campaign_route=@($task.map,$next);frame_paced=$true;game_frames=$frames;duration='240s'};output=@{trace_jsonl=$trace;combat_capture=$true;record_demo=$false;stop_file=$stop};test=@{campaign_combat_evaluation=$true}}
+        if($task.with_teammate){
+            $mateTrace=Join-Path $task.dir 'teammate.jsonl'
+            $mateConfig=Join-Path $task.dir 'teammate-config.json'
+            @{server=@{host='127.0.0.1';port=$task.port};client=@{name='CampaignLeader';game_dir=(Join-Path $task.runtime 'baseq2')};combat=@{mode='rules'};run=@{mode='campaign';campaign_route=@($task.map,$next);frame_paced=$true;game_frames=$frames;duration='240s'};output=@{trace_jsonl=$mateTrace;combat_capture=$true;record_demo=$false;stop_file=$stop};test=@{campaign_combat_evaluation=$true}}|ConvertTo-Json -Depth 8|Set-Content $mateConfig -Encoding utf8
+            $mateLeaderConfig=Get-Content -LiteralPath $mateConfig -Raw|ConvertFrom-Json -AsHashtable
+            $mateLeaderConfig.run.campaign_leader=$true
+            $mateLeaderConfig|ConvertTo-Json -Depth 8|Set-Content $mateConfig -Encoding utf8
+            $teammate=Start-Process $client -ArgumentList @('--config',('"'+$mateConfig+'"')) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $task.dir 'teammate.log') -RedirectStandardError (Join-Path $task.dir 'teammate.err')
+            $mateDeadline=(Get-Date).AddSeconds(15)
+            while(!(Test-Path $mateTrace) -or (Get-Item $mateTrace).Length -eq 0){if($teammate.HasExited -or (Get-Date) -gt $mateDeadline){throw 'Campaign teammate startup failed'};Start-Sleep -Milliseconds 100}
+            $botConfig.run.mode='companion'
+            $botConfig.run.Remove('campaign_route')
+            $botConfig.test=@{}
+            if($task.mode -eq 'learned'){$combat.live_companion=$true}
+        }
+        $botConfig|ConvertTo-Json -Depth 8|Set-Content $config -Encoding utf8
         $bot=Start-Process $client -ArgumentList @('--config',('"'+$config+'"')) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $task.dir 'bot.log') -RedirectStandardError (Join-Path $task.dir 'bot.err')
         $deadline=(Get-Date).AddSeconds(260)
         while(!$bot.HasExited){
             if((Get-Date) -gt $deadline){throw 'Client wall timeout'}
+            if($teammate -and $teammate.HasExited){
+                if($teammate.ExitCode){throw "Campaign teammate failed: $($teammate.ExitCode)"}
+                Set-Content -LiteralPath $stop -Value 'teammate_frame_budget'
+            }
             if(Test-Path $trace){
                 $tail=Get-Content -LiteralPath $trace -Tail 2
                 foreach($line in $tail){
@@ -101,7 +123,7 @@ $worker={
         if($report.reason -eq 'not_started'){$report.reason='frame_budget'}
     }catch{$report.reason=$_.Exception.Message}
     finally{
-        foreach($p in @($bot,$server)){if($p -and !$p.HasExited){Stop-Process -Id $p.Id -ErrorAction SilentlyContinue};if($p){$null=$p.WaitForExit(5000)}}
+        foreach($p in @($bot,$teammate,$server)){if($p -and !$p.HasExited){Stop-Process -Id $p.Id -ErrorAction SilentlyContinue};if($p){$null=$p.WaitForExit(5000)}}
         $report.wall_seconds=$watch.Elapsed.TotalSeconds
         try{
             $rows=@(Get-Content -LiteralPath $trace|ForEach-Object {try{$r=$_|ConvertFrom-Json;if($r.map -eq $task.map){$r}}catch{}})
@@ -111,6 +133,16 @@ $worker={
             foreach($r in $unique){if($prior.health -gt 0 -and $r.health -le 0){$deaths++};$prior=$r}
             $events=@(Read-DamageEvents (Join-Path $task.dir 'server.log')|Where-Object map -eq $task.map)
             $actor=$rows[0].self_entity
+            if($task.with_teammate){
+                $mateRows=@(Get-Content -LiteralPath $mateTrace|ForEach-Object {try{$r=$_|ConvertFrom-Json;if($r.map -eq $task.map){$r}}catch{}})
+                if(!$mateRows.Count){throw 'No teammate map trace'}
+                $mateActor=$mateRows[0].self_entity
+                if($mateActor -eq $actor){throw 'Distinct native teammate entity absent'}
+                $report.teammate_observed_frames=@($unique|Where-Object teammate).Count
+                $report.teammate_minimum_health=($mateRows.health|Measure-Object -Minimum).Minimum
+                $report.friendly_health_damage=[int](($events|Where-Object {$_.attacker -eq $actor -and $_.target -eq $mateActor}|Measure-Object live_health_damage -Sum).Sum)
+                $report.teammate_to_bot_health_damage=[int](($events|Where-Object {$_.attacker -eq $mateActor -and $_.target -eq $actor}|Measure-Object live_health_damage -Sum).Sum)
+            }
             $damage=Measure-BotDamage $events $actor
             $report.frames=$unique.Count;$report.first_frame=$unique[0].frame;$report.last_frame=$unique[-1].frame
             $report.game_seconds=($unique[-1].frame-$unique[0].frame)/10

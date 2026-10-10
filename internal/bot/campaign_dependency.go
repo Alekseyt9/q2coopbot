@@ -20,7 +20,7 @@ type CampaignDependency struct {
 
 // Discover goals only after an observed named door actually blocks movement.
 func (p *Planner) discoverCampaignDependency(s quake.Snapshot, dx, dy float64) {
-	if !p.Campaign || s.Teammate != nil || p.World.Goal != "reach_level_exit" || p.campaignUnitTrip != nil || s.Frame < p.campaignDependencyRetry {
+	if !p.campaignActive(s) || p.World.Goal != "reach_level_exit" || p.campaignUnitTrip != nil || s.Frame < p.campaignDependencyRetry {
 		return
 	}
 	g := p.World.Geometry

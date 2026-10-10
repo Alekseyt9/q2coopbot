@@ -43,13 +43,13 @@ func (p *Planner) cancelButtonTask(frame int) {
 }
 
 func (p *Planner) validateButtonOwner(s quake.Snapshot) {
-	if p.button != nil && (s.Health <= 0 || (p.button.campaign && (!p.Campaign || s.Teammate != nil)) || (!p.button.campaign && (s.Teammate == nil || s.TeammateEntity != p.button.teammateEntity))) {
+	if p.button != nil && (s.Health <= 0 || (p.button.campaign && !p.campaignActive(s)) || (!p.button.campaign && (s.Teammate == nil || s.TeammateEntity != p.button.teammateEntity))) {
 		p.cancelButtonTask(s.Frame)
 	}
 }
 
 func (p *Planner) selectButtonTask(s quake.Snapshot) *buttonTask {
-	campaign := p.World.Goal == "reach_level_exit" && p.Campaign && s.Teammate == nil
+	campaign := p.World.Goal == "reach_level_exit" && p.campaignActive(s)
 	if p.World.GeometryStatus != "ready" || (p.World.Goal != "follow_teammate" && !campaign) || !s.OnGround ||
 		s.Frame < p.buttonCooldown || quake.Horizontal(s.Self, p.goalPoint) > 256 {
 		return nil

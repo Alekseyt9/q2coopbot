@@ -89,8 +89,8 @@ func (p *Planner) rememberedCandidates(s quake.Snapshot) []quake.Object {
 			continue
 		}
 		at := healthStand(r.Item.Origin)
-		campaignHealth := p.Campaign && s.Teammate == nil && r.Item.Class == "item_health" && (s.Health < 45 || p.preparingForExit(s))
-		campaignPickup := p.Campaign && s.Teammate == nil && r.Item.Class != "item_health" && usefulRememberedPickup(s, r.Item.Class)
+		campaignHealth := p.campaignActive(s) && r.Item.Class == "item_health" && (s.Health < 45 || p.preparingForExit(s))
+		campaignPickup := p.campaignActive(s) && r.Item.Class != "item_health" && usefulRememberedPickup(s, r.Item.Class)
 		preparePickup := campaignPickup && p.preparingSuppliesForExit(s)
 		maxDistance := 480.0
 		if campaignHealth {

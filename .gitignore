@@ -33,3 +33,4 @@ __pycache__/
 *.ipch
 *.VC.db
 *.vsidx
+/workspace/cache

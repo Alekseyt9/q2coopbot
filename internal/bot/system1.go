@@ -81,7 +81,7 @@ func (t *Tactician) options(w World) []string {
 			actions = append(actions, "retreat")
 		}
 	}
-	if s.Teammate == nil && w.Campaign != nil && w.Goal == "reach_level_exit" {
+	if w.Campaign != nil && w.Goal == "reach_level_exit" {
 		if profile := combatSpacing(s); profile != nil && profile.NeedSpace && s.OnGround {
 			actions = append(actions, "retreat")
 		}

@@ -26,7 +26,7 @@ type ExitPreparation struct {
 }
 
 func (p *Planner) nearCampaignExit(s quake.Snapshot) bool {
-	return p.Campaign && s.Teammate == nil && s.Health > 0 && p.World.Campaign != nil && p.World.Campaign.Exit != nil && quake.Horizontal(s.Self, p.World.Campaign.Exit.Center) < 768
+	return p.campaignActive(s) && s.Health > 0 && p.World.Campaign != nil && p.World.Campaign.Exit != nil && quake.Horizontal(s.Self, p.World.Campaign.Exit.Center) < 768
 }
 
 func (p *Planner) updateExitPreparation(s quake.Snapshot) {

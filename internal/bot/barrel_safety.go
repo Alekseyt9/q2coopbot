@@ -37,6 +37,13 @@ func (p *Planner) guardBarrelShot(s quake.Snapshot, cmd quake.UserCmd) quake.Use
 	}
 	for index, barrel := range s.Barrels {
 		intersects := barrelRay(s.Self, start, barrel.Origin) || barrelRay(start, end, barrel.Origin)
+		if s.Weapon == "Blaster" {
+			axis, starts, padding := boltLaunchPaths(s, cmd)
+			for _, muzzle := range starts {
+				tip := quake.Vec3{muzzle[0] + 1000*axis[0], muzzle[1] + 1000*axis[1], muzzle[2] + 1000*axis[2]}
+				intersects = intersects || paddedBarrelRay(s.Self, muzzle, barrel.Origin, padding) || paddedBarrelRay(muzzle, tip, barrel.Origin, padding)
+			}
+		}
 		if machinegunWeapon(s.Weapon) || shotgunWeapon(s.Weapon) {
 			intersects = barrelRay(s.Self, start, barrel.Origin) || machinegunBarrelCone(start, end, barrel.Origin)
 		}
@@ -72,12 +79,17 @@ func (p *Planner) guardBarrelShot(s quake.Snapshot, cmd quake.UserCmd) quake.Use
 
 // Conservative padded stock barrel box, including network quantization.
 func barrelRay(from, to, at quake.Vec3) bool {
+	return paddedBarrelRay(from, to, at, 0)
+}
+
+func paddedBarrelRay(from, to, at quake.Vec3, padding float64) bool {
 	lo, hi := 0., 1.
 	for i := range from {
 		min, max := at[i]-24, at[i]+24
 		if i == 2 {
 			min, max = at[i]-8, at[i]+48
 		}
+		min, max = min-padding, max+padding
 		d := to[i] - from[i]
 		if math.Abs(d) < 1e-8 {
 			if from[i] < min || from[i] > max {

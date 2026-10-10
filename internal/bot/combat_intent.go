@@ -12,7 +12,7 @@ type CombatIntent struct {
 
 func combatIntent(w World) *CombatIntent {
 	s := w.Snapshot
-	if w.Campaign == nil || s.Teammate != nil || s.Health <= 0 {
+	if w.Campaign == nil || s.Teammate != nil && !w.Campaign.Leader || s.Health <= 0 {
 		return nil
 	}
 	if w.Goal == "recover_health" {

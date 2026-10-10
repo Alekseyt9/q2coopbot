@@ -53,6 +53,7 @@ type Planner struct {
 	campaignDestination       string
 	Campaign                  bool
 	CampaignNextMap           string
+	CampaignLeader            bool
 	CampaignRoute             []string
 	CampaignUnitMaps          []string
 	campaignRouteIndex        int
@@ -425,7 +426,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 	searching := false
 	regrouping := false
 	standalonePickup := false
-	campaign := p.Campaign && s.Teammate == nil
+	campaign := p.campaignActive(s)
 	p.World.Campaign = nil
 	if p.testCombatOnly {
 		// Isolated combat recipes have no level-exit objective. Retain all
@@ -489,7 +490,7 @@ func (p *Planner) update(s quake.Snapshot, root string) {
 			p.routeKnown = false
 		}
 	}
-	if s.Teammate != nil {
+	if s.Teammate != nil && !campaign {
 		goal = *s.Teammate
 	}
 	p.hasGoal = true
@@ -731,7 +732,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	s := p.World.Snapshot
 	defer func() {
 		p.World.Command.proposedCommand = result
-		result = p.guardBarrelShot(s, p.guardHandGrenade(s, p.limitMachinegunBurst(s, p.limitLaserMovement(s, result))))
+		result = p.guardBoltTeammate(s, p.guardBarrelShot(s, p.guardHandGrenade(s, p.limitMachinegunBurst(s, p.limitLaserMovement(s, result)))))
 	}()
 	if !isRailgun(s.Weapon) || s.Health <= 0 {
 		p.railAim = railAim{}
@@ -873,7 +874,7 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	if tactic == "circle" {
 		return p.combatCircle(cmd)
 	}
-	spacingGoal := s.Teammate != nil && (p.World.Goal == "cover_teammate" || p.World.Goal == "follow_teammate") && quake.Distance(s.Self, *s.Teammate) <= combatLeash(profile) || s.Teammate == nil && p.Campaign && p.World.Goal == "reach_level_exit"
+	spacingGoal := s.Teammate != nil && (p.World.Goal == "cover_teammate" || p.World.Goal == "follow_teammate") && quake.Distance(s.Self, *s.Teammate) <= combatLeash(profile) || p.campaignActive(s) && p.World.Goal == "reach_level_exit"
 	if spacingGoal && profile != nil && profile.Distance < profile.Minimum+32 && (tactic == "" || tactic == "attack" || tactic == "retreat") {
 		if profile.NeedSpace {
 			return p.combatRetreat(cmd, profile)

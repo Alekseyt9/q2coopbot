@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateRange(0,15)][int]$ClientStartupDelaySeconds=0,[string]$GeneratedFixture="",[ValidateSet('standard','remaining-far')][string]$ParasiteFixture='standard',[ValidateSet(0,100)][int]$ReleaseGameFrame=0,[ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$Synchronous,[switch]$StopOnGoal,[switch]$StopOnFirstDeath,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','machinegun','weapons','weapons-scarce','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
+param([switch]$GuardExpectBlocked,[string]$GuardTeammatePosition='',[ValidateRange(0,15)][int]$ClientStartupDelaySeconds=0,[string]$GeneratedFixture="",[ValidateSet('standard','remaining-far')][string]$ParasiteFixture='standard',[ValidateSet(0,100)][int]$ReleaseGameFrame=0,[ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$Synchronous,[switch]$StopOnGoal,[switch]$StopOnFirstDeath,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','machinegun','weapons','weapons-scarce','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
 $ErrorActionPreference='Stop';$repo=Split-Path $PSScriptRoot -Parent
 function Measure-BarrelSafety($Rows,$Events) {
     $actor=$Rows[0].self_entity
@@ -12,6 +12,14 @@ function Measure-BarrelSafety($Rows,$Events) {
         barrel_contacts=@($Events|Where-Object {$_.attacker -eq $actor -and $_.target_class -eq 'misc_explobox' -and $_.mod -ne 26}).Count
         scope='Observed stock barrels and Blaster shot guard; no unseen barrel or other weapon acceptance'
     }
+}
+if($GuardExpectBlocked -and !$GuardTeammatePosition){throw 'GuardExpectBlocked requires GuardTeammatePosition'}
+if($GuardTeammatePosition){
+    if(!$Worker -or $Synchronous -or !$ParasiteWeapon -or $ParasiteLoadout -ne 'machinegun' -or $CombatMode -ne 'learned' -or $ReleaseGameFrame -ne 0 -or !$ProviderFile -or $GeneratedFixture){throw 'Guard teammate trial requires a standalone real-time Machinegun probe without isolated frame control'}
+    $ProviderFile=(Resolve-Path -LiteralPath $ProviderFile).Path
+    $guardProvider=Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json
+    if($guardProvider.kind -ne 'combat_control_probe_v1'){throw 'Guard teammate trial requires a diagnostic probe, not training weights'}
+    foreach($action in $guardProvider.steps){if(!$action.attack -or $action.forward -or $action.side -or $action.yaw_delta_degrees -or $action.pitch_delta_degrees -or $action.vertical -ne 'release'){throw 'Guard teammate probe must only request fixed aim fire'}}
 }
 if($StopOnGoal -and (!$Synchronous -or !$ParasiteWeapon)){throw 'Goal stop requires a synchronous combat fixture'}
 if($StopOnFirstDeath -and !$StopOnGoal){throw 'First-life death stopping requires goal supervision'}
@@ -26,7 +34,7 @@ if(($ParasiteMixed -or $ParasiteHealthKit) -and !$ParasiteWeapon){throw 'Parasit
 if($RequireMixedDetour -and (!$ParasiteMixed -or $ParasiteMixedClass -ne 'monster_gunner')){throw 'Required mixed detour needs observed Gunner/Parasite fixture'}
 if($Synchronous -and (!$Rules -or !$CombatCapture -or !$ParasiteWeapon -or $ParasiteLoadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce')){throw 'Unsupported synchronous equipment'}
 if($ParasiteLoadout -in 'weapons','weapons-scarce' -and (!$Synchronous -or $CombatMode -ne 'learned' -or $TrainingMonsterHealth)){throw 'Weapon-choice fixture requires synchronous direct learned control'}
-if($ParasiteLoadout -eq 'machinegun' -and (!$Synchronous -or $TrainingMonsterHealth)){throw 'Fixed Machinegun requires synchronous capture without health override'}
+if($ParasiteLoadout -eq 'machinegun' -and ((!$Synchronous -and !$GuardTeammatePosition) -or $TrainingMonsterHealth)){throw 'Fixed Machinegun requires synchronous capture or the explicit real-time guard probe without health override'}
 if($ParasiteLoadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){throw 'Fixed Shotgun exercise requires synchronous rules'}
 if($ParasiteFixture -ne 'standard' -and (!$Synchronous -or !$ParasiteWeapon -or $ParasiteMixed -or $ParasiteHealthKit -or $ParasiteHealth -ne 100 -or $TrainingMonsterHealth -or $ParasiteLoadout -ne 'blaster' -or $CombatMode -ne 'learned')){throw 'Remaining-Parasite fixture requires stock isolated direct synchronous Blaster'}
 if(!$Worker){
@@ -99,6 +107,14 @@ if($Group -or $GroupRetreat -or $ParasiteMixed){
     if($generated){$flankOrigin=Format-GeneratedPosition $generated.monsters[1].position ' '}
     [IO.File]::AppendAllText($entityPath,"`n{`n`"classname`" `"$flankClass`"`n`"origin`" `"$flankOrigin`"`n}`n",[Text.Encoding]::ASCII)
 }
+if($GuardTeammatePosition){
+    # Isolate friendly-fire geometry from unrelated barrel blast suppression.
+    $guardEntities=Join-Path $runtime "baseq2/maps/$fixtureMap.ent"
+    $guardText=[IO.File]::ReadAllText($guardEntities)
+    $barrelPattern='(?ms)\{[^{}]*"classname"\s+"misc_explobox"[^{}]*\}\s*'
+    $removedBarrels=[regex]::Matches($guardText,$barrelPattern).Count
+    [IO.File]::WriteAllText($guardEntities,[regex]::Replace($guardText,$barrelPattern,''),[Text.Encoding]::ASCII)
+}
 $server=$null;$bot=$null;$trace=Join-Path $OutputRoot 'bot.jsonl';$report=@{accepted=$false;reason='not_run';seed=$Seed}
 try{
     $env:Q2COOPBOT_TEST_RCON=[guid]::NewGuid().ToString('N')
@@ -118,7 +134,7 @@ try{
     if($generated){$placement=Format-GeneratedPosition $generated.player;$enemyOrigin=Format-GeneratedPosition $generated.monsters[0].position;$enemyClass=$generated.monsters[0].class}
     $report.parasite_fixture=$ParasiteFixture
     $initialHealth=if($ParasiteWeapon){$ParasiteHealth}elseif($CornerEscape){65}elseif($Recovery){$RecoveryHealth}elseif($Group -or $GroupRetreat){100}elseif($Cover -or $Circle){25}else{0}
-    @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};combat=@{mode=$CombatMode;provider_file=$ProviderFile};run=@{duration=$(if($GameFrames){$(if($Synchronous){'120s'}else{'60s'})}else{'15s'});game_frames=$GameFrames;frame_paced=$true;mode='campaign';next_map=$(if($fixtureMap -eq 'base2'){'base3'}else{'base2'})};test=@{combat_only=$combatOnly;teleport_map=$fixtureMap;teleport=$placement;spawn_map=$fixtureMap;spawn_soldier=$enemyOrigin;spawn_class=$enemyClass;teacher_vertical=[bool]$TeacherVertical;synchronous=[bool]$Synchronous;combat_barrier=[bool]$Synchronous;setup_hold_frames=$(if($Cover -or $Circle -or $GroupRetreat -or $Recovery -or $CornerEscape -or $ParasiteWeapon){10}else{0});initial_health=$initialHealth;weapon_switch_fixture=$(if($ParasiteWeapon){"parasite_$ParasiteLoadout"}else{""})};output=@{stop_file=$(if($StopOnGoal){Join-Path $OutputRoot 'goal.stop'}else{''});trace_jsonl=$trace;combat_capture=[bool]$CombatCapture}}|ConvertTo-Json -Depth 6|Set-Content $config
+    @{server=@{host='127.0.0.1';port=$Port};client=@{name='SoloRetreatBot';game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=$System1};combat=@{mode=$CombatMode;provider_file=$ProviderFile};run=@{duration=$(if($GameFrames){$(if($Synchronous){'120s'}else{'60s'})}else{'15s'});game_frames=$GameFrames;frame_paced=$true;mode='campaign';next_map=$(if($fixtureMap -eq 'base2'){'base3'}else{'base2'})};test=@{hitscan_guard_probe=[bool]$GuardTeammatePosition;combat_only=$combatOnly;teleport_map=$fixtureMap;teleport=$placement;spawn_map=$fixtureMap;spawn_soldier=$enemyOrigin;spawn_class=$enemyClass;teacher_vertical=[bool]$TeacherVertical;synchronous=[bool]$Synchronous;combat_barrier=[bool]$Synchronous;setup_hold_frames=$(if($Cover -or $Circle -or $GroupRetreat -or $Recovery -or $CornerEscape -or $ParasiteWeapon){10}else{0});initial_health=$initialHealth;weapon_switch_fixture=$(if($ParasiteWeapon){"parasite_$ParasiteLoadout"}else{""})};output=@{stop_file=$(if($StopOnGoal){Join-Path $OutputRoot 'goal.stop'}else{''});trace_jsonl=$trace;combat_capture=[bool]$CombatCapture}}|ConvertTo-Json -Depth 6|Set-Content $config
     $server=Start-Process (Join-Path $runtime 'q2ded.exe') -ArgumentList $args -WorkingDirectory $runtime -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'server.log') -RedirectStandardError (Join-Path $OutputRoot 'server.err')
     # A CIM endpoint query can delay client launch past the fixed frame-100
     # release when many instances boot together. Probe this server directly.
@@ -141,6 +157,18 @@ try{
             }
         }while(!$ready)
     }finally{$probe.Dispose()}
+    if($GuardTeammatePosition){
+        $mateConfig=Join-Path $OutputRoot 'guard-mate-config.json'
+        $mateTrace=Join-Path $OutputRoot 'guard-mate.jsonl'
+        @{server=@{host='127.0.0.1';port=$Port};client=@{name='GuardMate';game_dir=(Join-Path $runtime 'baseq2')};run=@{duration='120s';frame_paced=$true};test=@{idle=$true;teleport_map=$fixtureMap;teleport=$GuardTeammatePosition;initial_health=100;setup_hold_frames=10};output=@{trace_jsonl=$mateTrace}}|ConvertTo-Json -Depth 6|Set-Content -LiteralPath $mateConfig -Encoding utf8NoBOM
+        $friendlyActor=Start-Process $Client -ArgumentList "--config `"$mateConfig`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'guard-mate.log') -RedirectStandardError (Join-Path $OutputRoot 'guard-mate.err')
+        $mateDeadline=(Get-Date).AddSeconds(10)
+        while(!(Test-Path -LiteralPath $mateTrace)){
+            if($friendlyActor.HasExited -or (Get-Date) -ge $mateDeadline){throw 'Guard teammate failed to produce a snapshot'}
+            Start-Sleep -Milliseconds 100
+        }
+        $report.guard_teammate_position=$GuardTeammatePosition
+    }
     $report.reset_to_udp_ready_seconds=$resetClock.Elapsed.TotalSeconds
     $report.reset_scope='Cold runtime preparation plus native server restart to UDP bind; protocol begin is measured separately by the client'
     $report.client_startup_delay_seconds=$ClientStartupDelaySeconds
@@ -151,6 +179,23 @@ try{
     $rows=@(Get-Content $trace|ForEach-Object {$_|ConvertFrom-Json})
     . "$PSScriptRoot/read_damage_events.ps1"
     $events=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log'))
+    if($GuardTeammatePosition){
+        $owned=@($rows|Where-Object {$_.combat_policy.selection.owner -eq 'provider' -and $_.teammate_entity -gt 0 -and $_.weapon -like '*/v_machn/*'})
+        if($owned.Count -lt 10){throw 'Guard diagnostic requires observed teammate and provider-owned Machinegun frames'}
+        $actor=[int]$owned[0].self_entity;$mate=[int]$owned[0].teammate_entity
+        $mateRows=@(Get-Content -LiteralPath $mateTrace|ForEach-Object {$_|ConvertFrom-Json})
+        if(!$mateRows.Count -or @($mateRows|Where-Object {$_.self_entity -ne $mate -or $_.health -le 0}).Count){throw 'Guard teammate missing, changed identity or died'}
+        $nativeShots=@(Get-Content -LiteralPath (Join-Path $OutputRoot 'server.log')|Where-Object {$_ -match "^sv_test_hitscan .* event=fire .* actor=$actor mod=4 "})
+        $friendDamage=@($events|Where-Object {$_.attacker -eq $actor -and $_.target -eq $mate -and $_.live_health_damage -gt 0})
+        $fireCommands=@($owned|Where-Object {$_.sent_command.Buttons -band 1})
+        $blocked=@($owned|Where-Object {@($_.combat_policy.selection.interventions|Where-Object reason -eq 'machinegun_partner_guard').Count})
+        if($friendDamage.Count){throw 'Native friendly damage in guard diagnostic'}
+        if($GuardExpectBlocked){if(!$blocked.Count -or $nativeShots.Count -or $fireCommands.Count){throw 'Unsafe teammate placement did not suppress actual fire'}}
+        elseif(!$nativeShots.Count -or !$fireCommands.Count){throw 'Safe teammate placement did not produce native Machinegun fire'}
+        $report.guard_acceptance=@{timescale=$Timescale;expected_blocked=[bool]$GuardExpectBlocked;provider_frames=$owned.Count;blocked_frames=$blocked.Count;sent_fire_frames=$fireCommands.Count;native_machinegun_shots=$nativeShots.Count;friendly_damage_events=$friendDamage.Count;teammate_minimum_health=($mateRows.health|Measure-Object -Minimum).Minimum;monster_damage_to_teammate=[int](($events|Where-Object {$_.target -eq $mate -and $_.attacker_class -like 'monster_*'}|Measure-Object live_health_damage -Sum).Sum);removed_barrels=$removedBarrels;scope='Two vulnerable native clients, fixed diagnostic aim/fire; timescale recorded separately; stock spread/recoil, controlled barrel-free scene. Monster damage is reported separately; no learned-policy or general friendly-fire acceptance'}
+        $report.accepted=$true;$report.reason='guard_native_accepted'
+        return
+    }
     $report.barrel_safety=Measure-BarrelSafety $rows $events
     if($report.barrel_safety.suppressed_attack_violations){throw 'Barrel guard retained attack'}
     $report.campaign_engagement=@{
@@ -346,7 +391,7 @@ try{
         if(!$chosen.Count -or !$hidden.Count -or !$fired.Count -or !$returned.Count){throw 'Model-selected hide/fire/return cycle absent'}
         $report.scope=if($CoverFight){'Prepared single infantry fight: repeated model-selected cover exposures, attributed projectile damage and native kill; no group or general campaign acceptance'}else{'Prepared single infantry cover cycle; no group or general campaign acceptance'}
     }
-    if($rows|Where-Object {$_.map -ne 'base1' -or $_.teammate -or $_.health -le 0}){throw 'Unexpected map/teammate/death'}
+    if($rows|Where-Object {$_.map -ne 'base1' -or ($_.teammate -and !$GuardTeammatePosition) -or $_.health -le 0}){throw 'Unexpected map/teammate/death'}
     . "$PSScriptRoot/read_damage_events.ps1"
     $events=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log'));$actor=$rows[0].self_entity
     $report.damage_summary=Measure-BotDamage $events $actor
@@ -371,7 +416,7 @@ try{
         if(!$report.post_combat_route_frames){throw 'Campaign movement after recovered combat absent'}
     }
     $expectedKills=if($Group -or $GroupRetreat -or $ParasiteMixed){2}else{1}
-    if($report.kills -ne $expectedKills -and !$Cover -and !$GroupRetreat){throw 'Native target kill absent'}
+    if($report.kills -ne $expectedKills -and !$Cover -and !$GroupRetreat -and !$GuardTeammatePosition){throw 'Native target kill absent'}
     if($CoverFight -and ($report.kills -ne 1 -or $report.cover_exposures -lt 2)){throw 'Repeated cover exposures and native kill absent'}
     if(@(Get-Content (Join-Path $OutputRoot 'server.log')|Where-Object {$_ -eq "g_test_seed ready version=1 seed=$Seed"}).Count -ne 1){throw 'Seed acknowledgement absent'}
     $commands=Get-Content (Join-Path $OutputRoot 'bot.err')
@@ -406,7 +451,7 @@ try{
     }
 }
 finally{
-    foreach($process in @($bot,$server)){if($process -and !$process.HasExited){Stop-Process -Id $process.Id;$null=$process.WaitForExit(5000)}}
+    foreach($process in @($bot,$friendlyActor,$server)){if($process -and !$process.HasExited){Stop-Process -Id $process.Id;$null=$process.WaitForExit(5000)}}
     if((Test-Path $trace) -and (Test-Path (Join-Path $OutputRoot 'server.log'))){
         try{$report.first_life_diagnostic=& "$PSScriptRoot/analyze_combat_first_life.ps1" -RunRoot $OutputRoot}
         catch{$report.first_life_diagnostic_error=$_.Exception.Message}

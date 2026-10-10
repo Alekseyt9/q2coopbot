@@ -40,6 +40,7 @@ type Client struct {
 	testProjectileComparison                bool
 	testCombatBarrier, testCombatGo         bool
 	testSynchronous                         bool
+	testHitscanGuardProbe                   bool
 	testTeacherVertical                     bool
 	testLight                               *int
 	testCombatGoFrame                       int
@@ -612,7 +613,7 @@ func (c *Client) run(ctx context.Context) error {
 					setup = []string{"give Railgun", "give Slugs 10", "use Railgun"}
 				}
 				var payload []byte
-				if c.testSynchronous {
+				if c.testSynchronous || c.testHitscanGuardProbe {
 					setup = []string{"give Shotgun", "give Shells 20", "use Blaster"}
 					if c.testWeaponSwitchFixture == "parasite_machinegun" {
 						setup = []string{"give Machinegun", "give Bullets 100", "use Machinegun"}

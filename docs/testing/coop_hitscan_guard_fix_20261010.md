@@ -64,3 +64,52 @@ Replay активного префикса живой stochastic записи, �
 native сценарий с двумя клиентами на безопасных/опасных расположениях,
 проверяя actual shots/damage и отсутствие урона напарнику в принятой сцене.
 Живой сервер и бот с человеком не перезапускались; human client закрыт.
+
+## Применено после закрытия оценки
+
+560 evaluation и все диагностики закрыты. Candidate Go файлы перенесены
+в основной checkout после проверки исходных489 SHA. Основные geometry
+tests и существующие Blaster projectile friend/ray regressions прошли,
+результат `main-geometry-tests.jsonl`. Живой бинарник не заменён.
+
+В существующий `run_solo_tactical_retreat.ps1` добавлена отключённая по
+умолчанию опция GuardTeammatePosition для диагностического MG probe с
+двумя уязвимыми клиентами. Первый native запуск завершился на проверке
+single-client no_infighting: для двух клиентов этот fixture-only флаг
+отключён. Второй завершился на native проверке isolated release100,
+которая также рассчитана на одного клиента. Gameplay/native acceptance
+ещё отсутствует. Следующий запуск должен использовать supported двухклиентный
+barrier без single-client fixed release; native ограничения обучения
+ослаблять для этого нельзя. Неуспешные setup попытки сохранены.
+
+## Закрытая native проверка двух клиентов
+
+Предыдущий абзац описывает ранние setup попытки. Итоговые `native-safe-v8`
+и `native-blocked-v1` завершились с `accepted=true`. Существующий harness
+получил отдельный real-time диагностический режим с фиксированным probe;
+он принимает только локальный probe, а не веса нейросети. Ограничения
+lockstep обучения и natural evaluation сохранены.
+
+В безопасной позиции: 52 команды огня, 50 native Machinegun выстрелов,
+0 отмен и 0 событий урона бота напарнику. Напарник уязвим: монстр нанёс
+46 единиц урона по native ledger, минимальный наблюдаемый HP — 52.
+В опасной позиции: 52 отмены, 0 команд огня, 0 native выстрелов,
+0 friendly damage и минимальный HP напарника 100.
+
+Оба сценария использовали timescale=2; девять бочек удалены из diagnostic
+scene для отделения barrel guard. Геометрия карты, native spread/recoil
+и уязвимость клиентов сохранены. Это проверка двух расположений,
+не общая гарантия friendly fire и не оценка learned PPO в кооперативе.
+
+Повторные целевые geometry/probe/live-config regression tests прошли
+на основном checkout с base1 BSP из диагностического runtime. Первый
+повтор с неправильным asset root завершился ошибкой отсутствия карты;
+исправленный запуск сохранён отдельно, без перезаписи ошибки.
+Численные CPU neural тесты не запускались. После native captures удалена
+недостижимая synchronous ветка harness и исправлено описание timescale;
+эти изменения не меняют проверенное поведение игры.
+
+Закрывающий artifact: `native-acceptance.json` с SHA отчётов, native ledger,
+probe, бинарника и исходников; `pending-change.json` обновлён до
+`geometry_and_native_cases_verified`. Живой сервер с человеком и его
+бинарник не заменены. Следующий этап — learned companion с напарником.

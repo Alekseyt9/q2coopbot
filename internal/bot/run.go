@@ -29,6 +29,7 @@ type Config struct {
 	TestCampaignCombatEvaluation        bool
 	Campaign                            bool
 	CampaignNextMap                     string
+	CampaignLeader                      bool
 	CampaignRoute                       []string
 	CampaignUnitMaps                    []string
 	CheckpointControl                   string
@@ -41,6 +42,7 @@ type Config struct {
 	TestProjectileComparison            bool
 	TestCombatBarrier                   bool
 	TestSynchronous                     bool
+	TestHitscanGuardProbe               bool
 	TestCombatOnly                      bool
 	TestTeacherVertical                 bool
 	TestLight                           *int
@@ -141,6 +143,9 @@ func parseTestCampaignGoals(value string) ([]quake.Vec3, error) {
 }
 
 func Run(ctx context.Context, cfg Config) (runErr error) {
+	if cfg.CampaignLeader && !cfg.Campaign {
+		return fmt.Errorf("campaign leader requires campaign mode")
+	}
 	if cfg.CombatMode == "" {
 		cfg.CombatMode = "rules"
 	}
@@ -148,6 +153,11 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		return fmt.Errorf("unknown combat mode")
 	}
 	var combatProvider policy.Provider
+	if cfg.TestHitscanGuardProbe {
+		if err := validateHitscanGuardProbe(cfg); err != nil {
+			return err
+		}
+	}
 	if cfg.CombatLiveCompanion {
 		if err := validateLiveLearnedCompanion(cfg); err != nil {
 			return err
@@ -160,17 +170,24 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		}
 	}
 	if cfg.CombatMode != "rules" {
-		if !naturalCombat && (cfg.Host != "127.0.0.1" || !cfg.FramePaced || !cfg.CombatCapture || cfg.CombatProviderFile == "" || cfg.TestTeleport == "" || cfg.Idle || cfg.TestScenario != "" || cfg.TestSession != "" || cfg.TestWalkTarget != "" || cfg.TestLineCross || cfg.TestCombatBarrier && !cfg.TestSynchronous || cfg.TestHoldPosition || cfg.TestHoldPositionMap != "" || cfg.TestWeaponSwitchFixture != "" && cfg.TestWeaponSwitchFixture != "parasite_blaster" && !(cfg.TestSynchronous && (cfg.TestWeaponSwitchFixture == "parasite_machinegun" || multiWeaponFixture(cfg.TestWeaponSwitchFixture)))) {
+		if !naturalCombat && (cfg.Host != "127.0.0.1" || !cfg.FramePaced || !cfg.CombatCapture || cfg.CombatProviderFile == "" || cfg.TestTeleport == "" || cfg.Idle || cfg.TestScenario != "" || cfg.TestSession != "" || cfg.TestWalkTarget != "" || cfg.TestLineCross || cfg.TestCombatBarrier && !cfg.TestSynchronous || cfg.TestHoldPosition || cfg.TestHoldPositionMap != "" || cfg.TestWeaponSwitchFixture != "" && cfg.TestWeaponSwitchFixture != "parasite_blaster" && !cfg.TestHitscanGuardProbe && !(cfg.TestSynchronous && (cfg.TestWeaponSwitchFixture == "parasite_machinegun" || multiWeaponFixture(cfg.TestWeaponSwitchFixture)))) {
 			return fmt.Errorf("direct/shadow combat pilot requires isolated loopback placement, frame pacing, capture, probe and a supported fixed weapon without scripted command overrides")
 		}
 		var err error
-		if naturalCombat {
+		if cfg.TestHitscanGuardProbe {
+			combatProvider, err = policy.LoadProbe(cfg.CombatProviderFile)
+		} else if naturalCombat {
 			combatProvider, err = policy.LoadPPO(cfg.CombatProviderFile)
 		} else {
 			combatProvider, err = policy.LoadProvider(cfg.CombatProviderFile, cfg.TestSynchronous)
 		}
 		if err != nil {
 			return fmt.Errorf("combat provider: %w", err)
+		}
+		if cfg.TestHitscanGuardProbe {
+			if _, ok := combatProvider.(*policy.Probe); !ok {
+				return fmt.Errorf("hitscan guard diagnostic requires a local probe; neural providers must use the training or natural evaluation path")
+			}
 		}
 		if naturalCombat {
 			if _, ok := combatProvider.(*policy.PPO); !ok {
@@ -450,7 +467,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		testWalkRunIn:    cfg.TestWalkRunIn,
 		testWalkThenPlan: cfg.TestWalkThenPlan,
 		conn:             conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
-		decoder: quake.NewDecoder(), planner: &Planner{Campaign: cfg.Campaign, CampaignNextMap: cfg.CampaignNextMap, CampaignRoute: append([]string(nil), cfg.CampaignRoute...), CampaignUnitMaps: append([]string(nil), cfg.CampaignUnitMaps...), AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53, TestDisableProjectileLead: cfg.TestDisableProjectileLead, TestDisableHandGrenade: cfg.Idle || cfg.TestWeaponSwitchFixture == "hand_grenade_observe" || cfg.TestWeaponSwitchFixture == "hand_grenade_guard" || handGrenadeArmFixture(cfg.TestWeaponSwitchFixture)},
+		decoder: quake.NewDecoder(), planner: &Planner{Campaign: cfg.Campaign, CampaignLeader: cfg.CampaignLeader, CampaignNextMap: cfg.CampaignNextMap, CampaignRoute: append([]string(nil), cfg.CampaignRoute...), CampaignUnitMaps: append([]string(nil), cfg.CampaignUnitMaps...), AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53, TestDisableProjectileLead: cfg.TestDisableProjectileLead, TestDisableHandGrenade: cfg.Idle || cfg.TestWeaponSwitchFixture == "hand_grenade_observe" || cfg.TestWeaponSwitchFixture == "hand_grenade_guard" || handGrenadeArmFixture(cfg.TestWeaponSwitchFixture)},
 		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name, checkpointControl: cfg.CheckpointControl, checkpointRestore: restore, checkpointMode: cfg.CheckpointMode,
 		memoryFile: cfg.MemoryFile, memorySession: cfg.MemorySession,
 		idle: cfg.Idle, duration: cfg.Duration, framePaced: cfg.FramePaced, gameFrames: cfg.GameFrames,
@@ -470,6 +487,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		testProjectileComparison: cfg.TestProjectileComparison,
 		testCombatBarrier:        cfg.TestCombatBarrier,
 		testSynchronous:          cfg.TestSynchronous,
+		testHitscanGuardProbe:    cfg.TestHitscanGuardProbe,
 		testTeacherVertical:      cfg.TestTeacherVertical,
 		testLight:                cfg.TestLight,
 		testGroundEdgeProbe:      cfg.TestGroundEdgeProbe,
