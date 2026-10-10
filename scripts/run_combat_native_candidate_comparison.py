@@ -16,6 +16,8 @@ def main():
     ap = argparse.ArgumentParser()
     for name in ('reference','parent-update','candidate-update','out'):
         ap.add_argument('--'+name, type=pathlib.Path, required=True)
+    ap.add_argument('--candidate-branch', choices=('control','quality'), default='quality',
+                    help='Explicit sealed A/B branch to compare with the unchanged parent')
     a = ap.parse_args()
     repo = pathlib.Path(__file__).resolve().parents[1]
     reference, parent, candidate, out = [p.resolve() for p in
@@ -31,7 +33,7 @@ def main():
     spec = read(reference/'protocol.json')
     assert pathlib.Path(spec['parent']).resolve() == parent
     assert sha(parent/'weights.json') == spec['parent_weights_sha256']
-    assert candidate == reference/'quality/processing/quality/update'
+    assert candidate == reference/a.candidate_branch/'processing'/a.candidate_branch/'update'
     before, after = sealed_update(parent), sealed_update(candidate)
     assert after['updates_completed'] == before['updates_completed']+1
     assert before['architecture'] == after['architecture']
@@ -39,13 +41,13 @@ def main():
     assert shutil.disk_usage(out.parent).free > 8*1024**3
     out.mkdir()
     compiler = reference/'q2episode.exe'
-    template = read(reference/'quality/capture/train/plan.json')
+    template = read(reference/a.candidate_branch/'capture/train/plan.json')
     assert len(spec['families']) == len(set(spec['families'])) == 20
     save(out/'selection.json',dict(reference=str(reference),reference_result_sha256=sha(reference/'result.json'),
-        parent_update=str(parent),candidate_update=str(candidate),
+        parent_update=str(parent),candidate_update=str(candidate),candidate_branch=a.candidate_branch,
         parent_checkpoint_sha256=sha(parent/'checkpoint.pt'),candidate_checkpoint_sha256=sha(candidate/'checkpoint.pt'),
         compiler_sha256=sha(compiler),registry_path=template['registry_path'],registry_sha256=template['registry_sha256'],
-        scope='Development candidate follow-up, not final test or promotion. Reward-v9 candidate versus unchanged strong parent and rules.'))
+        scope='Development candidate follow-up, not final test or promotion. Explicit sealed A/B branch versus unchanged strong parent and rules.'))
     try:
         plans, entries, conditions = [], [], None
         for name, update in [('parent',parent),('after',candidate),('rules',None)]:
@@ -76,7 +78,7 @@ def main():
             comparison_reference='rules-baseline',reference_result_sha256=sha(reference/'result.json'),
             validation_offset=28,training_device='cuda',promotion=None,
             scope='Parent and candidate x two policy RNG arms plus rules. Identical80 generated validation conditions28..31; '
-                  'RNG arms repeat these scenes, not160 independent conditions. Common v9 labels; reward sums are not quality metrics. '
+                  'RNG arms repeat these scenes, not160 independent conditions. Common candidate objective labels; reward sums are not quality metrics. '
                   'Reused development, reserved test untouched; no training or automatic promotion.'))
         assert verify_sources(repo,reference/'evaluation') == source_binding
         save(out/'progress.json',dict(stage='evaluating',episodes=400,promotion=None))

@@ -109,8 +109,15 @@ def main():
     ap.add_argument('--init',action='store_true');ap.add_argument('--architecture',choices=('gru','attention','entity'),default='gru');ap.add_argument('--width',type=int,default=64);ap.add_argument('--data',type=pathlib.Path);ap.add_argument('--config',type=pathlib.Path);ap.add_argument('--resume',type=pathlib.Path)
     ap.add_argument('--anchor-model',type=pathlib.Path);ap.add_argument('--retention-bank',type=pathlib.Path)
     ap.add_argument('--retention-weight',type=float,default=1.);ap.add_argument('--bank-weight',type=float,default=1.)
+    ap.add_argument('--sequence-retention-spec',type=pathlib.Path)
+    ap.add_argument('--sequence-retention-weight',type=float,default=0.)
+    ap.add_argument('--fork-sequence-retention',action='store_true',
+                    help='Explicit objective fork preserving actor/critic/Adam for sequence retention')
     args=ap.parse_args();training_devices();torch.set_num_threads(2);torch.manual_seed(20261006);torch.use_deterministic_algorithms(True)
     assert all(math.isfinite(w) and w >= 0 for w in (args.retention_weight,args.bank_weight))
+    assert math.isfinite(args.sequence_retention_weight) and args.sequence_retention_weight >= 0
+    assert args.sequence_retention_spec is not None or args.sequence_retention_weight == 0
+    assert not args.fork_sequence_retention or (args.resume and args.sequence_retention_spec)
     # cuDNN GRU TF32 drifts from Go FP64 by ~2e-3 on real traces.
     # Keep FP32 CUDA training and the existing state parity tolerance.
     torch.backends.cudnn.allow_tf32=False;torch.backends.cuda.matmul.allow_tf32=False
@@ -182,6 +189,19 @@ def main():
         lp,_=likelihood(raw,std,z,attack,vertical,weapon,mask)
         log_error=float((lp-old).abs().max());value_error=float((v[:,0]-torch.tensor([r['sample']['value'] for r in rows],device=device)).abs().max())
         assert log_error<.003 and value_error<1e-4 and max(actor_state_error,value_state_error)<2e-5,(log_error,value_error,actor_state_error,value_state_error)
+    sequence_retention = None
+    if args.sequence_retention_spec:
+        assert target_head and not entity, 'Sequence retention requires an explicit target-aware history contract'
+        from combat_sequence_retention import load_spec, policy_kl
+        seq_spec, positions = load_spec(args.sequence_retention_spec,meta,rows,sha(args.model))
+        seq_positions = torch.tensor(positions,dtype=torch.long,device=device)
+        seq_weights = torch.tensor([m['weight'] for m in seq_spec['members']],dtype=torch.float64,device=device)
+        seq_teacher, seq_std = raw.detach().clone(), std.detach().clone()
+        sequence_retention = dict(version=seq_spec['version'],spec_sha256=sha(args.sequence_retention_spec),
+            weight=args.sequence_retention_weight,rows=len(positions),behavior_sha256=sha(args.model))
+        def sequence_loss(current):
+            terms = policy_kl(current[seq_positions],std,seq_teacher[seq_positions],seq_std,x[seq_positions])
+            return (terms * seq_weights).sum()
     bank_tensors={}
     if args.retention_weight or args.bank_weight:
         anchor=read(args.anchor_model);assert not anchor.get('memory') and anchor['feature_version']==model['feature_version']
@@ -201,6 +221,7 @@ def main():
         loss=-torch.minimum(ratio*ad,ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*entropy.mean()
         if args.retention_weight:loss=loss+args.retention_weight*anchor_kl(raw,std,teacher,teacher_std,weapon_mask=mask)
         if args.bank_weight:loss=loss+args.bank_weight*bank_loss()
+        if args.sequence_retention_weight:loss=loss+args.sequence_retention_weight*sequence_loss(raw)
         return loss,((ratio-1)-(lp-old)).mean()
     actor_opt=torch.optim.Adam(list(actor.parameters())+[std],lr=config['actor_lr']);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
     consumed=[];updates=0;total=0;migrations=[]
@@ -210,6 +231,8 @@ def main():
         assert cp['version']=='combat_architecture_checkpoint_v1' and cp['architecture']==expected_version and cp['weights_sha256']==sha(args.model) and cp['config']==config
         assert cp['anchor_sha256']==sha(args.anchor_model) and cp['bank_sha256']==sha(args.retention_bank)
         assert cp.get('retention_weights',[1.,1.])==[args.retention_weight,args.bank_weight]
+        if not args.fork_sequence_retention:
+            assert cp.get('sequence_retention') == sequence_retention, 'Explicit sequence objective fork required'
         for module_name,module in [('actor',actor),('value',value)]:
             assert all(torch.equal(v,cp[module_name][k].to(device=v.device)) for k,v in module.state_dict().items())
         assert torch.equal(std.detach(),cp['log_std'].to(device=std.device))
@@ -219,6 +242,7 @@ def main():
         torch.set_rng_state(cp['rng']);torch.cuda.set_rng_state_all(cp['cuda_rng'])
     ad=(ad-ad.mean())/(ad.std(unbiased=False)+1e-8)
     with torch.no_grad():initial_bank={s:float(bank_loss(s)) for s in bank_tensors}
+    with torch.no_grad():sequence_kl_before=float(sequence_loss(raw)) if sequence_retention else None
     trials=[];start=time.perf_counter();parameters=list(actor.parameters())+[std]
     for _ in range(config['actor_steps']):
         loss,kl=objective()
@@ -231,6 +255,7 @@ def main():
         value_opt.zero_grad();loss.backward();nn.utils.clip_grad_norm_(value.parameters(),config['max_grad_norm']);value_opt.step()
     torch.cuda.synchronize();seconds=time.perf_counter()-start
     with torch.no_grad():loss,kl=objective();final_bank={s:float(bank_loss(s)) for s in bank_tensors}
+    with torch.no_grad():sequence_kl_after=float(sequence_loss(compute(actor)[0])) if sequence_retention else None
     assert torch.isfinite(kl) and float(kl)<=config['target_kl']+1e-6
     base_a,cell_a=actor.export();base_v,cell_v=value.export()
     updated={**model,'actor':base_a,'value':base_v,'log_std':std.detach().cpu().tolist(),key:{**spec,'actor':cell_a,'value':cell_v}}
@@ -243,6 +268,7 @@ def main():
     args.out.mkdir(exist_ok=False);durable_json(args.out/'weights.json',updated)
     cp={'version':'combat_architecture_checkpoint_v1','architecture':expected_version,'weights_sha256':sha(args.out/'weights.json'),'config':config,'anchor_sha256':sha(args.anchor_model),'bank_sha256':sha(args.retention_bank),'actor':actor.state_dict(),'value':value.state_dict(),'log_std':std.detach(),'actor_optimizer':actor_opt.state_dict(),'value_optimizer':value_opt.state_dict(),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all(),'consumed_rollouts':consumed+[meta['rollout_sha256']],'updates_completed':updates+1,'total_actor_steps':total+done}
     cp['retention_weights']=[args.retention_weight,args.bank_weight]
+    if sequence_retention:cp['sequence_retention']=sequence_retention
     if migrations:cp['model_migrations']=migrations
     durable_write(args.out/'checkpoint.pt',lambda output:torch.save(cp,output))
     durable_write(args.out/'trainer.py',lambda output:output.write(pathlib.Path(__file__).read_bytes()))
@@ -250,6 +276,12 @@ def main():
     report['retention_weight']=args.retention_weight;report['bank_weight']=args.bank_weight
     report['weapon_head']=weapon_head
     report['model_migrations']=migrations
+    report['sequence_retention']=sequence_retention
+    report['sequence_retention_kl_before']=sequence_kl_before
+    report['sequence_retention_kl_after']=sequence_kl_after
+    report['sequence_retention_objective_fork']=args.fork_sequence_retention
+    if sequence_retention:
+        report['scope']+=' Sequence retention uses pinned train-only rows and frozen initial actor on actual full histories; target/weapon masks and all aim branches included. No zero-memory anchor or validation bank.'
     report['scope']=report['scope'].replace('No learned weapon choice or live promotion.','Masked weapon likelihood enabled only with the explicit V6 weapon head; weapon learning acceptance and live promotion are not established.')
     durable_json(args.out/'report.json',report)
     durable_json(args.out/'complete.json',{'version':'combat_update_complete_v1','weights_sha256':sha(args.out/'weights.json'),'checkpoint_sha256':sha(args.out/'checkpoint.pt'),'report_sha256':sha(args.out/'report.json')})

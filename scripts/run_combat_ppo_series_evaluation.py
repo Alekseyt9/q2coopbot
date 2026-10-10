@@ -83,7 +83,7 @@ def main():
             comparison_reference='rules-baseline', series_protocol_sha256=protocol_sha,
             validation_offset=validation_offset, training_planned_validation_offset=spec['planned_validation_offset'],
             validation_offset_override_reason='Explicit cohort-bound correction: original planned offset exceeds registered validation count.' if validation_offset != spec['planned_validation_offset'] else None,
-            scope=f'Two CUDA updates versus unchanged parent, exact common validation{validation_offset}..{validation_offset + 3} conditions and two declared RNG arms plus rules. '
+            scope=f'{spec["rounds"]} CUDA updates versus unchanged parent, exact common validation{validation_offset}..{validation_offset + 3} conditions and two declared RNG arms plus rules. '
                   'Development, no globally unseen-seed claim. Rules score cannot be compared to68/80 on earlier validation24..27 as the conditions differ. '
                   'No independent test, training or automatic promotion.'))
         assert verify_sources(repo, reference) == source_binding

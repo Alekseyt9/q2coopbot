@@ -70,3 +70,93 @@ checkpoint read-back exact; исходные weights SHA равны parent211c2d
 изолирует влияние warm против reset: прежний reset опыт использовал другие
 train seeds. Даже победа в A/B требует отдельного сравнения с сильным parent
 и правилами; development бои не являются финальным отложенным тестом.
+
+Для последующей проверки `run_combat_native_candidate_comparison.py`
+принимает явный `--candidate-branch control|quality` (default quality).
+Путь checkpoint обязан соответствовать выбранной закрытой ветке.
+Это позволяет проверить и v8 control, если именно она покажет лучшие
+результаты. До завершения A/B следующая оценка не запускается.
+
+Общий training pool закрыт:160/160 jobs, ошибок0,
+`source_unchanged=true`, receipt SHA
+`9a9c7ee79ed0d462a95c3ef641aa3e9f694f375bce55837c452ad76dcefd8460`.
+Сжатие160 завершенных members закрыто с проверкой сохранения SHA потоков.
+`training-comparability.json` подтверждает80 пар условий и одинаковые
+fork weights. Control processing начался с native-only экспорта20
+семейств и привязан к исходному общему pool receipt; последующее численное
+восстановление rollout/value/logprob и PPO выполняются на CUDA.
+Полное shared-pool обучение и оценка на момент этой записи еще не закрыты.
+
+Control CUDA finalize batch закрыт:20/20 корпусов,
+`state=complete`, `device=cuda`; request SHA
+`39e1e010128a0c3ccfe329f04e6a51ffb68bd606f63a964af49834cf0ad3fc93`.
+Это завершение восстановления обучающих данных, не завершение PPO update.
+
+Control processing затем закрыт:CUDA update6,4222 eligible transitions,
+10 actor steps. Веса SHA
+`385c10bd74209d13b71ea1da37338c9cbea0fffb39ca18bd1aad5ab0475c7813`,
+checkpoint SHA
+`00545c50d001136940c4d5889f8fa9bbfe2bee8474ee7fa0eff96d79a08dae9c`.
+`complete.json` связывает веса, checkpoint и report; началась подготовка
+quality ветки. Итоговый отдельный CUDA checkpoint audit и оценочные бои
+еще не завершены; эти training числа не подтверждают улучшение политики.
+
+Quality CUDA finalize также закрыт20/20, request SHA
+`b216a3155b5bb8e546359e534496c9bf36d2c8571f49f41b191fdda062abb26a`.
+Обе processing protocol записи имеют одинаковые `python_sources` SHA
+и общий `pool_sha256`; выбранные binding/plan indexes различаются
+соответственно control/quality. Quality дошла до `cuda-update`.
+
+Обе ветки обучения закрыты; quality CUDA update6 содержит4281 eligible
+transitions и10 actor steps. Quality weights SHA
+`ff6036d472bd5ddd917dcff33d82240166e6b538d139d454cfe9710288736580`,
+checkpoint SHA
+`cf554e6d224645afb9439f8717c58f7c40909071fe51b1fbf4754ea5d020abfb`.
+Для обеих веток отдельный CUDA checkpoint audit подтвердил
+`actor_value_std_exact=true`, `optimizer_state_exact=true`.
+Driver перешел к `paired_validation`,160 боёв в общей16-slot очереди.
+Shared-pool сбор и раздельное GPU обучение теперь проверены живым запуском;
+оценочное качество и финальная диагностическая приемка еще не закрыты.
+
+Все160 evaluation captures закрыты без ошибок и с неизмененными исходниками.
+Core quality report:control66/80 побед,9 смертей;quality63/80,12 смертей;
+received damage16.95 против20.1875, outgoing75.925 против75.2625.
+Пропусков capture frames0 в обеих ветках. Финальные native shot/movement
+диагностики еще выполняются. Эти результаты не дают основания для
+promotion quality ветки; отдельный сильный parent ранее70/80 в RNG arm a,
+но финальная диагностическая приемка текущего A/B еще необходима.
+
+## Финальный результат
+
+Driver завершился exit0. `progress.json` закрыт, result SHA
+`240940742210f4c3ef4adf50c23959e2abd2ffc40dc5ac73b2808b6329a986f0`.
+Отдельно перечитаны оба CUDA checkpoint seals и все native report SHA;
+`ownership_clean=true`. Полный warm A/B завершен, promotion отсутствует.
+
+| Метрика | Warm v8 control | Warm v9 quality |
+|---|---:|---:|
+| Победы |66/80|63/80|
+| Смерти |9|12|
+| Machinegun попадания по живым монстрам |49.0%|43.6%|
+| Machinegun confirmed waste |348/694 shots|419/752 shots|
+| Без выбранной/видимой bbox цели: hits/shots |1/206|1/272|
+| Blaster попадания |56.4%|59.7%|
+| Provider held attack стоя |18.5%|19.6%|
+| Средний абсолютный yaw команды /frame |10.31°|9.50°|
+| Median первый native выстрел после видимой цели |0s|0s|
+| Max первый native выстрел |4.1s|4.6s|
+
+В обеих ветках native fire зарегистрирован79/80; один бой без выстрела
+не подменен нулевой задержкой. Парные переходы:2 приобретенные победы,
+5 потерянных. Меньше yaw и лучше Blaster accuracy не компенсируют
+потери побед, рост смертей и ухудшение Machinegun. Quality ветка отклонена
+для promotion. Это не доказывает бесполезность miss penalty вообще;
+результат относится к этим coefficients, бюджету и parent.
+Warm-vs-reset причинное сравнение не проводилось (разные train seeds).
+
+Следующий опыт:из сильного v8 parent увеличить долю свежих training
+mixed/group сцен, reward оставить v8. Сохранить retention сцены и общую
+оценку всех20 семейств; читать actual native shot/damage/kill и движение.
+Не обучать на validation captures из диагностического разбора. Новые
+веса принимать только при улучшении относительно сильного parent и
+без заметной деградации ранее освоенных сцен.

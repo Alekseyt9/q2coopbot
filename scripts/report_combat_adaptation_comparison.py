@@ -67,6 +67,11 @@ def main():
         get=lambda label:[r for r in rows if r['variant']==label]
         paired[arm]=dict(parent_to_after=compare(get(before),get(after)),
                         rules_to_parent=compare(get(baseline),get(before)),rules_to_after=compare(get(baseline),get(after)))
+        control='control-'+arm
+        if control in entries:
+            assert entries[control]['policy_sampling_seed_offset']==entries[after]['policy_sampling_seed_offset']
+            paired[arm]['control_to_after']=compare(get(control),get(after))
+            paired[arm]['parent_to_control']=compare(get(before),get(control))
     files=['protocol.json','quality-report.json','quality-episodes.json','recovery/verified-members.json',
            'machinegun-hits.json','machinegun-selected-target-aim.json','blaster-projectile-hits.json','first-shot-latency.json','outcome-behavior.json']
     result=dict(state='complete',variants=variants,paired=paired,behavior=behavior['groups'],
@@ -83,6 +88,9 @@ def main():
                      f"{v['machinegun']['shots']} | {v['blaster']['shots']} |")
     for arm,comparisons in paired.items():
         lines+=['',f"{arm}: {comparisons['parent_to_after']}"]
+        if 'control_to_after' in comparisons:
+            lines += ['', f"{arm}, control → candidate: {comparisons['control_to_after']}",
+                      '', f"{arm}, parent → control: {comparisons['parent_to_control']}"]
     (root/'adaptation-comparison.md').write_text('\n'.join(lines)+'\n',encoding='utf-8')
     print({'state':'complete','report':str(root/'adaptation-comparison.md')})
 

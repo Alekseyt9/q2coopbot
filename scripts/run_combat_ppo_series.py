@@ -32,13 +32,15 @@ def main():
     parser.add_argument('--resume', action='store_true')
     parser.add_argument('--training-plan', type=pathlib.Path,
                         help='Use a sealed parent and explicit training registry instead of the historical uniform fork')
+    parser.add_argument('--family-counts', type=pathlib.Path,
+                        help='Explicit allocations across all20 families, in native four-fight blocks')
     args = parser.parse_args()
     assert 1 <= args.rounds <= 4 and args.train_offset >= 0
     repo = pathlib.Path(__file__).resolve().parents[1]
     reference, initial, out = args.reference.resolve(), args.parent_update.resolve(), args.out.resolve()
     status = read(reference / 'progress.json')
     assert status['stage'] == 'complete'
-    if args.training_plan:
+    if args.training_plan and 'result_sha256' in status:
         assert sha(reference/'result.json') == status['result_sha256']
         assert sha(reference/'quality-report.json') == read(reference/'result.json')['quality_report_sha256']
     else:
@@ -68,17 +70,28 @@ def main():
         original_plan = read(binding['plan'])
     families = [t['episode']['id'] for t in original_plan['tasks']]
     assert len(families) == 20
+    counts = {family: 4 for family in families}
+    stride = 4
+    if args.family_counts:
+        assert args.training_plan, 'Weighted curriculum requires an explicit training plan'
+        from compile_weighted_combat_plan import validate_counts
+        counts = read(args.family_counts)
+        stride = validate_counts(families, counts)
+    episodes = sum(counts.values())
     protocol = dict(version='combat_sequential_cuda_ppo_series_v1', reference=str(reference),
         reference_protocol_sha256=sha(reference / 'protocol.json'), parent_update=str(initial),
         parent_weights_sha256=sha(initial / 'weights.json'), parent_checkpoint_sha256=sha(initial / 'checkpoint.pt'),
         config_sha256=sha(source / 'config.json'), anchor_sha256=sha(source / 'anchor.json'), bank_sha256=sha(source / 'bank.json'),
-        families=families, rounds=args.rounds, episodes_per_round=80, slots=16, timescale=2,
-        train_offsets=[args.train_offset + 4 * i for i in range(args.rounds)], planned_validation_offset=32,
+        families=families, rounds=args.rounds, episodes_per_round=episodes, slots=16, timescale=2,
+        train_offsets=[args.train_offset + stride * i for i in range(args.rounds)], planned_validation_offset=32,
         scope='Fresh physical own-policy captures; disjoint train blocks within this series, no global unseen-seed claim. '
               'Same parent actor/value/std/Adam/config/reward, sequential CUDA updates. '
               'No quality conclusion from training outcomes; separate common development evaluation required. No independent test or promotion.')
     if args.training_plan:
         protocol['training_plan_sha256'] = sha(args.training_plan)
+    if args.family_counts:
+        protocol.update(family_counts=counts, family_counts_sha256=sha(args.family_counts),
+                        train_seed_stride=stride)
     if args.resume:
         assert read(out / 'protocol.json') == protocol
     else:
@@ -117,26 +130,31 @@ def main():
                 weights = capture / 'behavior-weights.json'
                 shutil.copyfile(current / 'weights.json', weights)
                 assert sha(weights) == sha(current / 'weights.json') and not read(weights)['deterministic']
-                path = compile_plan(compiler, original_plan['registry_path'],
-                    repo, weights, capture / 'series', 'train', families, offset)
+                if args.family_counts:
+                    from compile_weighted_combat_plan import compile_weighted
+                    path = compile_weighted(compiler, original_plan['registry_path'],
+                        repo, weights, capture / 'series', families, offset, counts)
+                else:
+                    path = compile_plan(compiler, original_plan['registry_path'],
+                        repo, weights, capture / 'series', 'train', families, offset)
                 plan = read(path)
-                assert sum(len(t['seeds']) for t in plan['tasks']) == 80
+                assert sum(len(t['seeds']) for t in plan['tasks']) == episodes
                 run([compiler, '--verify-plan', path, '--root', repo], capture / 'verify-plan.log')
                 save(capture / 'models.json', [dict(id='series', architecture=binding['architecture'], model=str(weights),
                     plan=str(path), capture_root=plan['output_root'], resume_checkpoint=str(current / 'checkpoint.pt'),
                     resume_checkpoint_sha256=sha(current / 'checkpoint.pt'), resume_report=str(current / 'report.json'),
                     resume_report_sha256=sha(current / 'report.json'), parent_updates_completed=previous['updates_completed'])])
                 save(capture / 'protocol.json', dict(version='combat_series_own_policy_round_v1', families=families,
-                    episodes_per_model=80, total_episodes=80, evaluations=[dict(model='series', label='behavior', root=plan['output_root'],
+                    episodes_per_model=episodes, total_episodes=episodes, evaluations=[dict(model='series', label='behavior', root=plan['output_root'],
                         plan=str(path), plan_sha256=sha(path), deterministic_weights_sha256=sha(weights), source_weights_sha256=sha(weights))],
                     scope='Training outcomes only; own current actor on all20 train families. Not evaluation or independent test.'))
                 shutil.copyfile(source / 'config.json', capture / 'config.json')
-                save(capture / 'execution.json', dict(stage='collecting_own_policy', round=index, episodes=80, promotion=None))
+                save(capture / 'execution.json', dict(stage='collecting_own_policy', round=index, episodes=episodes, promotion=None))
                 save(out / 'progress.json', dict(stage='collecting', round=index, rounds=args.rounds, completed_rounds=index - 1))
                 collect_compressed(repo, [path], capture)
             terminal = read(capture / 'pool/report.json')
             assert terminal['state'] == 'complete' and terminal['source_unchanged'] and not any(j['error'] for j in terminal['jobs']), 'Recover existing native pool before resume; never redispatch completed members'
-            assert len(terminal['jobs']) == 80
+            assert len(terminal['jobs']) == episodes
             manifest = read(pathlib.Path(terminal['jobs'][0]['root']) / 'manifest.json')
             run([sys.executable, repo / 'scripts/verify_combat_evaluation_members.py', '--root', capture,
                 '--source-fingerprint', manifest['source_fingerprint'], '--native-fingerprint', manifest['native_source_fingerprint']], capture / 'verify.log')
@@ -145,7 +163,7 @@ def main():
             run([sys.executable, repo / 'scripts/report_combat_control_ownership.py', '--root', capture], capture / 'ownership.log')
             ownership = read(capture / 'control-ownership.json')
             assert all(not g['counts'].get('rules_with_clear_target', 0) and not g['fallback_reasons'].get('pilot_equip_not_ready', 0) for g in ownership['groups'].values())
-            save(capture / 'execution.json', dict(stage='cuda_processing', round=index, episodes=80, promotion=None))
+            save(capture / 'execution.json', dict(stage='cuda_processing', round=index, episodes=episodes, promotion=None))
             command = [sys.executable, repo / 'scripts/process_combat_architecture_pool.py', '--capture-root', capture,
                 '--out', processing, '--config', capture / 'config.json', '--exporter', exporter,
                 '--anchor', source / 'anchor.json', '--bank', source / 'bank.json', '--export-workers', 4,
@@ -156,17 +174,17 @@ def main():
             processed = read(processing / 'report.json')
             assert processed['state'] == 'complete' and len(processed['training']) == 1
             training = processed['training'][0]
-            assert training['device'] == 'cuda' and training['allocated_episodes'] == 80
+            assert training['device'] == 'cuda' and training['allocated_episodes'] == episodes
             assert training['resume_checkpoint_sha256'] == sha(current / 'checkpoint.pt')
             assert training['updates_completed'] == previous['updates_completed'] + 1
             run([sys.executable, repo / 'scripts/audit_combat_spatial_ppo_checkpoint_cuda.py', '--roots', update], capture / 'checkpoint-audit.log')
             sealed_update(update)
-            save(capture / 'execution.json', dict(stage='complete', round=index, episodes=80,
+            save(capture / 'execution.json', dict(stage='complete', round=index, episodes=episodes,
                 processing_report_sha256=sha(processing / 'report.json'), parent_optimizer_preserved=True, promotion=None))
             save(out / 'progress.json', dict(stage='round_complete', completed_rounds=index, rounds=args.rounds,
                 latest_update=str(update), latest_weights_sha256=sha(update / 'weights.json')))
             current = update
-        save(out / 'progress.json', dict(stage='complete', completed_rounds=args.rounds, episodes=80 * args.rounds,
+        save(out / 'progress.json', dict(stage='complete', completed_rounds=args.rounds, episodes=episodes * args.rounds,
             final_update=str(current), final_weights_sha256=sha(current / 'weights.json'), final_checkpoint_sha256=sha(current / 'checkpoint.pt'),
             updates_completed=sealed_update(current)['updates_completed'], parent_optimizer_preserved=True, promotion=None))
     except Exception as error:

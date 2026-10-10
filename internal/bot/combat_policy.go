@@ -243,10 +243,10 @@ func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.
 			if trace.Valid {
 				to = trace.End
 			}
-			if machinegunWeapon(s.Weapon) && (s.Teammate != nil || s.LastTeammate != nil && s.TeammateAgeFrames != nil && *s.TeammateAgeFrames <= 10) {
+			if machinegunWeapon(s.Weapon) && hitscanTeammateRisk(s, cmd) {
 				stopFire("machinegun_partner_guard")
 			}
-			if shotgunWeapon(s.Weapon) && (s.Teammate != nil || s.LastTeammate != nil && s.TeammateAgeFrames != nil && *s.TeammateAgeFrames <= 10) {
+			if shotgunWeapon(s.Weapon) && hitscanTeammateRisk(s, cmd) {
 				stopFire("shotgun_partner_guard")
 			}
 			recentPartner := s.LastTeammate != nil && s.TeammateAgeFrames != nil && *s.TeammateAgeFrames <= 10 && teammateBlocksShot(from, to, *s.LastTeammate)
