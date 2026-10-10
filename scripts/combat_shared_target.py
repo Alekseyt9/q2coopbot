@@ -5,9 +5,40 @@ existing mask; remembered enemies never become selectable through this module.
 """
 from train_combat_bc import torch, nn
 from combat_spatial_aim import inputs as spatial_inputs
+from ppo_combat import network, layers
+import math
 
 VERSION = 'combat_shared_target_residual_v1'
 INPUT_WIDTH = 219  # spatial119 + previous1 + navigation27 + memory60 + group12
+
+
+def validate(model):
+    spec = model.get('shared_target')
+    if spec is None:
+        return
+    if (model.get('feature_version') != 'combat_features_v9' or
+            not model.get('spatial_aim') or not model.get('aim_mode_head') or
+            spec.get('version') != VERSION or len(spec.get('layers', [])) != 3):
+        raise ValueError('invalid shared target contract')
+    width = INPUT_WIDTH
+    for layer, output in zip(spec['layers'], (64, 32, 1)):
+        if len(layer['bias']) != output or len(layer['weight']) != output:
+            raise ValueError('invalid shared target output width')
+        for row, bias in zip(layer['weight'], layer['bias']):
+            if len(row) != width or not all(math.isfinite(v) and abs(v) <= 1e4 for v in row + [bias]):
+                raise ValueError('invalid shared target parameters')
+        width = output
+
+
+def build(model):
+    validate(model)
+    return network(model['shared_target']['layers']) if model.get('shared_target') else None
+
+
+def export(model, branch):
+    if branch is not None:
+        model['shared_target'] = dict(version=VERSION, layers=layers(branch))
+        validate(model)
 
 
 def masked_summary(values):

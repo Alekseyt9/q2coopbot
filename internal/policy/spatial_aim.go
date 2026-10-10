@@ -105,5 +105,5 @@ func (p *PPO) spatialRaw(o Observation, raw []float64) ([]float64, error) {
 			}
 		}
 	}
-	return result, nil
+	return p.sharedTargetRaw(o, result)
 }

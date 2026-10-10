@@ -1,6 +1,10 @@
 import unittest
 from ppo_combat import torch, training_devices
 from combat_shared_target import initialize, inputs, apply
+from combat_shared_target import VERSION
+from combat_spatial_aim import SpatialActor
+from combat_target_head_scope import freeze_decision_scope
+from ppo_combat import nn, layers
 
 
 class SharedTargetTests(unittest.TestCase):
@@ -50,6 +54,36 @@ class SharedTargetTests(unittest.TestCase):
         result = inputs(empty,self.raw)
         self.assertTrue(bool(torch.isfinite(result).all()))
         self.assertTrue(torch.equal(result[..., -72:],torch.zeros_like(result[..., -72:])))
+
+    def test_integrated_scope_trains_branch_and_preserves_other_outputs(self):
+        base=nn.Sequential(nn.Linear(1121,3,device='cuda'),nn.Tanh(),
+                           nn.Linear(3,81,device='cuda'))
+        spatial=nn.Sequential(nn.Linear(119,2,device='cuda'),nn.ReLU(),
+                              nn.Linear(2,2,device='cuda'),nn.ReLU(),
+                              nn.Linear(2,6,device='cuda'))
+        spec=dict(version='combat_shared_spatial_coarse_fine_aim_v2',layers=layers(spatial))
+        model=dict(feature_version='combat_features_v9',spatial_aim=spec,
+                   aim_mode_head='combat_precision_aim_v1',
+                   shared_target=dict(version=VERSION,layers=layers(initialize())))
+        actor=SpatialActor(base,spec,model).to('cuda')
+        std=nn.Parameter(torch.zeros(4,device='cuda'))
+        optimizer=torch.optim.Adam(list(actor.parameters())+[std],lr=.003)
+        initial=actor(self.x).detach().clone()
+        frozen_spatial={name:p.detach().clone() for name,p in actor.branch.named_parameters()}
+        project,count=freeze_decision_scope(actor,std,optimizer,'decisions')
+        self.assertEqual(count,22*4+16193)
+        for _ in range(3):
+            optimizer.zero_grad()
+            output=actor(self.x)
+            (output[...,21:29]*torch.arange(8,device='cuda')).mean().backward()
+            optimizer.step();project()
+        selected=torch.zeros(81,dtype=torch.bool,device='cuda')
+        selected[4]=True;selected[8:29]=True
+        self.assertTrue(torch.equal(actor(self.x)[...,~selected],initial[...,~selected]))
+        for name,p in actor.branch.named_parameters():
+            self.assertTrue(torch.equal(p,frozen_spatial[name]))
+        self.assertTrue(all(p.requires_grad for p in actor.target_branch.parameters()))
+        self.assertTrue(all('exp_avg' in optimizer.state[p] for p in actor.target_branch.parameters()))
 
 
 if __name__ == '__main__':

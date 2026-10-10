@@ -59,19 +59,28 @@ def migrate_coarse(model):
     spec['version']=COARSE_VERSION;validate(result);return result
 
 class SpatialActor(nn.Module):
-    def __init__(self,base,spec):
+    def __init__(self,base,spec,model=None):
         super().__init__();self.base=base;self.branch=network(spec['layers'])
+        from combat_shared_target import build
+        self.target_branch=build(model) if model is not None else None
     def forward(self,x,*args,**kwargs):
         output=self.base(x,*args,**kwargs)
-        if isinstance(output,tuple):return (apply(self.branch,x,output[0]),*output[1:])
-        return apply(self.branch,x,output)
+        raw=output[0] if isinstance(output,tuple) else output
+        result=apply(self.branch,x,raw)
+        if self.target_branch is not None:
+            from combat_shared_target import apply as apply_target
+            result=apply_target(self.target_branch,x,result)
+        return (result,*output[1:]) if isinstance(output,tuple) else result
     def single(self,x):return self(x[:,None,:])[0][:,0,:]
     def export(self):return self.base.export()
     def __iter__(self):return iter(self.base)
 
 def wrap(base,model):
     if not model.get('spatial_aim'):return base
-    validate(model);return SpatialActor(base,model['spatial_aim'])
+    validate(model);return SpatialActor(base,model['spatial_aim'],model)
 
 def export(model,actor):
-    if isinstance(actor,SpatialActor):model['spatial_aim']={**model['spatial_aim'],'layers':layers(actor.branch)}
+    if isinstance(actor,SpatialActor):
+        model['spatial_aim']={**model['spatial_aim'],'layers':layers(actor.branch)}
+        from combat_shared_target import export as export_target
+        export_target(model,actor.target_branch)

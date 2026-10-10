@@ -23,6 +23,11 @@ def freeze_decision_scope(actor, std, optimizer, scope):
                 mask[4] = True       # attack Bernoulli
                 mask[8:20] = True    # available weapon categorical
             selected[parameter] = mask
+    # A shared target representation owns no movement/aim/attack/weapon rows.
+    # Train it alongside the projected decision rows; preserve spatial weights.
+    if getattr(actor, 'target_branch', None) is not None:
+        for parameter in actor.target_branch.parameters():
+            selected[parameter] = torch.ones_like(parameter, dtype=torch.bool)
     for parameter in list(actor.parameters()) + [std]:
         parameter.requires_grad_(parameter in selected)
         if parameter in selected:

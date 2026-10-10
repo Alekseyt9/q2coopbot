@@ -121,7 +121,11 @@ def finalize(model_path, data, out):
     # already verified rollouts or require keeping a mutable checkout unchanged.
     frozen = out / 'verifier-sources'
     frozen.mkdir()
-    for path in (pathlib.Path(__file__).resolve(), pathlib.Path(__file__).with_name('combat_cuda_bootstrap.py').resolve()):
+    helper_paths=[pathlib.Path(__file__).resolve(), pathlib.Path(__file__).with_name('combat_cuda_bootstrap.py').resolve()]
+    if model.get('shared_target'):
+        helper_paths.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
+                            ('combat_shared_target.py','combat_spatial_aim.py'))
+    for path in helper_paths:
         target = frozen / path.name
         shutil.copy2(path, target)
         sources.pop(str(path), None)

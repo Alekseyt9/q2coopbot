@@ -30,14 +30,19 @@ def main():
     keys=list(before['actor'])
     selected={name for name in keys if name.rsplit('.',2)[-2] in ('head','residual','output')}
     assert len(selected)==4, 'Expected base and recurrent/attention output weights and biases'
+    shared={name for name in keys if name.startswith('target_branch.')}
+    selected |= shared
     frozen_count=changed_count=0
     masks={}
     for name,old in before['actor'].items():
         new=after['actor'][name]
         assert old.is_cuda and new.is_cuda and old.dtype==new.dtype and old.shape==new.shape
         if name in selected:
-            assert old.ndim in (1,2) and old.shape[0] in (45,81)
-            mask=torch.zeros_like(old,dtype=torch.bool);mask[4]=True;mask[8:29]=True
+            if name in shared:
+                mask=torch.ones_like(old,dtype=torch.bool)
+            else:
+                assert old.ndim in (1,2) and old.shape[0] in (45,81)
+                mask=torch.zeros_like(old,dtype=torch.bool);mask[4]=True;mask[8:29]=True
             assert torch.equal(old[~mask],new[~mask]), name
             changed_count+=int((old[mask]!=new[mask]).sum())
             frozen_count+=int((~mask).sum());masks[name]=mask
@@ -57,6 +62,12 @@ def main():
         if name not in selected:
             assert old.keys()==new.keys(), name
             for field in old:assert torch.equal(old[field],new[field]), (name,field)
+            continue
+        if name in shared and not old:
+            if report['actor_steps']:
+                assert 'step' in new and float(new['step'])==report['actor_steps'], name
+            else:
+                assert not new, name
             continue
         assert old.keys()==new.keys() and 'step' in old
         assert float(new['step']-old['step'])==report['actor_steps'], name

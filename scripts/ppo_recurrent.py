@@ -306,6 +306,8 @@ def main():
     report['trainable_actor_parameters']=trainable_actor_parameters
     if args.actor_head_scope=='target':report['scope']+=' Projected target rows20:29 only; other actor outputs/encoder/spatial/std and their Adam moments preserved. Output tensor Adam clocks advance for target updates; switching scope requires explicit checkpoint fork.'
     if args.actor_head_scope=='decisions':report['scope']+=' Projected attack row4, weapon rows8:20 and target rows20:29 only; movement/vertical/aim/mode/encoder/spatial/std and their Adam moments preserved. Shared output tensor Adam clocks advance; changing scope or its learning rate requires explicit checkpoint fork. Joint on-policy PPO likelihood and masks unchanged.'
+    if model.get('shared_target'):
+        report['scope']+=' Explicit shared per-enemy target residual is trained in target/decision scopes; its new Adam states start empty after a sealed checkpoint migration. Availability masks and none output unchanged.'
     if sequence_retention:
         report['scope']+=' Sequence retention uses pinned train-only rows and frozen initial actor on actual full histories; target/weapon masks and all aim branches included. No zero-memory anchor or validation bank.'
     report['scope']=report['scope'].replace('No learned weapon choice or live promotion.','Masked weapon likelihood enabled only with the explicit V6 weapon head; weapon learning acceptance and live promotion are not established.')

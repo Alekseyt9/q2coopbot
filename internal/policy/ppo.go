@@ -29,6 +29,7 @@ type PPOFile struct {
 	TargetHead      string               `json:"target_head,omitempty"`
 	AimModeHead     string               `json:"aim_mode_head,omitempty"`
 	SpatialAim      *SpatialAimFile      `json:"spatial_aim,omitempty"`
+	SharedTarget    *SpatialAimFile      `json:"shared_target,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
@@ -104,6 +105,9 @@ func LoadPPO(path string) (*PPO, error) {
 		return nil, fmt.Errorf("spatial aim requires precision head")
 	}
 	if e = validateSpatialAim(f.SpatialAim); e != nil {
+		return nil, e
+	}
+	if e = validateSharedTarget(f); e != nil {
 		return nil, e
 	}
 	if e = validateFeatureLayers(f.Value, 1, f.Features); e != nil {
