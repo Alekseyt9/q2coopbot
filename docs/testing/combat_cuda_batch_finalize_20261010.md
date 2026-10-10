@@ -45,3 +45,22 @@ this mode on resume. Do not reinterpret already-consumed audit corpora as fresh
 on-policy training data.
 
 The two-case timing finished:26.28seconds for separate CUDA processes versus15.72seconds for one batch, ratio1.67; all three numerical/context/audit files remained byte-exact. This is one local measurement under concurrent evaluation load. The20-case acceptance covers the current Postmove temporal-attention actor/value; other architectures retain the existing finalizer contracts but were not benchmarked here.
+
+The first fresh full-cycle collection has now completed80 own-policy fights
+(train128..131). Its20 corpora were finalized successfully in one CUDA
+interpreter under `first-life-update4-process-v2-20261010/control/cuda-finalize-batch`.
+The batch receipt reports50.47seconds inside the batch function, excluding
+interpreter/import startup. This is a different fresh workload, not a paired
+speed comparison with the old75.62second workload. Merge, PPO update and exact
+checkpoint audit follow; their completion is still pending at this entry.
+The initial processing attempt had a death-stop replay metadata mismatch and
+ended before PPO; recovery retained all native captures and failed artifacts.
+See `combat_first_life_tail_20261010.md` for the repaired replay proof.
+
+Full-cycle acceptance now passed:20/20 batch finalizations,5695-transition
+merge, resumed CUDA PPO update4 with10 accepted actor steps, and exact CUDA
+checkpoint/Adam restoration. Processing report:
+`workspace/artifacts/first-life-update4-process-v2-20261010/report.json`.
+The runtime quality comparison remains pending. The paired two-case benchmark
+still measures only finalization speed; full-cycle acceptance does not establish
+the same speedup for training or native gameplay.

@@ -65,6 +65,8 @@ def main():
     comparisons=[]
     models=sorted({e['model'] for e in protocol['evaluations'] if e['label'] in ('before','after')})
     for model in models:
+        if model+'-before' not in paired or model+'-after' not in paired:
+            continue  # A candidate-only cohort has reference comparisons below.
         before=paired[model+'-before']; after=paired[model+'-after']; assert before.keys()==after.keys()
         comparisons.append({'model':model,'gained_wins':sum(after[k] and not before[k] for k in before),
                             'lost_wins':sum(before[k] and not after[k] for k in before),

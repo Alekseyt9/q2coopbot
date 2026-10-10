@@ -5,18 +5,19 @@ from ppo_combat import network,layers
 from combat_precision_head import validate_precision_model
 
 VERSION='combat_shared_spatial_fine_aim_v1'
+COARSE_VERSION='combat_shared_spatial_coarse_fine_aim_v2'
 INPUT_WIDTH=119
 
 def validate(model):
     validate_precision_model(model)
-    spec=model.get('spatial_aim');assert spec and spec['version']==VERSION and len(spec['layers'])==3
+    spec=model.get('spatial_aim');assert spec and spec['version'] in (VERSION,COARSE_VERSION) and len(spec['layers'])==3
     width=INPUT_WIDTH
     for i,l in enumerate(spec['layers']):
         assert len(l['bias'])==len(l['weight']) and 1<=len(l['bias'])<=256
         assert all(len(row)==width for row in l['weight'])
         assert all(abs(v)<=1e4 for row,b in zip(l['weight'],l['bias']) for v in row+[b])
         width=len(l['bias'])
-    assert width==4
+    assert width==(6 if spec['version']==COARSE_VERSION else 4)
 
 def inputs(features,raw):
     assert features.shape[:-1]==raw.shape[:-1] and features.shape[-1]==854 and raw.shape[-1]==81
@@ -35,7 +36,9 @@ def inputs(features,raw):
 def apply(branch,features,raw):
     correction=branch(inputs(features,raw));result=raw.clone()
     result[...,47:63]=result[...,47:63]+correction[...,:2].reshape(*raw.shape[:-1],16)
-    result[...,65:81]=result[...,65:81]+correction[...,2:].reshape(*raw.shape[:-1],16)
+    result[...,65:81]=result[...,65:81]+correction[...,2:4].reshape(*raw.shape[:-1],16)
+    if correction.shape[-1]==6:
+        result[...,29:45]=result[...,29:45]+correction[...,4:6].reshape(*raw.shape[:-1],16)
     return result
 
 def initialize(model):
@@ -44,6 +47,16 @@ def initialize(model):
     with torch.no_grad():branch[-1].weight.zero_();branch[-1].bias.zero_()
     result['spatial_aim']=dict(version=VERSION,layers=layers(branch));validate(result)
     return result
+
+def migrate_coarse(model):
+    """Append zero coarse residuals; existing actor/value/fine/mode preserved."""
+    result=copy.deepcopy(model)
+    if not result.get('spatial_aim'):result=initialize(result)
+    validate(result);spec=result['spatial_aim']
+    if spec['version']==COARSE_VERSION:return result
+    last=spec['layers'][-1];width=len(last['weight'][0])
+    last['weight'].extend([[0.]*width,[0.]*width]);last['bias'].extend([0.,0.])
+    spec['version']=COARSE_VERSION;validate(result);return result
 
 class SpatialActor(nn.Module):
     def __init__(self,base,spec):

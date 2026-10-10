@@ -2,7 +2,7 @@
 import re
 
 STEP=re.compile(r'^sv_test_step version=1 phase=(begin|end) spawncount=(-?\d+) frame=(\d+) seq=(\d+) actor=(\d+)$')
-EVENT=re.compile(r'^sv_test_(?:projectile|damage) spawncount=(-?\d+) server_frame=(\d+) ')
+EVENT=re.compile(r'^sv_test_(?:projectile|damage|hitscan) spawncount=(-?\d+) server_frame=(\d+) ')
 
 def records(stream):
     pending=None;previous=None

@@ -18,23 +18,38 @@ function Get-CombatGoalReceipt($Row, $Events, $Release, [string[]]$Classes, [str
 
 function Wait-CombatGoalOrExit($Bot, [string]$Root, [int]$TimeoutMilliseconds, [string[]]$Classes, [string]$Map='base1', [bool]$FirstDeath=$false) {
     . "$PSScriptRoot/read_damage_events.ps1"
-    if($FirstDeath){. "$PSScriptRoot/combat_death_stop.ps1"}
-    $clock=[Diagnostics.Stopwatch]::StartNew();$receipt=$null
+    if($FirstDeath){. "$PSScriptRoot/combat_death_stop.ps1";. "$PSScriptRoot/combat_trace_reader.ps1"}
+    $clock=[Diagnostics.Stopwatch]::StartNew();$receipt=$null;$row=$null;$pendingDeath=$null
+    $trace=Join-Path $Root 'bot.jsonl';$log=Join-Path $Root 'server.log'
+    $cursor=if($FirstDeath){New-CombatTraceCursor $trace}else{$null}
     while(!$Bot.WaitForExit(50)){
         if($clock.ElapsedMilliseconds -gt $TimeoutMilliseconds){throw 'Bot timeout'}
         if($receipt){continue}
-        $log=Join-Path $Root 'server.log';$trace=Join-Path $Root 'bot.jsonl'
         if(!(Test-Path $trace)){continue}
         $release=@(Get-Content -LiteralPath $log | Select-String '^sv_test_combat spawncount=(-?\d+) server_frame=(\d+) g_test_combat_start game_frame=\d+ ready=1 seed=\d+$')
         if($release.Count -ne 1){continue}
-        $row=$null
-        try{$row=Get-Content -LiteralPath $trace -Tail 1 | ConvertFrom-Json -ErrorAction Stop}catch{continue} # Writer may still be appending a line.
         $context=@{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value}
+        if($FirstDeath){
+            foreach($nextRow in @(Read-CombatTraceRows $cursor 8388608)){
+                $row=$nextRow
+                if(!$pendingDeath -and $nextRow.combat_policy.observation -and $null -ne $nextRow.health -and $nextRow.health -le 0 -and
+                    $nextRow.combat_policy.observation.identity.life -eq 1 -and $nextRow.observation_frame -gt $context.frame -and
+                    $nextRow.spawncount -eq $context.spawncount -and $nextRow.connection -eq 1 -and $nextRow.map -eq $Map){
+                    # Retain the observation even if native damage arrives later
+                    # or more trace rows already show the respawned actor.
+                    $pendingDeath=$nextRow
+                }
+            }
+        }else{
+            $row=$null
+            try{$row=Get-Content -LiteralPath $trace -Tail 1 | ConvertFrom-Json -ErrorAction Stop}catch{continue}
+        }
+        if(!$row){continue}
         $events=@(Read-DamageEvents $log)
         $receipt=Get-CombatGoalReceipt $row $events $context $Classes $Map
         $receiptName='goal-stop.json';$stopReason='combat_goal_complete'
         if(!$receipt -and $FirstDeath){
-            $receipt=Get-CombatFirstLifeDeathReceipt $row $events $context $Map
+            $receipt=Get-CombatFirstLifeDeathReceipt $pendingDeath $events $context $Map
             $receiptName='death-stop.json';$stopReason='combat_first_life_death'
         }
         if($receipt){

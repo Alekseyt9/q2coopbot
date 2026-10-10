@@ -210,8 +210,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 if($release.Count -ne 1){throw 'Death release proof missing'}
                 $observed=@($rows|Where-Object observation_frame -eq $death.observed_frame)
                 if($observed.Count -ne 1){throw 'Death receipt observation missing'}
-                $deathMap=if($sample){$sample.map}else{'base1'}
-                $verified=Get-CombatFirstLifeDeathReceipt $observed[0] @(Read-DamageEvents (Join-Path $out 'server.log')) @{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value} $deathMap
+                $verified=Get-CombatFirstLifeDeathReceipt $observed[0] @(Read-DamageEvents (Join-Path $out 'server.log')) @{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value} $captureMap
                 if(!$verified){throw 'Unverified death stop'}
                 foreach($key in @('version','reason','map','spawncount','actor','death_frame','observed_frame','health')){if($death.$key -ne $verified.$key){throw 'Death receipt differs from native evidence'}}
                 if(!(Test-Path (Join-Path $out 'goal.stop')) -or (Get-Content (Join-Path $out 'goal.stop') -Raw).Trim() -ne 'combat_first_life_death'){throw 'Death stop marker missing'}

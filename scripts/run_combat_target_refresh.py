@@ -5,10 +5,10 @@ from combat_target_head import migrate
 from prepare_combat_target_heads import build,forward
 from train_combat_bc import torch
 
-def compile_plan(compiler,registry,root,model,folder,split,families,offset):
+def compile_plan(compiler,registry,root,model,folder,split,families,offset,count=4):
     folder.mkdir();plan=folder/'plan.json'
     command=[compiler,'--registry',registry,'--episodes',','.join(families),'--split',split,
-        '--mode','learned' if model else 'rules','--count',4,'--seed-offset',offset,
+        '--mode','learned' if model else 'rules','--count',count,'--seed-offset',offset,
         '--root',root,'--out',plan,'--artifacts',folder/'capture']
     if model:command+=['--model',model]
     run(command,folder/'compile.log');return plan

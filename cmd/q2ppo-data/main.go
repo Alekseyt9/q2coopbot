@@ -124,14 +124,15 @@ func run() error {
 		Valid    bool `json:"provenance_valid"`
 		Complete bool `json:"capture_complete"`
 		Results  []struct {
-			Root      string                `json:"root"`
-			Seed      int                   `json:"seed"`
-			Valid     bool                  `json:"capture_valid"`
-			Dispatch  bool                  `json:"dispatch_valid"`
-			ConfigSHA string                `json:"provider_config_sha256"`
-			Worker    int                   `json:"worker"`
-			Mixed     bool                  `json:"fixture_mixed"`
-			Goal      *learningenv.GoalStop `json:"goal_stop"`
+			Root      string                 `json:"root"`
+			Seed      int                    `json:"seed"`
+			Valid     bool                   `json:"capture_valid"`
+			Dispatch  bool                   `json:"dispatch_valid"`
+			ConfigSHA string                 `json:"provider_config_sha256"`
+			Worker    int                    `json:"worker"`
+			Mixed     bool                   `json:"fixture_mixed"`
+			Goal      *learningenv.GoalStop  `json:"goal_stop"`
+			Death     *learningenv.DeathStop `json:"death_stop"`
 		} `json:"results"`
 	}
 	if e = read(filepath.Join(*batch, "report.json"), &report); e != nil {
@@ -290,9 +291,62 @@ func run() error {
 			}
 			args = append(args, "--goal-observed-frame", fmt.Sprint(goal.ObservedFrame))
 		}
+		if r.Death != nil {
+			if !manifest.StopOnGoal || r.Goal != nil {
+				return fmt.Errorf("death stop requires supervision without a conflicting goal")
+			}
+			path := filepath.Join(r.Root, "death-stop.json")
+			var death learningenv.DeathStop
+			if e = read(path, &death); e != nil {
+				return e
+			}
+			if !reflect.DeepEqual(death, *r.Death) {
+				return fmt.Errorf("death stop receipt changed")
+			}
+			if e = remember(path); e != nil {
+				return e
+			}
+			for i := range args {
+				if args[i] == "game_frame_limit" {
+					args[i] = "combat_first_life_death"
+				}
+			}
+			// The captured exporter verifies the actual ordered native death
+			// terminal, receipt observation and full reward before emitting proof.
+			args = append(args, "--death-stop", path)
+		}
 		output, e := exec.Command(exporter, args...).CombinedOutput()
 		if e != nil {
 			return fmt.Errorf("native replay: %w %s", e, output)
+		}
+		if r.Death != nil {
+			for _, path := range []string{filepath.Join(replay, "death-stop-verification.json"), filepath.Join(r.Root, "dataset", "death-stop-verification.json")} {
+				var proof struct {
+					State   string                `json:"state"`
+					Receipt learningenv.DeathStop `json:"receipt"`
+					Step    int                   `json:"death_step"`
+				}
+				if e = read(path, &proof); e != nil {
+					return e
+				}
+				if proof.State != "verified" || proof.Step <= 0 || !reflect.DeepEqual(proof.Receipt, *r.Death) {
+					return fmt.Errorf("death terminal/reward proof missing or changed")
+				}
+				if e = remember(path); e != nil {
+					return e
+				}
+			}
+			a, err := sha(filepath.Join(replay, "death-stop-verification.json"))
+			if err != nil {
+				return err
+			}
+			b, err := sha(filepath.Join(r.Root, "dataset", "death-stop-verification.json"))
+			if err != nil {
+				return err
+			}
+			if a != b {
+				return fmt.Errorf("offline replay differs: death-stop-verification.json")
+			}
 		}
 		for _, name := range []string{"steps.jsonl", "rewards.jsonl", "server_outcomes.jsonl"} {
 			a, e := sha(filepath.Join(replay, name))

@@ -6,6 +6,7 @@ import (
 )
 
 const SpatialAimVersion = "combat_shared_spatial_fine_aim_v1"
+const SpatialCoarseAimVersion = "combat_shared_spatial_coarse_fine_aim_v2"
 const SpatialAimInputWidth = 119
 
 type SpatialAimFile struct {
@@ -17,12 +18,16 @@ func validateSpatialAim(f *SpatialAimFile) error {
 	if f == nil {
 		return nil
 	}
-	if f.Version != SpatialAimVersion || len(f.Layers) != 3 {
+	if (f.Version != SpatialAimVersion && f.Version != SpatialCoarseAimVersion) || len(f.Layers) != 3 {
 		return fmt.Errorf("invalid spatial aim header")
 	}
 	width := SpatialAimInputWidth
+	outputWidth := 4
+	if f.Version == SpatialCoarseAimVersion {
+		outputWidth = 6
+	}
 	for i, layer := range f.Layers {
-		if len(layer.Weight) != len(layer.Bias) || len(layer.Bias) == 0 || len(layer.Bias) > MaxHiddenWidth || i == 2 && len(layer.Bias) != 4 {
+		if len(layer.Weight) != len(layer.Bias) || len(layer.Bias) == 0 || len(layer.Bias) > MaxHiddenWidth || i == 2 && len(layer.Bias) != outputWidth {
 			return fmt.Errorf("invalid spatial aim dimensions")
 		}
 		for row, weights := range layer.Weight {
@@ -95,6 +100,9 @@ func (p *PPO) spatialRaw(o Observation, raw []float64) ([]float64, error) {
 		for axis := 0; axis < 2; axis++ {
 			result[PrecisionFineOffset+2*(slot+1)+axis] += x[axis]
 			result[PrecisionModeOffset+2*(slot+1)+axis] += x[axis+2]
+			if p.file.SpatialAim.Version == SpatialCoarseAimVersion {
+				result[TargetAimOffset+2*slot+axis] += x[axis+4]
+			}
 		}
 	}
 	return result, nil
