@@ -2,10 +2,43 @@ import copy
 import unittest
 
 from ppo_combat import torch, nn, training_devices, guarded_actor_step
-from combat_target_head_scope import freeze_target_scope
+from combat_target_head_scope import freeze_target_scope, freeze_decision_scope
 
 
 class TargetScopeTests(unittest.TestCase):
+    def test_decision_scope_preserves_aim_and_old_momentum(self):
+        training_devices()
+        for width in (45,81):
+            actor=nn.Sequential(nn.Linear(2,3,device='cuda'),nn.Tanh(),nn.Linear(3,width,device='cuda'))
+            std=nn.Parameter(torch.zeros(4,device='cuda'))
+            opt=torch.optim.Adam(list(actor.parameters())+[std],lr=.001)
+            x=torch.ones(3,2,device='cuda')
+            (actor(x).sum()+std.sum()).backward();opt.step()
+            initial=actor(x).detach().clone()
+            states=copy.deepcopy(opt.state_dict())
+            project,count=freeze_decision_scope(actor,std,opt,'decisions')
+            self.assertEqual(count,22*4)
+            selected=torch.zeros(width,dtype=torch.bool,device='cuda');selected[4]=True;selected[8:29]=True
+            direction=1.-2.*(torch.arange(width,device='cuda')%2)
+            opt.zero_grad();(actor(x)[:,selected]*direction[selected]).sum().backward();opt.step();project()
+            current=actor(x).detach()
+            self.assertTrue(torch.equal(initial[:,~selected],current[:,~selected]))
+            self.assertTrue(bool((initial[:,selected]!=current[:,selected]).any(dim=0).all()))
+            for index,p in enumerate(list(actor.parameters())+[std]):
+                before=states['state'][index]
+                after=opt.state_dict()['state'][index]
+                if index in (2,3):
+                    for name in ('exp_avg','exp_avg_sq'):
+                        self.assertTrue(torch.equal(before[name][~selected],after[name][~selected]))
+                else:
+                    for name,value in before.items():self.assertTrue(torch.equal(value,after[name]))
+            # The joint policy changes only in the three intended decisions.
+            from audit_combat_head_learning_cuda import components
+            features=torch.zeros(3,854,device='cuda');features[:,833]=1;features[:,834]=1;features[:,426]=1
+            terms,_=components(initial,current,std,std,features)
+            for name in ('attack','weapon','target'):self.assertGreater(float(terms[name].mean()),0)
+            for name in ('movement','vertical','aim','aim_mode'):self.assertLess(float(terms[name].abs().max()),1e-12)
+
     def test_head_kl_isolates_target_and_masked_branches(self):
         training_devices()
         from audit_combat_head_learning_cuda import components

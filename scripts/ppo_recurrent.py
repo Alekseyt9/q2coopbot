@@ -113,8 +113,9 @@ def main():
     ap.add_argument('--sequence-retention-weight',type=float,default=0.)
     ap.add_argument('--fork-sequence-retention',action='store_true',
                     help='Explicit objective fork preserving actor/critic/Adam for sequence retention')
-    ap.add_argument('--actor-head-scope',choices=('all','target'),default='all')
+    ap.add_argument('--actor-head-scope',choices=('all','target','decisions'),default='all')
     ap.add_argument('--target-head-lr',type=float,default=.003)
+    ap.add_argument('--decision-head-lr',type=float,default=.003)
     ap.add_argument('--fork-head-scope',action='store_true',help='Explicit optimizer-scope fork from a resumed checkpoint')
     args=ap.parse_args();training_devices();torch.set_num_threads(2);torch.manual_seed(20261006);torch.use_deterministic_algorithms(True)
     assert all(math.isfinite(w) and w >= 0 for w in (args.retention_weight,args.bank_weight))
@@ -123,6 +124,7 @@ def main():
     assert not args.fork_sequence_retention or (args.resume and args.sequence_retention_spec)
     assert not args.fork_head_scope or args.resume
     assert math.isfinite(args.target_head_lr) and 0 < args.target_head_lr <= .01
+    assert math.isfinite(args.decision_head_lr) and 0 < args.decision_head_lr <= .01
     # cuDNN GRU TF32 drifts from Go FP64 by ~2e-3 on real traces.
     # Keep FP32 CUDA training and the existing state parity tolerance.
     torch.backends.cudnn.allow_tf32=False;torch.backends.cuda.matmul.allow_tf32=False
@@ -147,7 +149,8 @@ def main():
         return
     config=read(args.config);meta=read(args.data/'report.json');validate_objective(config,meta)
     assert args.actor_head_scope == 'all' or (target_head and not args.sequence_retention_spec)
-    actor_training=dict(scope=args.actor_head_scope,learning_rate=args.target_head_lr if args.actor_head_scope=='target' else config['actor_lr'])
+    assert args.actor_head_scope != 'decisions' or weapon_head, 'Decision scope requires the masked weapon head'
+    actor_training=dict(scope=args.actor_head_scope,learning_rate={'target':args.target_head_lr,'decisions':args.decision_head_lr,'all':config['actor_lr']}[args.actor_head_scope])
     assert meta['feature_version']==model['feature_version'], 'Rollout feature contract differs'
     key=next(k for k in ('memory','attention','entity_attention') if model.get(k));spec=model[key];entity=key=='entity_attention'
     expected_version={'memory':VERSION,'attention':TEMPORAL,'entity_attention':ENTITY}[key];assert spec['version']==expected_version
@@ -256,9 +259,9 @@ def main():
     trials=[];start=time.perf_counter();parameters=list(actor.parameters())+[std]
     project=lambda:std.clamp_(-8,1)
     trainable_actor_parameters=sum(p.numel() for p in parameters)
-    if args.actor_head_scope=='target':
-        from combat_target_head_scope import freeze_target_scope
-        project,trainable_actor_parameters=freeze_target_scope(actor,std,actor_opt)
+    if args.actor_head_scope in ('target','decisions'):
+        from combat_target_head_scope import freeze_decision_scope
+        project,trainable_actor_parameters=freeze_decision_scope(actor,std,actor_opt,args.actor_head_scope)
     for _ in range(config['actor_steps']):
         loss,kl=objective()
         if float(kl.detach())>config['target_kl']:break
@@ -302,6 +305,7 @@ def main():
     report['training_config_forks']=config_forks
     report['trainable_actor_parameters']=trainable_actor_parameters
     if args.actor_head_scope=='target':report['scope']+=' Projected target rows20:29 only; other actor outputs/encoder/spatial/std and their Adam moments preserved. Output tensor Adam clocks advance for target updates; switching scope requires explicit checkpoint fork.'
+    if args.actor_head_scope=='decisions':report['scope']+=' Projected attack row4, weapon rows8:20 and target rows20:29 only; movement/vertical/aim/mode/encoder/spatial/std and their Adam moments preserved. Shared output tensor Adam clocks advance; changing scope or its learning rate requires explicit checkpoint fork. Joint on-policy PPO likelihood and masks unchanged.'
     if sequence_retention:
         report['scope']+=' Sequence retention uses pinned train-only rows and frozen initial actor on actual full histories; target/weapon masks and all aim branches included. No zero-memory anchor or validation bank.'
     report['scope']=report['scope'].replace('No learned weapon choice or live promotion.','Masked weapon likelihood enabled only with the explicit V6 weapon head; weapon learning acceptance and live promotion are not established.')

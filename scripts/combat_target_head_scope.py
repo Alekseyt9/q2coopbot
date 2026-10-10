@@ -1,9 +1,14 @@
-"""Projected target-row updates preserving other actor parameters and Adam state."""
+"""Projected decision-row updates preserving other actor parameters and Adam state."""
 import copy
 from ppo_combat import torch, nn
 
 
 def freeze_target_scope(actor, std, optimizer):
+    return freeze_decision_scope(actor, std, optimizer, 'target')
+
+
+def freeze_decision_scope(actor, std, optimizer, scope):
+    assert scope in ('target', 'decisions')
     assert next(actor.parameters()).is_cuda and std.is_cuda
     optimizer.zero_grad(set_to_none=True)
     core = getattr(actor, 'base', actor)
@@ -14,6 +19,9 @@ def freeze_target_scope(actor, std, optimizer):
         for parameter in (module.weight, module.bias):
             mask = torch.zeros_like(parameter, dtype=torch.bool)
             mask[20:29] = True
+            if scope == 'decisions':
+                mask[4] = True       # attack Bernoulli
+                mask[8:20] = True    # available weapon categorical
             selected[parameter] = mask
     for parameter in list(actor.parameters()) + [std]:
         parameter.requires_grad_(parameter in selected)

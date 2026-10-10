@@ -23,8 +23,9 @@ def main():
         parser.add_argument('--'+name, type=pathlib.Path, required=True)
     for name in ('config', 'resume', 'anchor', 'bank'):
         parser.add_argument('--'+name, type=pathlib.Path)
-    parser.add_argument('--actor-head-scope', choices=('all','target'), default='all')
+    parser.add_argument('--actor-head-scope', choices=('all','target','decisions'), default='all')
     parser.add_argument('--target-head-lr', type=float, default=.003)
+    parser.add_argument('--decision-head-lr', type=float, default=.003)
     parser.add_argument('--fork-head-scope', action='store_true')
     parser.add_argument('--plan-index', type=int, help='Process one frozen plan from a multi-model evaluation pool')
     args = parser.parse_args()
@@ -104,7 +105,8 @@ def main():
                  '--data', out/'merged', '--config', args.config.resolve(), '--resume', args.resume.resolve(),
                  '--anchor-model', args.anchor.resolve(), '--retention-bank', args.bank.resolve(),
                  '--retention-weight', '0', '--bank-weight', '0', '--out', out/'update',
-                 '--actor-head-scope', args.actor_head_scope, '--target-head-lr', str(args.target_head_lr)]
+                 '--actor-head-scope', args.actor_head_scope, '--target-head-lr', str(args.target_head_lr),
+                 '--decision-head-lr', str(args.decision_head_lr)]
             if args.fork_head_scope:
                 training_command.append('--fork-head-scope')
             run(training_command, out/'train.log', repo)
