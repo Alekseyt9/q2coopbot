@@ -358,7 +358,15 @@ func run() error {
 				return e
 			}
 			if a != b {
-				return fmt.Errorf("offline replay differs: %s", name)
+				if name != "rewards.jsonl" {
+					return fmt.Errorf("offline replay differs: %s", name)
+				}
+				if e = verifyRewardReplay(filepath.Join(replay, name), filepath.Join(r.Root, "dataset", name)); e != nil {
+					return fmt.Errorf("offline replay differs: %s: %w", name, e)
+				}
+				if e = remember(filepath.Join(r.Root, "dataset", name)); e != nil {
+					return e
+				}
 			}
 			if e = remember(filepath.Join(replay, name)); e != nil {
 				return e

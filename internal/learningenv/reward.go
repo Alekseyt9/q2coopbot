@@ -14,6 +14,7 @@ const AimRewardVersion = "combat_reward_v3"
 const ManeuverRewardVersion = "combat_reward_v4"
 const ActionQualityRewardVersion = "combat_reward_v6"
 const TargetSequenceRewardVersion = "combat_reward_v7"
+const SelectedAimRewardVersion = "combat_reward_v8"
 
 // RewardConfig is an explicit experimental objective, not a measured success
 // metric. Server effects never enter the policy observation.
@@ -46,7 +47,7 @@ func (c RewardConfig) HasPotentialReward() bool {
 }
 
 func (c RewardConfig) HasActionQualityCosts() bool {
-	return c.Version == ActionQualityRewardVersion || c.Version == TargetSequenceRewardVersion
+	return c.Version == ActionQualityRewardVersion || c.Version == TargetSequenceRewardVersion || c.Version == SelectedAimRewardVersion
 }
 
 func (c RewardConfig) Validate() error {
@@ -105,15 +106,16 @@ func (c RewardConfig) Validate() error {
 }
 
 type Reward struct {
-	TargetCycle *TargetCycleEvidence `json:"target_cycle,omitempty"`
-	Version     string               `json:"version"`
-	Worker      string               `json:"worker"`
-	Episode     string               `json:"episode"`
-	Step        int                  `json:"step"`
-	Available   bool                 `json:"available"`
-	Reason      string               `json:"reason,omitempty"`
-	Score       *float64             `json:"score"`
-	Components  map[string]float64   `json:"components"`
+	AimReference *AimReferenceEvidence `json:"aim_reference,omitempty"`
+	TargetCycle  *TargetCycleEvidence  `json:"target_cycle,omitempty"`
+	Version      string                `json:"version"`
+	Worker       string                `json:"worker"`
+	Episode      string                `json:"episode"`
+	Step         int                   `json:"step"`
+	Available    bool                  `json:"available"`
+	Reason       string                `json:"reason,omitempty"`
+	Score        *float64              `json:"score"`
+	Components   map[string]float64    `json:"components"`
 }
 
 func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
@@ -205,21 +207,32 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 		score += r.Components["monster_kill"]
 	}
 	if c.HasPotentialReward() {
-		before, err := aimPotentialWithKick(s.Observation, c.AimPotential, c.AimKickAngles)
-		if err != nil {
-			r.Components = nil
-			return deny("invalid_aim_observation")
-		}
-		after := 0.0
-		if !s.Terminal && !completeHandoff {
-			after, err = aimPotentialWithKick(*s.Next, c.AimPotential, c.AimKickAngles)
+		if c.Version == SelectedAimRewardVersion {
+			shaping, evidence, err := c.selectedAimShaping(s, s.Terminal || completeHandoff)
 			if err != nil {
 				r.Components = nil
 				return deny("invalid_aim_observation")
 			}
+			r.AimReference = evidence
+			r.Components["aim_potential"] = shaping
+			score += shaping
+		} else {
+			before, err := aimPotentialWithKick(s.Observation, c.AimPotential, c.AimKickAngles)
+			if err != nil {
+				r.Components = nil
+				return deny("invalid_aim_observation")
+			}
+			after := 0.0
+			if !s.Terminal && !completeHandoff {
+				after, err = aimPotentialWithKick(*s.Next, c.AimPotential, c.AimKickAngles)
+				if err != nil {
+					r.Components = nil
+					return deny("invalid_aim_observation")
+				}
+			}
+			r.Components["aim_potential"] = c.AimGamma*after - before
+			score += r.Components["aim_potential"]
 		}
-		r.Components["aim_potential"] = c.AimGamma*after - before
-		score += r.Components["aim_potential"]
 	}
 	if c.Version == ManeuverRewardVersion || c.Version == MissRewardVersion || c.HasActionQualityCosts() {
 		before, err := spacingPotential(s.Observation, c.SpacingPotential, c.ParasiteRange)
@@ -248,7 +261,8 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 			r.Components = nil
 			return deny("invalid_action_quality_observation")
 		}
-		for name, cost := range components {
+		for _, name := range []string{"off_target_attack", "turn_away", "stalled_movement"} {
+			cost := components[name]
 			r.Components[name] = cost
 			score += cost
 		}
