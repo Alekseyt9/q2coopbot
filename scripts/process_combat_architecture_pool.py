@@ -66,12 +66,14 @@ def main():
     ap.add_argument('--export-workers',type=int,default=4)
     ap.add_argument('--resume',action='store_true')
     ap.add_argument('--cuda-only-export',action='store_true',help='Native/features export, then CUDA numerical verification and exact next-state bootstrap')
+    ap.add_argument('--cuda-batch-finalize',action='store_true',help='Verify all corpora of a model in one CUDA interpreter; requires --cuda-only-export')
     ap.add_argument('--model-id',help='Process one binding from a shared pool with its own pinned objective/config')
     args=ap.parse_args()
     repo=pathlib.Path(__file__).resolve().parents[1]
     capture=args.capture_root.resolve(); out=args.out.resolve()
     assert out.is_dir() if args.resume else not out.exists(),'Fresh output required, or explicit --resume'
     assert 1<=args.export_workers<=16
+    assert not args.cuda_batch_finalize or args.cuda_only_export
     pool=read(capture/'pool/report.json')
     assert pool['state'] in ('complete','failed') and pool['source_unchanged']
     assert pool['scheduler']=='independent_episode_queue'
@@ -119,6 +121,8 @@ def main():
         scope='Own-policy native corpus; failed attempts excluded and retried; equal allocated episodes, actual eligible transitions reported separately.')
     if args.cuda_only_export:
         protocol['numerical_verification']='cuda_verified_v1'
+    if args.cuda_batch_finalize:
+        protocol['cuda_finalization']='independent_cases_single_interpreter_v1'
     if args.model_id:
         protocol.update(selected_model=args.model_id,pool_plan_indexes=pool_plan_indexes,
                         selection_scope='Original shared pool receipt retained and hashed; only this binding processed, local plan indexes remapped.')
@@ -235,9 +239,19 @@ def main():
                          model_root/('export-'+str(i)+'.log')) for i,(case,export) in enumerate(exports)]
                 for future in futures:future.result()
             if args.cuda_only_export:
-                for i,(_,export) in enumerate(exports):
-                    run([sys.executable,snapshots/'finalize_combat_cuda_rollout.py','--model',binding['model'],
-                         '--data',export.with_name(export.name+'-native'),'--out',export],model_root/('cuda-finalize-'+str(i)+'.log'))
+                if args.cuda_batch_finalize:
+                    request=model_root/'cuda-finalize-request.json'
+                    save(request,dict(version='combat_cuda_finalize_batch_v1',tasks=[dict(
+                        model=binding['model'],model_sha256=sha(binding['model']),
+                        data=str(export.with_name(export.name+'-native')),out=str(export),
+                        native_report_sha256=sha(export.with_name(export.name+'-native')/'report.json')) for _,export in exports]))
+                    run([sys.executable,snapshots/'finalize_combat_cuda_batch.py','--request',request,
+                         '--receipt-root',model_root/'cuda-finalize-batch'],model_root/'cuda-finalize-batch.log')
+                    assert read(model_root/'cuda-finalize-batch/report.json')['state']=='complete'
+                else:
+                    for i,(_,export) in enumerate(exports):
+                        run([sys.executable,snapshots/'finalize_combat_cuda_rollout.py','--model',binding['model'],
+                             '--data',export.with_name(export.name+'-native'),'--out',export],model_root/('cuda-finalize-'+str(i)+'.log'))
             run([out/'q2ppo-data.exe','--merge',','.join(str(e) for _,e in exports),'--out',model_root/'rollout'],model_root/'merge.log')
             run([pwsh,'-NoProfile','-File',repo/'scripts/compress_completed_combat_streams.ps1',
                  '-Root',model_root],model_root/'compress.log')

@@ -105,3 +105,7 @@ and after, FireBC and rules:480 battles,80 per variant, validation20..23. All
 evaluation variants use the original common reward/guard. Identical before
 weights are repeated to measure native repeat variation. These are reused
 development validation seeds; final test and promotion remain deferred.
+
+Live update: capture completed160/160 with zero errors. The control branch completed its CUDA update (6189 eligible transitions,10 accepted actor steps, cumulative update3); the miss branch is still finalizing its20 native corpora on CUDA. No paired quality result yet. First-attack diagnostics are queued after the sealed480 evaluation; see combat_first_attack_20261010.md for the completed predecessor-corpus measurements.
+
+Both updates are now sealed complete: control6189 eligible transitions and miss6156,86 sequences each,10 accepted actor steps each, cumulative update3. Both CUDA checkpoint audits passed (actor/value/std and optimizer state exact). Root processing report SHA256:07b77bee0f366b46d827b526739cdbd72155d640ccc3b502d09ad726c9793477. The paired480 evaluation has entered paired_native_evaluation; quality and promotion remain unverified. The small transition-count difference is reported rather than claiming identical executed trajectories.
