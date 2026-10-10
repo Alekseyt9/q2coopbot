@@ -10,6 +10,7 @@ import (
 )
 
 type combatControl struct {
+	actionQualityGuard bool
 	campaignEvaluation bool
 	engagement         combatEngagement
 	history            policy.History
@@ -111,7 +112,13 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		sel.ElapsedUS = time.Since(start).Microseconds()
 		return rules()
 	}
-	guarded, changes := c.planner.guardDirectCombat(c.planner.World.Snapshot, proposed)
+	limited := proposed
+	var changes []policy.Intervention
+	if b.actionQualityGuard {
+		limited, changes = c.planner.guardLearnedCombatAim(o, c.planner.World.Snapshot, a, proposed)
+	}
+	guarded, safetyChanges := c.planner.guardDirectCombat(c.planner.World.Snapshot, limited)
+	changes = append(changes, safetyChanges...)
 	converted := policy.FromCommand(o, proposed, c.planner.World.Snapshot.DeltaAngles, "")
 	if math.Abs(converted.PitchDelta-a.PitchDelta) > .01 {
 		changes = append(changes, policy.Intervention{Component: "pitch", Reason: "protocol_pitch_limit"})

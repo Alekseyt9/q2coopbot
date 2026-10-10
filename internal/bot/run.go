@@ -23,6 +23,7 @@ import (
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
 	CombatMode, CombatProviderFile      string
+	CombatActionQualityGuard            bool
 	CombatCapture                       bool
 	TestCampaignCombatEvaluation        bool
 	Campaign                            bool
@@ -423,7 +424,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	defer conn.Close()
 	client := &Client{
-		combatControl:      combatControl{mode: cfg.CombatMode, provider: combatProvider, campaignEvaluation: cfg.TestCampaignCombatEvaluation},
+		combatControl:      combatControl{mode: cfg.CombatMode, provider: combatProvider, campaignEvaluation: cfg.TestCampaignCombatEvaluation, actionQualityGuard: cfg.CombatActionQualityGuard},
 		combatCapture:      cfg.CombatCapture,
 		scenarioResultPath: cfg.TestScenarioResult, scenarioTailFrames: cfg.TestScenarioTailFrames,
 		scenario:                scenario,

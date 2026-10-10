@@ -15,8 +15,9 @@ import (
 // separate section so ordinary companion settings stay easy to read.
 type ConfigFile struct {
 	Combat struct {
-		Mode         string `json:"mode"`
-		ProviderFile string `json:"provider_file"`
+		Mode               string `json:"mode"`
+		ProviderFile       string `json:"provider_file"`
+		ActionQualityGuard bool   `json:"action_quality_guard,omitempty"`
 	} `json:"combat"`
 	Server struct {
 		Host string `json:"host"`
@@ -215,6 +216,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.System1Model, cfg.System2Model = file.Models.System1, file.Models.System2
 	cfg.CombatCapture = file.Output.CombatCapture
 	cfg.CombatMode, cfg.CombatProviderFile = file.Combat.Mode, resolve(file.Combat.ProviderFile)
+	cfg.CombatActionQualityGuard = file.Combat.ActionQualityGuard
 	cfg.TestCampaignCombatEvaluation = file.Test.CampaignCombatEvaluation
 	cfg.Idle, cfg.ExitOnReconnect = file.Test.Idle, file.Test.ExitOnReconnect
 	cfg.TestChangeMap, cfg.TestChangeAfter = file.Test.ChangeMap, file.Test.ChangeAfterFrames
