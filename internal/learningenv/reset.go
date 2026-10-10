@@ -12,17 +12,18 @@ const ResetVersion = "observed_fixture_reset_v1"
 // This verifies exposed starting fields and optionally listed inventory, not RNG/monster AI or
 // complete server reset equivalence. The expectation is an offline fixture.
 type ResetExpectation struct {
-	Seed          *int                  `json:"seed,omitempty"`
-	Version       string                `json:"version"`
-	Map           string                `json:"map"`
-	Position      quake.Vec3            `json:"position"`
-	Health        int16                 `json:"health"`
-	Armor         int16                 `json:"armor"`
-	Weapon        string                `json:"weapon"`
-	Ammo          int16                 `json:"ammo"`
-	EnemyClass    string                `json:"enemy_class"`
-	EnemyPosition quake.Vec3            `json:"enemy_position"`
-	Inventory     []quake.InventoryItem `json:"inventory,omitempty"`
+	AllowUnobservedEnemy bool                  `json:"allow_unobserved_enemy,omitempty"`
+	Seed                 *int                  `json:"seed,omitempty"`
+	Version              string                `json:"version"`
+	Map                  string                `json:"map"`
+	Position             quake.Vec3            `json:"position"`
+	Health               int16                 `json:"health"`
+	Armor                int16                 `json:"armor"`
+	Weapon               string                `json:"weapon"`
+	Ammo                 int16                 `json:"ammo"`
+	EnemyClass           string                `json:"enemy_class"`
+	EnemyPosition        quake.Vec3            `json:"enemy_position"`
+	Inventory            []quake.InventoryItem `json:"inventory,omitempty"`
 }
 
 type ResetProof struct {
@@ -37,6 +38,10 @@ type ResetProof struct {
 
 func VerifyReset(o policy.Observation, expected ResetExpectation) ResetProof {
 	r := ResetProof{Version: ResetVersion, Expectation: expected, Unverified: []string{"inventory", "server_rng", "monster_ai_state", "entity_generation", "complete_world_reset"}}
+	if expected.AllowUnobservedEnemy {
+		r.Reason = "unobserved_enemy_reset_requires_paired_proof"
+		return r
+	}
 	if expected.Version != ResetVersion || expected.Map == "" || expected.Health <= 0 || expected.EnemyClass == "" || expected.Weapon != "Shotgun" && expected.Weapon != "Blaster" && expected.Weapon != "Machinegun" {
 		r.Reason = "invalid_or_unsupported_reset_expectation"
 		return r
@@ -98,6 +103,21 @@ func VerifyReset(o policy.Observation, expected ResetExpectation) ResetProof {
 		return r
 	}
 	r.ObservedFieldsConfirmed = true
+	return r
+}
+
+// A real peer can have its enemy occluded at reset. Only paired export may
+// opt into a participant-resource proof; enemy/world reset remains unverified.
+func VerifyPairedParticipantReset(o policy.Observation, expected ResetExpectation) ResetProof {
+	copy := expected
+	copy.AllowUnobservedEnemy = false
+	r := VerifyReset(o, copy)
+	r.Expectation = expected
+	if expected.AllowUnobservedEnemy && r.Reason == "reset_observed_enemy_mismatch" {
+		r.Reason = ""
+		r.ObservedFieldsConfirmed = true
+		r.Unverified = append(r.Unverified, "enemy_presence_and_pose_not_observed")
+	}
 	return r
 }
 

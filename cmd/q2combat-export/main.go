@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -36,8 +38,42 @@ func run() error {
 	requireExecution := flag.Bool("require-execution", false, "Reject export without exact server dispatch for every sent command")
 	resetFile := flag.String("reset-expectation", "", "Optional fixture JSON; reject mismatched first usable observation")
 	synchronous := flag.Bool("synchronous", false, "Require native one-command/one-tick phases and seeded single-client barrier")
+	pairedPeer := flag.String("paired-peer-trace", "", "Complete second client trace; experimental paired export, not PPO eligible")
+	pairedRole := flag.Int("paired-role", 0, "Selected actor role in a paired export: primary=0, peer=1")
+	pairedReward := flag.Bool("paired-experimental-reward", false, "Audit paired v10/v11 reward; dataset remains ineligible for PPO")
+	pairedStop := flag.Bool("paired-stop-on-death", false, "Close both actor datasets at first verified participant death; experimental v11 reward allowed, PPO eligibility false")
 	rewardFile := flag.String("reward-config", "", "Optional explicit experimental reward JSON; requires synchronous proof")
 	flag.Parse()
+	if *pairedStop && (*pairedPeer == "" || *goalFrame != 0 || *deathFile != "") {
+		return fmt.Errorf("paired death boundary requires both traces without other terminal modes")
+	}
+	var jointBoundary *learningenv.PairedDeathBoundary
+	if *pairedRole < 0 || *pairedRole > 1 || *pairedPeer == "" && *pairedRole != 0 || *pairedPeer != "" && !*synchronous {
+		return fmt.Errorf("paired export requires synchronous proof, both traces and role0/1")
+	}
+	if *pairedPeer != "" && *rewardFile != "" && !*pairedReward {
+		return fmt.Errorf("paired reward audit requires explicit --paired-experimental-reward; PPO eligibility remains false")
+	}
+	if *pairedReward && (*pairedPeer == "" || *rewardFile == "") {
+		return fmt.Errorf("paired experimental reward requires both traces and reward config")
+	}
+	pairedHashes := map[string]string{}
+	if *pairedPeer != "" {
+		for _, path := range []string{*input, *pairedPeer, *serverLog, *resetFile} {
+			digest, err := pairedFileSHA(path)
+			if err != nil {
+				return err
+			}
+			pairedHashes[path] = digest
+		}
+		if *rewardFile != "" {
+			digest, err := pairedFileSHA(*rewardFile)
+			if err != nil {
+				return err
+			}
+			pairedHashes[*rewardFile] = digest
+		}
+	}
 	var deathStop *learningenv.DeathStop
 	if *deathFile != "" {
 		if !*synchronous || *endReason != "combat_first_life_death" || *goalFrame != 0 || *rewardFile == "" {
@@ -99,6 +135,12 @@ func run() error {
 		if err := rewardConfig.Validate(); err != nil {
 			return err
 		}
+		if *pairedReward && (rewardConfig.Version != learningenv.NavigationRewardVersion && rewardConfig.Version != learningenv.CoopRewardVersion) {
+			return fmt.Errorf("paired experimental reward audit requires v10 or v11")
+		}
+		if *pairedReward && ((rewardConfig.Version == learningenv.CoopRewardVersion) != *pairedStop) {
+			return fmt.Errorf("paired v11 reward requires joint stop; paired v10 remains a nonterminal audit")
+		}
 	}
 	if *resetFile != "" {
 		data, err := os.ReadFile(*resetFile)
@@ -158,14 +200,46 @@ func run() error {
 				return err
 			}
 		}
-		applied, err = harness.ReadAppliedCommandsForClient(*serverLog, *clientName)
+		if *pairedPeer != "" {
+			logFile, e := os.Open(*serverLog)
+			if e != nil {
+				return e
+			}
+			pairs, e := learningenv.ReadPairedNativeSteps(logFile, events)
+			logFile.Close()
+			if e != nil {
+				return e
+			}
+			var traces [2][]harness.Trace
+			for role, path := range [2]string{*input, *pairedPeer} {
+				traceFile, e := os.Open(path)
+				if e != nil {
+					return e
+				}
+				rows, e := learningenv.ReadPairedTrace(traceFile)
+				traceFile.Close()
+				if e != nil {
+					return e
+				}
+				if *pairedRole == 1 {
+					role = 1 - role
+				}
+				traces[role] = rows
+			}
+			native, applied, err = pairs.BindTraces(traces, *pairedRole)
+			if err == nil && *pairedStop {
+				jointBoundary, err = pairs.FirstDeathBoundary(traces, events)
+			}
+		} else {
+			applied, err = harness.ReadAppliedCommandsForClient(*serverLog, *clientName)
+		}
 		if err != nil {
 			return err
 		}
 		if len(applied) > 0 {
 			executions = learningenv.NewExecutionIndex(applied)
 		}
-		if *synchronous {
+		if *synchronous && *pairedPeer == "" {
 			f, err := os.Open(*serverLog)
 			if err != nil {
 				return err
@@ -209,6 +283,9 @@ func run() error {
 		serverEncoder = json.NewEncoder(serverWriter)
 	}
 	a := learningenv.Assembler{Worker: *worker, Episode: *episode}
+	if *pairedStop && *pairedRole == 1 {
+		a.KeepScriptedPeerFromFrame = native.Release.Frame
+	}
 	var rewardWriter *bufio.Writer
 	var rewardEncoder *json.Encoder
 	if rewardConfig != nil {
@@ -237,6 +314,7 @@ func run() error {
 	var initial *policy.Observation
 	var resetProof *learningenv.ResetProof
 	goalMarked := false
+	jointMarked := false
 	deathVerified, deathObservationFound, deathRewardVerified := false, false, false
 	deathStep := 0
 	sequenceReward := learningenv.SequenceReward{}
@@ -246,6 +324,9 @@ func run() error {
 	emit := func(s *learningenv.Step, o *learningenv.Outcome) error {
 		if s == nil {
 			return nil
+		}
+		if jointBoundary != nil && s.Observation.Identity.Frame >= jointBoundary.EndFrame {
+			return nil // Full traces remain bound/audited; stop-latency tail is excluded.
 		}
 		if *goalFrame > 0 {
 			if s.Next != nil && s.Next.Identity.Frame == *goalFrame {
@@ -263,6 +344,9 @@ func run() error {
 			initial = &copy
 			if resetExpectation != nil {
 				p := learningenv.VerifyReset(copy, *resetExpectation)
+				if *pairedPeer != "" {
+					p = learningenv.VerifyPairedParticipantReset(copy, *resetExpectation)
+				}
 				resetProof = &p
 				if err := p.Error(); err != nil {
 					return err
@@ -304,6 +388,15 @@ func run() error {
 			}
 			deathVerified, deathStep = true, s.Index
 		}
+		if jointBoundary != nil && s.Next != nil && s.Next.Identity.Frame == jointBoundary.EndFrame {
+			if jointMarked {
+				return fmt.Errorf("duplicate paired terminal")
+			}
+			if err := jointBoundary.MarkTerminal(s, *pairedRole); err != nil {
+				return err
+			}
+			jointMarked = true
+		}
 		if err := se.Encode(s); err != nil {
 			return err
 		}
@@ -320,6 +413,11 @@ func run() error {
 			if outcome.Available {
 				serverWindows++
 			}
+			if s.JointTerminal != nil {
+				for _, index := range s.JointTerminal.DeathEventIndexes {
+					outcome.JointDeathEvents = append(outcome.JointDeathEvents, joiner.Events[index])
+				}
+			}
 			if missJoiner != nil {
 				if err := missJoiner.Enrich(s, &outcome); err != nil {
 					return err
@@ -335,6 +433,9 @@ func run() error {
 			}
 			if rewardConfig != nil {
 				r := sequenceReward.Evaluate(s, outcome)
+				if s.JointTerminal != nil && !r.Available {
+					return fmt.Errorf("joint terminal lost reward: %s", r.Reason)
+				}
 				if deathStop != nil && s.Index == deathStep {
 					if !r.Available || r.Components["death"] != rewardConfig.Death {
 						return fmt.Errorf("death stop lost terminal reward")
@@ -367,9 +468,10 @@ func run() error {
 	for scanner.Scan() {
 		line++
 		var row struct {
-			Capture  *policy.Capture `json:"combat_policy"`
-			Command  quake.UserCmd   `json:"sent_command"`
-			Sequence uint32          `json:"client_sequence"`
+			TerminalObservationOnly bool            `json:"terminal_observation_only"`
+			Capture                 *policy.Capture `json:"combat_policy"`
+			Command                 quake.UserCmd   `json:"sent_command"`
+			Sequence                uint32          `json:"client_sequence"`
 		}
 		if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
 			return fmt.Errorf("line %d: %w", line, err)
@@ -387,7 +489,11 @@ func run() error {
 			int(row.Capture.Observation.Health) == deathStop.Health {
 			deathObservationFound = true
 		}
-		sent = append(sent, harness.Trace{Connection: id.Connection, Generation: id.Spawncount, ClientSequence: row.Sequence, Command: row.Command})
+		if !row.TerminalObservationOnly {
+			sent = append(sent, harness.Trace{Connection: id.Connection, Generation: id.Spawncount, ClientSequence: row.Sequence, Command: row.Command})
+		} else if !*pairedStop {
+			return fmt.Errorf("final paired observation requires paired-stop-on-death export")
+		}
 		s, o, err := a.Push(*row.Capture)
 		if err != nil {
 			return fmt.Errorf("line %d: %w", line, err)
@@ -412,6 +518,9 @@ func run() error {
 	}
 	if *goalFrame > 0 && !goalMarked {
 		return fmt.Errorf("verified goal observation missing from complete transitions")
+	}
+	if jointBoundary != nil && !jointMarked {
+		return fmt.Errorf("paired terminal transition missing")
 	}
 	if deathStop != nil {
 		if !deathVerified || !deathObservationFound || !deathRewardVerified {
@@ -463,24 +572,30 @@ func run() error {
 		return err
 	}
 	summary := struct {
-		Version                string                    `json:"version"`
-		Steps                  int                       `json:"steps"`
-		Terminals              int                       `json:"terminals"`
-		Truncated              int                       `json:"truncated"`
-		Scope                  string                    `json:"scope"`
-		ServerWindows          int                       `json:"server_windows"`
-		ServerEvents           int                       `json:"server_events"`
-		JoinedEvents           int                       `json:"joined_server_events"`
-		UnassignedEvents       int                       `json:"unassigned_server_events"`
-		CommandProof           harness.CommandProof      `json:"command_proof"`
-		ExclusiveWindows       int                       `json:"exclusive_execution_windows"`
-		ObservedResetConfirmed bool                      `json:"observed_reset_confirmed"`
-		NativeSteps            int                       `json:"native_steps"`
-		SynchronousConfirmed   bool                      `json:"synchronous_confirmed"`
-		RewardConfig           *learningenv.RewardConfig `json:"reward_config,omitempty"`
-		RewardSteps            int                       `json:"reward_steps,omitempty"`
-		RewardSum              *float64                  `json:"reward_sum,omitempty"`
-		RewardMasks            map[string]int            `json:"reward_masks,omitempty"`
+		Version                  string                           `json:"version"`
+		Steps                    int                              `json:"steps"`
+		Terminals                int                              `json:"terminals"`
+		Truncated                int                              `json:"truncated"`
+		Scope                    string                           `json:"scope"`
+		ServerWindows            int                              `json:"server_windows"`
+		ServerEvents             int                              `json:"server_events"`
+		JoinedEvents             int                              `json:"joined_server_events"`
+		UnassignedEvents         int                              `json:"unassigned_server_events"`
+		CommandProof             harness.CommandProof             `json:"command_proof"`
+		ExclusiveWindows         int                              `json:"exclusive_execution_windows"`
+		ObservedResetConfirmed   bool                             `json:"observed_reset_confirmed"`
+		NativeSteps              int                              `json:"native_steps"`
+		SynchronousConfirmed     bool                             `json:"synchronous_confirmed"`
+		RewardConfig             *learningenv.RewardConfig        `json:"reward_config,omitempty"`
+		RewardSteps              int                              `json:"reward_steps,omitempty"`
+		RewardSum                *float64                         `json:"reward_sum,omitempty"`
+		RewardMasks              map[string]int                   `json:"reward_masks,omitempty"`
+		PairedConfirmed          bool                             `json:"paired_confirmed,omitempty"`
+		PairedExperimentalReward bool                             `json:"paired_experimental_reward,omitempty"`
+		JointBoundary            *learningenv.PairedDeathBoundary `json:"joint_death_boundary,omitempty"`
+		PairedTrainingReady      bool                             `json:"paired_training_ready"`
+		PairedRole               int                              `json:"paired_role,omitempty"`
+		PairedSources            map[string]string                `json:"paired_source_sha256,omitempty"`
 	}{Version: learningenv.StepVersion, Steps: count, Terminals: terminals, Truncated: truncated,
 		Scope: "Observed transitions with optional exact native dispatch proof; server damage windows describe effects, not shot accuracy or delayed causal credit. No victory or scalar reward inferred.", ServerWindows: serverWindows, CommandProof: proof, ExclusiveWindows: exclusiveWindows}
 	if resetProof != nil {
@@ -497,6 +612,23 @@ func run() error {
 		summary.NativeSteps = len(native.Steps)
 		summary.SynchronousConfirmed = true
 	}
+	if *pairedPeer != "" {
+		summary.PairedConfirmed = true
+		summary.PairedExperimentalReward = *pairedReward
+		summary.JointBoundary = jointBoundary
+		summary.PairedRole = *pairedRole
+		summary.PairedSources = pairedHashes
+		for path, digest := range pairedHashes {
+			current, err := pairedFileSHA(path)
+			if err != nil {
+				return err
+			}
+			if current != digest {
+				return fmt.Errorf("paired source changed during export: %s", path)
+			}
+		}
+		summary.Scope += " Both full client traces and paired native commands verified. Paired PPO eligibility remains false pending two-actor reset/terminal/reward validation."
+	}
 	if joiner != nil {
 		summary.ServerEvents = len(joiner.Events)
 		summary.JoinedEvents = len(joiner.Used)
@@ -507,4 +639,17 @@ func run() error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(*out, "report.json"), data, 0644)
+}
+
+func pairedFileSHA(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err = io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }

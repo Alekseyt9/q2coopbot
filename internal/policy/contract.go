@@ -44,6 +44,7 @@ type Enemy struct {
 // Tracks describe uninterrupted visible observations, not server generations.
 // Client/BSP-derived features are separate from offline server reward telemetry.
 type Observation struct {
+	RememberedThreats  []RememberedThreat     `json:"remembered_threats,omitempty"`
 	Navigation         *NavigationContext     `json:"navigation_context,omitempty"`
 	PreviousTarget     *TargetIntent          `json:"previous_target_intent,omitempty"`
 	Composition        *[]MonsterCount        `json:"visible_monster_composition,omitempty"`

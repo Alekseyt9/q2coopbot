@@ -14,6 +14,7 @@ type combatControl struct {
 	campaignEvaluation bool
 	engagement         combatEngagement
 	history            policy.History
+	threatMemory       policy.ThreatMemory
 	mode               string
 	provider           policy.Provider
 	last               policy.Identity
@@ -49,6 +50,7 @@ func (c *Client) combatObservation(now time.Time) policy.Observation {
 	policy.EnrichEnvironment(&o, s, c.planner.World.Geometry)
 	o.Navigation = c.planner.combatNavigationContext()
 	b.history.Enrich(&o)
+	b.threatMemory.Enrich(&o, s.Defeated)
 	if b.previousTarget != nil && policy.SameLife(b.previousTarget.Identity, id) && b.previousTarget.Identity.Frame+1 == id.Frame {
 		o.PreviousTarget = b.previousTarget
 	}
@@ -82,7 +84,11 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		sel.Fallback = "setup_or_harness_override"
 		return rules()
 	}
-	active, continuation, fallback := b.engagement.observe(o, c.planner.World.Snapshot.Defeated)
+	grace := combatOcclusionFrames
+	if p, ok := b.provider.(*policy.PPO); ok && p.FeatureVersion() == policy.ThreatFeatureVersion {
+		grace = policy.ThreatMemoryFrames
+	}
+	active, continuation, fallback := b.engagement.observe(o, c.planner.World.Snapshot.Defeated, grace)
 	sel.CombatContinuation = continuation
 	if !active {
 		sel.Fallback = fallback

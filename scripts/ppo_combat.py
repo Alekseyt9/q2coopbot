@@ -143,6 +143,12 @@ def restore_checkpoint(path,model_path,config,actor,value,std,rollout_sha):
 
 def validate_objective(config,meta):
     expected=config.get('objective_reward_sha256')
+    if meta.get('reward_version') in ('combat_reward_v10','combat_reward_v11'):
+        assert expected, 'Navigation/coop objective must be pinned in training config'
+        assert meta.get('aim_gamma')==config['gamma'], 'Navigation discount differs from PPO gamma'
+    if meta.get('reward_version') == 'combat_reward_v11':
+        assert meta.get('paired_adapter_verified') and meta.get('paired_training_ready'), 'Coop objective requires finalized paired adapter'
+        assert meta.get('numerical_verification') == 'cuda_verified_v1'
     assert meta.get('reward_version') not in ('combat_reward_v2','combat_reward_v3','combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9') or expected, 'Kill objective must be pinned in training config'
     if meta.get('reward_version') in ('combat_reward_v3','combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9'):
         assert meta.get('aim_gamma')==config['gamma'], 'Aim shaping discount differs from PPO gamma'

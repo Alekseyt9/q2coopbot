@@ -16,6 +16,8 @@ def main():
         ap.add_argument('--'+name, type=pathlib.Path, required=True)
     ap.add_argument('--preserve-critic-optimizer', action='store_true',
                     help='Explicit warm objective fork; keep critic and both Adam states')
+    ap.add_argument('--migration-parent', action='store_true',
+                    help='Use verified CUDA navigation migration receipt instead of a training completion seal')
     a = ap.parse_args()
     assert torch.cuda.is_available() and not a.out.exists()
     torch.backends.cuda.matmul.allow_tf32 = False
@@ -23,8 +25,15 @@ def main():
     torch.backends.cuda.enable_flash_sdp(False)
     torch.backends.cuda.enable_mem_efficient_sdp(False)
     torch.backends.cuda.enable_math_sdp(True)
-    seal = read(a.parent/'complete.json')
-    for filename, key in [('weights.json','weights_sha256'), ('checkpoint.pt','checkpoint_sha256'), ('report.json','report_sha256')]:
+    seal = read(a.parent/('migration.json' if a.migration_parent else 'complete.json'))
+    if a.migration_parent:
+        assert seal['version'] == 'combat_navigation_checkpoint_migration_v1'
+        assert seal['device'] == 'cuda' and seal['persisted_restoration_verified']
+        assert not seal['training_performed'] and seal['persisted_optimizer_steps'] == 0
+        assert all(v['optimizer_restored'] and v['disposable_cuda_step'] for v in seal['optimizer_checks'].values())
+    files = [('weights.json','weights_sha256'), ('checkpoint.pt','checkpoint_sha256')]
+    if not a.migration_parent: files.append(('report.json','report_sha256'))
+    for filename, key in files:
         assert sha(a.parent/filename) == seal[key]
     model = read(a.parent/'weights.json')
     assert not model['deterministic'] and bool(model.get('memory') or model.get('attention'))
@@ -33,16 +42,20 @@ def main():
     assert state['weights_sha256'] == sha(a.parent/'weights.json')
     config, reward = read(a.config), read(a.reward)
     assert config['objective_reward_sha256'] == sha(a.reward)
-    assert reward['version'] in ('combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9')
+    assert reward['version'] in ('combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v10','combat_reward_v11')
     assert reward['monster_kill'] > 0 and reward['aim_gamma'] == config['gamma']
     if reward['version'] in ('combat_reward_v5','combat_reward_v9'):
         assert -0.1 <= reward['blaster_miss'] < 0
-    if reward['version'] in ('combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9'):
+    if reward['version'] in ('combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v10','combat_reward_v11'):
         assert all(-0.05 <= reward[name] < 0 for name in ('off_target_attack','turn_away','stalled_movement'))
     if reward['version'] == 'combat_reward_v7':
         assert -0.05 <= reward['target_churn'] < 0
     if reward['version'] == 'combat_reward_v9':
         assert -0.1 <= reward['machinegun_miss'] < 0
+    if reward['version'] in ('combat_reward_v10','combat_reward_v11'):
+        assert 0 < reward['navigation_potential'] <= 0.1
+    if reward['version'] == 'combat_reward_v11':
+        assert reward['peer_death'] < 0
     assert {k:v for k,v in state['config'].items() if k!='objective_reward_sha256'} == {k:v for k,v in config.items() if k!='objective_reward_sha256'}
     actor, value = build(model,'actor'), build(model,'value')
     for name, module in [('actor',actor), ('value',value)]:
@@ -69,7 +82,8 @@ def main():
     restored_actor, restored_value = build(child,'actor'), build(child,'value')
     assert all(torch.equal(v,restored_actor.state_dict()[k]) for k,v in actor.state_dict().items())
     assert all(torch.equal(v,restored_value.state_dict()[k]) for k,v in value.state_dict().items())
-    x = torch.randn(2,7,854,device='cuda')*.01
+    width = len(model['actor'][0]['weight'][0])
+    x = torch.randn(2,7,width,device='cuda')*.01
     with torch.no_grad():
         assert torch.equal(forward(actor,x),forward(restored_actor,x))
         if a.preserve_critic_optimizer:
@@ -107,6 +121,7 @@ def main():
         checkpoint_sha256=sha(a.out/'checkpoint.pt'),config_sha256=sha(a.config),
         anchor_sha256=state['anchor_sha256'],bank_sha256=state['bank_sha256'],
         reward_config_sha256=sha(a.reward),actor_std_exact=True,critic_output_zero=not a.preserve_critic_optimizer,
+        parent_receipt_sha256=sha(a.parent/('migration.json' if a.migration_parent else 'complete.json')),
         adam_reset=not a.preserve_critic_optimizer,critic_optimizer_preserved=a.preserve_critic_optimizer,
         checkpoint_readback_exact=True,updates_completed=state['updates_completed'],
         scope='Explicit objective fork, not training or a PPO update. Actor/std and consumed history/RNG retained. '

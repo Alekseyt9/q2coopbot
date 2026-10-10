@@ -53,3 +53,20 @@ func TestEngagementGraceUsesFramesAndCannotCrossReset(t *testing.T) {
 		}
 	}
 }
+
+func TestEngagementThreatMemoryHorizon(t *testing.T) {
+	o := policy.Observation{Identity: policy.Identity{Map: "base1", Connection: 1, Spawncount: 1, Actor: 1, Life: 1, Frame: 20}, Enemies: []policy.Enemy{{ID: 7, Class: "monster_soldier"}}}
+	e := combatEngagement{}
+	e.observe(o, nil, policy.ThreatMemoryFrames)
+	o.Enemies = nil
+	for frame := 21; frame <= 220; frame++ {
+		o.Identity.Frame = frame
+		if active, continuation, _ := e.observe(o, nil, policy.ThreatMemoryFrames); !active || !continuation {
+			t.Fatal("memory search handed off early", frame)
+		}
+	}
+	o.Identity.Frame++
+	if active, _, reason := e.observe(o, nil, policy.ThreatMemoryFrames); active || reason != "combat_visibility_timeout" {
+		t.Fatal("unbounded continuation")
+	}
+}

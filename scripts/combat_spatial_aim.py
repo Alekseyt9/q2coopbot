@@ -20,7 +20,7 @@ def validate(model):
     assert width==(6 if spec['version']==COARSE_VERSION else 4)
 
 def inputs(features,raw):
-    assert features.shape[:-1]==raw.shape[:-1] and features.shape[-1] in (854,881) and raw.shape[-1]==81
+    assert features.shape[:-1]==raw.shape[:-1] and features.shape[-1] in (854,881,1121) and raw.shape[-1]==81
     shape=features.shape[:-1];x=features[...,:854].reshape(-1,854);r=raw.reshape(-1,81);n=len(x)
     e=x[:,73:169].reshape(n,8,12);typed=x[:,466:786].reshape(n,8,40);bbox=x[:,426:466].reshape(n,8,5)
     common=torch.cat((x[:,:20],x[:,810:845],r[:,:2].tanh()),-1)[:,None,:].expand(-1,8,-1)

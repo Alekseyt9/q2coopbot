@@ -64,3 +64,40 @@ func TestMergeRejectsMixedPolicyAndDuplicateEpisodes(t *testing.T) {
 		t.Fatal("changed native receipt accepted")
 	}
 }
+
+func TestMergePairedRequiresFinalizationAndKeepsMemberOutcomes(t *testing.T) {
+	a, b := rolloutFixture(t, 1, "model"), rolloutFixture(t, 2, "model")
+	set := func(dir, end string, ready bool) {
+		var meta map[string]any
+		if err := read(filepath.Join(dir, "report.json"), &meta); err != nil {
+			t.Fatal(err)
+		}
+		meta["paired_adapter_version"] = "coop_primary_native_adapter_v1"
+		meta["paired_adapter_verified"] = true
+		meta["paired_training_ready"] = ready
+		meta["numerical_verification"] = "cuda_verified_v1"
+		meta["paired_episode_end"] = end
+		write(t, filepath.Join(dir, "report.json"), meta)
+	}
+	set(a, "joint_death", true)
+	set(b, "surviving_horizon", false)
+	if err := MergeRollouts([]string{a, b}, filepath.Join(t.TempDir(), "rejected")); err == nil {
+		t.Fatal("unfinished paired member accepted")
+	}
+	set(b, "surviving_horizon", true)
+	out := filepath.Join(t.TempDir(), "merged")
+	if err := MergeRollouts([]string{a, b}, out); err != nil {
+		t.Fatal(err)
+	}
+	var meta map[string]any
+	if err := read(filepath.Join(out, "report.json"), &meta); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := meta["paired_episode_end"]; exists {
+		t.Fatal("one case outcome assigned to entire batch")
+	}
+	members := meta["members"].([]any)
+	if members[0].(map[string]any)["paired_episode_end"] != "joint_death" || members[1].(map[string]any)["paired_episode_end"] != "surviving_horizon" {
+		t.Fatal("member outcomes lost")
+	}
+}

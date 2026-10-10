@@ -94,6 +94,7 @@ func ReadDamageEvents(r io.Reader) ([]DamageEvent, error) {
 // temporal join, not proof that the last command caused a hit or was executed.
 // Delayed projectile damage belongs to its effect window. Nothing is a victory.
 type ServerOutcome struct {
+	JointDeathEvents     []DamageEvent          `json:"joint_death_events,omitempty"`
 	Version              string                 `json:"version"`
 	Worker               string                 `json:"worker"`
 	Episode              string                 `json:"episode"`

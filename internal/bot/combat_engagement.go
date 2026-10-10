@@ -16,7 +16,11 @@ type combatEngagement struct {
 	lastSeen int
 }
 
-func (e *combatEngagement) observe(o policy.Observation, defeated []quake.Object) (active, continuation bool, fallback string) {
+func (e *combatEngagement) observe(o policy.Observation, defeated []quake.Object, graceOverride ...int) (active, continuation bool, fallback string) {
+	grace := combatOcclusionFrames
+	if len(graceOverride) > 0 && graceOverride[0] >= combatOcclusionFrames && graceOverride[0] <= policy.ThreatMemoryFrames {
+		grace = graceOverride[0]
+	}
 	if e.known == nil || !policy.SameLife(e.identity, o.Identity) || o.Identity.Frame < e.identity.Frame || o.Identity.Frame > e.identity.Frame+1 {
 		*e = combatEngagement{known: make(map[int]string)}
 	}
@@ -36,7 +40,7 @@ func (e *combatEngagement) observe(o policy.Observation, defeated []quake.Object
 	if len(e.known) == 0 {
 		return false, false, "system2_noncombat"
 	}
-	if o.Identity.Frame-e.lastSeen <= combatOcclusionFrames {
+	if o.Identity.Frame-e.lastSeen <= grace {
 		return true, true, ""
 	}
 	// Explicitly uncertain completion. Do not interpret timeout as a kill.

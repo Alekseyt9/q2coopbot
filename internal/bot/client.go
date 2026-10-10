@@ -104,6 +104,7 @@ type Client struct {
 	demo                                    *quake.DemoRecorder
 	demoErr                                 error
 	stopFile                                string
+	testPairStopFrame                       int
 	name                                    string
 	idle                                    bool
 	testChangeMap                           string
@@ -391,6 +392,11 @@ func (c *Client) handle(packet []byte) {
 		switch {
 		case request == "test_combat_go" && c.testCombatBarrier:
 			c.beginTestCombat()
+		case strings.HasPrefix(request, "test_pair_stop ") && c.testSynchronous && c.testCombatBarrier:
+			var frame int
+			if _, err := fmt.Sscanf(request, "test_pair_stop %d", &frame); err == nil && frame > c.testCombatGoFrame {
+				c.testPairStopFrame = frame
+			}
 		case request == "changing":
 			c.begun = false
 			c.beginPending = ""
@@ -481,6 +487,21 @@ func (c *Client) run(ctx context.Context) error {
 			return c.demoErr
 		}
 		now := time.Now()
+		if c.testPairStopFrame > 0 && c.latestFrame < c.testPairStopFrame {
+			_ = c.send(nil, false) // Acknowledge reliable stop while awaiting its final frame.
+			continue
+		}
+		if c.testPairStopFrame > 0 && c.latestFrame >= c.testPairStopFrame {
+			if c.latestFrame != c.testPairStopFrame {
+				return fmt.Errorf("paired stop observation overshot native boundary")
+			}
+			if err := c.writePairedFinalObservation(now); err != nil {
+				return err
+			}
+			log.Printf("paired_stop_observed frame=%d health=%d", c.latestFrame, c.planner.World.Snapshot.Health)
+			_ = c.command("disconnect")
+			return nil
+		}
 		if c.begun && c.strategist != nil {
 			if decision, ok := c.strategist.poll(c.planner.World); ok {
 				c.planner.applyDecision(decision)
@@ -493,7 +514,14 @@ func (c *Client) run(ctx context.Context) error {
 			}
 			c.tactician.tick(c.planner.World)
 		}
-		if c.connected && !c.begun && c.lastHandshake != "" && now.Sub(c.handshakeAt) >= 2*time.Second {
+		handshakeRetry := 2 * time.Second
+		if c.testSynchronous {
+			// A pooled startup can delay an otherwise reliable signon response.
+			// Repeating new/configstrings every 2s accumulates whole replies in
+			// the native reliable buffer before a busy instance drains them.
+			handshakeRetry = 20 * time.Second
+		}
+		if c.connected && !c.begun && c.lastHandshake != "" && now.Sub(c.handshakeAt) >= handshakeRetry {
 			_ = c.command(c.lastHandshake)
 		}
 		if c.beginPending != "" && !now.Before(c.beginAt) {
@@ -782,7 +810,9 @@ func (c *Client) run(ctx context.Context) error {
 				}
 			}
 			weaponRequest := ""
-			observeInventory := !c.idle || c.scenario != nil && c.scenario.Scenario.ActorInventory
+			// An idle paired walker still needs observed equipment for the
+			// synchronous reset barrier. This does not enable combat decisions.
+			observeInventory := !c.idle || c.testSynchronous && c.testCombatBarrier || c.scenario != nil && c.scenario.Scenario.ActorInventory
 			if !safetyStop && observeInventory && (!c.planner.testSetupHold || c.testWalkThenPlan) && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
 				if !directCombat && !c.planner.testSetupHold && !c.idle && !pairSetup && !c.testProjectileComparison && !multiWeaponFixture(c.testWeaponSwitchFixture) && c.testWeaponSwitchFixture != "parasite_shotgun" && c.testWeaponSwitchFixture != "parasite_machinegun" && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
 					if !c.planner.grenadeThrowPending(c.planner.World.Snapshot) && !c.planner.grenadeSelectionPending(c.planner.World.Snapshot) {
@@ -962,6 +992,9 @@ func (c *Client) run(ctx context.Context) error {
 						cmd = c.testWalkPath.command(c.planner.World.Snapshot, c.testWalkTarget, c.planner.World.Geometry, c.planner.Nav)
 					}
 					c.planner.World.Command = CommandDecision{MoveSource: "test_walk", AimSource: "test_walk"}
+					if c.testWalkRoute {
+						c.planner.World.Command.LimitReason = c.testWalkPath.reason
+					}
 					if c.testWalkRunIn {
 						c.planner.World.Command.MoveSource = "test_movement_run_in"
 						if c.testCombatBarrier {

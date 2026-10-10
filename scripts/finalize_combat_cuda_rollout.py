@@ -25,6 +25,14 @@ def finalize(model_path, data, out):
     assert meta['numerical_verification'] == 'cuda_pending'
     assert meta['model_sha256'] == sha(model_path) and not model['deterministic']
     assert meta['feature_version'] == model['feature_version']
+    paired = meta.get('paired_adapter_version')
+    if paired:
+        assert paired == 'coop_primary_native_adapter_v1' and meta['paired_adapter_verified']
+        assert meta['reward_version'] == 'combat_reward_v11'
+        end = meta.get('paired_episode_end', 'joint_death')
+        assert end in ('joint_death', 'surviving_horizon', 'joint_death_after_handoff')
+        assert meta['terminals'] == (1 if end == 'joint_death' else 0)
+        assert not meta['paired_training_ready']
     assert sha(data / 'native-rollout.jsonl') == meta['native_rollout_sha256']
     sources = dict(meta['source_sha256'])
     sources.update({str((data / 'report.json').resolve()): sha(data / 'report.json'),
@@ -109,6 +117,15 @@ def finalize(model_path, data, out):
     for path, digest in sources.items():
         assert sha(path) == digest, 'Input changed during CUDA verification: ' + path
     out.mkdir()
+    # Preserve the verifier actually used; future source edits must not invalidate
+    # already verified rollouts or require keeping a mutable checkout unchanged.
+    frozen = out / 'verifier-sources'
+    frozen.mkdir()
+    for path in (pathlib.Path(__file__).resolve(), pathlib.Path(__file__).with_name('combat_cuda_bootstrap.py').resolve()):
+        target = frozen / path.name
+        shutil.copy2(path, target)
+        sources.pop(str(path), None)
+        sources[str(target.resolve())] = sha(target)
     with (out / 'rollout.jsonl').open('w', encoding='utf-8') as stream:
         for row, nv in zip(rows, values):
             row['next_value'] = nv
@@ -126,6 +143,9 @@ def finalize(model_path, data, out):
     meta.update(version='combat_ppo_rollout_v1', numerical_verification='cuda_verified_v1',
                 rollout_sha256=sha(out / 'rollout.jsonl'), source_sha256=sources,
                 cuda_verification_sha256=sha(out / 'cuda-verification.json'))
+    if paired:
+        meta['paired_training_ready'] = True
+        meta['paired_training_scope'] = 'Experimental verified primary learner pilot; scripted peer excluded. Registry-wide eligibility unproven.'
     save(out / 'report.json', meta)
     return audit
 

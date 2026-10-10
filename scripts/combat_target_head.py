@@ -6,7 +6,7 @@ from train_combat_bc import torch
 HEAD_VERSION = 'combat_target_conditioned_aim_v1'
 FEATURE_VERSION = 'combat_features_v7'
 WIDTH = 854
-FEATURE_WIDTHS = {FEATURE_VERSION: WIDTH, 'combat_features_v8': 881}
+FEATURE_WIDTHS = {FEATURE_VERSION: WIDTH, 'combat_features_v8': 881, 'combat_features_v9': 1121}
 OUTPUTS = 45
 
 def validate_model(model):

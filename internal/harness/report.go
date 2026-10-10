@@ -10,7 +10,8 @@ import (
 )
 
 type Trace struct {
-	Arbitration struct {
+	TerminalObservationOnly bool `json:"terminal_observation_only,omitempty"`
+	Arbitration             struct {
 		LimitReason string `json:"limit_reason"`
 	} `json:"arbitration"`
 	Connection        int             `json:"connection,omitempty"`

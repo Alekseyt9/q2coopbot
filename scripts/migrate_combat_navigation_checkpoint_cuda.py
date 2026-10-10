@@ -12,11 +12,15 @@ from migrate_combat_navigation_cuda import branch, migrate, output, sha, torch
 from ppo_recurrent import durable_json, durable_write
 
 
-def expanded(tensor):
-    return torch.cat((tensor, tensor.new_zeros(tensor.shape[0],27)),1)
+def expanded(tensor, extra=27):
+    return torch.cat((tensor, tensor.new_zeros(tensor.shape[0],extra)),1)
 
 
 def transfer(cp, old, new):
+    widths = {('combat_features_v7','combat_features_v8'):(854,881),
+              ('combat_features_v8','combat_features_v9'):(881,1121)}
+    old_width,new_width = widths[(old['feature_version'],new['feature_version'])]
+    extra = new_width-old_width
     if cp['version'] != 'combat_architecture_checkpoint_v1':
         raise ValueError('Unsupported checkpoint contract')
     key = 'memory' if old.get('memory') else 'attention'
@@ -37,9 +41,9 @@ def transfer(cp, old, new):
                 raise ValueError('Source checkpoint/weights mismatch: '+role+'/'+name)
             target = ns[name]
             if target.shape != value.shape:
-                if value.ndim!=2 or value.shape[1]!=854 or target.shape!=(value.shape[0],881):
+                if value.ndim!=2 or value.shape[1]!=old_width or target.shape!=(value.shape[0],new_width):
                     raise ValueError('Unexpected shape change')
-                if not torch.equal(target,expanded(value)):
+                if not torch.equal(target,expanded(value,extra)):
                     raise ValueError('Expansion changed existing weights')
                 changed.append(name)
             elif not torch.equal(value,target):
@@ -63,8 +67,8 @@ def transfer(cp, old, new):
                 if field not in ('exp_avg','exp_avg_sq','max_exp_avg_sq') or tensor.shape!=shape:
                     raise ValueError('Unknown Adam moment')
                 if name in changed:
-                    state['state'][identifier][field]=expanded(tensor)
-        changes.append(dict(role=role,parameter=changed[0],old_width=854,new_width=881))
+                    state['state'][identifier][field]=expanded(tensor,extra)
+        changes.append(dict(role=role,parameter=changed[0],old_width=old_width,new_width=new_width))
     if not torch.equal(cp['log_std'].to('cuda'),torch.tensor(new['log_std'],device='cuda')):
         raise ValueError('Checkpoint standard deviations differ')
     return result, changes
@@ -91,7 +95,7 @@ def verify(cp, new):
                     assert actual==value
         # Zero-gradient step on disposable restored state exercises actual Adam
         # with widened moment shapes. The persisted checkpoint is not stepped.
-        x = torch.randn(2,8,881,device='cuda')
+        x = torch.randn(2,8,len(new['actor'][0]['weight'][0]),device='cuda')
         net.zero_grad()
         (output(net,x).sum()*0).backward()
         optimizer.step()

@@ -7,6 +7,24 @@ import (
 	"testing"
 )
 
+func TestPairedParticipantResetOcclusionDoesNotBypassResources(t *testing.T) {
+	o := damageStep(10).Observation
+	o.Version, o.Health, o.Weapon, o.OnGround = policy.ObservationVersion, 100, "Blaster", true
+	o.Enemies = nil
+	expected := ResetExpectation{Version: ResetVersion, Map: o.Identity.Map, Position: o.Position, Health: 100, Weapon: "Blaster", EnemyClass: "monster_soldier", AllowUnobservedEnemy: true}
+	if r := VerifyReset(o, expected); r.ObservedFieldsConfirmed {
+		t.Fatal("solo accepted hidden enemy opt-in", r)
+	}
+	r := VerifyPairedParticipantReset(o, expected)
+	if !r.ObservedFieldsConfirmed || r.FullServerResetConfirmed || r.Unverified[len(r.Unverified)-1] != "enemy_presence_and_pose_not_observed" {
+		t.Fatal(r)
+	}
+	o.Health--
+	if r := VerifyPairedParticipantReset(o, expected); r.ObservedFieldsConfirmed {
+		t.Fatal("occlusion hid resource mismatch", r)
+	}
+}
+
 func TestResetVerifiesObservedFieldsAndKeepsHiddenStateUnconfirmed(t *testing.T) {
 	s := damageStep(10)
 	o := s.Observation

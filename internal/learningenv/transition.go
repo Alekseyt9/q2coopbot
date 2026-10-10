@@ -14,6 +14,7 @@ const StepVersion = "combat_step_v1"
 const OutcomeVersion = "observed_outcome_v1"
 
 type Step struct {
+	JointTerminal  *PairedDeathBoundary  `json:"joint_terminal,omitempty"`
 	Sample         *policy.Sample        `json:"sample,omitempty"`
 	Native         *NativeStep           `json:"native_step,omitempty"`
 	ClientSequence uint32                `json:"client_sequence"`
@@ -52,8 +53,23 @@ type Outcome struct {
 
 type Assembler struct {
 	Worker, Episode string
-	pending         *policy.Capture
-	index           int
+	// Diagnostic paired peer only: retain scripted idle/walking after verified
+	// release. Such datasets remain explicitly ineligible for PPO.
+	KeepScriptedPeerFromFrame int
+	pending                   *policy.Capture
+	index                     int
+}
+
+func (a *Assembler) harnessOverride(c policy.Capture) bool {
+	if a.KeepScriptedPeerFromFrame > 0 && c.Observation.Identity.Frame >= a.KeepScriptedPeerFromFrame {
+		allowed := func(reason string) bool {
+			return reason == "" || reason == "test_idle" || reason == "test_walk" || !strings.HasPrefix(reason, "test_")
+		}
+		if allowed(c.LimitReason) && allowed(c.MoveLimitReason) {
+			return false
+		}
+	}
+	return strings.HasPrefix(c.LimitReason, "test_") || strings.HasPrefix(c.MoveLimitReason, "test_")
 }
 
 func (a *Assembler) Push(c policy.Capture) (*Step, *Outcome, error) {
@@ -70,7 +86,7 @@ func (a *Assembler) Push(c policy.Capture) (*Step, *Outcome, error) {
 		}
 		step, outcome = a.finish("", &o)
 		switch {
-		case strings.HasPrefix(c.LimitReason, "test_") || strings.HasPrefix(c.MoveLimitReason, "test_"):
+		case a.harnessOverride(c):
 			step.Truncated = true
 			step.Reason = "harness_override"
 			step.Next = nil
@@ -104,7 +120,7 @@ func (a *Assembler) Push(c policy.Capture) (*Step, *Outcome, error) {
 		}
 	}
 	a.pending = nil
-	if o.Health > 0 && o.AgeMS >= 0 && o.AgeMS <= 300 && !strings.HasPrefix(c.LimitReason, "test_") && !strings.HasPrefix(c.MoveLimitReason, "test_") {
+	if o.Health > 0 && o.AgeMS >= 0 && o.AgeMS <= 300 && !a.harnessOverride(c) {
 		copy := c
 		a.pending = &copy
 	}

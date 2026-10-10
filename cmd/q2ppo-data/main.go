@@ -222,6 +222,15 @@ func run() error {
 		if p.Version() != behavior.Version() || !p.IsStochastic() || p.SamplingSeed() != int64(r.Seed) {
 			return fmt.Errorf("episode weight version or sampling seed differs")
 		}
+		var eligibility struct {
+			Paired bool `json:"paired_confirmed"`
+		}
+		if e = read(filepath.Join(r.Root, "dataset", "report.json"), &eligibility); e != nil {
+			return e
+		}
+		if eligibility.Paired {
+			return fmt.Errorf("paired PPO export requires a validated two-actor training adapter")
+		}
 		rewardPath := filepath.Join(r.Root, "dataset", "reward-config.json")
 		var rewardConfig learningenv.RewardConfig
 		if e = read(rewardPath, &rewardConfig); e != nil {

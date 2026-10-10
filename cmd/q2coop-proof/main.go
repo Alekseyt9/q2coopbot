@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"q2coopbot/internal/harness"
 	"q2coopbot/internal/learningenv"
 )
 
@@ -22,9 +23,14 @@ func main() {
 func run() error {
 	path := flag.String("server-log", "", "Closed paired native server log")
 	out := flag.String("out", "", "Fresh native paired proof JSON")
+	primary := flag.String("primary-trace", "", "Optional full primary trace, required with peer trace")
+	peer := flag.String("peer-trace", "", "Optional full peer trace for shared death boundary proof")
 	flag.Parse()
 	if *path == "" || *out == "" {
 		return fmt.Errorf("server-log and out required")
+	}
+	if (*primary == "") != (*peer == "") {
+		return fmt.Errorf("both participant traces required")
 	}
 	data, err := os.ReadFile(*path)
 	if err != nil {
@@ -39,14 +45,37 @@ func run() error {
 		return err
 	}
 	digest := sha256.Sum256(data)
+	var boundary *learningenv.PairedDeathBoundary
+	traceSHA := map[string]string{}
+	if *primary != "" {
+		var traces [2][]harness.Trace
+		for role, tracePath := range [2]string{*primary, *peer} {
+			contents, e := os.ReadFile(tracePath)
+			if e != nil {
+				return e
+			}
+			traces[role], e = learningenv.ReadPairedTrace(bytes.NewReader(contents))
+			if e != nil {
+				return e
+			}
+			h := sha256.Sum256(contents)
+			traceSHA[tracePath] = hex.EncodeToString(h[:])
+		}
+		boundary, err = pairs.FirstDeathBoundary(traces, events)
+		if err != nil {
+			return err
+		}
+	}
 	result := struct {
-		Version   string                   `json:"version"`
-		Source    string                   `json:"source"`
-		SHA       string                   `json:"source_sha256"`
-		Trainable bool                     `json:"ppo_trainable"`
-		Native    *learningenv.NativePairs `json:"native"`
-		Scope     string                   `json:"scope"`
-	}{"coop_native_pair_proof_v1", *path, hex.EncodeToString(digest[:]), false, pairs, "Paired commands, world steps and shared effect indexes only. Reset, per-actor reward, terminal and both-client trace validation remain required."}
+		Version   string                           `json:"version"`
+		Source    string                           `json:"source"`
+		SHA       string                           `json:"source_sha256"`
+		Trainable bool                             `json:"ppo_trainable"`
+		Native    *learningenv.NativePairs         `json:"native"`
+		Scope     string                           `json:"scope"`
+		Boundary  *learningenv.PairedDeathBoundary `json:"joint_death_boundary,omitempty"`
+		TraceSHA  map[string]string                `json:"trace_sha256,omitempty"`
+	}{Version: "coop_native_pair_proof_v1", Source: *path, SHA: hex.EncodeToString(digest[:]), Native: pairs, Scope: "Paired commands and native effects; optional both-client observed death boundary. PPO reset/reward and live joint stop validation remain required.", Boundary: boundary, TraceSHA: traceSHA}
 	f, err := os.OpenFile(*out, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return err

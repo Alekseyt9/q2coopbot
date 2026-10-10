@@ -35,7 +35,10 @@ func MergeRollouts(dirs []string, out string) error {
 		if meta["version"] != "combat_ppo_rollout_v1" {
 			return fmt.Errorf("unsupported rollout")
 		}
-		keys := []string{"version", "feature_version", "reward_config_sha256", "reward_version", "aim_gamma", "training_monster_health", "policy_version", "model_sha256", "recurrent_version", "numerical_verification"}
+		keys := []string{"version", "feature_version", "reward_config_sha256", "reward_version", "aim_gamma", "training_monster_health", "policy_version", "model_sha256", "recurrent_version", "numerical_verification", "paired_adapter_version", "paired_adapter_verified", "paired_training_ready"}
+		if meta["paired_adapter_version"] != nil && (meta["paired_adapter_verified"] != true || meta["paired_training_ready"] != true || meta["numerical_verification"] != "cuda_verified_v1") {
+			return fmt.Errorf("paired rollout is not CUDA finalized")
+		}
 		if reference == nil {
 			reference = meta
 		} else {
@@ -117,7 +120,7 @@ func MergeRollouts(dirs []string, out string) error {
 		t, _ := meta["terminals"].(float64)
 		skipped += int(s)
 		terminals += int(t)
-		members = append(members, map[string]any{"directory": dir, "rows": meta["rows"], "rollout_sha256": meta["rollout_sha256"]})
+		members = append(members, map[string]any{"directory": dir, "rows": meta["rows"], "rollout_sha256": meta["rollout_sha256"], "paired_episode_end": meta["paired_episode_end"], "terminals": meta["terminals"]})
 	}
 	for path, h := range sources {
 		actual, err := Hash(path)
@@ -142,6 +145,10 @@ func MergeRollouts(dirs []string, out string) error {
 	// Per-case CUDA receipts are pinned in source_sha256; a merged corpus has
 	// no single per-case verification file representing every member.
 	delete(reference, "cuda_verification_sha256")
+	if reference["paired_adapter_version"] != nil {
+		delete(reference, "paired_episode_end")
+		reference["paired_scope"] = "Primary actor only; member-specific joint death, surviving horizon or control handoff. Pilot geometry only; general registry eligibility unproven."
+	}
 	reference["scope"] = "Joint fresh on-policy curriculum batch; all native receipts pinned; per-episode seeds and memory context retained. Sample share follows eligible transitions."
 	h, err := Hash(filepath.Join(out, "rollout.jsonl"))
 	if err != nil {

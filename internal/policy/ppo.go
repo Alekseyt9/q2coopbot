@@ -73,22 +73,22 @@ func LoadPPO(path string) (*PPO, error) {
 	if d.Decode(new(any)) != io.EOF {
 		return nil, fmt.Errorf("trailing PPO data")
 	}
-	if f.Kind != PPOKind || (f.Features != FeatureVersion && f.Features != AimFeatureVersion && f.Features != BBoxFeatureVersion && f.Features != TypedFeatureVersion && f.Features != RecoilFeatureVersion && f.Features != WeaponFeatureVersion && f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion) || f.SamplingSeed < 0 {
+	if f.Kind != PPOKind || (f.Features != FeatureVersion && f.Features != AimFeatureVersion && f.Features != BBoxFeatureVersion && f.Features != TypedFeatureVersion && f.Features != RecoilFeatureVersion && f.Features != WeaponFeatureVersion && f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion && f.Features != ThreatFeatureVersion) || f.SamplingSeed < 0 {
 		return nil, fmt.Errorf("invalid PPO header")
 	}
 	outputs := 8
 	if f.WeaponHead != "" {
-		if f.WeaponHead != WeaponHeadVersion || (f.Features != WeaponFeatureVersion && f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion) || f.EntityAttention != nil {
+		if f.WeaponHead != WeaponHeadVersion || (f.Features != WeaponFeatureVersion && f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion && f.Features != ThreatFeatureVersion) || f.EntityAttention != nil {
 			return nil, fmt.Errorf("invalid PPO weapon contract")
 		}
 		outputs += len(weaponNames)
 	}
 	if f.TargetHead != "" {
-		if f.TargetHead != TargetHeadVersion || (f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion) || f.WeaponHead != WeaponHeadVersion || f.EntityAttention != nil {
+		if f.TargetHead != TargetHeadVersion || (f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion && f.Features != ThreatFeatureVersion) || f.WeaponHead != WeaponHeadVersion || f.EntityAttention != nil {
 			return nil, fmt.Errorf("invalid PPO target contract")
 		}
 		outputs = TargetOutputWidth
-	} else if f.Features == TargetFeatureVersion || f.Features == NavigationFeatureVersion {
+	} else if f.Features == TargetFeatureVersion || f.Features == NavigationFeatureVersion || f.Features == ThreatFeatureVersion {
 		return nil, fmt.Errorf("target features require target head")
 	}
 	if f.AimModeHead != "" {
