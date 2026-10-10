@@ -23,6 +23,7 @@ param(
     [string]$ProviderFile='',
     [string]$RewardConfig='',
     [string]$GeneratedFixtures='',
+    [string]$BinaryBundle='',
     [string]$OutputRoot=''
 )
 $ErrorActionPreference='Stop'
@@ -75,12 +76,21 @@ $nativeRepo=Join-Path (Split-Path $repo -Parent) 'yquake2'
 $nativeSources=Get-HarnessNativeSourceRecords $nativeRepo
 $nativeFingerprint=Get-HarnessFingerprint $nativeSources
 $client=Join-Path $OutputRoot 'q2coopbot.exe'
+$exporter=Join-Path $OutputRoot 'q2combat-export.exe'
+if($BinaryBundle){
+    if($Feedback){throw 'Feedback relay does not yet support prebuilt bundles'}
+    . "$PSScriptRoot/combat_harness_bundle.ps1"
+    $bundleReceipt=Assert-HarnessBinaryBundle $BinaryBundle $fingerprint
+    foreach($name in @('q2coopbot.exe','q2combat-export.exe')){
+        Install-HarnessBinaryLink (Join-Path $BinaryBundle $name) (Join-Path $OutputRoot $name) $bundleReceipt.binaries.$name.sha256
+    }
+}else{
 $env:GOCACHE=Join-Path $repo 'workspace/build/gocache'
 $env:GOTOOLCHAIN='auto'
 Push-Location $repo
 try{go build -buildvcs=false -o $client ./cmd/q2coopbot;if($LASTEXITCODE){throw 'Client build failed'}}finally{Pop-Location}
-$exporter=Join-Path $OutputRoot 'q2combat-export.exe'
 Push-Location $repo;try{go build -buildvcs=false -o $exporter ./cmd/q2combat-export;if($LASTEXITCODE){throw 'Exporter build failed'}}finally{Pop-Location}
+}
 $relay=Join-Path $OutputRoot 'q2learning-relay.exe'
 if($Feedback){Push-Location $repo;try{go build -buildvcs=false -o $relay ./cmd/q2learning-relay;if($LASTEXITCODE){throw 'Relay build failed'}}finally{Pop-Location}}
 $probeHash=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{''})
@@ -316,6 +326,7 @@ $manifest=[ordered]@{
     stop=$(if($StopOnGoal){'Verified native fixture kills in first life, followed by observed final effect; otherwise fixed game-frame maximum and wall watchdog.'}else{'Fixed game-frame limit per client; 60s wall watchdog; first-life diagnostics and per-life transitions remain separate.'})
     dataset_scope=$(if($RewardConfig){'Separate observations, execution proof, native effects and explicit experimental first-life rewards. No positive demonstration labels or victory inference.'}else{'Separate observed steps, exact native command dispatch proof and damage effect windows; effects are not shot accuracy or delayed causal credit. No scalar reward or positive demonstration labels.'})
 }
+if($BinaryBundle){$manifest.binary_bundle=$BinaryBundle;$manifest.binary_bundle_receipt_sha256=(Get-FileHash -LiteralPath (Join-Path $BinaryBundle 'receipt.json')).Hash.ToLowerInvariant()}
 $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $OutputRoot 'manifest.json') -Encoding utf8
 $report=[ordered]@{
     version=1;provenance_valid=$valid;capture_complete=($valid -and $usable.Count -eq $Workers*$EpisodesPerWorker)

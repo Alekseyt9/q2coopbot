@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param([Parameter(Mandatory)][string[]]$Plans,
  [ValidateSet(4,8,16,24,32)][int]$MaxInstances=16,[int]$Port=34800,
- [Parameter(Mandatory)][string]$OutputRoot,[switch]$DryRun)
+ [Parameter(Mandatory)][string]$OutputRoot,[switch]$DryRun,[switch]$NoBinaryBundle)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 $root=[IO.Path]::GetFullPath($(if([IO.Path]::IsPathRooted($OutputRoot)){$OutputRoot}else{Join-Path $repo $OutputRoot}))
@@ -44,6 +44,9 @@ foreach($s in $schedules){New-Item -ItemType Directory -Path $s.schedule.output_
 foreach($g in $groups){New-Item -ItemType Directory -Path $g.root|Out-Null}
 . "$PSScriptRoot/harness_manifest.ps1"
 $fingerprint=Get-HarnessFingerprint (Get-HarnessSourceRecords $repo)
+. "$PSScriptRoot/combat_harness_bundle.ps1"
+$binaryBundle=''
+if(!$NoBinaryBundle){$binaryBundle=New-HarnessBinaryBundle $repo}
 $queue=[Collections.Concurrent.ConcurrentQueue[object]]::new()
 foreach($job in @($jobs|Sort-Object seed_index,task_index,plan_index,mode)){$queue.Enqueue($job)}
 $hostExe=(Get-Process -Id $PID).Path;$monitor=$null;$clock=[Diagnostics.Stopwatch]::StartNew()
@@ -55,7 +58,7 @@ try{
             $start=[DateTime]::UtcNow;$timer=[Diagnostics.Stopwatch]::StartNew();$failure=''
             @{state='running';job=$job.index;seed=$job.seed;mode=$job.mode;port=$using:Port+$slot}|ConvertTo-Json|Set-Content "$using:root/slot-$slot.json"
             try{
-                & "$using:repo/scripts/run_registered_combat_pool_episode.ps1" -Plan $job.plan -TaskIndex $job.task_index -SeedIndex $job.seed_index -Mode $job.mode -Port ($using:Port+$slot) -OutputRoot $job.root *>&1|Set-Content "$using:root/jobs/job-$($job.index).log"
+                & "$using:repo/scripts/run_registered_combat_pool_episode.ps1" -Plan $job.plan -TaskIndex $job.task_index -SeedIndex $job.seed_index -Mode $job.mode -Port ($using:Port+$slot) -OutputRoot $job.root -BinaryBundle $using:binaryBundle *>&1|Set-Content "$using:root/jobs/job-$($job.index).log"
             }catch{$failure=$_.Exception.Message}
             $result=[pscustomobject]@{job=$job.index;plan_index=$job.plan_index;task_index=$job.task_index;seed=$job.seed;mode=$job.mode;slot=$slot;port=$using:Port+$slot;root=$job.root;started_utc=$start.ToString('o');finished_utc=[DateTime]::UtcNow.ToString('o');wall_seconds=$timer.Elapsed.TotalSeconds;error=$failure}
             $result|ConvertTo-Json|Set-Content "$using:root/jobs/job-$($job.index)-result.json"

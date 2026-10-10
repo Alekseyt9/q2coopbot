@@ -54,3 +54,20 @@ processing path explicitly selects CUDA-only export/finalization and training.
 The whole actor, critic, standard deviations and spatial branch remain trainable.
 Paired native validation must compare old/new weights under the same guard;
 the guard-only 16-battle probe is not evidence of model improvement.
+
+## Completed fresh CUDA update (2026-10-10)
+
+The fresh movement capture sealed 160/160 battles with unchanged sources.
+`movement-ppo-process-v1-20261010/report.json` is complete. Instant used 5406
+eligible transitions and Postmove 6715; both accepted ten additional actor
+steps, reaching PPO update2. CUDA training took 12.84 and 4.72 seconds,
+respectively; collection and numerical verification are separate costs.
+Both checkpoint CUDA audits verified exact actor/value/std and Adam state
+after reload. No Go numerical neural replay was executed in this processing path.
+
+Paired evaluation `movement-ppo-eval-v2-20261010` uses validation offsets
+28..31, six variants, 480 battles, the same movement guard, 16 refill slots
+and timescale2. Evaluation remains unsealed while running. One signon failure
+(job116, seed1095028) produced an empty trace after server configstrings
+buffer overflow; this is infrastructure failure, not a model loss, and needs
+a preserved retry before a complete quality comparison can be claimed.

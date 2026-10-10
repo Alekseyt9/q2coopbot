@@ -280,3 +280,6 @@ Postmove53→51/80, FireBC49/80, rules70/80. Превосходство над �
 и новых весов под одним исправленным фильтром, с FireBC/rules контролями.
 Результатов этого нового цикла пока нет. Подробности
 `docs/testing/combat_cuda_native_export_20261010.md`.
+
+
+**Movement PPO update2, 2026-10-10:**160 fresh captures, both CUDA checkpoint reload audits exact. Recovered validation480/480: Instant52→48/80, Postmove49→51/80, FireBC51/80, rules64/80. One empty signon failure retried with original logs preserved; its valid loss included. No promotion. Prior rules70 used different seeds. Next: isolate applied movement/aim coupling and stationary firing in losses before allocating another training cycle. [Results](testing/combat_movement_ppo_evaluation_20261010.md). Shared source-bound binary bundle verified16/16 and prevents per-battle executable copies; overall throughput benefit unproven.
