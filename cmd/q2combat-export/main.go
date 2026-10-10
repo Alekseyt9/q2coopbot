@@ -227,6 +227,10 @@ func run() error {
 	goalMarked := false
 	deathVerified, deathObservationFound, deathRewardVerified := false, false, false
 	deathStep := 0
+	sequenceReward := learningenv.SequenceReward{}
+	if rewardConfig != nil {
+		sequenceReward.Config = *rewardConfig
+	}
 	emit := func(s *learningenv.Step, o *learningenv.Outcome) error {
 		if s == nil {
 			return nil
@@ -313,7 +317,7 @@ func run() error {
 				return err
 			}
 			if rewardConfig != nil {
-				r := rewardConfig.Evaluate(s, outcome)
+				r := sequenceReward.Evaluate(s, outcome)
 				if deathStop != nil && s.Index == deathStep {
 					if !r.Available || r.Components["death"] != rewardConfig.Death {
 						return fmt.Errorf("death stop lost terminal reward")

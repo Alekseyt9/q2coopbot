@@ -31,12 +31,14 @@ def main():
     assert state['weights_sha256'] == sha(a.parent/'weights.json')
     config, reward = read(a.config), read(a.reward)
     assert config['objective_reward_sha256'] == sha(a.reward)
-    assert reward['version'] in ('combat_reward_v4','combat_reward_v5','combat_reward_v6')
+    assert reward['version'] in ('combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7')
     assert reward['monster_kill'] > 0 and reward['aim_gamma'] == config['gamma']
     if reward['version'] == 'combat_reward_v5':
         assert -0.1 <= reward['blaster_miss'] < 0
-    if reward['version'] == 'combat_reward_v6':
+    if reward['version'] in ('combat_reward_v6','combat_reward_v7'):
         assert all(-0.05 <= reward[name] < 0 for name in ('off_target_attack','turn_away','stalled_movement'))
+    if reward['version'] == 'combat_reward_v7':
+        assert -0.05 <= reward['target_churn'] < 0
     assert {k:v for k,v in state['config'].items() if k!='objective_reward_sha256'} == {k:v for k,v in config.items() if k!='objective_reward_sha256'}
     actor, value = build(model,'actor'), build(model,'value')
     for name, module in [('actor',actor), ('value',value)]:

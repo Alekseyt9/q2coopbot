@@ -13,6 +13,7 @@ const KillRewardVersion = "combat_reward_v2"
 const AimRewardVersion = "combat_reward_v3"
 const ManeuverRewardVersion = "combat_reward_v4"
 const ActionQualityRewardVersion = "combat_reward_v6"
+const TargetSequenceRewardVersion = "combat_reward_v7"
 
 // RewardConfig is an explicit experimental objective, not a measured success
 // metric. Server effects never enter the policy observation.
@@ -34,20 +35,25 @@ type RewardConfig struct {
 	OffTargetAttack  float64 `json:"off_target_attack,omitempty"`
 	TurnAway         float64 `json:"turn_away,omitempty"`
 	StalledMovement  float64 `json:"stalled_movement,omitempty"`
+	TargetChurn      float64 `json:"target_churn,omitempty"`
 }
 
 func (c RewardConfig) HasKillReward() bool {
 	return c.Version == KillRewardVersion || c.HasPotentialReward()
 }
 func (c RewardConfig) HasPotentialReward() bool {
-	return c.Version == AimRewardVersion || c.Version == ManeuverRewardVersion || c.Version == MissRewardVersion || c.Version == ActionQualityRewardVersion
+	return c.Version == AimRewardVersion || c.Version == ManeuverRewardVersion || c.Version == MissRewardVersion || c.HasActionQualityCosts()
+}
+
+func (c RewardConfig) HasActionQualityCosts() bool {
+	return c.Version == ActionQualityRewardVersion || c.Version == TargetSequenceRewardVersion
 }
 
 func (c RewardConfig) Validate() error {
 	if c.Version != RewardVersion && !c.HasKillReward() {
 		return fmt.Errorf("unsupported reward version")
 	}
-	for _, v := range []float64{c.MonsterDamage, c.ReceivedDamage, c.SelfDamage, c.FriendlyDamage, c.Death, c.Tick, c.MonsterKill, c.AimPotential, c.AimGamma, c.SpacingPotential, c.ParasiteRange, c.BlasterMiss, c.OffTargetAttack, c.TurnAway, c.StalledMovement} {
+	for _, v := range []float64{c.MonsterDamage, c.ReceivedDamage, c.SelfDamage, c.FriendlyDamage, c.Death, c.Tick, c.MonsterKill, c.AimPotential, c.AimGamma, c.SpacingPotential, c.ParasiteRange, c.BlasterMiss, c.OffTargetAttack, c.TurnAway, c.StalledMovement, c.TargetChurn} {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
 			return fmt.Errorf("nonfinite reward coefficient")
 		}
@@ -70,7 +76,7 @@ func (c RewardConfig) Validate() error {
 		return fmt.Errorf("blaster miss cost requires reward v5")
 	}
 	for _, cost := range []float64{c.OffTargetAttack, c.TurnAway, c.StalledMovement} {
-		if c.Version == ActionQualityRewardVersion {
+		if c.HasActionQualityCosts() {
 			if cost >= 0 || cost < -.05 {
 				return fmt.Errorf("v6 requires action quality costs in [-.05,0)")
 			}
@@ -78,7 +84,14 @@ func (c RewardConfig) Validate() error {
 			return fmt.Errorf("action quality costs require reward v6")
 		}
 	}
-	if c.Version == ManeuverRewardVersion || c.Version == MissRewardVersion || c.Version == ActionQualityRewardVersion {
+	if c.Version == TargetSequenceRewardVersion {
+		if c.TargetChurn >= 0 || c.TargetChurn < -.05 {
+			return fmt.Errorf("v7 requires target churn cost in [-.05,0)")
+		}
+	} else if c.TargetChurn != 0 {
+		return fmt.Errorf("target churn cost requires reward v7")
+	}
+	if c.Version == ManeuverRewardVersion || c.Version == MissRewardVersion || c.HasActionQualityCosts() {
 		if c.SpacingPotential <= 0 || c.SpacingPotential > 2 || c.ParasiteRange < 280 || c.ParasiteRange > 512 {
 			return fmt.Errorf("invalid maneuver potential scale/range")
 		}
@@ -92,17 +105,25 @@ func (c RewardConfig) Validate() error {
 }
 
 type Reward struct {
-	Version    string             `json:"version"`
-	Worker     string             `json:"worker"`
-	Episode    string             `json:"episode"`
-	Step       int                `json:"step"`
-	Available  bool               `json:"available"`
-	Reason     string             `json:"reason,omitempty"`
-	Score      *float64           `json:"score"`
-	Components map[string]float64 `json:"components"`
+	TargetCycle *TargetCycleEvidence `json:"target_cycle,omitempty"`
+	Version     string               `json:"version"`
+	Worker      string               `json:"worker"`
+	Episode     string               `json:"episode"`
+	Step        int                  `json:"step"`
+	Available   bool                 `json:"available"`
+	Reason      string               `json:"reason,omitempty"`
+	Score       *float64             `json:"score"`
+	Components  map[string]float64   `json:"components"`
 }
 
 func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
+	if c.Version == TargetSequenceRewardVersion {
+		return Reward{Version: c.Version, Worker: s.Worker, Episode: s.Episode, Step: s.Index, Reason: "sequence_context_required"}
+	}
+	return c.evaluate(s, o)
+}
+
+func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 	r := Reward{Version: c.Version, Worker: s.Worker, Episode: s.Episode, Step: s.Index}
 	deny := func(reason string) Reward { r.Reason = reason; return r }
 	if err := c.Validate(); err != nil {
@@ -200,7 +221,7 @@ func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
 		r.Components["aim_potential"] = c.AimGamma*after - before
 		score += r.Components["aim_potential"]
 	}
-	if c.Version == ManeuverRewardVersion || c.Version == MissRewardVersion || c.Version == ActionQualityRewardVersion {
+	if c.Version == ManeuverRewardVersion || c.Version == MissRewardVersion || c.HasActionQualityCosts() {
 		before, err := spacingPotential(s.Observation, c.SpacingPotential, c.ParasiteRange)
 		if err != nil {
 			r.Components = nil
@@ -221,7 +242,7 @@ func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
 		r.Components["blaster_miss"] = float64(len(o.ProjectileMisses.Misses)) * c.BlasterMiss
 		score += r.Components["blaster_miss"]
 	}
-	if c.Version == ActionQualityRewardVersion {
+	if c.HasActionQualityCosts() {
 		components, err := c.actionQualityCosts(s)
 		if err != nil {
 			r.Components = nil

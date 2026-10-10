@@ -15,6 +15,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', type=pathlib.Path, required=True)
     ap.add_argument('--seed-offset', type=int, default=320)
+    ap.add_argument('--control-reward',type=pathlib.Path,default=pathlib.Path('scripts/scenarios/combat-reward-recoil-v5.json'))
+    ap.add_argument('--quality-reward',type=pathlib.Path,default=pathlib.Path('scripts/scenarios/combat-reward-action-quality-v6.json'))
+    ap.add_argument('--wide',action='store_true')
+    ap.add_argument('--validation-stochastic',action='store_true')
+    ap.add_argument('--require-calibration',type=pathlib.Path)
     args = ap.parse_args()
     repo = pathlib.Path(__file__).resolve().parents[1]
     out = args.out.resolve()
@@ -28,20 +33,33 @@ def main():
     source = parent.parents[1]
     families = [f'campaign-{m}-site-{site}-{weapon}' for m in ('base1','base2')
                 for site in ('02','03') for weapon in ('blaster','machinegun')]
+    if args.wide:
+        families = [t['episode']['id'] for t in read(repo/'workspace/artifacts/parent-ppo-series-v1-20261010/round-2/capture/series/plan.json')['tasks']]
+        assert len(families)==len(set(families))==20
+    count = len(families)*4
+    validation_offset = 28 if args.wide else 48
+    control_reward, quality_reward = args.control_reward.resolve(),args.quality_reward.resolve()
+    if read(quality_reward)['version']=='combat_reward_v7':
+        assert args.require_calibration is not None
+        calibration = read(args.require_calibration)
+        assert calibration['state']=='complete' and calibration['reward_sha256']==sha(quality_reward) and calibration['cycle_events']>0
+        for filename,digest in calibration['implementation_sha256'].items():
+            assert sha(repo/filename)==digest,'Reward implementation changed since calibration'
     compiler, exporter = out/'q2episode.exe', out/'q2ppo-data.exe'
     for package, binary in [('q2episode', compiler), ('q2ppo-data', exporter)]:
         run(['go','build','-buildvcs=false','-o',binary,'./cmd/'+package], out/('build-'+package+'.log'))
     save(out/'protocol.json', dict(version='combat_action_quality_ab_v1', parent=str(parent),
         parent_weights_sha256=sha(parent/'weights.json'), families=families,
-        train_seed_offset=args.seed_offset, validation_seed_offset=48,
-        training_episodes_per_branch=32, validation_episodes_per_branch=32,
+        train_seed_offset=args.seed_offset, validation_seed_offset=validation_offset,
+        training_episodes_per_branch=count, validation_episodes_per_branch=count,
+        control_reward_sha256=sha(control_reward),quality_reward_sha256=sha(quality_reward),
+        validation_stochastic=args.validation_stochastic,
         slots=16, timescale=2, training_device='cuda', runtime_action_quality_guard=False,
-        scope='Small development A/B, not final test. Same actor/std, critic-output and Adam reset in both branches. '
+        scope='Fresh development A/B, not final test. Same actor/std, critic-output and Adam reset in both branches. '
               'Reward changes only; fresh train split and separate common validation. No promotion.'))
     branches = []
     try:
-        rewards = {'control': repo/'scripts/scenarios/combat-reward-recoil-v5.json',
-                   'quality': repo/'scripts/scenarios/combat-reward-action-quality-v6.json'}
+        rewards = {'control':control_reward,'quality':quality_reward}
         for name, reward in rewards.items():
             branch = out/name
             branch.mkdir()
@@ -66,7 +84,7 @@ def main():
             plan = compile_plan(compiler, registry/'index.json', repo, fork/'weights.json',
                                 capture/'train', 'train', families, args.seed_offset, count=4)
             schedule = read(plan)
-            assert sum(len(t['seeds']) for t in schedule['tasks']) == 32
+            assert sum(len(t['seeds']) for t in schedule['tasks']) == count
             report = read(fork/'report.json')
             save(capture/'models.json', [dict(id=name, architecture=dict(architecture='attention'),
                 model=str(fork/'weights.json'), plan=str(plan), capture_root=schedule['output_root'],
@@ -92,22 +110,27 @@ def main():
             run([sys.executable,repo/'scripts/audit_combat_spatial_ppo_checkpoint_cuda.py',
                  '--roots',update],branch/'checkpoint-audit.log')
             model = read(update/'weights.json')
-            model['deterministic'] = True
+            model['deterministic'] = not args.validation_stochastic
             weights = evaluation/(name+'-weights.json')
             save(weights, model)
             valid = compile_plan(compiler, repo/'scripts/scenarios/combat-training/index.json', repo,
-                                 weights,evaluation/name,'validation',families,48,count=4)
+                                 weights,evaluation/name,'validation',families,validation_offset,count=4)
+            valid_plan = read(valid)
+            valid_plan['policy_sampling_seed_offset'] = 20261011 if args.validation_stochastic else 0
+            save(valid,valid_plan)
             plans.append(valid)
             entries.append(dict(model=name,label='after',root=read(valid)['output_root'],plan=str(valid),
                 plan_sha256=sha(valid),source_weights_sha256=sha(update/'weights.json'),
-                deterministic_weights_sha256=sha(weights)))
+                deterministic_weights_sha256=sha(weights),deterministic=not args.validation_stochastic,
+                policy_sampling_seed_offset=valid_plan['policy_sampling_seed_offset']))
         save(evaluation/'protocol.json',dict(version='combat_action_quality_common_validation_v1',
-             evaluations=entries, families=families, total_episodes=64,episodes_per_model=32,
+             evaluations=entries, families=families, total_episodes=2*count,episodes_per_model=count,
              slots=16,timescale=2,scope='Common validation geometry/seeds and legacy outcome reward; no final test or promotion.'))
-        save(out/'progress.json',dict(stage='paired_validation',episodes=64,promotion=None))
+        save(out/'progress.json',dict(stage='paired_validation',episodes=2*count,promotion=None))
         collect_compressed(repo,plans,evaluation)
-        save(out/'progress.json',dict(stage='captures_complete',training_episodes=64,validation_episodes=64,
+        save(out/'progress.json',dict(stage='captures_complete',training_episodes=2*count,validation_episodes=2*count,
              evaluation_root=str(evaluation),scope='Quality report still required; no promotion.'))
+        run([sys.executable,repo/'scripts/report_combat_action_quality_ab.py','--root',out],out/'report.log')
     except Exception as error:
         save(out/'progress.json',dict(stage='failed',error=str(error),promotion=None))
         raise
