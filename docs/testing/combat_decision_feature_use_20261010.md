@@ -43,5 +43,21 @@ residual to zero and verify exact old policy/checkpoint state on CUDA. Train
 the new representation on fresh own-policy captures, then compare on new
 sites/seeds against the unchanged reference and ordinary rules. No hidden
 native monster health or test labels enter inference. Activation and live
-promotion require actual paired game evidence; this candidate is not
-implemented or accepted yet.
+promotion require actual paired game evidence.
+
+2026-10-11: `scripts/combat_shared_target.py` now implements an experimental
+CUDA scorer,219 inputs ->64 ->32 ->1 shared across eight enemy slots. It reads
+119 observed spatial inputs, one previous-target flag,27 navigation inputs,
+masked mean/max of the30-dimensional remembered-threat slots, and a masked
+12-dimensional group mean. Pooling avoids dependence on memory slot ordering.
+The residual changes only target logits21:29; the existing none logit and
+availability mask remain unchanged. Its final layer starts at zero.
+
+`scripts/test_combat_shared_target_cuda.py` passes two CUDA tests: exact zero
+initial output preservation and changes limited to target logits after
+synthetic updates; enemy permutation equivariance, memory permutation
+invariance, finite empty-group handling, and trainability of the input layer.
+Synthetic labels here only exercise software gradients, not combat learning.
+Checkpoint/optimizer migration, Go runtime support and PPO integration are
+still pending. This module is not enabled in gameplay and has no measured
+combat benefit yet.

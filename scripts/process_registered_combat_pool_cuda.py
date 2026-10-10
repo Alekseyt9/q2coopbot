@@ -17,6 +17,15 @@ def run(command, log, repo):
     assert result.returncode == 0, str(log)
 
 
+def select_learned_jobs(report, plan_index):
+    assert report['state']=='complete' and report['source_unchanged']
+    assert report['usable_captures']==len(report['jobs'])
+    assert all(not job['error'] for job in report['jobs']), 'Whole pool must be accepted'
+    jobs=sorted((j for j in report['jobs'] if plan_index is None or j['plan_index']==plan_index),key=lambda j:j['job'])
+    assert jobs and all(j['mode']=='learned' for j in jobs), 'Explicit learned plan required; rules captures cannot become PPO data'
+    return jobs
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in ('pool', 'out'):
@@ -35,13 +44,13 @@ def main():
     report = read(root/'report.json')
     assert report['state'] == 'complete' and report['source_unchanged']
     assert report['usable_captures'] == len(report['jobs'])
-    assert all(not job['error'] and job['mode'] == 'learned' for job in report['jobs'])
     plans = []
     for binding in report['plans']:
         path = pathlib.Path(binding['path'])
         assert sha(path) == binding['sha256']
         plans.append(read(path))
     assert args.plan_index is None or 0 <= args.plan_index < len(plans), 'Invalid plan index'
+    selected_jobs=select_learned_jobs(report,args.plan_index)
     selected_plans = plans if args.plan_index is None else [plans[args.plan_index]]
     models = {str(pathlib.Path(p['model_path']).resolve()) for p in selected_plans}
     assert len(models) == 1
@@ -56,7 +65,7 @@ def main():
     try:
         exporter = out/'q2ppo-data.exe'
         run(['go', 'build', '-o', exporter, './cmd/q2ppo-data'], out/'build.log', repo)
-        jobs = sorted((j for j in report['jobs'] if args.plan_index is None or j['plan_index'] == args.plan_index), key=lambda j: j['job'])
+        jobs = selected_jobs
         assert jobs, 'Selected plan has no captures'
         cases = []
         for job in jobs:

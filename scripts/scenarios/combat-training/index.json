@@ -123,6 +123,14 @@
     "campaign-jail1-site-01-group-parasite-infantry-weapons-ssg.json",
     "campaign-jail1-site-02-group-parasite-infantry-weapons-ssg.json",
     "campaign-city1-site-01-group-parasite-infantry-weapons-ssg.json",
-    "campaign-city1-site-02-group-parasite-infantry-weapons-ssg.json"
+    "campaign-city1-site-02-group-parasite-infantry-weapons-ssg.json",
+    "campaign-base3-site-02-group-parasite-infantry-gunner-weapons.json",
+    "campaign-ware2-site-02-group-parasite-infantry-gunner-weapons.json",
+    "campaign-jail1-site-02-group-parasite-infantry-gunner-weapons.json",
+    "campaign-city1-site-02-group-parasite-infantry-gunner-weapons.json",
+    "campaign-base3-site-02-group-parasite-infantry-gunner-weapons-ssg.json",
+    "campaign-ware2-site-02-group-parasite-infantry-gunner-weapons-ssg.json",
+    "campaign-jail1-site-02-group-parasite-infantry-gunner-weapons-ssg.json",
+    "campaign-city1-site-02-group-parasite-infantry-gunner-weapons-ssg.json"
   ]
 }

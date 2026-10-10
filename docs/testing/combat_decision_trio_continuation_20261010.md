@@ -146,3 +146,10 @@ against the previous test plan before capture. The old rejected rules plans
 and learned-only results remain diagnostic evidence, not mixed into this
 new-source paired comparison. Baseline and full-campaign superiority remain
 unproven until the corresponding accepted comparisons complete.
+
+2026-10-11: the common-source240-case pool and both80-case CUDA finalizers are
+complete. Results and promotion limitations are recorded in
+`combat_rules_paired_quality_20261011.md`: rules26 goals,update9 29,update10 32,
+but fewer kills/more received damage for both learned models, and0/20 jail1
+goals. Update10 remains unpromoted. CUDA verified9371 update9 and10111 update10
+eligible rows; no evaluation training was performed.

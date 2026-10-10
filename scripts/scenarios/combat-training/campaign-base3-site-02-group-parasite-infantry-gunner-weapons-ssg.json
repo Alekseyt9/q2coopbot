@@ -1,0 +1,301 @@
+{
+  "generator": {
+    "site": {
+      "map": "base3",
+      "entity_index": 8,
+      "source_class": "monster_soldier_light",
+      "source_origin": [
+        608,
+        96,
+        -232
+      ],
+      "bsp_sha256": "dc15095a381b47f68b72f60f7ecdc9cf5e60970629394321e0cc25e4c388308d",
+      "wall_distances": [
+        239,
+        168,
+        238,
+        100,
+        185,
+        296,
+        512,
+        337
+      ]
+    },
+    "version": 1,
+    "kind": "campaign-ground-group-v1",
+    "distributions": {
+      "confirmation": {
+        "player": {
+          "min": [
+            781.375,
+            165.5,
+            -231.875
+          ],
+          "max": [
+            789.375,
+            173.5,
+            -231.875
+          ]
+        },
+        "primary": {
+          "min": [
+            612,
+            94,
+            -231.875
+          ],
+          "max": [
+            614,
+            98,
+            -231.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              664,
+              95,
+              -231.875
+            ],
+            "max": [
+              666,
+              97,
+              -231.875
+            ]
+          },
+          {
+            "min": [
+              645.2548339959391,
+              140.25483399593904,
+              -231.875
+            ],
+            "max": [
+              647.2548339959391,
+              142.25483399593904,
+              -231.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "test": {
+        "player": {
+          "min": [
+            781.375,
+            165.5,
+            -231.875
+          ],
+          "max": [
+            789.375,
+            173.5,
+            -231.875
+          ]
+        },
+        "primary": {
+          "min": [
+            608,
+            94,
+            -231.875
+          ],
+          "max": [
+            610,
+            98,
+            -231.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              664,
+              95,
+              -231.875
+            ],
+            "max": [
+              666,
+              97,
+              -231.875
+            ]
+          },
+          {
+            "min": [
+              645.2548339959391,
+              140.25483399593904,
+              -231.875
+            ],
+            "max": [
+              647.2548339959391,
+              142.25483399593904,
+              -231.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "train": {
+        "player": {
+          "min": [
+            781.375,
+            165.5,
+            -231.875
+          ],
+          "max": [
+            789.375,
+            173.5,
+            -231.875
+          ]
+        },
+        "primary": {
+          "min": [
+            600,
+            94,
+            -231.875
+          ],
+          "max": [
+            602,
+            98,
+            -231.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              664,
+              95,
+              -231.875
+            ],
+            "max": [
+              666,
+              97,
+              -231.875
+            ]
+          },
+          {
+            "min": [
+              645.2548339959391,
+              140.25483399593904,
+              -231.875
+            ],
+            "max": [
+              647.2548339959391,
+              142.25483399593904,
+              -231.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "validation": {
+        "player": {
+          "min": [
+            781.375,
+            165.5,
+            -231.875
+          ],
+          "max": [
+            789.375,
+            173.5,
+            -231.875
+          ]
+        },
+        "primary": {
+          "min": [
+            604,
+            94,
+            -231.875
+          ],
+          "max": [
+            606,
+            98,
+            -231.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              664,
+              95,
+              -231.875
+            ],
+            "max": [
+              666,
+              97,
+              -231.875
+            ]
+          },
+          {
+            "min": [
+              645.2548339959391,
+              140.25483399593904,
+              -231.875
+            ],
+            "max": [
+              647.2548339959391,
+              142.25483399593904,
+              -231.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "id": "campaign-base3-site-02-group-parasite-infantry-gunner-weapons-ssg",
+  "revision": 1,
+  "title": "base3 encounter 8: monster_soldier / group parasite, infantry, gunner",
+  "status": "runnable",
+  "map": "base3",
+  "scope": "first_life_combat",
+  "goal": "alive_native_kills_then_observed_effect",
+  "monsters": [
+    "monster_parasite",
+    "monster_infantry",
+    "monster_gunner"
+  ],
+  "geometry": "Original campaign BSP encounter; distinct location; static hull/floor/visibility verified; native doors and movers retained",
+  "initial_state": "Isolated stock-health distinct-class ground group; Super Shotgun initial, MG/Shotgun/Blaster owned; native no-infighting fixture",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 300,
+  "modes": [
+    "rules",
+    "learned"
+  ],
+  "ppo_trainable": true,
+  "splits": {
+    "confirmation": {
+      "start": 233550000,
+      "count": 4096
+    },
+    "test": {
+      "start": 233540000,
+      "count": 4096
+    },
+    "train": {
+      "start": 233520000,
+      "count": 4096
+    },
+    "validation": {
+      "start": 233530000,
+      "count": 4096
+    }
+  },
+  "recipe": {
+    "runner": "combat-baseline",
+    "loadout": "weapons-ssg",
+    "mixed": true,
+    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
+  },
+  "missing": []
+}
