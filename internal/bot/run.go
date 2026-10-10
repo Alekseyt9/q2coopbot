@@ -22,6 +22,8 @@ import (
 
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
+	ConnectReadyFile                    string
+	ConnectReleaseFile                  string
 	CombatMode, CombatProviderFile      string
 	CombatActionQualityGuard            bool
 	CombatLiveCompanion                 bool
@@ -437,6 +439,9 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	if cfg.AASDir == "" {
 		cfg.AASDir = filepath.Join(cfg.GameDir, "maps")
+	}
+	if err := waitConnectRelease(ctx, cfg); err != nil {
+		return err
 	}
 	address, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", cfg.Host, cfg.Port))
 	if err != nil {

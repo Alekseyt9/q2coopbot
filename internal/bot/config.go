@@ -32,14 +32,16 @@ type ConfigFile struct {
 		AASDir        string `json:"aas_dir"`
 	} `json:"client"`
 	Run struct {
-		CampaignLeader   bool     `json:"campaign_leader"`
-		CampaignRoute    []string `json:"campaign_route"`
-		CampaignUnitMaps []string `json:"campaign_unit_maps"`
-		Mode             string   `json:"mode"`
-		NextMap          string   `json:"next_map"`
-		Duration         string   `json:"duration"`
-		FramePaced       bool     `json:"frame_paced"`
-		GameFrames       int      `json:"game_frames"`
+		ConnectReadyFile   string   `json:"connect_ready_file,omitempty"`
+		ConnectReleaseFile string   `json:"connect_release_file,omitempty"`
+		CampaignLeader     bool     `json:"campaign_leader"`
+		CampaignRoute      []string `json:"campaign_route"`
+		CampaignUnitMaps   []string `json:"campaign_unit_maps"`
+		Mode               string   `json:"mode"`
+		NextMap            string   `json:"next_map"`
+		Duration           string   `json:"duration"`
+		FramePaced         bool     `json:"frame_paced"`
+		GameFrames         int      `json:"game_frames"`
 	} `json:"run"`
 	Models struct {
 		System1 string `json:"system1"`
@@ -180,6 +182,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.CheckpointControl = resolve(file.Test.CheckpointControl)
 	cfg.CheckpointRestore, cfg.CheckpointMode = resolve(file.Test.CheckpointRestore), file.Test.CheckpointMode
 	cfg.FramePaced, cfg.GameFrames = file.Run.FramePaced, file.Run.GameFrames
+	cfg.ConnectReadyFile, cfg.ConnectReleaseFile = resolve(file.Run.ConnectReadyFile), resolve(file.Run.ConnectReleaseFile)
 	if file.Run.Mode != "" && file.Run.Mode != "companion" && file.Run.Mode != "campaign" {
 		return cfg, fmt.Errorf("run.mode must be companion or campaign")
 	}

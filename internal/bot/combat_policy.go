@@ -47,6 +47,7 @@ func (c *Client) combatObservation(now time.Time) policy.Observation {
 	o := policy.Observe(s, id, c.previous)
 	o.AgeMS = now.Sub(c.planner.World.Updated).Milliseconds()
 	policy.EnrichEnvironment(&o, s, c.planner.World.Geometry)
+	o.Navigation = c.planner.combatNavigationContext()
 	b.history.Enrich(&o)
 	if b.previousTarget != nil && policy.SameLife(b.previousTarget.Identity, id) && b.previousTarget.Identity.Frame+1 == id.Frame {
 		o.PreviousTarget = b.previousTarget

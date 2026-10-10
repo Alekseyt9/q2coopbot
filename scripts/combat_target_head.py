@@ -6,19 +6,20 @@ from train_combat_bc import torch
 HEAD_VERSION = 'combat_target_conditioned_aim_v1'
 FEATURE_VERSION = 'combat_features_v7'
 WIDTH = 854
+FEATURE_WIDTHS = {FEATURE_VERSION: WIDTH, 'combat_features_v8': 881}
 OUTPUTS = 45
 
 def validate_model(model):
-    if model.get('target_head') != HEAD_VERSION or model['feature_version'] != FEATURE_VERSION:
+    if model.get('target_head') != HEAD_VERSION or model['feature_version'] not in FEATURE_WIDTHS:
         raise ValueError('Invalid target feature/head contract')
     if model.get('weapon_head') != 'combat_masked_weapon_v1' or model.get('entity_attention'):
         raise ValueError('Target actor requires masked weapon head; entity attention unsupported')
-    if len(model['actor'][-1]['bias']) != OUTPUTS or len(model['actor'][0]['weight'][0]) != WIDTH:
+    if len(model['actor'][-1]['bias']) != OUTPUTS or len(model['actor'][0]['weight'][0]) != FEATURE_WIDTHS[model['feature_version']]:
         raise ValueError('Invalid target actor dimensions')
 
 def availability(features):
-    if features.ndim != 2 or features.shape[1] != WIDTH:
-        raise ValueError('Target head requires V7 observations')
+    if features.ndim != 2 or features.shape[1] not in FEATURE_WIDTHS.values():
+        raise ValueError('Target head requires V7/V8 observations')
     valid = features[:,426:466:5]
     if not bool(((valid == 0) | (valid == 1)).all()):
         raise ValueError('Invalid observed bbox mask')

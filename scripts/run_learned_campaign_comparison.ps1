@@ -53,7 +53,14 @@ foreach($map in $Maps){
                 New-Item -ItemType Directory -Path (Split-Path $dest -Parent) -Force|Out-Null
                 New-Item -ItemType HardLink -Path $dest -Target $asset.FullName -ErrorAction Stop|Out-Null
             }
-            $tasks+=@{map=$map;mode=$mode;seed=$runSeed;port=$taskPort;dir=$dir;runtime=$runtime;with_teammate=[bool]$WithCampaignTeammate}
+            $taskModel=$evalModel
+            if($Stochastic -and $mode -eq 'learned'){
+                $taskModel=Join-Path $dir 'seeded-weights.json'
+                $taskWeights=Get-Content -LiteralPath $evalModel -Raw|ConvertFrom-Json -AsHashtable
+                $taskWeights.sampling_seed=$runSeed
+                $taskWeights|ConvertTo-Json -Depth 100 -Compress|Set-Content -LiteralPath $taskModel -Encoding utf8
+            }
+            $tasks+=@{map=$map;mode=$mode;seed=$runSeed;port=$taskPort;dir=$dir;runtime=$runtime;with_teammate=[bool]$WithCampaignTeammate;provider=$taskModel;provider_sha256=$(if($taskModel){(Get-FileHash $taskModel).Hash.ToLowerInvariant()}else{''})}
         }
     }
 }
@@ -75,7 +82,7 @@ $worker={
         do{Start-Sleep -Milliseconds 100;if($server.HasExited -or (Get-Date) -gt $deadline){throw 'Server startup failed'}}while(!(Get-NetUDPEndpoint -OwningProcess $server.Id -LocalPort $task.port -ErrorAction SilentlyContinue))
         if(Get-NetUDPEndpoint -OwningProcess $server.Id|Where-Object LocalAddress -NotIn '127.0.0.1','::1'){throw 'Non-loopback listener'}
         $combat=@{mode=$task.mode}
-        if($task.mode -eq 'learned'){$combat.provider_file=$evalModel}
+        if($task.mode -eq 'learned'){$combat.provider_file=$task.provider}
         $config=Join-Path $task.dir 'config.json'
         $botConfig=@{server=@{host='127.0.0.1';port=$task.port};client=@{name='CampaignBot';game_dir=(Join-Path $task.runtime 'baseq2')};combat=$combat;run=@{mode='campaign';campaign_route=@($task.map,$next);frame_paced=$true;game_frames=$frames;duration='240s'};output=@{trace_jsonl=$trace;combat_capture=$true;record_demo=$false;stop_file=$stop};test=@{campaign_combat_evaluation=$true}}
         if($task.with_teammate){
@@ -92,9 +99,52 @@ $worker={
             $botConfig.run.Remove('campaign_route')
             $botConfig.test=@{}
             if($task.mode -eq 'learned'){$combat.live_companion=$true}
+            $readyFile=Join-Path $task.dir 'connect-ready.json'
+            $releaseFile=Join-Path $task.dir 'connect-release.txt'
+            $botConfig.run.connect_ready_file=$readyFile
+            $botConfig.run.connect_release_file=$releaseFile
+            $botConfig|ConvertTo-Json -Depth 8|Set-Content $config -Encoding utf8
+            $bot=Start-Process $client -ArgumentList @('--config',('"'+$config+'"')) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $task.dir 'bot.log') -RedirectStandardError (Join-Path $task.dir 'bot.err')
+            $readyDeadline=(Get-Date).AddSeconds(15)
+            $readyRecord=$null
+            while(!$readyRecord){
+                if($bot.HasExited -or (Get-Date) -gt $readyDeadline){throw 'Companion provider startup failed'}
+                if(Test-Path $readyFile){try{$readyRecord=Get-Content $readyFile -Raw|ConvertFrom-Json}catch{}}
+                if(!$readyRecord){Start-Sleep -Milliseconds 50}
+            }
+            if($readyRecord.pid -ne $bot.Id -or !$readyRecord.token){throw 'Companion ready identity mismatch'}
+            # Native KillBox telefrags an occupant when the second client begins.
+            # Wait for the leader to clear all initial spawn locations without
+            # teleporting, changing map entities or granting invulnerability.
+            $spawnText=Get-Content (Join-Path $task.runtime "baseq2/maps/$($task.map).ent") -Raw
+            $initialSpawns=@([regex]::Matches($spawnText,'(?s)\{[^{}]*\}')|ForEach-Object {
+                if($_.Value -match '"classname"\s+"info_player_(?:start|coop)"' -and $_.Value -notmatch '"targetname"'){
+                    $spawnMatch=[regex]::Match($_.Value,'"origin"\s+"([^\"]+)"')
+                    if($spawnMatch.Success){,@($spawnMatch.Groups[1].Value.Split(' ',[StringSplitOptions]::RemoveEmptyEntries)|ForEach-Object {[double]$_})}
+                }
+            })
+            if(!$initialSpawns.Count){throw 'Initial native spawn locations absent'}
+            $spawnDeadline=(Get-Date).AddSeconds(25)
+            $clearFrames=0;$previousClearFrame=-1
+            do{
+                if($teammate.HasExited -or (Get-Date) -gt $spawnDeadline){throw 'Leader did not clear initial spawn zone'}
+                $leaderSnapshot=$null
+                foreach($leaderLine in @(Get-Content -LiteralPath $mateTrace -Tail 3)){try{$leaderSnapshot=$leaderLine|ConvertFrom-Json}catch{}}
+                $spawnClear=$leaderSnapshot -and $leaderSnapshot.map -eq $task.map -and $leaderSnapshot.health -gt 0 -and ((Get-Date)-(Get-Item $mateTrace).LastWriteTime).TotalSeconds -lt 1
+                foreach($initialSpawn in $initialSpawns){
+                    if($spawnClear){$spawnDistance=0.;foreach($coordinate in 0..2){$spawnDistance+=[math]::Pow($leaderSnapshot.self[$coordinate]-$initialSpawn[$coordinate],2)};if($spawnDistance -lt 192*192){$spawnClear=$false}}
+                }
+                if(!$spawnClear){$clearFrames=0}elseif($leaderSnapshot.frame -ne $previousClearFrame){$clearFrames++;$previousClearFrame=$leaderSnapshot.frame}
+                if($clearFrames -lt 3){Start-Sleep -Milliseconds 100}
+            }while($clearFrames -lt 3)
+            $report.leader_clear_spawn_frame=$leaderSnapshot.frame
+            $report.spawn_clear_radius=192
+            Set-Content -LiteralPath $releaseFile -Value $readyRecord.token -Encoding ascii
         }
-        $botConfig|ConvertTo-Json -Depth 8|Set-Content $config -Encoding utf8
-        $bot=Start-Process $client -ArgumentList @('--config',('"'+$config+'"')) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $task.dir 'bot.log') -RedirectStandardError (Join-Path $task.dir 'bot.err')
+        if(!$bot){
+            $botConfig|ConvertTo-Json -Depth 8|Set-Content $config -Encoding utf8
+            $bot=Start-Process $client -ArgumentList @('--config',('"'+$config+'"')) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $task.dir 'bot.log') -RedirectStandardError (Join-Path $task.dir 'bot.err')
+        }
         $deadline=(Get-Date).AddSeconds(260)
         while(!$bot.HasExited){
             if((Get-Date) -gt $deadline){throw 'Client wall timeout'}
@@ -141,6 +191,10 @@ $worker={
                 $report.teammate_observed_frames=@($unique|Where-Object teammate).Count
                 $report.teammate_minimum_health=($mateRows.health|Measure-Object -Minimum).Minimum
                 $report.friendly_health_damage=[int](($events|Where-Object {$_.attacker -eq $actor -and $_.target -eq $mateActor}|Measure-Object live_health_damage -Sum).Sum)
+                $report.friendly_combat_health_damage=[int](($events|Where-Object {$_.attacker -eq $actor -and $_.target -eq $mateActor -and $_.mod -ne 21}|Measure-Object live_health_damage -Sum).Sum)
+                $report.friendly_telefrag_health_damage=[int](($events|Where-Object {$_.attacker -eq $actor -and $_.target -eq $mateActor -and $_.mod -eq 21}|Measure-Object live_health_damage -Sum).Sum)
+                $startupTelefrag=@($events|Where-Object {$_.attacker -eq $actor -and $_.target -eq $mateActor -and $_.mod -eq 21 -and $_.frame -le $unique[0].frame -and $_.live_health_damage -gt 0})
+                if($startupTelefrag.Count){$report.infrastructure_ok=$false;$report.reason='startup_telefrag';$report.startup_telefrag=$true}
                 $report.teammate_to_bot_health_damage=[int](($events|Where-Object {$_.attacker -eq $mateActor -and $_.target -eq $actor}|Measure-Object live_health_damage -Sum).Sum)
             }
             $damage=Measure-BotDamage $events $actor
