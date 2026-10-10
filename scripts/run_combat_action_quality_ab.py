@@ -20,6 +20,11 @@ def main():
     ap.add_argument('--wide',action='store_true')
     ap.add_argument('--validation-stochastic',action='store_true')
     ap.add_argument('--require-calibration',type=pathlib.Path)
+    ap.add_argument('--parent-update',type=pathlib.Path,
+                    help='Explicit sealed CUDA parent; identical objective fork in both branches')
+    ap.add_argument('--preserve-critic-optimizer',action='store_true')
+    ap.add_argument('--shared-training-pool',action='store_true',
+                    help='Dispatch both branch corpora in one16-slot queue, process objectives separately')
     args = ap.parse_args()
     repo = pathlib.Path(__file__).resolve().parents[1]
     out = args.out.resolve()
@@ -29,7 +34,9 @@ def main():
     out.mkdir()
     os.environ['GOCACHE'] = str(repo/'workspace/build/go-cache')
     os.environ['GOTOOLCHAIN'] = 'auto'
-    parent = repo/'workspace/artifacts/parent-ppo-series-v1-20261010/round-2/processing/series/update'
+    parent = args.parent_update.resolve() if args.parent_update else repo/'workspace/artifacts/parent-ppo-series-v1-20261010/round-2/processing/series/update'
+    from run_combat_ppo_series import sealed_update
+    sealed_update(parent)
     source = parent.parents[1]
     families = [f'campaign-{m}-site-{site}-{weapon}' for m in ('base1','base2')
                 for site in ('02','03') for weapon in ('blaster','machinegun')]
@@ -39,14 +46,18 @@ def main():
     count = len(families)*4
     validation_offset = 28 if args.wide else 48
     control_reward, quality_reward = args.control_reward.resolve(),args.quality_reward.resolve()
-    if read(quality_reward)['version'] in ('combat_reward_v7','combat_reward_v8'):
+    if read(quality_reward)['version'] in ('combat_reward_v7','combat_reward_v8','combat_reward_v9'):
         assert args.require_calibration is not None
         calibration = read(args.require_calibration)
         assert calibration['state']=='complete' and calibration['reward_sha256']==sha(quality_reward)
         if read(quality_reward)['version']=='combat_reward_v7':
             assert calibration['cycle_events']>0
-        else:
+        elif read(quality_reward)['version']=='combat_reward_v8':
             assert calibration['aim_applied_steps']>0 and calibration['aim_positive']>0 and calibration['aim_negative']>0
+        else:
+            assert calibration['episodes']>0
+            assert sum(g['counts']['machinegun_misses'] for g in calibration['groups'].values())>0
+            assert sum(g['counts']['blaster_misses'] for g in calibration['groups'].values())>0
         for filename,digest in calibration['implementation_sha256'].items():
             assert sha(repo/filename)==digest,'Reward implementation changed since calibration'
     compiler, exporter = out/'q2episode.exe', out/'q2ppo-data.exe'
@@ -58,9 +69,12 @@ def main():
         training_episodes_per_branch=count, validation_episodes_per_branch=count,
         control_reward_sha256=sha(control_reward),quality_reward_sha256=sha(quality_reward),
         validation_stochastic=args.validation_stochastic,
+        critic_optimizer_preserved=args.preserve_critic_optimizer,
+        shared_training_pool=args.shared_training_pool,
         slots=16, timescale=2, training_device='cuda', runtime_action_quality_guard=False,
-        scope='Fresh development A/B, not final test. Same actor/std, critic-output and Adam reset in both branches. '
-              'Reward changes only; fresh train split and separate common validation. No promotion.'))
+        scope='Fresh development A/B, not final test. Same actor/std and objective fork procedure in both branches. '
+              +('Critic and Adam preserved. ' if args.preserve_critic_optimizer else 'Critic-output and Adam reset. ')
+              +'Reward changes only; fresh train split and separate common validation. No promotion.'))
     branches = []
     try:
         rewards = {'control':control_reward,'quality':quality_reward}
@@ -71,8 +85,11 @@ def main():
             config['objective_reward_sha256'] = sha(reward)
             save(branch/'config.json', config)
             fork = branch/'fork'
-            run([sys.executable,repo/'scripts/fork_combat_architecture_objective_cuda.py',
-                 '--parent',parent,'--config',branch/'config.json','--reward',reward,'--out',fork], branch/'fork.log')
+            fork_command=[sys.executable,repo/'scripts/fork_combat_architecture_objective_cuda.py',
+                 '--parent',parent,'--config',branch/'config.json','--reward',reward,'--out',fork]
+            if args.preserve_critic_optimizer:
+                fork_command.append('--preserve-critic-optimizer')
+            run(fork_command, branch/'fork.log')
             registry = branch/'registry'
             registry.mkdir()
             files = []
@@ -96,15 +113,25 @@ def main():
                 resume_report=str(fork/'report.json'), resume_report_sha256=sha(fork/'report.json'),
                 parent_updates_completed=report['updates_completed'])])
             branches.append((name, branch, capture, plan))
+        if args.shared_training_pool:
+            bindings=[read(capture/'models.json')[0] for _,_,capture,_ in branches]
+            assert [b['id'] for b in bindings]==['control','quality']
+            save(out/'models.json',bindings)
+            save(out/'progress.json',dict(stage='collecting_shared',episodes=2*count,promotion=None))
+            collect_compressed(repo,[plan for _,_,_,plan in branches],out)
         for name, branch, capture, plan in branches:
-            save(out/'progress.json', dict(stage='collecting', branch=name, promotion=None))
-            collect_compressed(repo, [plan], capture)
+            if not args.shared_training_pool:
+                save(out/'progress.json', dict(stage='collecting', branch=name, promotion=None))
+                collect_compressed(repo, [plan], capture)
             save(out/'progress.json', dict(stage='cuda_training', branch=name, promotion=None))
             processing = branch/'processing'
-            run([sys.executable,repo/'scripts/process_combat_architecture_pool.py','--capture-root',capture,
+            process_command=[sys.executable,repo/'scripts/process_combat_architecture_pool.py','--capture-root',out if args.shared_training_pool else capture,
                  '--out',processing,'--config',branch/'config.json','--exporter',exporter,
                  '--anchor',source/'anchor.json','--bank',source/'bank.json','--export-workers','4',
-                 '--cuda-only-export','--cuda-batch-finalize'], branch/'process.log')
+                 '--cuda-only-export','--cuda-batch-finalize']
+            if args.shared_training_pool:
+                process_command += ['--model-id',name]
+            run(process_command, branch/'process.log')
             assert read(processing/'report.json')['state'] == 'complete'
         evaluation = out/'evaluation'
         evaluation.mkdir()

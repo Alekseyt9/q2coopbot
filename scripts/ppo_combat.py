@@ -143,8 +143,8 @@ def restore_checkpoint(path,model_path,config,actor,value,std,rollout_sha):
 
 def validate_objective(config,meta):
     expected=config.get('objective_reward_sha256')
-    assert meta.get('reward_version') not in ('combat_reward_v2','combat_reward_v3','combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8') or expected, 'Kill objective must be pinned in training config'
-    if meta.get('reward_version') in ('combat_reward_v3','combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8'):
+    assert meta.get('reward_version') not in ('combat_reward_v2','combat_reward_v3','combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9') or expected, 'Kill objective must be pinned in training config'
+    if meta.get('reward_version') in ('combat_reward_v3','combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9'):
         assert meta.get('aim_gamma')==config['gamma'], 'Aim shaping discount differs from PPO gamma'
     if expected:
         assert expected.lower()==meta.get('reward_config_sha256','').lower(), 'Rollout reward differs from checkpoint objective'

@@ -109,6 +109,7 @@ type ServerOutcome struct {
 	Events               []DamageEvent          `json:"events"`
 	Score                *float64               `json:"reward_score"`
 	ProjectileMisses     *ProjectileMissOutcome `json:"projectile_misses,omitempty"`
+	HitscanMisses        *HitscanMissOutcome    `json:"hitscan_misses,omitempty"`
 }
 
 type DamageJoiner struct {

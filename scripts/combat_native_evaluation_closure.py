@@ -24,8 +24,10 @@ def finalize(repo, root, result):
         clean=all(not v['visible_target_rules'] and not v['equip_fallback'] for v in counts.values()),
         control_ownership_sha256=sha(root / 'control-ownership.json'), promotion=None))
     run([sys.executable, repo / 'scripts/report_combat_outcome_behavior.py', '--root', root], root / 'outcome-behavior.log')
+    run([sys.executable, repo / 'scripts/report_combat_first_shot_latency.py', '--root', root], root / 'first-native-shot.log')
     run([sys.executable, repo / 'scripts/audit_combat_physical_storage.py', '--root', root, '--out', root / 'storage-final.json'], root / 'storage.log')
     status = read(root / 'progress.json')
     status.update(ownership_acceptance_sha256=sha(root / 'ownership-acceptance.json'),
+        first_native_shot_sha256=sha(root / 'first-shot-latency.json'),
         outcome_behavior_sha256=sha(root / 'outcome-behavior.json'), physical_storage_sha256=sha(root / 'storage-final.json'))
     save(root / 'progress.json', status)

@@ -53,6 +53,7 @@ def main():
         # binaries and terminal-member LZX use a3GiB dispatch reserve. Check it now.
         assert shutil.disk_usage(out).free > 3 * 1024**3, 'Reserve3GiB for400 native comparison; compact closed archives before dispatch'
         capture = series / 'round-1/capture'
+        compiler = series/'q2episode.exe' if spec.get('training_plan_sha256') else repo/'workspace/build/q2episode-sampling-v1.exe'
         template = read(read(capture / 'models.json')[0]['plan'])
         plans, entries, conditions = [], [], None
         for name, update in [('parent', initial), ('after', latest), ('rules', None)]:
@@ -63,7 +64,7 @@ def main():
                 assert not read(weights)['deterministic']
             modes = [('stochastic-a', 20261011), ('stochastic-b', 20261012)] if weights else [('baseline', 0)]
             for label, offset in modes:
-                path = compile_plan(repo / 'workspace/build/q2episode-sampling-v1.exe', template['registry_path'],
+                path = compile_plan(compiler, template['registry_path'],
                     repo, weights, out / (name + '-' + label), 'validation', spec['families'], validation_offset)
                 plan = read(path)
                 plan['policy_sampling_seed_offset'] = offset
@@ -72,7 +73,7 @@ def main():
                 if conditions is None:
                     conditions = instance_set
                 assert instance_set == conditions
-                run([repo / 'workspace/build/q2episode-sampling-v1.exe', '--verify-plan', path, '--root', repo], path.parent / 'verify.log')
+                run([compiler, '--verify-plan', path, '--root', repo], path.parent / 'verify.log')
                 plans.append(path)
                 entries.append(dict(model=name, label=label, root=plan['output_root'], plan=str(path), plan_sha256=sha(path),
                     deterministic_weights_sha256=sha(weights) if weights else None, source_weights_sha256=sha(weights) if weights else None,

@@ -44,9 +44,13 @@ def report(root):
     protocol, proof, quality = read(root / 'protocol.json'), read(root / 'recovery/verified-members.json'), read(root / 'quality-report.json')
     assert quality['state'] == proof['state'] == 'complete'
     assert quality['protocol_sha256'] == proof['protocol_sha256'] == sha(root / 'protocol.json')
+    assert quality['episodes'] == protocol['total_episodes'] == len(proof['members'])
     if (root / 'progress.json').exists():
         progress = read(root / 'progress.json')
-        assert progress['stage'] == 'complete' and progress['quality_report_sha256'] == sha(root / 'quality-report.json')
+        if progress['stage'] == 'complete':
+            assert progress['quality_report_sha256'] == sha(root / 'quality-report.json')
+        else:
+            assert progress['stage'] == 'quality_report_complete' and progress['episodes'] == quality['episodes']
     groups, sources = {}, []
     for entry in protocol['evaluations']:
         rows = []

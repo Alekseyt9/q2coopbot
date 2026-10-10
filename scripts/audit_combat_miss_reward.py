@@ -12,7 +12,7 @@ PROJECTILE = re.compile(r'^sv_test_projectile spawncount=(-?\d+) server_frame=(\
 DAMAGE = re.compile(r'^sv_test_damage spawncount=(-?\d+) server_frame=(\d+) g_test_damage version=1 map=\w+ frame=\d+ (.*)$')
 
 
-def episode(worker):
+def episode(worker, min_frame=0):
     steps = worker / 'dataset/steps.jsonl'
     log = worker / 'server.log'
     windows = {}
@@ -23,6 +23,7 @@ def episode(worker):
             native = step.get('native_step')
             execution = step.get('server_execution') or {}
             if (native and obs['identity']['life'] == 1 and obs['health'] > 0
+                    and obs['identity']['frame'] > min_frame
                     and execution.get('matched') and execution.get('window_exclusive')
                     and execution.get('recovery_commands', 0) == 0):
                 key = (native['spawncount'], native['begin_frame'], native['actor'], native['sequence'])
@@ -92,8 +93,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--root', type=pathlib.Path, required=True)
     ap.add_argument('--penalty', type=float, default=-0.02)
+    ap.add_argument('--min-frame', type=int, default=0,
+                    help='Exclusive client frame cutoff; 100 matches the weapon quality reports')
     a = ap.parse_args()
     assert -0.1 <= a.penalty < 0
+    assert a.min_frame >= 0
     root = a.root.resolve()
     protocol = read(root / 'protocol.json')
     proof = read(root / 'recovery/verified-members.json')
@@ -107,15 +111,17 @@ def main():
             report = read(path)
             assert report['capture_complete'] and report['provenance_valid']
             worker = pathlib.Path(report['results'][0]['root'])
-            data = episode(worker)
+            data = episode(worker, a.min_frame)
             counts.update(data['counts'])
             episodes.append(dict(seed=report['results'][0]['seed'], **data))
         assert len(episodes) == protocol['episodes_per_model']
         groups[entry['model']+'-'+entry['label']] = dict(counts=dict(counts), episodes=episodes,
             proposed_total_reward_delta=counts['creditable_misses']*a.penalty,
             proposed_mean_episode_reward_delta=counts['creditable_misses']*a.penalty/len(episodes))
-    save(root / 'miss-reward-audit.json', dict(version='native_blaster_miss_credit_audit_v1',
+    filename = 'miss-reward-audit.json' if a.min_frame == 0 else f'miss-reward-audit-after-frame-{a.min_frame}.json'
+    save(root / filename, dict(version='native_blaster_miss_credit_audit_v1',
          groups=groups, penalty=a.penalty, protocol_sha256=sha(root / 'protocol.json'),
+         exclusive_client_frame_cutoff=a.min_frame,
          member_proof_sha256=sha(root / 'recovery/verified-members.json'),
          scope='Descriptive proposed reward only. No weights, stored rewards or training changed. '
                'Credit at native impact/end command, not launch. Unknown/freed and post-life endings '

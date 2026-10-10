@@ -74,6 +74,7 @@ func run() error {
 	var native *learningenv.NativeSteps
 	var rewardConfig *learningenv.RewardConfig
 	var missJoiner *learningenv.ProjectileMissJoiner
+	var hitscanJoiner *learningenv.HitscanMissJoiner
 	if *rewardFile != "" {
 		if !*synchronous {
 			return fmt.Errorf("reward export requires synchronous native proof")
@@ -135,12 +136,23 @@ func run() error {
 			return parseErr
 		}
 		joiner = &learningenv.DamageJoiner{Events: events}
-		if rewardConfig != nil && rewardConfig.Version == learningenv.MissRewardVersion {
+		if rewardConfig != nil && rewardConfig.HasProjectileMissCost() {
 			f, err := os.Open(*serverLog)
 			if err != nil {
 				return err
 			}
 			missJoiner, err = learningenv.ReadProjectileMisses(f, events)
+			f.Close()
+			if err != nil {
+				return err
+			}
+		}
+		if rewardConfig != nil && rewardConfig.Version == learningenv.NativeWasteRewardVersion {
+			f, err := os.Open(*serverLog)
+			if err != nil {
+				return err
+			}
+			hitscanJoiner, err = learningenv.ReadHitscanMisses(f, events)
 			f.Close()
 			if err != nil {
 				return err
@@ -310,6 +322,11 @@ func run() error {
 			}
 			if missJoiner != nil {
 				if err := missJoiner.Enrich(s, &outcome); err != nil {
+					return err
+				}
+			}
+			if hitscanJoiner != nil {
+				if err := hitscanJoiner.Enrich(s, &outcome); err != nil {
 					return err
 				}
 			}

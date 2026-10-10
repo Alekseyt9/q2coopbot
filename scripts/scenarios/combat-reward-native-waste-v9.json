@@ -1,0 +1,20 @@
+{
+  "version": "combat_reward_v9",
+  "monster_damage": 0.01,
+  "received_damage": -0.02,
+  "self_damage_extra": -0.02,
+  "friendly_damage": -0.1,
+  "death": -5,
+  "tick": -0.001,
+  "monster_kill": 5,
+  "aim_potential": 0.5,
+  "aim_gamma": 0.99,
+  "spacing_potential": 2,
+  "parasite_range": 288,
+  "aim_kick_angles": true,
+  "off_target_attack": -0.01,
+  "turn_away": -0.005,
+  "stalled_movement": -0.002,
+  "blaster_miss": -0.02,
+  "machinegun_miss": -0.02
+}

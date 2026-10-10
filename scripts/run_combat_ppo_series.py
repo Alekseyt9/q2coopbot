@@ -1,5 +1,6 @@
 """Sequential fresh native corpora and sealed CUDA PPO checkpoint continuation."""
 import argparse
+import os
 import pathlib
 import shutil
 import sys
@@ -29,27 +30,42 @@ def main():
     parser.add_argument('--rounds', type=int, default=2)
     parser.add_argument('--train-offset', type=int, default=200)
     parser.add_argument('--resume', action='store_true')
+    parser.add_argument('--training-plan', type=pathlib.Path,
+                        help='Use a sealed parent and explicit training registry instead of the historical uniform fork')
     args = parser.parse_args()
     assert 1 <= args.rounds <= 4 and args.train_offset >= 0
     repo = pathlib.Path(__file__).resolve().parents[1]
     reference, initial, out = args.reference.resolve(), args.parent_update.resolve(), args.out.resolve()
     status = read(reference / 'progress.json')
-    assert status['stage'] == 'complete' and status['diagnostics_complete']
-    for filename, field in [('quality-report.json', 'quality_report_sha256'),
-        ('diagnostics-acceptance.json', 'diagnostics_acceptance_sha256'),
-        ('ownership-acceptance.json', 'ownership_acceptance_sha256'), ('storage-final.json', 'physical_storage_sha256')]:
-        assert sha(reference / filename) == status[field]
-    assert read(reference / 'ownership-acceptance.json')['clean']
+    assert status['stage'] == 'complete'
+    if args.training_plan:
+        assert sha(reference/'result.json') == status['result_sha256']
+        assert sha(reference/'quality-report.json') == read(reference/'result.json')['quality_report_sha256']
+    else:
+        assert status['diagnostics_complete']
+        for filename, field in [('quality-report.json', 'quality_report_sha256'),
+            ('diagnostics-acceptance.json', 'diagnostics_acceptance_sha256'),
+            ('ownership-acceptance.json', 'ownership_acceptance_sha256'), ('storage-final.json', 'physical_storage_sha256')]:
+            assert sha(reference / filename) == status[field]
+        assert read(reference / 'ownership-acceptance.json')['clean']
     source_binding = verify_sources(repo, reference)
     parent_report = sealed_update(initial)
-    assert parent_report['updates_completed'] == 2
+    assert parent_report['updates_completed'] >= 1 if args.training_plan else parent_report['updates_completed'] == 2
     source = initial.parents[1]
     for filename, field in [('config.json', 'config_sha256'), ('anchor.json', 'anchor_sha256'), ('bank.json', 'bank_sha256')]:
         assert sha(source / filename) == parent_report[field]
-    old_bindings = read(repo / 'workspace/artifacts/wall-curriculum-ab-capture-v1-20261010/models.json')
-    binding = next(b for b in old_bindings if b['id'] == 'uniform')
-    assert binding['resume_checkpoint_sha256'] == sha(initial / 'checkpoint.pt')
-    original_plan = read(binding['plan'])
+    if args.training_plan:
+        original_plan = read(args.training_plan)
+        architecture = {'combat_causal_attention_v1':'attention','combat_gru_v1':'gru'}[parent_report['architecture']]
+        binding = dict(architecture=dict(architecture=architecture))
+        assert all(t['split']=='train' for t in original_plan['tasks'])
+        assert sha(original_plan['registry_path']) == original_plan['registry_sha256']
+        assert sha(initial/'weights.json') == read(reference/'protocol.json')['evaluations'][0]['source_weights_sha256']
+    else:
+        old_bindings = read(repo / 'workspace/artifacts/wall-curriculum-ab-capture-v1-20261010/models.json')
+        binding = next(b for b in old_bindings if b['id'] == 'uniform')
+        assert binding['resume_checkpoint_sha256'] == sha(initial / 'checkpoint.pt')
+        original_plan = read(binding['plan'])
     families = [t['episode']['id'] for t in original_plan['tasks']]
     assert len(families) == 20
     protocol = dict(version='combat_sequential_cuda_ppo_series_v1', reference=str(reference),
@@ -61,6 +77,8 @@ def main():
         scope='Fresh physical own-policy captures; disjoint train blocks within this series, no global unseen-seed claim. '
               'Same parent actor/value/std/Adam/config/reward, sequential CUDA updates. '
               'No quality conclusion from training outcomes; separate common development evaluation required. No independent test or promotion.')
+    if args.training_plan:
+        protocol['training_plan_sha256'] = sha(args.training_plan)
     if args.resume:
         assert read(out / 'protocol.json') == protocol
     else:
@@ -69,6 +87,14 @@ def main():
         out.mkdir()
         save(out / 'protocol.json', protocol)
     current = initial
+    compiler = out/'q2episode.exe' if args.training_plan else repo/'workspace/build/q2episode-sampling-v1.exe'
+    exporter = out/'q2ppo-data.exe' if args.training_plan else source/'q2ppo-data.exe'
+    if args.training_plan:
+        os.environ['GOCACHE'] = str(repo/'workspace/build/go-cache')
+        os.environ['GOTOOLCHAIN'] = 'auto'
+        for package,binary in [('q2episode',compiler),('q2ppo-data',exporter)]:
+            if not binary.exists():
+                run(['go','build','-buildvcs=false','-o',binary,'./cmd/'+package],out/('build-'+package+'.log'))
     try:
         for index, offset in enumerate(protocol['train_offsets'], 1):
             assert verify_sources(repo, reference) == source_binding
@@ -91,11 +117,11 @@ def main():
                 weights = capture / 'behavior-weights.json'
                 shutil.copyfile(current / 'weights.json', weights)
                 assert sha(weights) == sha(current / 'weights.json') and not read(weights)['deterministic']
-                path = compile_plan(repo / 'workspace/build/q2episode-sampling-v1.exe', original_plan['registry_path'],
+                path = compile_plan(compiler, original_plan['registry_path'],
                     repo, weights, capture / 'series', 'train', families, offset)
                 plan = read(path)
                 assert sum(len(t['seeds']) for t in plan['tasks']) == 80
-                run([repo / 'workspace/build/q2episode-sampling-v1.exe', '--verify-plan', path, '--root', repo], capture / 'verify-plan.log')
+                run([compiler, '--verify-plan', path, '--root', repo], capture / 'verify-plan.log')
                 save(capture / 'models.json', [dict(id='series', architecture=binding['architecture'], model=str(weights),
                     plan=str(path), capture_root=plan['output_root'], resume_checkpoint=str(current / 'checkpoint.pt'),
                     resume_checkpoint_sha256=sha(current / 'checkpoint.pt'), resume_report=str(current / 'report.json'),
@@ -121,7 +147,7 @@ def main():
             assert all(not g['counts'].get('rules_with_clear_target', 0) and not g['fallback_reasons'].get('pilot_equip_not_ready', 0) for g in ownership['groups'].values())
             save(capture / 'execution.json', dict(stage='cuda_processing', round=index, episodes=80, promotion=None))
             command = [sys.executable, repo / 'scripts/process_combat_architecture_pool.py', '--capture-root', capture,
-                '--out', processing, '--config', capture / 'config.json', '--exporter', source / 'q2ppo-data.exe',
+                '--out', processing, '--config', capture / 'config.json', '--exporter', exporter,
                 '--anchor', source / 'anchor.json', '--bank', source / 'bank.json', '--export-workers', 4,
                 '--cuda-only-export', '--cuda-batch-finalize']
             if processing.exists():

@@ -15,6 +15,7 @@ const ManeuverRewardVersion = "combat_reward_v4"
 const ActionQualityRewardVersion = "combat_reward_v6"
 const TargetSequenceRewardVersion = "combat_reward_v7"
 const SelectedAimRewardVersion = "combat_reward_v8"
+const NativeWasteRewardVersion = "combat_reward_v9"
 
 // RewardConfig is an explicit experimental objective, not a measured success
 // metric. Server effects never enter the policy observation.
@@ -33,6 +34,7 @@ type RewardConfig struct {
 	SpacingPotential float64 `json:"spacing_potential,omitempty"`
 	ParasiteRange    float64 `json:"parasite_range,omitempty"`
 	BlasterMiss      float64 `json:"blaster_miss,omitempty"`
+	MachinegunMiss   float64 `json:"machinegun_miss,omitempty"`
 	OffTargetAttack  float64 `json:"off_target_attack,omitempty"`
 	TurnAway         float64 `json:"turn_away,omitempty"`
 	StalledMovement  float64 `json:"stalled_movement,omitempty"`
@@ -47,14 +49,18 @@ func (c RewardConfig) HasPotentialReward() bool {
 }
 
 func (c RewardConfig) HasActionQualityCosts() bool {
-	return c.Version == ActionQualityRewardVersion || c.Version == TargetSequenceRewardVersion || c.Version == SelectedAimRewardVersion
+	return c.Version == ActionQualityRewardVersion || c.Version == TargetSequenceRewardVersion || c.Version == SelectedAimRewardVersion || c.Version == NativeWasteRewardVersion
+}
+
+func (c RewardConfig) HasProjectileMissCost() bool {
+	return c.Version == MissRewardVersion || c.Version == NativeWasteRewardVersion
 }
 
 func (c RewardConfig) Validate() error {
 	if c.Version != RewardVersion && !c.HasKillReward() {
 		return fmt.Errorf("unsupported reward version")
 	}
-	for _, v := range []float64{c.MonsterDamage, c.ReceivedDamage, c.SelfDamage, c.FriendlyDamage, c.Death, c.Tick, c.MonsterKill, c.AimPotential, c.AimGamma, c.SpacingPotential, c.ParasiteRange, c.BlasterMiss, c.OffTargetAttack, c.TurnAway, c.StalledMovement, c.TargetChurn} {
+	for _, v := range []float64{c.MonsterDamage, c.ReceivedDamage, c.SelfDamage, c.FriendlyDamage, c.Death, c.Tick, c.MonsterKill, c.AimPotential, c.AimGamma, c.SpacingPotential, c.ParasiteRange, c.BlasterMiss, c.MachinegunMiss, c.OffTargetAttack, c.TurnAway, c.StalledMovement, c.TargetChurn} {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
 			return fmt.Errorf("nonfinite reward coefficient")
 		}
@@ -69,12 +75,19 @@ func (c RewardConfig) Validate() error {
 	} else if c.AimPotential != 0 || c.AimGamma != 0 || c.AimKickAngles {
 		return fmt.Errorf("aim shaping requires reward v3")
 	}
-	if c.Version == MissRewardVersion {
+	if c.HasProjectileMissCost() {
 		if c.BlasterMiss >= 0 || c.BlasterMiss < -0.1 {
 			return fmt.Errorf("v5 requires bounded negative blaster miss cost")
 		}
 	} else if c.BlasterMiss != 0 {
 		return fmt.Errorf("blaster miss cost requires reward v5")
+	}
+	if c.Version == NativeWasteRewardVersion {
+		if c.MachinegunMiss >= 0 || c.MachinegunMiss < -.1 {
+			return fmt.Errorf("v9 requires bounded negative MG miss cost")
+		}
+	} else if c.MachinegunMiss != 0 {
+		return fmt.Errorf("MG miss cost requires reward v9")
 	}
 	for _, cost := range []float64{c.OffTargetAttack, c.TurnAway, c.StalledMovement} {
 		if c.HasActionQualityCosts() {
@@ -152,7 +165,7 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 	if !o.Available || o.Version != "server_step_effects_v1" {
 		return deny("unavailable_native_effects")
 	}
-	if c.Version == MissRewardVersion {
+	if c.HasProjectileMissCost() {
 		if o.ProjectileMisses == nil || o.ProjectileMisses.Version != "native_projectile_miss_v1" {
 			return deny("unavailable_projectile_miss_evidence")
 		}
@@ -160,6 +173,20 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 		for _, m := range o.ProjectileMisses.Misses {
 			if m.Shot == 0 || m.Entity <= 0 || seen[m.Shot] || (m.Outcome != "geometry" && m.Outcome != "sky") || !sameNativeWindow(&m.End, s.Native) || m.Launch.Spawncount != m.End.Spawncount || m.Launch.Actor != m.End.Actor || m.Launch.BeginFrame > m.End.BeginFrame || m.Launch.EndFrame != m.Launch.BeginFrame+1 || m.Launch.Sequence == 0 || m.Launch.Sequence > m.End.Sequence {
 				return deny("invalid_projectile_miss_evidence")
+			}
+			seen[m.Shot] = true
+		}
+	}
+	if c.Version == NativeWasteRewardVersion {
+		if o.HitscanMisses == nil || o.HitscanMisses.Version != "native_hitscan_miss_v1" {
+			return deny("unavailable_hitscan_miss_evidence")
+		}
+		seen := map[uint32]bool{}
+		for _, m := range o.HitscanMisses.Misses {
+			if m.Shot == 0 || seen[m.Shot] || !sameNativeWindow(&m.Window, s.Native) || s.Native.Actor != s.Observation.Identity.Actor ||
+				(m.Outcome != "geometry" && m.Outcome != "sky" && m.Outcome != "no_contact" && m.Outcome != "corpse") ||
+				s.Execution == nil || !s.Execution.Matched || !s.Execution.WindowExclusive || s.Execution.RecoveryCommands != 0 {
+				return deny("invalid_hitscan_miss_evidence")
 			}
 			seen[m.Shot] = true
 		}
@@ -207,7 +234,7 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 		score += r.Components["monster_kill"]
 	}
 	if c.HasPotentialReward() {
-		if c.Version == SelectedAimRewardVersion {
+		if c.Version == SelectedAimRewardVersion || c.Version == NativeWasteRewardVersion {
 			shaping, evidence, err := c.selectedAimShaping(s, s.Terminal || completeHandoff)
 			if err != nil {
 				r.Components = nil
@@ -251,9 +278,13 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 		r.Components["spacing_potential"] = c.AimGamma*after - before
 		score += r.Components["spacing_potential"]
 	}
-	if c.Version == MissRewardVersion {
+	if c.HasProjectileMissCost() {
 		r.Components["blaster_miss"] = float64(len(o.ProjectileMisses.Misses)) * c.BlasterMiss
 		score += r.Components["blaster_miss"]
+	}
+	if c.Version == NativeWasteRewardVersion {
+		r.Components["machinegun_miss"] = float64(len(o.HitscanMisses.Misses)) * c.MachinegunMiss
+		score += r.Components["machinegun_miss"]
 	}
 	if c.HasActionQualityCosts() {
 		components, err := c.actionQualityCosts(s)

@@ -29,14 +29,19 @@ def measure(shot,step):
     desired_pitch=-math.degrees(math.atan2(desired[2],math.hypot(*desired[:2])))
     applied=step['applied_action'];client_view=[o['view_angles'][i]*360/65536+applied[k] for i,k in ((0,'pitch_delta_degrees'),(1,'yaw_delta_degrees'))]
     damage=shot['damage'];selected_hit=bool(damage and int(damage['target'])==entity and int(damage['health_after'])<int(damage['health_before']) and int(damage['health_before'])>0)
+    velocity=vector(shot['fields']['velocity']); horizontal=math.hypot(*velocity[:2])
+    target_horizontal=math.hypot(*desired[:2])
+    radial=(velocity[0]*desired[0]+velocity[1]*desired[1])/target_horizontal if target_horizontal>1e-6 else None
+    lateral=math.sqrt(max(0,horizontal*horizontal-radial*radial)) if radial is not None else None
     return dict(status='measured',entity=entity,track=action.get('target_track',0),distance=math.sqrt(sum(v*v for v in desired)),
+        native_horizontal_speed=horizontal,native_radial_speed=radial,native_lateral_speed=lateral,
         pre_recoil_degrees=angular(ray(view[1],view[0]),desired),post_recoil_degrees=angular(aim,desired),
         pre_pitch_error=wrap(view[0]-desired_pitch),post_pitch_error=wrap(view[0]+kick[0]-desired_pitch),
         native_vs_applied_pitch=abs(wrap(view[0]-client_view[0])),native_vs_applied_yaw=abs(wrap(view[1]-client_view[1])),
         native_recoil_pitch=kick[0],observed_kick_pitch=(o.get('kick_angles_degrees') or [None])[0],selected_target_damage=selected_hit)
 
 def summary(rows):
-    return dict(shots=len(rows),**{key:sum(r[key] for r in rows)/len(rows) if rows else None for key in ('pre_recoil_degrees','post_recoil_degrees','pre_pitch_error','post_pitch_error','native_vs_applied_pitch','native_vs_applied_yaw')},
+    return dict(shots=len(rows),**{key:sum(r[key] for r in rows)/len(rows) if rows else None for key in ('pre_recoil_degrees','post_recoil_degrees','pre_pitch_error','post_pitch_error','native_vs_applied_pitch','native_vs_applied_yaw','native_horizontal_speed')},
         recoil_worsened_shots=sum(r['post_recoil_degrees']>r['pre_recoil_degrees']+1 for r in rows),
         selected_target_damage=sum(r['selected_target_damage'] for r in rows))
 
@@ -61,11 +66,17 @@ def main():
                 if item['status']=='measured':values.append(item)
             sources.append(dict(steps_sha256=sha(steps),server_sha256=sha(log),server_log=str(log)))
         strata={}
-        for label,predicate in [('recoil_above_6',lambda r:abs(r['native_recoil_pitch'])>6),('recoil_at_most_1.5',lambda r:abs(r['native_recoil_pitch'])<=1.5),('distance_below_128',lambda r:r['distance']<128),('distance_128_to_256',lambda r:128<=r['distance']<256),('distance_at_least_256',lambda r:r['distance']>=256)]:
+        for label,predicate in [('recoil_above_6',lambda r:abs(r['native_recoil_pitch'])>6),('recoil_at_most_1.5',lambda r:abs(r['native_recoil_pitch'])<=1.5),('distance_below_128',lambda r:r['distance']<128),('distance_128_to_256',lambda r:128<=r['distance']<256),('distance_at_least_256',lambda r:r['distance']>=256),
+                                ('stationary',lambda r:r['native_horizontal_speed']<10),
+                                ('moving_10_to_100',lambda r:10<=r['native_horizontal_speed']<100),
+                                ('moving_100_to_200',lambda r:100<=r['native_horizontal_speed']<200),
+                                ('moving_at_least_200',lambda r:r['native_horizontal_speed']>=200),
+                                ('lateral_above_100',lambda r:r['native_lateral_speed'] is not None and r['native_lateral_speed']>100),
+                                ('near_lateral_above_100',lambda r:r['distance']<128 and r['native_lateral_speed'] is not None and r['native_lateral_speed']>100)]:
             strata[label]=summary([r for r in values if predicate(r)])
         groups[entry['model']+'-'+entry['label']]=dict(status_counts=dict(counts),all=summary(values),descriptive_strata=strata)
     save(a.root/'machinegun-selected-target-aim.json',dict(state='complete',protocol_sha256=sha(a.root/'protocol.json'),groups=groups,sources=sources,
-        scope='Actual native muzzle/view/aim at each shot versus explicit chosen target from pre-command client snapshot and known bbox. No nearest-target substitution or hidden target coordinates. Snapshot staleness, enemy motion, random spread and geometry affect outcomes; angular error is descriptive and not hit probability. Rules without declared target remain unmeasured. No policy execution.'))
+        scope='Actual native muzzle/view/aim at each shot versus explicit chosen target from pre-command client snapshot and known bbox. Native radial/lateral speeds are projected against the observed target, not hidden coordinates. No nearest-target substitution. Snapshot staleness, enemy motion, random spread and geometry affect outcomes; angular error is descriptive and not hit probability. Rules without declared target remain unmeasured. No policy execution.'))
     print(json.dumps(groups),flush=True)
 
 if __name__=='__main__':main()

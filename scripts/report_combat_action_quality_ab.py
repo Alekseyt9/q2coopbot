@@ -12,9 +12,12 @@ from report_combat_selected_target_aim import measure
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--root', type=pathlib.Path, required=True)
+    ap.add_argument('--resume-closed', action='store_true',
+                    help='Recover failed reporting after a completed native pool; never recapture')
     args = ap.parse_args()
     root = args.root.resolve()
-    assert read(root/'progress.json')['stage'] == 'captures_complete'
+    stage=read(root/'progress.json')['stage']
+    assert stage == 'captures_complete' or (args.resume_closed and stage == 'failed')
     repo = pathlib.Path(__file__).resolve().parents[1]
     evaluation = root/'evaluation'
     pool = read(evaluation/'pool/report.json')
@@ -25,11 +28,23 @@ def main():
          '--native-fingerprint',manifest['native_source_fingerprint']], root/'verify-evaluation.log')
     run([sys.executable,repo/'scripts/report_combat_architecture_evaluation.py','--root',evaluation,
          '--member-proof',evaluation/'recovery/verified-members.json'],root/'quality.log')
+    run([sys.executable,repo/'scripts/audit_combat_sampling_configs.py','--root',evaluation],root/'sampling-config.log')
+    assert not read(evaluation/'sampling-config-audit.json')['repeated_stochastic_execution_configs']
+    run([sys.executable,repo/'scripts/report_combat_control_ownership.py','--root',evaluation],root/'control-ownership.log')
+    ownership=read(evaluation/'control-ownership.json')
+    assert all(not g['counts'].get('rules_with_clear_target',0) and
+               not g['fallback_reasons'].get('pilot_equip_not_ready',0)
+               for g in ownership['groups'].values()), 'Visible combat/equipment ownership fallback invalidates A/B'
     run([sys.executable,repo/'scripts/report_combat_selected_target_aim.py','--root',evaluation],root/'selected-target.log')
     for script,log in [('report_combat_machinegun_hits.py','machinegun-hits.log'),
                        ('report_combat_blaster_hits.py','blaster-hits.log'),
-                       ('report_combat_first_shot_latency.py','first-shot-latency.log')]:
+                       ('report_combat_first_shot_latency.py','first-shot-latency.log'),
+                       ('report_combat_machinegun_aim.py','machinegun-aim.log'),
+                       ('report_combat_movement.py','native-movement.log'),
+                       ('audit_combat_machinegun_waste.py','machinegun-waste.log')]:
         run([sys.executable,repo/'scripts'/script,'--root',evaluation],root/log)
+    run([sys.executable,repo/'scripts/audit_combat_miss_reward.py','--root',evaluation,
+         '--min-frame','100'],root/'blaster-miss-credit.log')
     quality = read(evaluation/'quality-report.json')
     episodes = read(evaluation/'quality-episodes.json')
     cycle_audit = None
@@ -140,7 +155,16 @@ def main():
         native_machinegun=read(evaluation/'machinegun-hits.json')['groups'],
         native_blaster=read(evaluation/'blaster-projectile-hits.json')['groups'],
         first_shot_latency=read(evaluation/'first-shot-latency.json')['groups'],
-        native_reports_sha256={f:sha(evaluation/f) for f in ('machinegun-hits.json','blaster-projectile-hits.json','first-shot-latency.json')},
+        native_machinegun_waste=read(evaluation/'machinegun-waste-audit.json')['groups'],
+        native_blaster_miss_credit=read(evaluation/'miss-reward-audit-after-frame-100.json')['groups'],
+        native_movement=read(evaluation/'first-life-movement.json')['groups'],
+        native_machinegun_aim=read(evaluation/'machinegun-selected-target-aim.json')['groups'],
+        control_ownership_sha256=sha(evaluation/'control-ownership.json'),
+        sampling_config_sha256=sha(evaluation/'sampling-config-audit.json'),
+        ownership_clean=True,
+        native_reports_sha256={f:sha(evaluation/f) for f in ('machinegun-hits.json','blaster-projectile-hits.json','first-shot-latency.json',
+            'machinegun-waste-audit.json','miss-reward-audit-after-frame-100.json',
+            'first-life-movement.json','machinegun-selected-target-aim.json')},
         scope='Common development cohort, not final-test superiority. Commands are not native shot counts; '
               'standing is observed horizontal speed, not proof of uselessness. '
               'Standing attack and visible no-attack spans require consecutive observed provider frames; '
@@ -170,6 +194,13 @@ def main():
                 positive_progress=sum(r['aim_positive'] for r in rows),negative_progress=sum(r['aim_negative'] for r in rows))
         result['selected_aim_references'] = references
         result['selected_aim_audit_sha256'] = sha(root/'selected-aim-audit/report.json')
+    if (root/'training-comparability.json').exists():
+        pairing=read(root/'training-comparability.json')
+        assert pairing['state']=='complete' and pairing['config_same_except_reward']
+        for branch,digest in pairing['source_plans_sha256'].items():
+            assert sha(root/branch/'capture/train/plan.json')==digest
+            assert sha(root/branch/'fork/weights.json')==pairing['fork_weights_sha256']
+        result['training_comparability_sha256']=sha(root/'training-comparability.json')
     save(root/'result.json',result)
     lines = ['# Парная проверка боевых моделей','',result['scope'],'',
              '| Ветка | Победы | Смерти | Полученный урон | Поворот, градусов/кадр | Атака стоя |',
@@ -181,6 +212,21 @@ def main():
                      f"{m['standing_attack_fraction']:.1%} |")
     for label, paired in pairs.items():
         lines += ['',f"{label}: новых побед {paired['gained_wins']}, потерянных {paired['lost_wins']}."]
+    lines += ['','| Ветка | MG попадания | MG расход впустую / выстрелы | MG без выбранной/видимой цели: попадания / выстрелы | Blaster попадания |',
+              '|---|---:|---:|---:|---:|']
+    for v in result['variants']:
+        label=v['variant']
+        mg=result['native_machinegun'][label]
+        strata=result['native_machinegun_waste'][label]['strata']
+        all_shots=strata['all']
+        blind=strata.get('provider_no_target_without_visible_bbox',{}).get('counts',{})
+        blaster=result['native_blaster'][label]
+        mg_fraction=mg['live_monster_damage_fraction']
+        blaster_fraction=blaster['live_monster_hit_fraction']
+        mg_text=f'{mg_fraction:.1%}' if mg_fraction is not None else 'нет выстрелов'
+        blaster_text=f'{blaster_fraction:.1%}' if blaster_fraction is not None else 'нет выстрелов'
+        lines.append(f"| {label} | {mg_text} | {all_shots['creditable_confirmed_waste']} / {all_shots['counts']['shots']} | "
+                     f"{blind.get('live_monster_damage',0)} / {blind.get('shots',0)} | {blaster_text} |")
     lines += ['','| Семейство | Боев на ветку | Победы control / quality | Смерти control / quality |',
               '|---|---:|---:|---:|']
     for row in family_pairs:
