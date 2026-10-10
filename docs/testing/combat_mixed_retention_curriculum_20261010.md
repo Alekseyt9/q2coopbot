@@ -29,7 +29,7 @@ mixed348..379, две проблемные сцены348..363, остальны�
 собственных зарегистрированных train splits. Validation/test traces не
 используются для PPO. Global unseen-seed claim отсутствует.
 Распределение закреплено в
-`scripts/scenarios/combat-training/mixed-retention-allocation-v1.json`.
+`scripts/scenarios/combat-training-suites/mixed-retention-allocation-v1.json`.
 План smoke v2 проверен `q2episode --verify-plan`:20 семейств/160 эпизодов.
 Неудачный smoke v1 сcount2 сохранен как диагностика; игровые captures
 на нем не создавались. В сравнении с прежними80-бойными опытами меняются

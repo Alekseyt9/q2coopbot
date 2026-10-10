@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "id": "coop-base2-navigation-combat",
+  "revision": 1,
+  "title": "Base2: бой, потеря контакта и возврат к напарнику",
+  "status": "planned",
+  "map": "base2",
+  "scope": "bounded_coop_navigation_combat",
+  "goal": "survive_clear_encounter_reacquire_observed_partner",
+  "monsters": ["monster_soldier_ss", "monster_infantry", "monster_gunner"],
+  "geometry": "Multiple original BSP/AAS sites; corridor and corner occlusion; remembered rendezvous uses safe walking routes",
+  "initial_state": "Two real clients; seeded leader path; Blaster and Machinegun variants; last-seen age and route observations remain distinct from currently visible partner",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 500,
+  "modes": ["rules", "learned"],
+  "ppo_trainable": false,
+  "splits": {
+    "train": {"start": 960100000, "count": 4096},
+    "validation": {"start": 960110000, "count": 64},
+    "test": {"start": 960120000, "count": 64},
+    "confirmation": {"start": 960130000, "count": 64}
+  },
+  "recipe": {"runner": ""},
+  "missing": [
+    "Shared validated two-client synchronous runner and no startup telefrags",
+    "Seeded clear/occluded leader paths and navigation ownership compatible with learned combat",
+    "Audited terminal/reward/provenance export with both actors and correct friendly damage attribution",
+    "Safe reacquisition reward; bounded stale-position search remains enforced",
+    "Multiple-site native validation and fresh CUDA on-policy rollout before enabling training"
+  ]
+}

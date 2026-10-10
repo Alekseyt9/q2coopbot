@@ -94,3 +94,39 @@ attention64/128, добавляя по27 нулевых колонок вход�
 и trainable on-policy сценарии с navigation_context и напарником. Текущие
 natural traces остаются evaluation-only. После обучения нужны paired seeds
 и оценка reacquisition/ожидания наряду с уроном, смертями и прохождением.
+
+## Перенос обучающего checkpoint и регистрация кооп-curriculum
+
+`scripts/migrate_combat_navigation_checkpoint_cuda.py` переносит закрытый
+architecture checkpoint v7→v8 без сброса Adam. Проверены sealed source files,
+точное совпадение существующих параметров, нулевое расширение27 входных
+колонок и соответствующих exp_avg/exp_avg_sq. Параметры остальных слоёв,
+шаги Adam, config, inactive anchor/bank pins, RNG и consumed_rollouts сохранены.
+Активный retention objective требует отдельной миграции и отклоняется.
+
+Проверен реальный attention64 spatial/coarse-fine parent после update5:
+`workspace/artifacts/navigation-v8-checkpoint-v2-20261010` содержит
+`weights.json`, `checkpoint.pt`, `migration.json`. На RTX5070 выполнены
+проверки old/new outputs, restoration/moments, пробный Adam step на временной
+копии и повторное чтение сохранённого checkpoint. Сохраняемый optimizer не
+делал новых шагов; обучение и качество ещё не оценивались.
+
+В реестре появились `coop-base1-navigation-combat` и
+`coop-base2-navigation-combat` со статусом planned и disjoint seeds для
+train/validation/test/confirmation. Они описывают несколько геометрий,
+Blaster/Machinegun, seeded leader path, видимые и скрытые позиции напарника.
+PPOTrainable=false до реализации и native проверки двухклиентного barrier,
+reset/RNG/weapon phases, обоих command receipts, first-life terminals и
+награды за наблюдаемый прогресс/reacquisition.
+
+Причина отдельного runner: действующий isolated harness включает
+`testCombatOnly`, который возвращает goal=combat_fixture без маршрута.
+Простое подключение второго клиента не обеспечит обучение навигационных
+входов. Natural campaign runner не имеет обязательного synchronous PPO
+export; его captures по-прежнему evaluation-only.
+
+Обнаружен и исправлен прежний дефект загрузки registry: JSON распределения
+mixed-retention перенесён из каталога episode descriptors в
+combat-training-suites с обновлением документированной ссылки. Содержимое
+распределения сохранено. Проверки internal/trainingepisodes запускаются
+без нейросетевых CPU вычислений.

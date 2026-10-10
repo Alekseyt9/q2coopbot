@@ -29,6 +29,8 @@
     "campaign-base2-site-03-blaster.json",
     "campaign-base2-site-03-machinegun.json",
     "campaign-base2-site-04-blaster.json",
-    "campaign-base2-site-04-machinegun.json"
+    "campaign-base2-site-04-machinegun.json",
+    "coop-base1-navigation-combat.json",
+    "coop-base2-navigation-combat.json"
   ]
 }

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "id": "coop-base1-navigation-combat",
+  "revision": 1,
+  "title": "Base1: бой и сопровождение наблюдаемого напарника",
+  "status": "planned",
+  "map": "base1",
+  "scope": "bounded_coop_navigation_combat",
+  "goal": "survive_clear_encounter_reacquire_observed_partner",
+  "monsters": ["monster_soldier", "monster_infantry", "monster_parasite"],
+  "geometry": "Multiple original BSP/AAS sites; clear lane, corner occlusion, doorway; reject unsafe navigation links",
+  "initial_state": "Two real clients; seeded leader path; Blaster and Machinegun variants; model receives only its native observations and planner context",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 500,
+  "modes": ["rules", "learned"],
+  "ppo_trainable": false,
+  "splits": {
+    "train": {"start": 960000000, "count": 4096},
+    "validation": {"start": 960010000, "count": 64},
+    "test": {"start": 960020000, "count": 64},
+    "confirmation": {"start": 960030000, "count": 64}
+  },
+  "recipe": {"runner": ""},
+  "missing": [
+    "Two-client synchronous barrier with both actors present before fixed-frame release and verified nonoverlapping initial positions",
+    "Versioned seeded leader path and navigation goal retained during provider-owned combat; no combat_fixture early return",
+    "Both-client command receipts; audited first-life terminal, goal and truncation exports with native damage attribution",
+    "Observed-goal progress/reacquisition reward without omniscient teammate coordinates or reward for useless movement",
+    "Native reset/RNG/weapon-phase validation at multiple sites and validated CUDA on-policy export"
+  ]
+}
