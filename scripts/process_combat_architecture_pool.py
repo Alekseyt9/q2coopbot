@@ -66,6 +66,7 @@ def main():
     ap.add_argument('--export-workers',type=int,default=4)
     ap.add_argument('--resume',action='store_true')
     ap.add_argument('--cuda-only-export',action='store_true',help='Native/features export, then CUDA numerical verification and exact next-state bootstrap')
+    ap.add_argument('--model-id',help='Process one binding from a shared pool with its own pinned objective/config')
     args=ap.parse_args()
     repo=pathlib.Path(__file__).resolve().parents[1]
     capture=args.capture_root.resolve(); out=args.out.resolve()
@@ -76,6 +77,13 @@ def main():
     assert pool['scheduler']=='independent_episode_queue'
     models=read(capture/'models.json')
     jobs=pool['jobs']
+    pool_plan_indexes=list(range(len(models)))
+    if args.model_id:
+        pool_plan_indexes=[i for i,b in enumerate(models) if b['id']==args.model_id]
+        assert len(pool_plan_indexes)==1,'Requested binding must be unique'
+        models=[models[i] for i in pool_plan_indexes]
+        jobs=[dict(j,original_plan_index=j['plan_index'],plan_index=pool_plan_indexes.index(j['plan_index']))
+              for j in jobs if j['plan_index'] in pool_plan_indexes]
     expected={}
     plans={}
     for p,binding in enumerate(models):
@@ -111,6 +119,9 @@ def main():
         scope='Own-policy native corpus; failed attempts excluded and retried; equal allocated episodes, actual eligible transitions reported separately.')
     if args.cuda_only_export:
         protocol['numerical_verification']='cuda_verified_v1'
+    if args.model_id:
+        protocol.update(selected_model=args.model_id,pool_plan_indexes=pool_plan_indexes,
+                        selection_scope='Original shared pool receipt retained and hashed; only this binding processed, local plan indexes remapped.')
     if args.resume:
         assert protocol==read(out/'protocol.json'),'Frozen processing inputs changed'
         for source,target in [(args.config,'config.json'),(args.exporter,'q2ppo-data.exe'),(args.anchor,'anchor.json'),(args.bank,'bank.json')]:
@@ -166,6 +177,10 @@ def main():
                     command=[pwsh,'-NoProfile','-File',repo/'scripts/run_registered_combat_pool_episode.ps1',
                         '-Plan',models[p]['plan'],'-TaskIndex',t,'-SeedIndex',expected[key],
                         '-Mode',mode,'-Port',args.retry_port,'-OutputRoot',retry_root]
+                    original_manifest=pathlib.Path(job['root'])/'manifest.json'
+                    if original_manifest.exists():
+                        bundle=read(original_manifest).get('binary_bundle')
+                        if bundle:command+=['-BinaryBundle',bundle]
                     try:
                         run(command,log);member(retry_root,seed)
                     except (RuntimeError,AssertionError,FileNotFoundError):

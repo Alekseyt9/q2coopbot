@@ -49,6 +49,7 @@ func run() error {
 	var resetExpectation *learningenv.ResetExpectation
 	var native *learningenv.NativeSteps
 	var rewardConfig *learningenv.RewardConfig
+	var missJoiner *learningenv.ProjectileMissJoiner
 	if *rewardFile != "" {
 		if !*synchronous {
 			return fmt.Errorf("reward export requires synchronous native proof")
@@ -110,6 +111,17 @@ func run() error {
 			return parseErr
 		}
 		joiner = &learningenv.DamageJoiner{Events: events}
+		if rewardConfig != nil && rewardConfig.Version == learningenv.MissRewardVersion {
+			f, err := os.Open(*serverLog)
+			if err != nil {
+				return err
+			}
+			missJoiner, err = learningenv.ReadProjectileMisses(f, events)
+			f.Close()
+			if err != nil {
+				return err
+			}
+		}
 		applied, err = harness.ReadAppliedCommandsForClient(*serverLog, *clientName)
 		if err != nil {
 			return err
@@ -256,6 +268,11 @@ func run() error {
 			}
 			if outcome.Available {
 				serverWindows++
+			}
+			if missJoiner != nil {
+				if err := missJoiner.Enrich(s, &outcome); err != nil {
+					return err
+				}
 			}
 			if err := serverEncoder.Encode(outcome); err != nil {
 				return err

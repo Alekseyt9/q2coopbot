@@ -29,20 +29,21 @@ type RewardConfig struct {
 	AimKickAngles    bool    `json:"aim_kick_angles,omitempty"`
 	SpacingPotential float64 `json:"spacing_potential,omitempty"`
 	ParasiteRange    float64 `json:"parasite_range,omitempty"`
+	BlasterMiss      float64 `json:"blaster_miss,omitempty"`
 }
 
 func (c RewardConfig) HasKillReward() bool {
 	return c.Version == KillRewardVersion || c.HasPotentialReward()
 }
 func (c RewardConfig) HasPotentialReward() bool {
-	return c.Version == AimRewardVersion || c.Version == ManeuverRewardVersion
+	return c.Version == AimRewardVersion || c.Version == ManeuverRewardVersion || c.Version == MissRewardVersion
 }
 
 func (c RewardConfig) Validate() error {
 	if c.Version != RewardVersion && !c.HasKillReward() {
 		return fmt.Errorf("unsupported reward version")
 	}
-	for _, v := range []float64{c.MonsterDamage, c.ReceivedDamage, c.SelfDamage, c.FriendlyDamage, c.Death, c.Tick, c.MonsterKill, c.AimPotential, c.AimGamma, c.SpacingPotential, c.ParasiteRange} {
+	for _, v := range []float64{c.MonsterDamage, c.ReceivedDamage, c.SelfDamage, c.FriendlyDamage, c.Death, c.Tick, c.MonsterKill, c.AimPotential, c.AimGamma, c.SpacingPotential, c.ParasiteRange, c.BlasterMiss} {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
 			return fmt.Errorf("nonfinite reward coefficient")
 		}
@@ -57,7 +58,14 @@ func (c RewardConfig) Validate() error {
 	} else if c.AimPotential != 0 || c.AimGamma != 0 || c.AimKickAngles {
 		return fmt.Errorf("aim shaping requires reward v3")
 	}
-	if c.Version == ManeuverRewardVersion {
+	if c.Version == MissRewardVersion {
+		if c.BlasterMiss >= 0 || c.BlasterMiss < -0.1 {
+			return fmt.Errorf("v5 requires bounded negative blaster miss cost")
+		}
+	} else if c.BlasterMiss != 0 {
+		return fmt.Errorf("blaster miss cost requires reward v5")
+	}
+	if c.Version == ManeuverRewardVersion || c.Version == MissRewardVersion {
 		if c.SpacingPotential <= 0 || c.SpacingPotential > 2 || c.ParasiteRange < 280 || c.ParasiteRange > 512 {
 			return fmt.Errorf("invalid maneuver potential scale/range")
 		}
@@ -107,6 +115,18 @@ func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
 	}
 	if !o.Available || o.Version != "server_step_effects_v1" {
 		return deny("unavailable_native_effects")
+	}
+	if c.Version == MissRewardVersion {
+		if o.ProjectileMisses == nil || o.ProjectileMisses.Version != "native_projectile_miss_v1" {
+			return deny("unavailable_projectile_miss_evidence")
+		}
+		seen := map[uint32]bool{}
+		for _, m := range o.ProjectileMisses.Misses {
+			if m.Shot == 0 || m.Entity <= 0 || seen[m.Shot] || (m.Outcome != "geometry" && m.Outcome != "sky") || !sameNativeWindow(&m.End, s.Native) || m.Launch.Spawncount != m.End.Spawncount || m.Launch.Actor != m.End.Actor || m.Launch.BeginFrame > m.End.BeginFrame || m.Launch.EndFrame != m.Launch.BeginFrame+1 || m.Launch.Sequence == 0 || m.Launch.Sequence > m.End.Sequence {
+				return deny("invalid_projectile_miss_evidence")
+			}
+			seen[m.Shot] = true
+		}
 	}
 	if o.MonsterHealthDamage < 0 || o.ReceivedHealthDamage < 0 || o.SelfHealthDamage < 0 || o.TeammateHealthDamage < 0 || o.Deaths < 0 || o.Deaths > 1 || o.SelfHealthDamage > o.ReceivedHealthDamage {
 		return deny("invalid_native_effects")
@@ -167,7 +187,7 @@ func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
 		r.Components["aim_potential"] = c.AimGamma*after - before
 		score += r.Components["aim_potential"]
 	}
-	if c.Version == ManeuverRewardVersion {
+	if c.Version == ManeuverRewardVersion || c.Version == MissRewardVersion {
 		before, err := spacingPotential(s.Observation, c.SpacingPotential, c.ParasiteRange)
 		if err != nil {
 			r.Components = nil
@@ -183,6 +203,10 @@ func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
 		}
 		r.Components["spacing_potential"] = c.AimGamma*after - before
 		score += r.Components["spacing_potential"]
+	}
+	if c.Version == MissRewardVersion {
+		r.Components["blaster_miss"] = float64(len(o.ProjectileMisses.Misses)) * c.BlasterMiss
+		score += r.Components["blaster_miss"]
 	}
 	if math.IsNaN(score) || math.IsInf(score, 0) {
 		r.Components = nil

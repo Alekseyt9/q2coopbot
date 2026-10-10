@@ -203,7 +203,7 @@ func (e Episode) validate() error {
 		if (e.Map != "base1" && e.Generator == nil) || e.GameFrames < 150 || e.GameFrames > 500 || !e.PPOTrainable {
 			return fmt.Errorf("unsupported synchronous recipe")
 		}
-		if e.Recipe.RewardConfig != "scripts/scenarios/combat-reward-recoil-v5.json" {
+		if e.Recipe.RewardConfig != "scripts/scenarios/combat-reward-recoil-v5.json" && e.Recipe.RewardConfig != "scripts/scenarios/combat-reward-blaster-miss-v1.json" {
 			return fmt.Errorf("unsupported reward recipe")
 		}
 		switch e.Recipe.Loadout {

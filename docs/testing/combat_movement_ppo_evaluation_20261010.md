@@ -56,3 +56,5 @@ command counts and guard reasons without neural execution.
 the same80 validation28..31 conditions and unchanged movement guard as the
 completed480 comparison. It uses the shared binary bundle and16 refill slots.
 Results pending; no new training or parent selection until native proof.
+
+**Parent control complete:** Postmove BC50/80, deaths26, mean received41.60; same validation28..31 and source-bound guard. PPO1 had49/80 and PPO2 had51/80 in the matched480 comparison. This small spread does not establish a reliable winner. Strict80-member proof complete.

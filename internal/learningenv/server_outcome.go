@@ -94,20 +94,21 @@ func ReadDamageEvents(r io.Reader) ([]DamageEvent, error) {
 // temporal join, not proof that the last command caused a hit or was executed.
 // Delayed projectile damage belongs to its effect window. Nothing is a victory.
 type ServerOutcome struct {
-	Version              string        `json:"version"`
-	Worker               string        `json:"worker"`
-	Episode              string        `json:"episode"`
-	Step                 int           `json:"step"`
-	Available            bool          `json:"available"`
-	Reason               string        `json:"reason,omitempty"`
-	MonsterHealthDamage  int           `json:"monster_health_damage"`
-	ReceivedHealthDamage int           `json:"received_health_damage"`
-	SelfHealthDamage     int           `json:"self_health_damage"`
-	TeammateHealthDamage int           `json:"teammate_health_damage"`
-	MonsterKills         int           `json:"monster_kills"`
-	Deaths               int           `json:"deaths"`
-	Events               []DamageEvent `json:"events"`
-	Score                *float64      `json:"reward_score"`
+	Version              string                 `json:"version"`
+	Worker               string                 `json:"worker"`
+	Episode              string                 `json:"episode"`
+	Step                 int                    `json:"step"`
+	Available            bool                   `json:"available"`
+	Reason               string                 `json:"reason,omitempty"`
+	MonsterHealthDamage  int                    `json:"monster_health_damage"`
+	ReceivedHealthDamage int                    `json:"received_health_damage"`
+	SelfHealthDamage     int                    `json:"self_health_damage"`
+	TeammateHealthDamage int                    `json:"teammate_health_damage"`
+	MonsterKills         int                    `json:"monster_kills"`
+	Deaths               int                    `json:"deaths"`
+	Events               []DamageEvent          `json:"events"`
+	Score                *float64               `json:"reward_score"`
+	ProjectileMisses     *ProjectileMissOutcome `json:"projectile_misses,omitempty"`
 }
 
 type DamageJoiner struct {
