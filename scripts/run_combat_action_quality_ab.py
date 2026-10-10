@@ -39,10 +39,14 @@ def main():
     count = len(families)*4
     validation_offset = 28 if args.wide else 48
     control_reward, quality_reward = args.control_reward.resolve(),args.quality_reward.resolve()
-    if read(quality_reward)['version']=='combat_reward_v7':
+    if read(quality_reward)['version'] in ('combat_reward_v7','combat_reward_v8'):
         assert args.require_calibration is not None
         calibration = read(args.require_calibration)
-        assert calibration['state']=='complete' and calibration['reward_sha256']==sha(quality_reward) and calibration['cycle_events']>0
+        assert calibration['state']=='complete' and calibration['reward_sha256']==sha(quality_reward)
+        if read(quality_reward)['version']=='combat_reward_v7':
+            assert calibration['cycle_events']>0
+        else:
+            assert calibration['aim_applied_steps']>0 and calibration['aim_positive']>0 and calibration['aim_negative']>0
         for filename,digest in calibration['implementation_sha256'].items():
             assert sha(repo/filename)==digest,'Reward implementation changed since calibration'
     compiler, exporter = out/'q2episode.exe', out/'q2ppo-data.exe'

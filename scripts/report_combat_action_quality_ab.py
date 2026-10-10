@@ -27,18 +27,28 @@ def main():
          '--member-proof',evaluation/'recovery/verified-members.json'],root/'quality.log')
     run([sys.executable,repo/'scripts/report_combat_selected_target_aim.py','--root',evaluation],root/'selected-target.log')
     for script,log in [('report_combat_machinegun_hits.py','machinegun-hits.log'),
-                       ('report_combat_blaster_hits.py','blaster-hits.log')]:
+                       ('report_combat_blaster_hits.py','blaster-hits.log'),
+                       ('report_combat_first_shot_latency.py','first-shot-latency.log')]:
         run([sys.executable,repo/'scripts'/script,'--root',evaluation],root/log)
     quality = read(evaluation/'quality-report.json')
     episodes = read(evaluation/'quality-episodes.json')
     cycle_audit = None
     reward = repo/'scripts/scenarios/combat-reward-target-sequence-v7.json'
-    if (root/'protocol.json').exists() and read(root/'protocol.json').get('quality_reward_sha256')==sha(reward):
+    selected_reward = repo/'scripts/scenarios/combat-reward-selected-aim-v8.json'
+    quality_reward_sha = read(root/'protocol.json').get('quality_reward_sha256') if (root/'protocol.json').exists() else None
+    if quality_reward_sha in (sha(reward),sha(selected_reward)):
         directory = root/'target-cycle-audit'
         run([sys.executable,repo/'scripts/audit_combat_sequence_reward.py','--evaluation',evaluation,
              '--exporter',pathlib.Path(pool['jobs'][0]['root'])/'q2combat-export.exe',
              '--reward',reward,'--out',directory,'--compress'],root/'target-cycle-audit.log')
         cycle_audit = read(directory/'report.json')
+    selected_audit = None
+    if quality_reward_sha==sha(selected_reward):
+        directory = root/'selected-aim-audit'
+        run([sys.executable,repo/'scripts/audit_combat_sequence_reward.py','--evaluation',evaluation,
+             '--exporter',pathlib.Path(pool['jobs'][0]['root'])/'q2combat-export.exe',
+             '--reward',selected_reward,'--out',directory,'--compress'],root/'selected-aim-audit.log')
+        selected_audit = read(directory/'report.json')
     groups = {}
     for entry in read(evaluation/'protocol.json')['evaluations']:
         count = attack = standing_attack = measured_attack = far_attack = big_turn = upward_attack = 0
@@ -98,7 +108,8 @@ def main():
         variants=quality['variants'], command_metrics=groups, paired=pairs,
         native_machinegun=read(evaluation/'machinegun-hits.json')['groups'],
         native_blaster=read(evaluation/'blaster-projectile-hits.json')['groups'],
-        native_reports_sha256={f:sha(evaluation/f) for f in ('machinegun-hits.json','blaster-projectile-hits.json')},
+        first_shot_latency=read(evaluation/'first-shot-latency.json')['groups'],
+        native_reports_sha256={f:sha(evaluation/f) for f in ('machinegun-hits.json','blaster-projectile-hits.json','first-shot-latency.json')},
         scope='Common development cohort, not final-test superiority. Commands are not native shot counts; '
               'standing is observed horizontal speed, not proof of uselessness. Nominal selected-target angles '
               'exclude recoil/projectile lead/obstruction; far angle is not an exact native miss. No promotion.')
@@ -113,6 +124,18 @@ def main():
                 cycles_per1000_available_steps=1000*cycles/steps if steps else None)
         result['target_cycles'] = cycle_groups
         result['target_cycle_audit_sha256'] = sha(root/'target-cycle-audit/report.json')
+    if selected_audit is not None:
+        references = {}
+        for entry in read(evaluation/'protocol.json')['evaluations']:
+            label = entry['model']+'-'+entry['label']
+            rows = [r for r in selected_audit['members'] if r['label']==label]
+            reasons = {}
+            for row in rows:
+                for reason,count in row['aim_references'].items(): reasons[reason] = reasons.get(reason,0)+count
+            references[label] = dict(available_steps=sum(r['steps'] for r in rows),reasons=reasons,
+                positive_progress=sum(r['aim_positive'] for r in rows),negative_progress=sum(r['aim_negative'] for r in rows))
+        result['selected_aim_references'] = references
+        result['selected_aim_audit_sha256'] = sha(root/'selected-aim-audit/report.json')
     save(root/'result.json',result)
     lines = ['# Парная проверка боевых моделей','',result['scope'],'',
              '| Ветка | Победы | Смерти | Полученный урон | Поворот, градусов/кадр | Атака стоя |',

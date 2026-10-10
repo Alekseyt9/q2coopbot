@@ -29,6 +29,9 @@ func (c RewardConfig) selectedAimShaping(s *Step, terminal bool) (float64, *AimR
 		evidence.Reason = reason
 		return 0, evidence, nil
 	}
+	if terminal {
+		return mask("terminal_or_handoff")
+	}
 	if s.Owner != "provider" || evidence.Entity <= 0 || evidence.Track <= 0 {
 		return mask("no_provider_target")
 	}
@@ -79,5 +82,8 @@ func (c RewardConfig) selectedAimShaping(s *Step, terminal bool) (float64, *AimR
 		}
 	}
 	evidence.Applied, evidence.Reason, evidence.Before, evidence.After = true, "stable_selected_target", before, after
-	return c.AimGamma*after - before, evidence, nil
+	// Discount scales progress only. A stationary inaccurate aim must not earn
+	// (gamma-1)*negativePotential on each frame. Masked boundaries mean this
+	// preference has no policy-invariance guarantee.
+	return c.AimGamma * (after - before), evidence, nil
 }

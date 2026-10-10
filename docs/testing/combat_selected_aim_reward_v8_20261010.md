@@ -1,0 +1,95 @@
+# Доводка к выбранной цели, reward v8 — 10.10.2026
+
+## Причина опыта
+
+V7 уменьшил циклы A→B→A, но в общем development сравнении проиграл v6:
+64/80 против67/80 побед. Другие архитектуры и опубликованные веса этим
+опытом не заменяются. При нескольких наблюдаемых целях reference прежнего
+aim shaping совпадает с выбором модели лишь примерно в половине кадров.
+В v8 меняется только вспомогательный сигнал доводки; коэффициенты native
+damage/kill/death/time,spacing и action-quality costs оставлены от v6.
+V7 target_churn не включается. Архитектура и runtime aim guard не меняются.
+
+## Определение
+
+Выбранная цель должна совпадать по entity/track с предыдущим намерением
+provider из непосредственно предыдущего кадра той же жизни/сессии. В обоих
+наблюдениях нужны известные clear bbox и подтвержденное сохранение намерения
+в next observation. Используются только наблюдаемые bbox, eye,view и kick.
+Никакого управления прицелом или выбора цели в runtime из reward нет.
+
+`phi=-scale*(1-dot(view_with_kick,bbox_direction))/2`.
+`aim_potential=gamma*(phi_after-phi_before)` для той же выбранной цели.
+Поле конфигурации aim_potential остается масштабом .5,gamma=.99.
+В отличие от v6, gamma масштабирует изменение: неподвижный неточный
+прицел не получает положительный discount drift. Это экспериментальная
+предпочтительность перехода, не globally telescoping PBRS и не гарантия
+сохранения оптимальной политики. Движение/параллакс и движение врага могут
+изменять наблюдаемую ошибку; сигнал не является exact hit reward.
+
+Первый выбор,переключение/смена track,устаревшее намерение,потеря видимости,
+нет выбранной цели,owner!=provider,terminal/death/control_handoff дают
+нулевой вспомогательный сигнал. Native damage,kill и death не маскируются.
+Terminal не дает положительный бонус за устранение отрицательного phi.
+Неизвестные/неверные факты не превращаются в придуманный target.
+Evidence aim_reference содержитentity/track,status,before/after и причину маски.
+
+## Проверки и калибровка
+
+Go tests: переход к более дальней выбранной цели против ближайшей;
+неподвижный прицел; ухудшение прицела; первая/новая цель,track,кадровая/мировая
+непрерывность,occlusion,current/next intent; native kill/death/handoff;
+observed kick и границы коэффициентов. Learningenv/exporter/q2ppo/registry
+tests и выборочные source-tree checks проходят без CPU численной проверки NN.
+
+Историческая калибровка на160 уже оцененных боях v7/v6:
+`workspace/artifacts/selected-aim-calibration-v1-20261010/report.json`.
+9848 доступных rewards,5278 stable-selected transitions,
+2769 положительных и2509 отрицательных изменений;
+3282 no_provider_target,870 new_or_changed_target,
+310 terminal_or_handoff,108 next_target_unavailable.
+Каждая маска проверена на нулевой aim shaping; исходные корпуса не меняются
+и в обучение не поступают. Закрытые большие экспорты сжаты LZX/SHA.
+
+Reward config: `scripts/scenarios/combat-reward-selected-aim-v8.json`,
+SHA256 `ef03cd4a599a0e0bd7238c794c27ade53deca87b4d5f6f51b987cc640f48d763`.
+Driver проверяет совпадение implementation/reward SHA с калибровкой.
+
+## Новый A/B
+
+`workspace/artifacts/selected-aim-ab-v1-20261010`, v6 противv8.
+Одинаковый sealed attention64 update4 actor/std; одинаковый сброс critic/Adam
+обеих веток на CUDA. По80 новых stochastic own-policy train-боев,
+все20 семейств,train offsets328..331. Один одинаковый PPO update наветку.
+Затем160 общих validation-боев,offset28..31 повторно development,
+stochastic sampling offset20261011. Независимый test не используется.
+Пул16 с пополнением,×2; человеческая сессия UDP29110 сохраняется,
+оценочные порты35500..35515. Все обучения/численные проверки NN только CUDA.
+
+Итоговые метрики: победы/смерти/native damage, MG и blaster hits,
+большие повороты,стрельба вверх,атака стоя,циклы переключения,
+coverage/masks нового reference. Сам рост reward не является улучшением.
+Статус и результаты отражаются в progress.json/result.json; продвижения нет.
+
+Добавлен `report_combat_first_shot_latency.py`: реальные native mod1/mod4
+выстрелы связываются с точным command window; время отсчитывается от
+native release/первой видимой возможности. Первый кадр после release включен,
+в отличие от hit-rate scope frame>100. Интервалы в game seconds при10Hz,
+не в стеновом времени пула×2. Нет выстрела/нет видимой возможности остаются
+явными, не подставляются в среднее как ноль.
+Проверен на предыдущих160 sealed v6/v7 battles: у обеих веток78/80 с native
+выстрелом,2 с видимой целью без выстрела; среди измеренных78 median0,
+mean0.06795,max1.4 игровых секунд. Это совпадение метрики на development
+наборе; не опровергает наблюдаемую игроком задержку живого companion.
+
+Текущий новый control corpus завершился80/80 безошибок;20 корпусов прошли
+CUDA batch finalization (51.26с),идет CUDA update. Результатов v8 еще нет.
+Живая человеческая сессия продолжает использовать отдельные прежние веса.
+
+Контроль завершил CUDA update5:4016 eligible transitions,8 actor steps,
+43 cumulative steps. SHA256 весов:
+`f4e12f775b4dcacd8f908d7e80fb7c2083b8de62e5c9a8e4b39922271c065688`.
+Кандидат v8 собирает новые train-бои:на срезе26/80,0 ошибок.
+Драйвер жив; обучение кандидата и160 validation-боев еще впереди.
+Оконный клиент игрока к этому срезу закрыт; живые сервер PID1976 и бот3556
+сохраняются,автоматического повторного открытия клиентского окна нет.
