@@ -29,6 +29,51 @@ def run(command, log):
         raise RuntimeError('Command failed; inspect '+str(log))
 
 
+def compact_closed_exports(folder):
+    """Called after the producer exits; preserve every stream's exact bytes."""
+    records=[]
+    for path in folder.rglob('*.jsonl'):
+        if path.stat().st_size < 131072:continue
+        digest=sha(path)
+        subprocess.run(['compact.exe','/C','/EXE:LZX','/F','/Q',str(path)],
+                       stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,
+                       creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),check=True)
+        assert sha(path)==digest,'Export bytes changed during compression'
+        records.append(dict(path=str(path),sha256=digest,logical_bytes=path.stat().st_size))
+    save(folder/'compression-sha.json',dict(state='complete',files=records))
+
+
+def verified_cuda_exports(model_root, exports, model):
+    """Recover a complete CUDA batch before a failed merge, without rerunning it."""
+    receipt_path=model_root/'cuda-finalize-batch/report.json'
+    if not receipt_path.exists():return False
+    receipt=read(receipt_path)
+    assert receipt['state']=='complete' and receipt['device']=='cuda'
+    assert len(receipt['tasks'])==len(exports)
+    cache={}
+    def digest(path):
+        path=pathlib.Path(path)
+        if path not in cache:cache[path]=sha(path)
+        return cache[path]
+    for (_,export),task in zip(exports,receipt['tasks']):
+        native=export.with_name(export.name+'-native')
+        assert pathlib.Path(task['out']).resolve()==export.resolve()
+        assert task['model_sha256']==digest(model)
+        assert task['native_report_sha256']==digest(native/'report.json')
+        assert task['report_sha256']==digest(export/'report.json')
+        meta=read(export/'report.json')
+        assert meta['model_sha256']==digest(model)
+        assert meta['rollout_sha256']==task['rollout_sha256']==digest(export/'rollout.jsonl')
+        assert meta['sequence_sha256']==digest(export/'sequence.jsonl')
+        assert meta['native_rollout_sha256']==digest(native/'native-rollout.jsonl')
+        assert meta['cuda_verification_sha256']==task['cuda_verification_sha256']==digest(export/'cuda-verification.json')
+        assert read(export/'cuda-verification.json')['device']=='cuda'
+        for path,expected in meta['source_sha256'].items():assert digest(path)==expected
+    save(model_root/'reused-cuda-exports.json',dict(state='complete',cases=len(exports),
+        batch_receipt_sha256=sha(receipt_path),scope='All source/model/rollout/sequence/CUDA report SHA checked; no native redispatch or numerical refinalization.'))
+    return True
+
+
 def member(root, seed):
     root=pathlib.Path(root)
     report, manifest=read(root/'report.json'),read(root/'manifest.json')
@@ -123,6 +168,8 @@ def main():
         protocol['numerical_verification']='cuda_verified_v1'
     if args.cuda_batch_finalize:
         protocol['cuda_finalization']='independent_cases_single_interpreter_v1'
+    if not args.resume or 'export_storage' in read(out/'protocol.json'):
+        protocol['export_storage']='producer-complete-lzx-sha256-v1'
     if args.model_id:
         protocol.update(selected_model=args.model_id,pool_plan_indexes=pool_plan_indexes,
                         selection_scope='Original shared pool receipt retained and hashed; only this binding processed, local plan indexes remapped.')
@@ -232,16 +279,20 @@ def main():
                 assert sha(case/'q2combat-export.exe').lower()==manifest['exporter_sha256'].lower()
                 exports.append((case,model_root/('rollout-'+str(t))))
             save(out/'progress.json',dict(stage='native-export',model=binding['id'],cases=len(exports)))
-            with concurrent.futures.ThreadPoolExecutor(max_workers=args.export_workers) as workers:
-                futures=[workers.submit(run,[out/'q2ppo-data.exe','--batch',case,'--model',binding['model'],'--out',
-                         export.with_name(export.name+'-native') if args.cuda_only_export else export]
-                         +(['--cuda-only'] if args.cuda_only_export else []),
-                         model_root/('export-'+str(i)+'.log')) for i,(case,export) in enumerate(exports)]
-                for future in futures:future.result()
-            if args.cuda_only_export:
+            recovered=args.resume and args.cuda_only_export and args.cuda_batch_finalize and verified_cuda_exports(model_root,exports,binding['model'])
+            if not recovered:
+                def export_one(i,case,export):
+                    destination=export.with_name(export.name+'-native') if args.cuda_only_export else export
+                    run([out/'q2ppo-data.exe','--batch',case,'--model',binding['model'],'--out',destination]
+                        +(['--cuda-only'] if args.cuda_only_export else []),model_root/('export-'+str(i)+'.log'))
+                    compact_closed_exports(destination)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=args.export_workers) as workers:
+                    futures=[workers.submit(export_one,i,case,export) for i,(case,export) in enumerate(exports)]
+                    for future in futures:future.result()
+            if args.cuda_only_export and not recovered:
                 if args.cuda_batch_finalize:
                     request=model_root/'cuda-finalize-request.json'
-                    save(request,dict(version='combat_cuda_finalize_batch_v1',tasks=[dict(
+                    save(request,dict(version='combat_cuda_finalize_batch_v1',compact_finalized_streams=True,tasks=[dict(
                         model=binding['model'],model_sha256=sha(binding['model']),
                         data=str(export.with_name(export.name+'-native')),out=str(export),
                         native_report_sha256=sha(export.with_name(export.name+'-native')/'report.json')) for _,export in exports]))
@@ -252,6 +303,8 @@ def main():
                     for i,(_,export) in enumerate(exports):
                         run([sys.executable,snapshots/'finalize_combat_cuda_rollout.py','--model',binding['model'],
                              '--data',export.with_name(export.name+'-native'),'--out',export],model_root/('cuda-finalize-'+str(i)+'.log'))
+            # Compact finalized copies BEFORE merge adds the full combined corpus.
+            for _,export in exports:compact_closed_exports(export)
             run([out/'q2ppo-data.exe','--merge',','.join(str(e) for _,e in exports),'--out',model_root/'rollout'],model_root/'merge.log')
             run([pwsh,'-NoProfile','-File',repo/'scripts/compress_completed_combat_streams.ps1',
                  '-Root',model_root],model_root/'compress.log')

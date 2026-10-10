@@ -1,5 +1,5 @@
 """Dispatch one predeclared independent test after sealed development selection."""
-import argparse,pathlib,sys,shutil
+import argparse,pathlib,sys,shutil,json,hashlib
 from process_combat_architecture_pool import read,save,sha,run
 from run_combat_target_refresh import compile_plan,pool
 
@@ -8,6 +8,7 @@ def main():
     repo=pathlib.Path(__file__).resolve().parents[1];prep=a.preparation.resolve();out=a.out.resolve()
     selection=read(prep/'selection-protocol.json');inventory=read(prep/'seed-inventory.json')
     assert selection['state']=='prepared_not_dispatched' and inventory['state']=='audited' and selection['seed_inventory_sha256']==sha(prep/'seed-inventory.json')
+    assert inventory['scan_report_sha256']==sha(prep/'scan-report.json') and not read(prep/'scan-report.json')['unreadable']
     development=pathlib.Path(selection['development_evaluation']);protocol=read(development/'protocol.json');quality=read(development/'quality-report.json');progress=read(development/'progress.json');proof=read(development/'recovery/verified-members.json')
     assert progress['stage']=='complete' and progress['diagnostics_complete'] and quality['state']=='complete'
     assert quality['protocol_sha256']==proof['protocol_sha256']==selection['development_protocol_sha256']==sha(development/'protocol.json')
@@ -37,6 +38,7 @@ def main():
             plan=compile_plan(repo/'workspace/build/q2episode-spatial-v2.exe',registry,repo,weights,out/name,'test',selection['families'],selection['seed_offset'],selection['count_per_family'])
             compiled=read(plan)
             assert {t['episode']['id']:t['seeds'] for t in compiled['tasks']}=={c['episode']:c['seeds'] for c in inventory['conditions']}
+            assert {t['episode']['id']:hashlib.sha256(json.dumps(t['episode'],sort_keys=True,separators=(',',':')).encode()).hexdigest() for t in compiled['tasks']}=={c['episode']:c['episode_sha256'] for c in inventory['conditions']},'Registered conditions changed after test reservation'
             plans.append(plan);entries.append(dict(model=name,label='test',root=str(out/name/'capture'),plan=str(plan),plan_sha256=sha(plan),source_weights_sha256=sha(weights) if weights else None,deterministic_weights_sha256=sha(weights) if weights else None))
         save(out/'protocol.json',dict(version='combat_independent_test_v1',evaluations=entries,families=selection['families'],episodes_per_model=160,total_episodes=640,slots=16,timescale=2,comparison_reference='rules-test',selection_decision_sha256=sha(out/'selection-decision.json'),seed_inventory_sha256=sha(prep/'seed-inventory.json'),scope='Predeclared single candidate selected solely from development. Reserved registered test distributions,160 conditions per arm, parent3/FireBC/rules controls. No training or candidate reselection on test results; whole campaigns remain separate.'))
         save(out/'progress.json',dict(stage='testing',episodes=640))

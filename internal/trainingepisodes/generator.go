@@ -258,6 +258,9 @@ func VerifyPlan(path, root string) error {
 	if p.Version != 1 || p.Workers != 4 || p.RegistrySHA256 != r.SHA256 || len(p.Tasks) == 0 {
 		return fmt.Errorf("invalid or stale plan")
 	}
+	if p.PolicySamplingSeedOffset < 0 || p.PolicySamplingSeedOffset > 2147483647 {
+		return fmt.Errorf("invalid policy sampling seed offset")
+	}
 	if p.ModelPath != "" {
 		h, err := Hash(p.ModelPath)
 		if err != nil || h != p.ModelSHA256 {
@@ -266,6 +269,11 @@ func VerifyPlan(path, root string) error {
 	}
 	seen := map[string]bool{}
 	for _, t := range p.Tasks {
+		for _, seed := range t.Seeds {
+			if int64(seed)+p.PolicySamplingSeedOffset > 2147483647 {
+				return fmt.Errorf("policy sampling seed exceeds 31-bit range")
+			}
+		}
 		if len(t.Seeds) == 0 || len(t.Modes) == 0 || seen[t.Episode.ID] {
 			return fmt.Errorf("empty or duplicate cohort")
 		}

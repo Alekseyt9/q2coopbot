@@ -237,14 +237,15 @@ type Task struct {
 	RewardSHA256  string     `json:"reward_sha256,omitempty"`
 }
 type Plan struct {
-	Version        int    `json:"version"`
-	RegistryPath   string `json:"registry_path"`
-	RegistrySHA256 string `json:"registry_sha256"`
-	ModelPath      string `json:"model_path,omitempty"`
-	ModelSHA256    string `json:"model_sha256,omitempty"`
-	Tasks          []Task `json:"tasks"`
-	Workers        int    `json:"workers"`
-	OutputRoot     string `json:"output_root"`
+	Version                  int    `json:"version"`
+	RegistryPath             string `json:"registry_path"`
+	RegistrySHA256           string `json:"registry_sha256"`
+	ModelPath                string `json:"model_path,omitempty"`
+	ModelSHA256              string `json:"model_sha256,omitempty"`
+	Tasks                    []Task `json:"tasks"`
+	Workers                  int    `json:"workers"`
+	OutputRoot               string `json:"output_root"`
+	PolicySamplingSeedOffset int64  `json:"policy_sampling_seed_offset,omitempty"`
 }
 
 func Build(r *Registry, root string, ids []string, split, mode, model, out string, count, offset int) (*Plan, error) {

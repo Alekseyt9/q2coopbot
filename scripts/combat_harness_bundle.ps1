@@ -13,8 +13,32 @@ function Assert-HarnessBinaryBundle {
 function Install-HarnessBinaryLink {
     param([string]$Source,[string]$Destination,[string]$SHA256)
     if(Test-Path -LiteralPath $Destination){throw 'Fresh binary destination required'}
-    try{New-Item -ItemType HardLink -Path $Destination -Target $Source -ErrorAction Stop|Out-Null}
-    catch{Copy-Item -LiteralPath $Source -Destination $Destination -ErrorAction Stop}
+    if([IO.Path]::GetPathRoot([IO.Path]::GetFullPath($Source)) -ne [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($Destination))){throw 'Harness binary links require the same volume'}
+    # Serialize shard creation across pool workers. NTFS permits at most1024
+    # links to one inode; a full shard requires one new copy, not one per run.
+    $mutex=[Threading.Mutex]::new($false,('Local\q2combat-binary-'+$SHA256.ToLowerInvariant()))
+    $locked=$false
+    try{
+        try{$locked=$mutex.WaitOne(60000)}catch [Threading.AbandonedMutexException]{$locked=$true}
+        if(!$locked){throw 'Timed out waiting for binary link shard'}
+        $linked=$false
+        try{New-Item -ItemType HardLink -Path $Destination -Target $Source -ErrorAction Stop|Out-Null;$linked=$true}catch{}
+        if(!$linked){
+            $shards=Join-Path (Split-Path $Source -Parent) 'link-shards'
+            New-Item -ItemType Directory -Path $shards -Force|Out-Null
+            $name=Split-Path $Source -Leaf
+            foreach($candidate in @(Get-ChildItem -LiteralPath $shards -Filter ($name+'.*') -File)){
+                if((Get-FileHash -LiteralPath $candidate.FullName).Hash.ToLowerInvariant() -ne $SHA256){throw 'Binary link shard changed'}
+                try{New-Item -ItemType HardLink -Path $Destination -Target $candidate.FullName -ErrorAction Stop|Out-Null;$linked=$true;break}catch{}
+            }
+            if(!$linked){
+                $candidate=Join-Path $shards ($name+'.'+[guid]::NewGuid().ToString('N'))
+                Copy-Item -LiteralPath $Source -Destination $candidate -ErrorAction Stop
+                if((Get-FileHash -LiteralPath $candidate).Hash.ToLowerInvariant() -ne $SHA256){throw 'New binary link shard hash differs'}
+                New-Item -ItemType HardLink -Path $Destination -Target $candidate -ErrorAction Stop|Out-Null
+            }
+        }
+    }finally{if($locked){$mutex.ReleaseMutex()};$mutex.Dispose()}
     if((Get-FileHash -LiteralPath $Destination).Hash.ToLowerInvariant() -ne $SHA256){throw 'Installed harness binary hash differs'}
 }
 

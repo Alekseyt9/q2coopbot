@@ -24,7 +24,7 @@ func TestMultiWeaponFixtureRequiresCompleteFreshStock(t *testing.T) {
 	}
 }
 
-func TestShotgunDirectOwnershipRequiresMultiFixture(t *testing.T) {
+func TestShotgunDirectOwnershipRequiresSupportedFixture(t *testing.T) {
 	c := policyClient(t, "learned")
 	c.testSynchronous = true
 	c.planner.World.Snapshot.Weapon = "models/weapons/v_shotg/tris.md2"
@@ -32,10 +32,12 @@ func TestShotgunDirectOwnershipRequiresMultiFixture(t *testing.T) {
 	if direct || sel.Fallback != "pilot_equip_not_ready" {
 		t.Fatal("Shotgun escaped isolated fixture")
 	}
-	c.testWeaponSwitchFixture = "parasite_weapons"
-	_, _, sel, direct = c.combatCommand(c.combatObservation(time.Now()), time.Now())
-	if !direct || sel.Owner != "provider" {
-		t.Fatal("rules stole Shotgun control", sel)
+	for _, fixture := range []string{"parasite_blaster", "parasite_machinegun", "parasite_weapons", "parasite_weapons-scarce"} {
+		c.testWeaponSwitchFixture = fixture
+		_, _, sel, direct = c.combatCommand(c.combatObservation(time.Now()), time.Now())
+		if !direct || sel.Owner != "provider" || sel.Fallback != "" {
+			t.Fatal("rules stole supported picked-up Shotgun control", fixture, sel)
+		}
 	}
 }
 

@@ -86,6 +86,20 @@ func TestGeneratedConditionsArePairedAndPlanCannotBeModified(t *testing.T) {
 	if err := VerifyPlan(path, root); err != nil {
 		t.Fatal(err)
 	}
+	// Sampling RNG changes must preserve the engine seeds and generated world.
+	p.PolicySamplingSeedOffset = 20261011
+	write(t, path, p)
+	if err := VerifyPlan(path, root); err != nil {
+		t.Fatalf("independent policy RNG offset rejected: %v", err)
+	}
+	for _, offset := range []int64{-1, 2147483647} {
+		p.PolicySamplingSeedOffset = offset
+		write(t, path, p)
+		if err := VerifyPlan(path, root); err == nil {
+			t.Fatalf("invalid/overflowing policy RNG offset accepted: %d", offset)
+		}
+	}
+	p.PolicySamplingSeedOffset = 0
 	p.Tasks[0].Instances[0].Player[0] += 100
 	write(t, path, p)
 	if err := VerifyPlan(path, root); err == nil {

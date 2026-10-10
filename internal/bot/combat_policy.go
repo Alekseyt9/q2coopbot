@@ -86,7 +86,9 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		sel.Fallback = fallback
 		return rules()
 	}
-	if o.Weapon != "Blaster" && !(b.campaignEvaluation && (machinegunWeapon(o.Weapon) || shotgunWeapon(o.Weapon))) && !(c.testSynchronous && ((c.testWeaponSwitchFixture == "parasite_machinegun" && machinegunWeapon(o.Weapon)) || multiWeaponFixture(c.testWeaponSwitchFixture) && (machinegunWeapon(o.Weapon) || shotgunWeapon(o.Weapon)))) {
+	supportedFixture := c.testWeaponSwitchFixture == "parasite_blaster" || c.testWeaponSwitchFixture == "parasite_machinegun" || multiWeaponFixture(c.testWeaponSwitchFixture)
+	fixtureWeapon := c.testSynchronous && supportedFixture && (machinegunWeapon(o.Weapon) || shotgunWeapon(o.Weapon))
+	if o.Weapon != "Blaster" && !(b.campaignEvaluation && (machinegunWeapon(o.Weapon) || shotgunWeapon(o.Weapon))) && !fixtureWeapon {
 		sel.Fallback = "pilot_equip_not_ready"
 		return rules()
 	}

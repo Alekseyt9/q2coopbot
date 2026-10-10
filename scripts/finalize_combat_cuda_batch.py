@@ -4,7 +4,7 @@ import json
 import pathlib
 import time
 
-from process_combat_architecture_pool import read, save, sha
+from process_combat_architecture_pool import read, save, sha, compact_closed_exports
 from finalize_combat_cuda_rollout import finalize
 
 
@@ -33,6 +33,8 @@ def batch(request_path, receipt_root):
             case_started = time.perf_counter()
             audit = finalize(model, data, out)
             assert audit['state'] == 'passed' and audit['device'] == 'cuda'
+            if request.get('compact_finalized_streams', False):
+                compact_closed_exports(out)
             meta = read(out/'report.json')
             meta['source_sha256'].update({str(request_path): request_digest, str(pathlib.Path(__file__).resolve()): script_digest})
             save(out/'report.json', meta)

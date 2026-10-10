@@ -84,7 +84,8 @@ try{
             $all+=@($r.results)
             $receipts+=@{root=$m.root;seed=$m.seed;report_sha256=(Get-FileHash "$($m.root)/report.json").Hash.ToLowerInvariant();manifest_sha256=(Get-FileHash "$($m.root)/manifest.json").Hash.ToLowerInvariant()}
         }
-        Copy-Item -LiteralPath $groupExporter -Destination (Join-Path $g.root 'q2combat-export.exe')
+        $aggregateSource=if($binaryBundle){Join-Path $binaryBundle 'q2combat-export.exe'}else{$groupExporter}
+        Install-HarnessBinaryLink $aggregateSource (Join-Path $g.root 'q2combat-export.exe') $manifest.exporter_sha256.ToLowerInvariant()
         if((Get-FileHash -LiteralPath (Join-Path $g.root 'q2combat-export.exe')).Hash.ToLowerInvariant() -ne $manifest.exporter_sha256.ToLowerInvariant()){throw 'Aggregate exporter copy changed'}
         $manifest|Add-Member -NotePropertyName pool_members -NotePropertyValue $receipts
         $manifest.workers=1;$manifest.episodes_per_worker=$all.Count;$manifest.seeds=@($all.seed);$manifest.seed_assignments=@($all|Select-Object worker,episode,seed,port,fixture_mixed,solo_fixture)

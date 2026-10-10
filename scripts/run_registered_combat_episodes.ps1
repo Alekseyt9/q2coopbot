@@ -42,6 +42,7 @@ try{
         $out=Join-Path $schedule.output_root "$($ep.id)-$mode"
         $argsMap=@{OutputRoot=$out;Workers=4;Timescale=2;GameFrames=$ep.game_frames;Seed=$task.seeds[0];Port=$Port;Skill=$ep.skill;CombatMode=$mode;Loadout=$ep.recipe.loadout;EpisodesPerWorker=[int]($task.seeds.Count/4);Synchronous=$true;StopOnGoal=$true;StopOnFirstDeath=$true;ReleaseGameFrame=100;RewardConfig=(Join-Path $repo $ep.recipe.reward_config)}
         if($mode -eq 'learned'){$argsMap.ProviderFile=$schedule.model_path}
+        if($null -ne $schedule.policy_sampling_seed_offset){$argsMap.PolicySamplingSeedOffset=[long]$schedule.policy_sampling_seed_offset}
         if($ep.recipe.mixed){$argsMap.Mixed=$true}
         if($task.instances.Count){
             $fixtureInput=Join-Path $schedule.output_root "$($ep.id)-$mode-fixtures.json"

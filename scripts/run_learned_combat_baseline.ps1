@@ -25,10 +25,12 @@ param(
     [string]$RewardConfig='',
     [string]$GeneratedFixtures='',
     [string]$BinaryBundle='',
+    [ValidateRange(0,2147483647)][long]$PolicySamplingSeedOffset=0,
     [string]$OutputRoot=''
 )
 $ErrorActionPreference='Stop'
 if($Seed -lt 0 -or [long]$Seed+$Workers*$EpisodesPerWorker-1 -gt 2147483647){throw 'Each independent episode needs its own valid 31-bit game seed'}
+if([long]$Seed+$Workers*$EpisodesPerWorker-1+$PolicySamplingSeedOffset -gt 2147483647){throw 'Effective policy sampling seed exceeds 31-bit range'}
 if($Synchronous -and $Loadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce'){throw 'Unsupported synchronous loadout'}
 if($Loadout -in 'weapons','weapons-scarce' -and (!$Synchronous -or $CombatMode -ne 'learned' -or $Feedback -or $TrainingMonsterHealth)){throw 'Weapon-choice fixture requires synchronous direct learned control without overrides'}
 if($Loadout -eq 'machinegun' -and (!$Synchronous -or $Feedback -or $TrainingMonsterHealth)){throw 'Machinegun requires synchronous capture without health/feedback overrides'}
@@ -123,7 +125,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
 		if($using:remoteProvider -or $using:ppoProvider){
 			$template=Get-Content -LiteralPath $using:ProviderFile -Raw|ConvertFrom-Json
 			if($using:remoteProvider){$template.episode="worker-$worker-seed-$($using:Seed+$index)";$template.seed=$using:Seed+$index}
-			if($using:ppoProvider){$template.sampling_seed=$using:Seed+$index}
+			if($using:ppoProvider){$template.sampling_seed=[long]$using:Seed+$index+$using:PolicySamplingSeedOffset}
 			$episodeProvider=Join-Path $using:OutputRoot "provider-worker-$worker-episode-$episode.json"
 			$template|ConvertTo-Json -Depth 10|Set-Content -LiteralPath $episodeProvider -Encoding utf8NoBOM
 		}
@@ -323,6 +325,7 @@ $usable=@($results | Where-Object capture_valid)
 $manifest=[ordered]@{
     version=2;stage=$(if($ppoProvider){'R4b PPO rollout pilot'}elseif($trainedProvider){'R4a BC control pilot'}else{'R1 dispatch and R2 transition pilot'});provider=$CombatMode;provider_kind=$providerKind;model_weights=$(if($trainedProvider){$ProviderFile}else{$null});model_weights_sha256=$(if($trainedProvider){$probeHash}else{$null});probe_sha256=$(if($ProviderFile){(Get-FileHash -LiteralPath $ProviderFile).Hash}else{$null});exporter_sha256=(Get-FileHash -LiteralPath $exporter).Hash
     remote_peer=[bool]$remoteProvider
+    policy_sampling_seed_offset=$PolicySamplingSeedOffset
     feedback=[bool]$Feedback;feedback_version=$(if($Feedback){'combat_feedback_v1'}else{$null});relay_sha256=$(if($Feedback){(Get-FileHash -LiteralPath $relay).Hash}else{$null})
     training_monster_health=$TrainingMonsterHealth
     generated_fixtures_sha256=$generatedHash

@@ -7,6 +7,7 @@ $task=$schedule.tasks[$TaskIndex];$ep=$task.episode;$seed=[int]$task.seeds[$Seed
 if($ep.recipe.runner -ne 'combat-baseline' -or $Mode -notin $task.modes){throw 'Unsupported single episode job'}
 $argsMap=@{OutputRoot=$OutputRoot;Workers=1;EpisodesPerWorker=1;Timescale=2;GameFrames=$ep.game_frames;Seed=$seed;Port=$Port;Skill=$ep.skill;CombatMode=$Mode;Loadout=$ep.recipe.loadout;Synchronous=$true;StopOnGoal=$true;StopOnFirstDeath=$true;ReleaseGameFrame=100;RewardConfig=(Join-Path $repo $ep.recipe.reward_config)}
 if($BinaryBundle){$argsMap.BinaryBundle=$BinaryBundle}
+if($null -ne $schedule.policy_sampling_seed_offset){$argsMap.PolicySamplingSeedOffset=[long]$schedule.policy_sampling_seed_offset}
 if($Mode -eq 'learned'){
     if((Get-FileHash $schedule.model_path).Hash.ToLowerInvariant() -ne $schedule.model_sha256){throw 'Frozen model changed'}
     $argsMap.ProviderFile=$schedule.model_path
