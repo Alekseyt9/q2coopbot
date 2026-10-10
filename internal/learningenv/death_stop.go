@@ -28,7 +28,7 @@ func VerifyDeathStop(g DeathStop, release *CombatRelease, events []DamageEvent, 
 	}
 	id, next, n := s.Observation.Identity, s.Next.Identity, s.Native
 	if g.Version != "combat_first_life_death_stop_v1" || g.Reason != "combat_first_life_death" ||
-		(g.Map != "base1" && g.Map != "base2") || g.Map != id.Map || id.Life != 1 || id.Connection != 1 ||
+		g.Map == "" || g.Map != id.Map || id.Life != 1 || id.Connection != 1 ||
 		!policy.SameLife(id, next) || next.Frame != id.Frame+1 || s.Observation.Health <= 0 || s.Next.Health > 0 ||
 		g.Health > 0 || g.Actor <= 0 || g.Actor != id.Actor || g.Spawncount != id.Spawncount ||
 		release.Spawncount != id.Spawncount || id.Frame < release.Frame ||

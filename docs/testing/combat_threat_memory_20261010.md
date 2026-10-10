@@ -64,3 +64,35 @@ Observed defeat и reset по-прежнему завершают продолж
 on-policy episodes. Следом: CUDA finalize, explicit reward objective fork v11,
 GPU update и held-out before/after. Расширение geometries/multi-monster scenes,
 проверка остальных architectures и full campaign/human coop остаются впереди.
+
+## Живые записи и исправление exporter
+
+Сбор `coop-threat-pool-v1-20261010` завершён: 32/32 accepted, 1280 learner
+rows, 1281 context rows, 22 learner kills, 9 participant-death episodes.
+Это сбор данных, не held-out quality result. `audit_coop_threat_memory.py`
+проверил 4106 записей памяти по own previously visible coordinates/velocities.
+В 220 provider frames без видимых enemies возраст памяти превышал старый
+30-frame grace. Продолжение боя и отсутствие скрытого обновления позиций
+подтверждены live trace; оптимальность поиска не установлена.
+
+Первый export/update v1 имел дефект: processor копировал глобальный
+`q2combat-paired-export.exe`, а был пересобран другой `q2combat-export.exe`.
+Старый exporter при десериализации удалял новое поле; все v9 tail features
+были нулевыми. CUDA parity не могла это обнаружить при нулевых input weights.
+Update v1 является update по старым входам с расширенным ownership, **не
+обучением памяти**. Его diagnostic eval `coop-threat-eval-v1-20261010`
+не является приёмкой исправленного варианта.
+
+Исправление: processor собирает frozen exporter из текущего source в output,
+не доверяет другому глобальному бинарнику. Для v9 добавлена проверка наличия
+ненулевых memory inputs. `--revision v2` создала dataset-v2/native-v2/cuda-v2
+из тех же immutable captures, старые sealed datasets сохранены. 32/32 v2
+outputs CUDA finalized; merged corpus `coop-threat-merged-v2-20261010`.
+
+`coop-threat-update-v2-20261010` обучен от исходного migration/objective fork,
+без продолжения defective update v1: 1280 rows, 7 принятых actor steps,
+updates_completed6, final approx KL0.004999542. Weights SHA
+`c40ff38e755d2dd49f4a45e9c5041c366de10b3f0c6e37119d1ed8591fec8aba`.
+`threat-input-learning.json`: CUDA подтвердил ненулевые новые columns:
+actor max abs1.379e-5, critic0.05877. Это доказательство участия новых входов
+в обучении, не повышения качества. Новая held-out evaluation необходима.

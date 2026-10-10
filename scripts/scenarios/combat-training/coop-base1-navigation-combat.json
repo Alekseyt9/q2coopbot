@@ -23,10 +23,10 @@
   },
   "recipe": {"runner": ""},
   "missing": [
-    "Two-client synchronous barrier with both actors present before fixed-frame release and verified nonoverlapping initial positions",
-    "Versioned seeded leader path and navigation goal retained during provider-owned combat; no combat_fixture early return",
-    "Both-client command receipts; audited first-life terminal, goal and truncation exports with native damage attribution",
-    "Observed-goal progress/reacquisition reward without omniscient teammate coordinates or reward for useless movement",
-    "Native reset/RNG/weapon-phase validation at multiple sites and validated CUDA on-policy export"
+    "Generalize the verified single-site two-client barrier/reset to registered multi-site recipes and nonoverlapping generated starts",
+    "Bind the tested seeded moving-peer path and observed navigation context to registry recipes; add Machinegun and corner/doorway variants",
+    "Generalize primary-only CUDA paired adapter beyond the Soldier/Blaster pilot; add goal completion and batch export receipts",
+    "Validate implemented v11 observed-navigation/peer-death rewards for multi-monster layouts and partner reacquisition",
+    "Native reset/RNG/weapon-phase validation at multiple sites, monster no-infighting for paired fixtures, and held-out quality comparison"
   ]
 }

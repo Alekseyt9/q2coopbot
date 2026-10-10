@@ -1,0 +1,193 @@
+{
+  "generator": {
+    "site": {
+      "map": "fact1",
+      "entity_index": 183,
+      "source_class": "monster_soldier_ss",
+      "source_origin": [
+        72,
+        224,
+        24
+      ],
+      "bsp_sha256": "eb23e1e86cbcf34e97be294854c9c25802ff3070121467a25dfc81a0942180a5",
+      "wall_distances": [
+        169,
+        239,
+        81,
+        330,
+        512,
+        213,
+        86,
+        303
+      ]
+    },
+    "version": 1,
+    "kind": "campaign-ground-combat-v1",
+    "distributions": {
+      "confirmation": {
+        "player": {
+          "min": [
+            -109.375,
+            146.5,
+            24.125
+          ],
+          "max": [
+            -101.375,
+            154.5,
+            24.125
+          ]
+        },
+        "primary": {
+          "min": [
+            76,
+            222,
+            24.125
+          ],
+          "max": [
+            78,
+            226,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "test": {
+        "player": {
+          "min": [
+            -109.375,
+            146.5,
+            24.125
+          ],
+          "max": [
+            -101.375,
+            154.5,
+            24.125
+          ]
+        },
+        "primary": {
+          "min": [
+            72,
+            222,
+            24.125
+          ],
+          "max": [
+            74,
+            226,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "train": {
+        "player": {
+          "min": [
+            -109.375,
+            146.5,
+            24.125
+          ],
+          "max": [
+            -101.375,
+            154.5,
+            24.125
+          ]
+        },
+        "primary": {
+          "min": [
+            64,
+            222,
+            24.125
+          ],
+          "max": [
+            66,
+            226,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "validation": {
+        "player": {
+          "min": [
+            -109.375,
+            146.5,
+            24.125
+          ],
+          "max": [
+            -101.375,
+            154.5,
+            24.125
+          ]
+        },
+        "primary": {
+          "min": [
+            68,
+            222,
+            24.125
+          ],
+          "max": [
+            70,
+            226,
+            24.125
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "id": "campaign-fact1-site-01-weapons",
+  "revision": 1,
+  "title": "fact1 encounter 183: monster_soldier / weapons",
+  "status": "runnable",
+  "map": "fact1",
+  "scope": "first_life_combat",
+  "goal": "alive_native_kills_then_observed_effect",
+  "monsters": [
+    "monster_soldier"
+  ],
+  "geometry": "Original campaign BSP encounter; distinct location; static hull/floor/visibility verified; native doors and movers retained",
+  "initial_state": "Isolated fight at original encounter location; other campaign monsters removed; original soldier variants use shotgun Soldier; stock monster HP; generated player HP80/100",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 300,
+  "modes": [
+    "learned"
+  ],
+  "ppo_trainable": true,
+  "splits": {
+    "confirmation": {
+      "start": 57110000,
+      "count": 4096
+    },
+    "test": {
+      "start": 57100000,
+      "count": 4096
+    },
+    "train": {
+      "start": 57080000,
+      "count": 4096
+    },
+    "validation": {
+      "start": 57090000,
+      "count": 4096
+    }
+  },
+  "recipe": {
+    "runner": "combat-baseline",
+    "loadout": "weapons",
+    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
+  },
+  "missing": []
+}

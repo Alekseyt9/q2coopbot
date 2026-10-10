@@ -162,7 +162,13 @@ func (e Episode) validate() error {
 	if e.Status != "runnable" && e.Status != "planned" {
 		return fmt.Errorf("unknown episode status")
 	}
-	if e.Map != "base1" && e.Map != "base2" || e.Skill < 0 || e.Skill > 3 || e.Timescale != 2 || e.GameFrames < 20 || e.GameFrames > 10000 {
+	mapSupported := e.Map == "base1" || e.Map == "base2"
+	if e.Generator != nil && e.Generator.Kind == "campaign-ground-combat-v1" {
+		for _, name := range campaignMapOrder {
+			mapSupported = mapSupported || e.Map == name
+		}
+	}
+	if !mapSupported || e.Skill < 0 || e.Skill > 3 || e.Timescale != 2 || e.GameFrames < 20 || e.GameFrames > 10000 {
 		return fmt.Errorf("invalid runtime conditions")
 	}
 	if len(e.Splits) != len(splitNames) {

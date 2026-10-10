@@ -1,0 +1,194 @@
+{
+  "generator": {
+    "site": {
+      "map": "jail2",
+      "entity_index": 198,
+      "source_class": "monster_infantry",
+      "source_origin": [
+        2024,
+        792,
+        -80
+      ],
+      "bsp_sha256": "5f0f1cd1df30c702745b28ef67908b1bbd5e82bf1a7f2c6e76b170d98478dfd9",
+      "wall_distances": [
+        24,
+        34,
+        168,
+        396,
+        380,
+        34,
+        24,
+        34
+      ]
+    },
+    "version": 1,
+    "kind": "campaign-ground-combat-v1",
+    "distributions": {
+      "confirmation": {
+        "player": {
+          "min": [
+            2020,
+            660,
+            -79.875
+          ],
+          "max": [
+            2028,
+            668,
+            -79.875
+          ]
+        },
+        "primary": {
+          "min": [
+            2028,
+            790,
+            -79.875
+          ],
+          "max": [
+            2030,
+            794,
+            -79.875
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "test": {
+        "player": {
+          "min": [
+            2020,
+            660,
+            -79.875
+          ],
+          "max": [
+            2028,
+            668,
+            -79.875
+          ]
+        },
+        "primary": {
+          "min": [
+            2024,
+            790,
+            -79.875
+          ],
+          "max": [
+            2026,
+            794,
+            -79.875
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "train": {
+        "player": {
+          "min": [
+            2020,
+            660,
+            -79.875
+          ],
+          "max": [
+            2028,
+            668,
+            -79.875
+          ]
+        },
+        "primary": {
+          "min": [
+            2016,
+            790,
+            -79.875
+          ],
+          "max": [
+            2018,
+            794,
+            -79.875
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      },
+      "validation": {
+        "player": {
+          "min": [
+            2020,
+            660,
+            -79.875
+          ],
+          "max": [
+            2028,
+            668,
+            -79.875
+          ]
+        },
+        "primary": {
+          "min": [
+            2020,
+            790,
+            -79.875
+          ],
+          "max": [
+            2022,
+            794,
+            -79.875
+          ]
+        },
+        "health": [
+          80,
+          100
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "id": "campaign-jail2-site-02-blaster",
+  "revision": 1,
+  "title": "jail2 encounter 198: monster_infantry / blaster",
+  "status": "runnable",
+  "map": "jail2",
+  "scope": "first_life_combat",
+  "goal": "alive_native_kills_then_observed_effect",
+  "monsters": [
+    "monster_infantry"
+  ],
+  "geometry": "Original campaign BSP encounter; distinct location; static hull/floor/visibility verified; native doors and movers retained",
+  "initial_state": "Isolated fight at original encounter location; other campaign monsters removed; original soldier variants use shotgun Soldier; stock monster HP; generated player HP80/100",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 300,
+  "modes": [
+    "rules",
+    "learned"
+  ],
+  "ppo_trainable": true,
+  "splits": {
+    "confirmation": {
+      "start": 55230000,
+      "count": 4096
+    },
+    "test": {
+      "start": 55220000,
+      "count": 4096
+    },
+    "train": {
+      "start": 55200000,
+      "count": 4096
+    },
+    "validation": {
+      "start": 55210000,
+      "count": 4096
+    }
+  },
+  "recipe": {
+    "runner": "combat-baseline",
+    "loadout": "blaster",
+    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
+  },
+  "missing": []
+}

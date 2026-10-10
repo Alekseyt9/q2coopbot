@@ -30,14 +30,19 @@ func run() error {
 	root := flag.String("root", ".", "repository root")
 	out := flag.String("out", "", "fresh execution plan JSON")
 	artifacts := flag.String("artifacts", "", "fresh runtime output root")
-	campaign := flag.Int("campaign-sites", 0, "generate this many distinct original encounter sites per base1/base2 map into out")
+	campaign := flag.Int("campaign-sites", 0, "generate this many distinct original encounter sites per selected map into out")
+	campaignMaps := flag.String("campaign-maps", "base1,base2", "comma-separated stock campaign maps for site generation")
 	flag.Parse()
 	if *campaign != 0 {
 		abs, err := filepath.Abs(*root)
 		if err != nil {
 			return err
 		}
-		episodes, err := trainingepisodes.CampaignRecipes(abs, *campaign)
+		maps := strings.Split(*campaignMaps, ",")
+		for i := range maps {
+			maps[i] = strings.TrimSpace(maps[i])
+		}
+		episodes, err := trainingepisodes.CampaignRecipesForMaps(abs, *campaign, maps)
 		if err != nil {
 			return err
 		}

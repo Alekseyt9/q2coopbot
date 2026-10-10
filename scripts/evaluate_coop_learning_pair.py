@@ -17,7 +17,10 @@ def main():
     repo = pathlib.Path(__file__).resolve().parent.parent
     root = a.out.resolve()
     root.mkdir(exist_ok=False)
+    client=root/'q2coopbot.exe'
+    subprocess.run(['go','build','-o',str(client),'./cmd/q2coopbot'],cwd=repo,check=True)
     save(root/'protocol.json', dict(version='coop_pilot_paired_evaluation_v1',
+        client_binary=str(client),client_sha256=sha(client),
         seed=a.seed, episodes=a.episodes, slots=16, timescale=2,
         before_sha256=sha(a.before), after_sha256=sha(a.after),control_sha256=sha(a.control) if a.control else None,
         scope='Held-out from update collection. One base1 Soldier/Blaster site and scripted moving peer; no general campaign or human coop acceptance.'))
@@ -27,6 +30,7 @@ def main():
         with (root/(name+'.log')).open('w', encoding='utf-8') as log:
             subprocess.run([sys.executable, str(repo/'scripts/run_coop_learning_pool.py'),
                 '--out', str(root/name), '--model', str(model.resolve()),
+                '--client-binary',str(client),
                 '--episodes', str(a.episodes), '--slots', '16', '--seed', str(a.seed), '--port', '30200'],
                 cwd=repo, stdout=log, stderr=subprocess.STDOUT, check=True)
             capture = read(root/name/'report.json')

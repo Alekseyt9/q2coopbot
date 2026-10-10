@@ -22,11 +22,33 @@ type CampaignSite struct {
 // CampaignRecipes selects spatially separated, grounded fights around original
 // campaign encounters. It does not claim to reproduce an entire campaign state.
 func CampaignRecipes(root string, perMap int) ([]Episode, error) {
+	return CampaignRecipesForMaps(root, perMap, []string{"base1", "base2"})
+}
+
+// The fixed order preserves seed ranges when a caller selects a different subset.
+var campaignMapOrder = []string{"base1", "base2", "base3", "train", "bunk1", "ware1", "ware2", "jail1", "jail2", "jail3", "jail4", "jail5", "security", "mintro", "mine1", "mine2", "mine3", "mine4", "fact1", "fact2", "fact3", "power1", "power2", "cool1", "waste1", "waste2", "waste3", "biggun", "hangar1", "hangar2", "lab", "command", "strike", "space", "city1", "city2", "city3", "boss1", "boss2"}
+
+func CampaignRecipesForMaps(root string, perMap int, maps []string) ([]Episode, error) {
 	if perMap < 1 || perMap > 12 {
 		return nil, fmt.Errorf("campaign sites per map must be 1..12")
 	}
+	if len(maps) == 0 {
+		return nil, fmt.Errorf("campaign maps required")
+	}
+	indices := make(map[string]int)
+	for i, name := range campaignMapOrder {
+		indices[name] = i
+	}
+	seen := make(map[string]bool)
+	for _, name := range maps {
+		if _, ok := indices[name]; !ok || seen[name] {
+			return nil, fmt.Errorf("unsupported or duplicate campaign map %q", name)
+		}
+		seen[name] = true
+	}
 	var result []Episode
-	for mapIndex, name := range []string{"base1", "base2"} {
+	for _, name := range maps {
+		mapIndex := indices[name]
 		world, err := loadGenerationWorld(root, name)
 		if err != nil {
 			return nil, err

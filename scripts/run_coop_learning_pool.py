@@ -3,6 +3,7 @@ import argparse
 import concurrent.futures
 import json
 import pathlib
+import os
 import queue
 import subprocess
 import time
@@ -13,6 +14,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--out', type=pathlib.Path, required=True)
     parser.add_argument('--model', type=pathlib.Path, required=True)
+    parser.add_argument('--client-binary',type=pathlib.Path,help='Reuse one frozen client for paired model comparisons')
     parser.add_argument('--episodes', type=int, default=32)
     parser.add_argument('--slots', type=int, default=16)
     parser.add_argument('--seed', type=int, default=186240)
@@ -24,7 +26,16 @@ def main():
     root.mkdir()
     repo = pathlib.Path(__file__).resolve().parent.parent
     client = root/'q2coopbot.exe'
-    subprocess.run(['go', 'build', '-o', str(client), './cmd/q2coopbot'], cwd=repo, check=True)
+    protocol_path=root.parent/'protocol.json'
+    if args.client_binary is None and protocol_path.exists():
+        protocol=read(protocol_path)
+        if protocol.get('version')=='coop_pilot_paired_evaluation_v1' and protocol.get('client_binary'):
+            args.client_binary=pathlib.Path(protocol['client_binary'])
+            assert sha(args.client_binary)==protocol['client_sha256'], 'Frozen evaluation client changed'
+    if args.client_binary:
+        os.link(args.client_binary.resolve(),client)
+    else:
+        subprocess.run(['go', 'build', '-o', str(client), './cmd/q2coopbot'], cwd=repo, check=True)
     manifest = dict(version='coop_learning_collection_pool_v1', slots=args.slots,
                     timescale=2, episodes=args.episodes, first_seed=args.seed,
                     model=str(model), model_sha256=sha(model), client_sha256=sha(client),
