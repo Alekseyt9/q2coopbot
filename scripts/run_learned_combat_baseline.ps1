@@ -16,6 +16,7 @@ param(
     [switch]$HealthKit,
     [switch]$Synchronous,
     [switch]$StopOnGoal,
+    [switch]$StopOnFirstDeath,
     [switch]$KeepRuntimeAssets,
     [switch]$TeacherVertical,
     [switch]$Feedback,
@@ -39,6 +40,7 @@ if($ReleaseGameFrame -and (!$Synchronous -or $Loadout -notin 'blaster','machineg
 if($EpisodePattern -ne 'uniform' -and (!$Mixed -or $EpisodesPerWorker -ne 3 -or !$Synchronous -or $Loadout -notin 'blaster','machinegun','weapons','weapons-scarce' -or $CombatMode -ne 'learned' -or $Feedback -or $HealthKit -or $TrainingMonsterHealth)){throw 'Unsupported Mixed/Solo pattern'}
 if($SoloFixture -ne 'standard' -and (!$Synchronous -or $Loadout -ne 'blaster' -or $CombatMode -ne 'learned' -or $Feedback -or $HealthKit -or $TrainingMonsterHealth -or ($Mixed -and $EpisodePattern -eq 'uniform'))){throw 'Remaining-Parasite fixture requires isolated direct synchronous Blaster Solo episodes without health overrides'}
 if($StopOnGoal -and (!$Synchronous -or $Feedback)){throw 'Goal stop requires synchronous capture without a live feedback relay'}
+if($StopOnFirstDeath -and (!$StopOnGoal -or !$RewardConfig)){throw 'First-life death stop requires goal supervision and an explicit reward'}
 $repo=Split-Path $PSScriptRoot -Parent
 if($GeneratedFixtures){
     if(!$Synchronous -or $ReleaseGameFrame -ne 100 -or $Feedback -or $HealthKit -or $TrainingMonsterHealth -or $SoloFixture -ne 'standard' -or $EpisodePattern -ne 'uniform'){throw 'Generated fixtures require the standard synchronous fixed release without overrides'}
@@ -145,7 +147,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
         $arguments+=@('-RecoverySkill',$using:Skill)
         $arguments+=@('-ParasiteFixture',$episodeFixture)
         if($samplePath){$arguments+=@('-GeneratedFixture',$samplePath)}
-        if($using:Synchronous){$arguments+='-Synchronous'};if($using:StopOnGoal){$arguments+='-StopOnGoal'}
+        if($using:Synchronous){$arguments+='-Synchronous'};if($using:StopOnGoal){$arguments+='-StopOnGoal'};if($using:StopOnFirstDeath){$arguments+='-StopOnFirstDeath'}
         if($using:TeacherVertical){$arguments+='-TeacherVertical'}
         if($episodeMixed){$arguments+=@('-ParasiteMixed','-ParasiteMixedClass','monster_gunner')}
         if($using:HealthKit){$arguments+='-ParasiteHealthKit'}
@@ -198,7 +200,24 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 $goalValid=$verified -and $goal.reason -eq 'combat_goal_complete' -and $goal.kill_frame -eq $verified.kill_frame -and $goal.observed_frame -ge $verified.kill_frame+1 -and $goal.observed_frame -le $rows[-1].observation_frame -and $goal.spawncount -eq $verified.spawncount -and $goal.actor -eq $verified.actor -and (Test-Path (Join-Path $out 'goal.stop'))
                 if(!$goalValid){throw 'Unverified goal stop'}
             }
-            $frameBudgetValid=$field.game_frames -eq $using:GameFrames -or ($goalValid -and $field.game_frames -gt 0 -and $field.game_frames -lt $using:GameFrames)
+            $death=$null;$deathValid=$false
+            if($using:StopOnFirstDeath -and (Test-Path (Join-Path $out 'death-stop.json'))){
+                if($goalValid){throw 'Conflicting goal and death receipts'}
+                . "$using:repo/scripts/combat_death_stop.ps1"
+                . "$using:repo/scripts/read_damage_events.ps1"
+                $death=Get-Content (Join-Path $out 'death-stop.json') -Raw | ConvertFrom-Json
+                $release=@(Get-Content (Join-Path $out 'server.log') | Select-String '^sv_test_combat spawncount=(-?\d+) server_frame=(\d+) g_test_combat_start game_frame=\d+ ready=1 seed=\d+$')
+                if($release.Count -ne 1){throw 'Death release proof missing'}
+                $observed=@($rows|Where-Object observation_frame -eq $death.observed_frame)
+                if($observed.Count -ne 1){throw 'Death receipt observation missing'}
+                $deathMap=if($sample){$sample.map}else{'base1'}
+                $verified=Get-CombatFirstLifeDeathReceipt $observed[0] @(Read-DamageEvents (Join-Path $out 'server.log')) @{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value} $deathMap
+                if(!$verified){throw 'Unverified death stop'}
+                foreach($key in @('version','reason','map','spawncount','actor','death_frame','observed_frame','health')){if($death.$key -ne $verified.$key){throw 'Death receipt differs from native evidence'}}
+                if(!(Test-Path (Join-Path $out 'goal.stop')) -or (Get-Content (Join-Path $out 'goal.stop') -Raw).Trim() -ne 'combat_first_life_death'){throw 'Death stop marker missing'}
+                $deathValid=$true
+            }
+            $frameBudgetValid=$field.game_frames -eq $using:GameFrames -or (($goalValid -or $deathValid) -and $field.game_frames -gt 0 -and $field.game_frames -lt $using:GameFrames)
             $dataset=Join-Path $out 'dataset'
             $config=Get-Content -LiteralPath (Join-Path $out 'bot-config.json') -Raw|ConvertFrom-Json
             $generatedProof=$null
@@ -211,13 +230,15 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 inventory=$(if($using:Loadout -in 'weapons','weapons-scarce'){@(@{name='Blaster';count=1},@{name='Machinegun';count=1},@{name='Shotgun';count=1},@{name='Bullets';count=$(if($using:Loadout -eq 'weapons'){40}else{10})},@{name='Shells';count=$(if($using:Loadout -eq 'weapons'){20}else{6})})}else{$null})
                 enemy_position=@($config.test.spawn_soldier.Split(',')|ForEach-Object {[double]::Parse($_,[Globalization.CultureInfo]::InvariantCulture)})
             }|ConvertTo-Json|Set-Content -LiteralPath $resetExpectation -Encoding utf8NoBOM
-            $exportArguments=@('--trace',(Join-Path $out 'bot.jsonl'),'--out',$dataset,'--worker',"worker-$worker",'--episode',"seed-$($using:Seed+$index)",'--end-reason',$(if($goalValid){'combat_goal_complete'}else{'game_frame_limit'}),'--server-log',(Join-Path $out 'server.log'),'--client-name','SoloRetreatBot','--require-execution','--reset-expectation',$resetExpectation)
+            $exportArguments=@('--trace',(Join-Path $out 'bot.jsonl'),'--out',$dataset,'--worker',"worker-$worker",'--episode',"seed-$($using:Seed+$index)",'--end-reason',$(if($goalValid){'combat_goal_complete'}elseif($deathValid){'combat_first_life_death'}else{'game_frame_limit'}),'--server-log',(Join-Path $out 'server.log'),'--client-name','SoloRetreatBot','--require-execution','--reset-expectation',$resetExpectation)
             if($using:Synchronous){$exportArguments+='--synchronous'}
             if($goalValid){$exportArguments+=@('--goal-observed-frame',"$($goal.observed_frame)")}
+            if($deathValid){$exportArguments+=@('--death-stop',(Join-Path $out 'death-stop.json'))}
             if($using:RewardConfig){$exportArguments+=@('--reward-config',$using:RewardConfig)}
             & $using:exporter @exportArguments
             if($LASTEXITCODE){throw 'Transition export failed'}
             $datasetReport=Get-Content -LiteralPath (Join-Path $dataset 'report.json') -Raw|ConvertFrom-Json
+            if($deathValid -and ((Get-Content (Join-Path $dataset 'death-stop-verification.json') -Raw|ConvertFrom-Json).state -ne 'verified')){throw 'Death terminal/reward verification missing'}
             if($using:Synchronous){
                 $rngLog=Get-Content -LiteralPath (Join-Path $out 'server.log')
                 $rng=@($rngLog|Select-String '^g_test_rng_start game_frame=(\d+) phase=post_frame seed=(\d+) cursor_before=(\d+) cursor_after=256$')
@@ -267,7 +288,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 generated_fixture=$sample;generated_start=$generatedProof
                 harness_accepted=[bool]$report.accepted;harness_reason=$report.reason;worker_exit_code=$process.ExitCode
                 capture_valid=($captures.Count -eq $rows.Count -and $mismatches -eq 0 -and $field.decode_errors -eq 0 -and $frameBudgetValid -and $seedAck -and $dispatchValid -and $datasetReport.command_proof.accepted -and $datasetReport.observed_reset_confirmed -and (!$episodeProvider -or $episodeProviderHash -eq (Get-FileHash -LiteralPath $episodeProvider).Hash))
-                goal_stop=$goal;actual_game_frames=$field.game_frames;frame_budget_valid=[bool]$frameBudgetValid
+                goal_stop=$goal;death_stop=$death;actual_game_frames=$field.game_frames;frame_budget_valid=[bool]$frameBudgetValid
                 provider_config_sha256=$episodeProviderHash
                 feedback=$feedbackReport
                 feedback_audit=$feedbackAuditReport

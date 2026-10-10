@@ -40,7 +40,7 @@ try{
     foreach($task in $schedule.tasks){foreach($mode in $task.modes){
         $ep=$task.episode
         $out=Join-Path $schedule.output_root "$($ep.id)-$mode"
-        $argsMap=@{OutputRoot=$out;Workers=4;Timescale=2;GameFrames=$ep.game_frames;Seed=$task.seeds[0];Port=$Port;Skill=$ep.skill;CombatMode=$mode;Loadout=$ep.recipe.loadout;EpisodesPerWorker=[int]($task.seeds.Count/4);Synchronous=$true;StopOnGoal=$true;ReleaseGameFrame=100;RewardConfig=(Join-Path $repo $ep.recipe.reward_config)}
+        $argsMap=@{OutputRoot=$out;Workers=4;Timescale=2;GameFrames=$ep.game_frames;Seed=$task.seeds[0];Port=$Port;Skill=$ep.skill;CombatMode=$mode;Loadout=$ep.recipe.loadout;EpisodesPerWorker=[int]($task.seeds.Count/4);Synchronous=$true;StopOnGoal=$true;StopOnFirstDeath=$true;ReleaseGameFrame=100;RewardConfig=(Join-Path $repo $ep.recipe.reward_config)}
         if($mode -eq 'learned'){$argsMap.ProviderFile=$schedule.model_path}
         if($ep.recipe.mixed){$argsMap.Mixed=$true}
         if($task.instances.Count){

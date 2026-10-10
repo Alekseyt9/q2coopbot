@@ -30,6 +30,7 @@ func run() error {
 	episode := flag.String("episode", "", "Episode identity")
 	endReason := flag.String("end-reason", "trace_end", "Reason for truncating the final command")
 	goalFrame := flag.Int("goal-observed-frame", 0, "Supervisor-verified goal boundary; offline terminal label only")
+	deathFile := flag.String("death-stop", "", "Supervisor first-life death receipt; requires a complete native death terminal and reward")
 	serverLog := flag.String("server-log", "", "Optional native log for separate server damage windows")
 	clientName := flag.String("client-name", "GoCoopMate", "Name selected by native sv_test_trace_client")
 	requireExecution := flag.Bool("require-execution", false, "Reject export without exact server dispatch for every sent command")
@@ -37,6 +38,29 @@ func run() error {
 	synchronous := flag.Bool("synchronous", false, "Require native one-command/one-tick phases and seeded single-client barrier")
 	rewardFile := flag.String("reward-config", "", "Optional explicit experimental reward JSON; requires synchronous proof")
 	flag.Parse()
+	var deathStop *learningenv.DeathStop
+	if *deathFile != "" {
+		if !*synchronous || *endReason != "combat_first_life_death" || *goalFrame != 0 || *rewardFile == "" {
+			return fmt.Errorf("death stop requires synchronous death end reason and reward, without goal boundary")
+		}
+		data, err := os.ReadFile(*deathFile)
+		if err != nil {
+			return err
+		}
+		if len(data) > 16384 {
+			return fmt.Errorf("death receipt too large")
+		}
+		decoder := json.NewDecoder(bytes.NewReader(data))
+		decoder.DisallowUnknownFields()
+		deathStop = &learningenv.DeathStop{}
+		if err := decoder.Decode(deathStop); err != nil {
+			return err
+		}
+		var extra any
+		if err := decoder.Decode(&extra); err != io.EOF {
+			return fmt.Errorf("trailing death receipt data")
+		}
+	}
 	if *goalFrame < 0 || *goalFrame > 0 && (!*synchronous || *endReason != "combat_goal_complete") {
 		return fmt.Errorf("goal boundary requires synchronous goal completion")
 	}
@@ -201,6 +225,8 @@ func run() error {
 	var initial *policy.Observation
 	var resetProof *learningenv.ResetProof
 	goalMarked := false
+	deathVerified, deathObservationFound, deathRewardVerified := false, false, false
+	deathStep := 0
 	emit := func(s *learningenv.Step, o *learningenv.Outcome) error {
 		if s == nil {
 			return nil
@@ -253,6 +279,15 @@ func run() error {
 				return fmt.Errorf("native step dispatch not exclusive/aligned")
 			}
 		}
+		if deathStop != nil && s.Terminal && s.Observation.Identity.Life == 1 && s.Observation.Health > 0 {
+			if deathVerified {
+				return fmt.Errorf("duplicate first-life death terminal")
+			}
+			if err := learningenv.VerifyDeathStop(*deathStop, native.Release, joiner.Events, s); err != nil {
+				return err
+			}
+			deathVerified, deathStep = true, s.Index
+		}
 		if err := se.Encode(s); err != nil {
 			return err
 		}
@@ -279,6 +314,12 @@ func run() error {
 			}
 			if rewardConfig != nil {
 				r := rewardConfig.Evaluate(s, outcome)
+				if deathStop != nil && s.Index == deathStep {
+					if !r.Available || r.Components["death"] != rewardConfig.Death {
+						return fmt.Errorf("death stop lost terminal reward")
+					}
+					deathRewardVerified = true
+				}
 				if r.Available {
 					rewardSteps++
 					rewardSum += *r.Score
@@ -320,6 +361,11 @@ func run() error {
 		}
 		row.Capture.ClientSequence = row.Sequence
 		id := row.Capture.Observation.Identity
+		if deathStop != nil && id.Life == 1 && id.Connection == 1 && id.Map == deathStop.Map &&
+			id.Spawncount == deathStop.Spawncount && id.Actor == deathStop.Actor && id.Frame == deathStop.ObservedFrame &&
+			int(row.Capture.Observation.Health) == deathStop.Health {
+			deathObservationFound = true
+		}
 		sent = append(sent, harness.Trace{Connection: id.Connection, Generation: id.Spawncount, ClientSequence: row.Sequence, Command: row.Command})
 		s, o, err := a.Push(*row.Capture)
 		if err != nil {
@@ -345,6 +391,22 @@ func run() error {
 	}
 	if *goalFrame > 0 && !goalMarked {
 		return fmt.Errorf("verified goal observation missing from complete transitions")
+	}
+	if deathStop != nil {
+		if !deathVerified || !deathObservationFound || !deathRewardVerified {
+			return fmt.Errorf("complete observed native death/reward proof missing")
+		}
+		data, err := json.MarshalIndent(struct {
+			State   string                 `json:"state"`
+			Step    int                    `json:"death_step"`
+			Receipt *learningenv.DeathStop `json:"receipt"`
+		}{"verified", deathStep, deathStop}, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(*out, "death-stop-verification.json"), data, 0644); err != nil {
+			return err
+		}
 	}
 	if err := stepWriter.Flush(); err != nil {
 		return err

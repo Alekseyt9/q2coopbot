@@ -16,8 +16,9 @@ function Get-CombatGoalReceipt($Row, $Events, $Release, [string[]]$Classes, [str
     [pscustomobject]@{version='combat_goal_stop_v1';reason='combat_goal_complete';spawncount=$Row.spawncount;actor=$Row.self_entity;classes=$Classes;kill_frame=$lastKill;observed_frame=$Row.observation_frame;health=$Row.health;kills=@($selected | Select-Object frame,target,target_class)}
 }
 
-function Wait-CombatGoalOrExit($Bot, [string]$Root, [int]$TimeoutMilliseconds, [string[]]$Classes, [string]$Map='base1') {
+function Wait-CombatGoalOrExit($Bot, [string]$Root, [int]$TimeoutMilliseconds, [string[]]$Classes, [string]$Map='base1', [bool]$FirstDeath=$false) {
     . "$PSScriptRoot/read_damage_events.ps1"
+    if($FirstDeath){. "$PSScriptRoot/combat_death_stop.ps1"}
     $clock=[Diagnostics.Stopwatch]::StartNew();$receipt=$null
     while(!$Bot.WaitForExit(50)){
         if($clock.ElapsedMilliseconds -gt $TimeoutMilliseconds){throw 'Bot timeout'}
@@ -31,9 +32,14 @@ function Wait-CombatGoalOrExit($Bot, [string]$Root, [int]$TimeoutMilliseconds, [
         $context=@{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value}
         $events=@(Read-DamageEvents $log)
         $receipt=Get-CombatGoalReceipt $row $events $context $Classes $Map
+        $receiptName='goal-stop.json';$stopReason='combat_goal_complete'
+        if(!$receipt -and $FirstDeath){
+            $receipt=Get-CombatFirstLifeDeathReceipt $row $events $context $Map
+            $receiptName='death-stop.json';$stopReason='combat_first_life_death'
+        }
         if($receipt){
-            $receipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $Root 'goal-stop.json') -Encoding utf8NoBOM
-            Set-Content -LiteralPath (Join-Path $Root 'goal.stop') -Value 'combat_goal_complete' -Encoding ascii
+            $receipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $Root $receiptName) -Encoding utf8NoBOM
+            Set-Content -LiteralPath (Join-Path $Root 'goal.stop') -Value $stopReason -Encoding ascii
         }
     }
 }
