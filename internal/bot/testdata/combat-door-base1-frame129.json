@@ -1,0 +1,109 @@
+{
+  "map": "base1",
+  "frame": 129,
+  "self": [
+    -1654.5,
+    1473.625,
+    120.125
+  ],
+  "self_velocity": [
+    0,
+    0,
+    0
+  ],
+  "on_ground": true,
+  "ducked": false,
+  "delta_angles": [
+    0,
+    24576,
+    0
+  ],
+  "weapon": "Blaster",
+  "health": 80,
+  "movers": [
+    {
+      "id": 341,
+      "model": 34,
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "angles": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": 338,
+      "model": 31,
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "angles": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": 339,
+      "model": 32,
+      "origin": [
+        0,
+        -66,
+        0
+      ],
+      "angles": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": 241,
+      "model": 19,
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "angles": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": 340,
+      "model": 33,
+      "origin": [
+        0,
+        66,
+        0
+      ],
+      "angles": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "combat_policy": {
+    "proposed_command": {
+      "Pitch": -1031,
+      "Yaw": 28466,
+      "Roll": 0,
+      "Forward": -144,
+      "Side": 235,
+      "Up": -400,
+      "Buttons": 1,
+      "Impulse": 0,
+      "Msec": 100,
+      "Light": 0
+    }
+  }
+}

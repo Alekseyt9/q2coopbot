@@ -53,10 +53,14 @@ def main():
     for entry in read(evaluation/'protocol.json')['evaluations']:
         count = attack = standing_attack = measured_attack = far_attack = big_turn = upward_attack = 0
         total_yaw = angular = max_yaw = 0.
+        longest_standing_attack = longest_visible_no_attack = 0
+        standing_attack_with_move = 0
         for path in pathlib.Path(entry['root']).glob('case-*/s-*/report.json'):
             member = read(path)
             trace = pathlib.Path(member['results'][0]['root'])/'bot.jsonl'
             seen = set()
+            previous_identity = None
+            standing_run = waiting_run = 0
             with trace.open(encoding='utf-8-sig') as stream:
                 for line in stream:
                     c = json.loads(line).get('combat_policy')
@@ -70,13 +74,27 @@ def main():
                         continue
                     seen.add(identity)
                     a = c['applied']
+                    contiguous = (previous_identity is not None and
+                                  identity[:2] == previous_identity[:2] and
+                                  identity[2] == previous_identity[2]+1)
+                    if not contiguous:
+                        standing_run = waiting_run = 0
+                    previous_identity = identity
+                    standing = math.hypot(*o['velocity'][:2]) < 10
+                    standing_run = standing_run+1 if standing and a['attack'] else 0
+                    waiting_run = (waiting_run+1 if not a['attack'] and
+                                   any(e.get('clear_shot') is True for e in o['enemies']) else 0)
+                    longest_standing_attack = max(longest_standing_attack,standing_run)
+                    longest_visible_no_attack = max(longest_visible_no_attack,waiting_run)
+                    standing_attack_with_move += (standing and a['attack'] and
+                                               (abs(a['forward']) > 0 or abs(a['side']) > 0))
                     count += 1
                     total_yaw += abs(a['yaw_delta_degrees'])
                     max_yaw = max(max_yaw,abs(a['yaw_delta_degrees']))
                     big_turn += abs(a['yaw_delta_degrees']) >= 45
                     if a['attack']:
                         attack += 1
-                        standing_attack += math.hypot(*o['velocity'][:2]) < 10
+                        standing_attack += standing
                         pitch = o['view_angles'][0]*360/65536+a['pitch_delta_degrees']
                         pitch = (pitch+180)%360-180
                         upward_attack += pitch < -35
@@ -92,11 +110,15 @@ def main():
             max_abs_yaw_delta=max_yaw, turns_at_least_45_degrees=big_turn,
             upward_attack_commands=upward_attack,
             standing_attack_fraction=standing_attack/attack if attack else None,
+            standing_attack_with_movement_commands=standing_attack_with_move,
+            longest_standing_attack_game_seconds=longest_standing_attack*.1,
+            longest_visible_no_attack_game_seconds=longest_visible_no_attack*.1,
             selected_target_measured_attack_commands=measured_attack,
             nominal_mean_attack_angular_error=angular/measured_attack if measured_attack else None,
             nominal_far_attack_fraction=far_attack/measured_attack if measured_attack else None,
             mean_game_frames=sum(x['frames'] for x in native)/len(native))
     pairs = {}
+    family_pairs = []
     labels = {e['label'] for e in read(evaluation/'protocol.json')['evaluations']}
     for label in sorted(labels):
         baseline = {(x['episode'],x['seed']):x for x in episodes if x['variant']=='control-'+label}
@@ -104,15 +126,27 @@ def main():
         assert baseline and baseline.keys() == candidate.keys()
         pairs[label] = dict(gained_wins=sum(candidate[k]['win'] and not baseline[k]['win'] for k in baseline),
                            lost_wins=sum(baseline[k]['win'] and not candidate[k]['win'] for k in baseline))
+        for family in sorted({k[0] for k in baseline}):
+            keys = [k for k in baseline if k[0] == family]
+            family_pairs.append(dict(label=label,episode=family,episodes=len(keys),
+                control_wins=sum(baseline[k]['win'] for k in keys),
+                quality_wins=sum(candidate[k]['win'] for k in keys),
+                control_deaths=sum(baseline[k]['death'] for k in keys),
+                quality_deaths=sum(candidate[k]['death'] for k in keys),
+                gained_wins=sum(candidate[k]['win'] and not baseline[k]['win'] for k in keys),
+                lost_wins=sum(baseline[k]['win'] and not candidate[k]['win'] for k in keys)))
     result = dict(state='complete',quality_report_sha256=sha(evaluation/'quality-report.json'),
-        variants=quality['variants'], command_metrics=groups, paired=pairs,
+        variants=quality['variants'], command_metrics=groups, paired=pairs,paired_families=family_pairs,
         native_machinegun=read(evaluation/'machinegun-hits.json')['groups'],
         native_blaster=read(evaluation/'blaster-projectile-hits.json')['groups'],
         first_shot_latency=read(evaluation/'first-shot-latency.json')['groups'],
         native_reports_sha256={f:sha(evaluation/f) for f in ('machinegun-hits.json','blaster-projectile-hits.json','first-shot-latency.json')},
         scope='Common development cohort, not final-test superiority. Commands are not native shot counts; '
-              'standing is observed horizontal speed, not proof of uselessness. Nominal selected-target angles '
-              'exclude recoil/projectile lead/obstruction; far angle is not an exact native miss. No promotion.')
+              'standing is observed horizontal speed, not proof of uselessness. '
+              'Standing attack and visible no-attack spans require consecutive observed provider frames; '
+              'movement commands at low speed do not prove a collision. '
+              'Nominal selected-target angles exclude recoil/projectile lead/obstruction; '
+              'far angle is not an exact native miss. No promotion.')
     if cycle_audit is not None:
         cycle_groups = {}
         for entry in read(evaluation/'protocol.json')['evaluations']:
@@ -147,6 +181,12 @@ def main():
                      f"{m['standing_attack_fraction']:.1%} |")
     for label, paired in pairs.items():
         lines += ['',f"{label}: новых побед {paired['gained_wins']}, потерянных {paired['lost_wins']}."]
+    lines += ['','| Семейство | Боев на ветку | Победы control / quality | Смерти control / quality |',
+              '|---|---:|---:|---:|']
+    for row in family_pairs:
+        lines.append(f"| {row['episode']} ({row['label']}) | {row['episodes']} | "
+                     f"{row['control_wins']} / {row['quality_wins']} | "
+                     f"{row['control_deaths']} / {row['quality_deaths']} |")
     if cycle_audit is not None:
         lines += ['','| Ветка | A→B→A | На1000 подтвержденных reward-переходов |','|---|---:|---:|']
         for label,m in result['target_cycles'].items():

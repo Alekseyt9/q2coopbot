@@ -194,7 +194,7 @@ func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.
 	}
 	probe := cmd
 	probe.Up = 0
-	predicted := predictGroundStep(s, probe)
+	predicted := predictCombatGroundStep(s, cmd)
 	if predicted != nil {
 		dx, dy := predicted.Displacement[0], predicted.Displacement[1]
 		step := math.Hypot(dx, dy)
@@ -205,8 +205,13 @@ func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.
 			} else {
 				stopMove(hazard)
 			}
-		} else if hazard := g.DoorMoveHazard(s.Movers, s.Self, dx, dy); hazard != "" {
-			stopMove(hazard)
+		} else if _, hazard := g.DoorMoveBlockStep(s.Movers, s.Self, dx, dy, step); hazard != "" {
+			if reduced, ok := p.checkedCombatMovementComponent(s, cmd, hazard); ok {
+				cmd = reduced
+				changes = append(changes, policy.Intervention{Component: "movement", Reason: "dynamic_door_component_clipped"})
+			} else {
+				stopMove(hazard)
+			}
 		} else if g.HasStaticLethalLasers() && p.laserCommandUnsafe(s, probe) {
 			stopMove("static_laser_hazard")
 		}
@@ -219,7 +224,7 @@ func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.
 			}
 		}
 	} else if cmd.Forward != 0 || cmd.Side != 0 || cmd.Up != 0 {
-		// Airborne/crouching dynamics require a checked trajectory guard before
+		// Airborne dynamics require a checked trajectory guard before
 		// the pilot permits new acceleration there; existing momentum is real.
 		stopMove("unsupported_motion_guard")
 	}
@@ -264,7 +269,7 @@ func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.
 // reverse a direction or invent a detour. Recompute inertia and all movement
 // hazards for each candidate; a safe destination alone is insufficient.
 func (p *Planner) checkedCombatMovementComponent(s quake.Snapshot, cmd quake.UserCmd, hazard string) (quake.UserCmd, bool) {
-	if hazard != "static_hull_blocked" || cmd.Up != 0 || s.Ducked || cmd.Forward == 0 || cmd.Side == 0 {
+	if (hazard != "static_hull_blocked" && hazard != "dynamic_door_blocked") || cmd.Up > 0 || cmd.Forward == 0 || cmd.Side == 0 {
 		return cmd, false
 	}
 	candidates := [2]quake.UserCmd{cmd, cmd}
@@ -276,18 +281,29 @@ func (p *Planner) checkedCombatMovementComponent(s quake.Snapshot, cmd quake.Use
 	}
 	g := p.World.Geometry
 	for _, candidate := range candidates {
-		prediction := predictGroundStep(s, candidate)
+		prediction := predictCombatGroundStep(s, candidate)
 		if prediction == nil {
 			continue
 		}
 		dx, dy := prediction.Displacement[0], prediction.Displacement[1]
 		step := math.Hypot(dx, dy)
+		_, doorHazard := g.DoorMoveBlockStep(s.Movers, s.Self, dx, dy, step)
 		if step < .125 || g.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, step) != "" ||
-			g.DoorMoveHazard(s.Movers, s.Self, dx, dy) != "" ||
+			doorHazard != "" ||
 			g.HasStaticLethalLasers() && p.laserCommandUnsafe(s, candidate) {
 			continue
 		}
 		return candidate, true
 	}
 	return cmd, false
+}
+
+// PM_CheckDuck runs before ground acceleration. A grounded negative Up command
+// selects the 100-unit crouch speed immediately. On release, use standing speed
+// conservatively even if headroom might prevent standing. Geometry checks retain
+// the standing hull; this does not authorize passage under a low ceiling.
+func predictCombatGroundStep(s quake.Snapshot, cmd quake.UserCmd) *GroundPrediction {
+	s.Ducked = cmd.Up < 0
+	cmd.Up = 0
+	return predictGroundStep(s, cmd)
 }

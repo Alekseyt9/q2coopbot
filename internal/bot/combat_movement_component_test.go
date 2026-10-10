@@ -31,7 +31,6 @@ func TestCombatMovementComponentAtRecordedWall(t *testing.T) {
 	}
 	for _, changed := range []quake.Snapshot{
 		func() quake.Snapshot { x := s; x.OnGround = false; return x }(),
-		func() quake.Snapshot { x := s; x.Ducked = true; return x }(),
 		func() quake.Snapshot { x := s; x.SelfVelocity = quake.Vec3{-300, 0, 0}; return x }(),
 	} {
 		if _, ok := c.planner.checkedCombatMovementComponent(changed, cmd, "static_hull_blocked"); ok {
