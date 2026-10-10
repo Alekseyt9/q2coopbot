@@ -190,7 +190,12 @@ func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.
 		dx, dy := predicted.Displacement[0], predicted.Displacement[1]
 		step := math.Hypot(dx, dy)
 		if hazard := g.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, step); hazard != "" {
-			stopMove(hazard)
+			if reduced, ok := p.checkedCombatMovementComponent(s, cmd, hazard); ok {
+				cmd = reduced
+				changes = append(changes, policy.Intervention{Component: "movement", Reason: "static_hull_component_clipped"})
+			} else {
+				stopMove(hazard)
+			}
 		} else if hazard := g.DoorMoveHazard(s.Movers, s.Self, dx, dy); hazard != "" {
 			stopMove(hazard)
 		} else if g.HasStaticLethalLasers() && p.laserCommandUnsafe(s, probe) {
@@ -244,4 +249,36 @@ func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.
 		}
 	}
 	return cmd, changes
+}
+
+// Only remove a component of the policy's own ground command. Never add speed,
+// reverse a direction or invent a detour. Recompute inertia and all movement
+// hazards for each candidate; a safe destination alone is insufficient.
+func (p *Planner) checkedCombatMovementComponent(s quake.Snapshot, cmd quake.UserCmd, hazard string) (quake.UserCmd, bool) {
+	if hazard != "static_hull_blocked" || cmd.Up != 0 || s.Ducked || cmd.Forward == 0 || cmd.Side == 0 {
+		return cmd, false
+	}
+	candidates := [2]quake.UserCmd{cmd, cmd}
+	candidates[0].Side = 0
+	candidates[1].Forward = 0
+	// Prefer the smallest change to the requested action when both are safe.
+	if math.Abs(float64(cmd.Side)) > math.Abs(float64(cmd.Forward)) {
+		candidates[0], candidates[1] = candidates[1], candidates[0]
+	}
+	g := p.World.Geometry
+	for _, candidate := range candidates {
+		prediction := predictGroundStep(s, candidate)
+		if prediction == nil {
+			continue
+		}
+		dx, dy := prediction.Displacement[0], prediction.Displacement[1]
+		step := math.Hypot(dx, dy)
+		if step < .125 || g.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, step) != "" ||
+			g.DoorMoveHazard(s.Movers, s.Self, dx, dy) != "" ||
+			g.HasStaticLethalLasers() && p.laserCommandUnsafe(s, candidate) {
+			continue
+		}
+		return candidate, true
+	}
+	return cmd, false
 }

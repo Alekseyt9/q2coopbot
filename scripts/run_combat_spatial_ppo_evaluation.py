@@ -26,14 +26,18 @@ def main():
         family_plan=read(bindings[0]['plan']);families=[t['episode']['id'] for t in family_plan['tasks']];assert len(families)==len(set(families))==20
         os.environ['GOCACHE']=str(repo/'workspace/build/go-cache');os.environ['GOTOOLCHAIN']='auto'
         plans=[];entries=[]
+        # Rebuild against the current execution/feature contract before freezing
+        # plans; an old compiler can emit bindings rejected by today's verifier.
+        compiler=repo/'workspace/build/q2episode-precision-v1.exe'
+        run(['go','build','-buildvcs=false','-o',compiler,'./cmd/q2episode'],out/'build-compiler.log')
         for name,label,source in variants:
             weight=None
             if source:
                 model=read(source);model.update(deterministic=True,sampling_seed=0);weight=out/(name+'-'+label+'-weights.json');save(weight,model)
             branch=out/(name+'-'+label)
-            plan=compile_plan(repo/'workspace/build/q2episode-precision-v1.exe',template['registry_path'],repo,weight,branch,'validation',families,a.seed_offset);plans.append(plan)
+            plan=compile_plan(compiler,template['registry_path'],repo,weight,branch,'validation',families,a.seed_offset);plans.append(plan)
             entries.append(dict(model=name,label=label,root=str(branch/'capture'),plan=str(plan),plan_sha256=sha(plan),source_weights_sha256=sha(source) if source else None,deterministic_weights_sha256=sha(weight) if weight else None))
-        save(out/'protocol.json',dict(version='combat_spatial_ppo_validation_v1',evaluations=entries,families=families,total_episodes=480,episodes_per_model=80,slots=16,timescale=2,validation_seed_offset=a.seed_offset,comparison_reference='firebc-baseline',comparison_stage='spatial_own_policy_cuda_ppo',training=training,processing_report_sha256=sha(processing/'report.json'),scope='Two spatial BC parents before/after fresh native-reward PPO updating whole actor/value/std. Paired validation conditions reused for development across20 families, not untouched final test. FireBC/rules controls; no automatic promotion.'))
+        save(out/'protocol.json',dict(version='combat_spatial_ppo_validation_v1',evaluations=entries,families=families,total_episodes=480,episodes_per_model=80,slots=16,timescale=2,validation_seed_offset=a.seed_offset,comparison_reference='firebc-baseline',comparison_stage='spatial_own_policy_cuda_ppo',training=training,processing_report_sha256=sha(processing/'report.json'),scope='Two spatial parents before/after fresh native-reward PPO updating whole actor/value/std. Same current movement guard for all variants. Paired validation development conditions across20 families, not untouched final test. FireBC/rules controls; no automatic promotion.'))
         save(out/'progress.json',dict(stage='paired_native_evaluation',episodes=480))
         pool(repo,repo/'workspace/tools/dev_tools/powershell-7.5.3/runtime/pwsh.exe',plans,out/'pool',out/'evaluation.log')
         manifests=sorted(pathlib.Path(entries[0]['root']).glob('case-*/s-*/manifest.json'));assert len(manifests)==80;manifest=read(manifests[0])

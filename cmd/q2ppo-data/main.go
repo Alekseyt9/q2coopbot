@@ -65,6 +65,9 @@ type row struct {
 	Frame         int                   `json:"frame"`
 	NextFrame     int                   `json:"next_frame"`
 	Interventions []policy.Intervention `json:"interventions"`
+	NextFeatures  []float64             `json:"next_features,omitempty"`
+	NextReset     bool                  `json:"next_reset"`
+	BootstrapZero bool                  `json:"bootstrap_zero"`
 }
 
 func main() {
@@ -78,6 +81,7 @@ func run() error {
 	merge := flag.String("merge", "", "comma-separated verified rollout directories from the same frozen policy")
 	out := flag.String("out", "", "fresh directory")
 	model := flag.String("model", "", "frozen original PPO model")
+	cudaOnly := flag.Bool("cuda-only", false, "native/features only; require CUDA finalization before merge or training")
 	flag.Parse()
 	if *merge != "" {
 		return trainingepisodes.MergeRollouts(strings.Split(*merge, ","), *out)
@@ -139,7 +143,11 @@ func run() error {
 	if e = os.Mkdir(*out, 0755); e != nil {
 		return e
 	}
-	f, e := os.Create(filepath.Join(*out, "rollout.jsonl"))
+	rolloutName := "rollout.jsonl"
+	if *cudaOnly {
+		rolloutName = "native-rollout.jsonl"
+	}
+	f, e := os.Create(filepath.Join(*out, rolloutName))
 	if e != nil {
 		return e
 	}
@@ -370,7 +378,10 @@ func run() error {
 				return fmt.Errorf("missing or foreign on-policy sample")
 			}
 			if s.Observation.Identity.Life == 1 && s.Owner == "provider" && s.Provider == p.Version() && s.Sample != nil {
-				if e = p.VerifyMemory(s.Observation, *s.Sample); e != nil {
+				if !*cudaOnly {
+					e = p.VerifyMemory(s.Observation, *s.Sample)
+				}
+				if e != nil {
 					return e
 				}
 				if contextEncoder != nil {
@@ -391,19 +402,29 @@ func run() error {
 			if reward.Step != s.Index || s.Sample.SamplingSeed != int64(r.Seed) {
 				return fmt.Errorf("sample/reward identity")
 			}
-			a, lp, value, e := p.Review(s.Observation, *s.Sample)
+			a, e := p.ActionForSample(s.Observation, *s.Sample)
 			if e != nil {
 				return e
 			}
-			if !reflect.DeepEqual(a, s.Action) || math.Abs(lp-s.Sample.LogProbability) > 1e-8 || math.Abs(value-s.Sample.Value) > 1e-8 {
+			if !reflect.DeepEqual(a, s.Action) {
 				return fmt.Errorf("behavior sample altered")
+			}
+			if !*cudaOnly {
+				_, lp, value, err := p.Review(s.Observation, *s.Sample)
+				if err != nil {
+					return err
+				}
+				if math.Abs(lp-s.Sample.LogProbability) > 1e-8 || math.Abs(value-s.Sample.Value) > 1e-8 {
+					return fmt.Errorf("behavior probability/value altered")
+				}
 			}
 			features, e := policy.FeaturesForVersion(s.Observation, p.FeatureVersion())
 			if e != nil {
 				return e
 			}
 			nv := 0.0
-			if !s.Terminal && !(manifest.Reward.HasKillReward() && s.Truncated && s.Reason == "control_handoff") {
+			zero := s.Terminal || manifest.Reward.HasKillReward() && s.Truncated && s.Reason == "control_handoff"
+			if !*cudaOnly && !zero {
 				nv, e = p.ValueAfter(s.Observation, *s.Sample, *s.Next)
 				if e != nil {
 					return e
@@ -412,7 +433,16 @@ func run() error {
 			if s.Terminal {
 				terminals++
 			}
-			if e = enc.Encode(row{features, nv, *s.Sample, *reward.Score, s.Terminal, s.Truncated, r.Seed, s.Index, s.Observation.Identity.Frame, s.Next.Identity.Frame, s.Interventions}); e != nil {
+			exported := row{Features: features, NextValue: nv, Sample: *s.Sample, Reward: *reward.Score, Terminal: s.Terminal, Truncated: s.Truncated, Seed: r.Seed, Index: s.Index, Frame: s.Observation.Identity.Frame, NextFrame: s.Next.Identity.Frame, Interventions: s.Interventions}
+			if *cudaOnly {
+				exported.NextFeatures, e = policy.FeaturesForVersion(*s.Next, p.FeatureVersion())
+				if e != nil {
+					return e
+				}
+				exported.NextReset = !policy.SameLife(s.Observation.Identity, s.Next.Identity) || s.Next.Identity.Frame != s.Observation.Identity.Frame+1
+				exported.BootstrapZero = zero
+			}
+			if e = enc.Encode(exported); e != nil {
 				return e
 			}
 			count++
@@ -430,11 +460,17 @@ func run() error {
 	if e = f.Sync(); e != nil {
 		return e
 	}
-	rolloutSHA, e := sha(filepath.Join(*out, "rollout.jsonl"))
+	rolloutSHA, e := sha(filepath.Join(*out, rolloutName))
 	if e != nil {
 		return e
 	}
 	metadata := map[string]any{"version": "combat_ppo_rollout_v1", "feature_version": behavior.FeatureVersion(), "reward_config_sha256": strings.ToLower(manifest.RewardSHA), "reward_version": manifest.Reward.Version, "aim_gamma": manifest.Reward.AimGamma, "training_monster_health": manifest.TrainingHealth, "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE; v2 verified control handoff retains reward with zero segment bootstrap; full world reset equivalence unproven"}
+	if *cudaOnly {
+		metadata["version"] = "combat_ppo_native_cuda_pending_v1"
+		metadata["numerical_verification"] = "cuda_pending"
+		metadata["native_rollout_sha256"] = rolloutSHA
+		delete(metadata, "rollout_sha256")
+	}
 	if contextFile != nil {
 		if e = contextFile.Sync(); e != nil {
 			return e
@@ -448,6 +484,6 @@ func run() error {
 		metadata["sequence_rows"] = contextRows
 	}
 	data, _ := json.MarshalIndent(metadata, "", "  ")
-	fmt.Printf("PPO rollout verified: rows=%d terminal=%d policy=%s\n", count, terminals, behavior.Version())
+	fmt.Printf("PPO native export: rows=%d terminal=%d policy=%s CUDA_pending=%v\n", count, terminals, behavior.Version(), *cudaOnly)
 	return os.WriteFile(filepath.Join(*out, "report.json"), data, 0644)
 }

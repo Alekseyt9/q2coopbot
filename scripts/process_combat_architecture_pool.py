@@ -65,6 +65,7 @@ def main():
     ap.add_argument('--retry-port',type=int,default=34400)
     ap.add_argument('--export-workers',type=int,default=4)
     ap.add_argument('--resume',action='store_true')
+    ap.add_argument('--cuda-only-export',action='store_true',help='Native/features export, then CUDA numerical verification and exact next-state bootstrap')
     args=ap.parse_args()
     repo=pathlib.Path(__file__).resolve().parents[1]
     capture=args.capture_root.resolve(); out=args.out.resolve()
@@ -108,6 +109,8 @@ def main():
         python_sources={p.name:sha(p) for p in snapshots.glob('*.py')},
         allocated_episodes=len(expected),final_test_deferred=True,
         scope='Own-policy native corpus; failed attempts excluded and retried; equal allocated episodes, actual eligible transitions reported separately.')
+    if args.cuda_only_export:
+        protocol['numerical_verification']='cuda_verified_v1'
     if args.resume:
         assert protocol==read(out/'protocol.json'),'Frozen processing inputs changed'
         for source,target in [(args.config,'config.json'),(args.exporter,'q2ppo-data.exe'),(args.anchor,'anchor.json'),(args.bank,'bank.json')]:
@@ -211,9 +214,15 @@ def main():
                 exports.append((case,model_root/('rollout-'+str(t))))
             save(out/'progress.json',dict(stage='native-export',model=binding['id'],cases=len(exports)))
             with concurrent.futures.ThreadPoolExecutor(max_workers=args.export_workers) as workers:
-                futures=[workers.submit(run,[out/'q2ppo-data.exe','--batch',case,'--model',binding['model'],'--out',export],
+                futures=[workers.submit(run,[out/'q2ppo-data.exe','--batch',case,'--model',binding['model'],'--out',
+                         export.with_name(export.name+'-native') if args.cuda_only_export else export]
+                         +(['--cuda-only'] if args.cuda_only_export else []),
                          model_root/('export-'+str(i)+'.log')) for i,(case,export) in enumerate(exports)]
                 for future in futures:future.result()
+            if args.cuda_only_export:
+                for i,(_,export) in enumerate(exports):
+                    run([sys.executable,snapshots/'finalize_combat_cuda_rollout.py','--model',binding['model'],
+                         '--data',export.with_name(export.name+'-native'),'--out',export],model_root/('cuda-finalize-'+str(i)+'.log'))
             run([out/'q2ppo-data.exe','--merge',','.join(str(e) for _,e in exports),'--out',model_root/'rollout'],model_root/'merge.log')
             run([pwsh,'-NoProfile','-File',repo/'scripts/compress_completed_combat_streams.ps1',
                  '-Root',model_root],model_root/'compress.log')

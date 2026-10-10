@@ -256,3 +256,27 @@ Center-hand muzzle queryv2 реализован и обучен100 CUDA epochs.5
 Расширенная проверка400/400 завершена со строгим proof: instant47/80, postmove53/80, FireBC49/80, rules67/80. Улучшение postmove на blaster25→31/40 сопровождается MG регрессией24→22/40 и base2 регрессией25→22/32. Instant как общее улучшение отклонён; postmove остаётся исследовательским кандидатом, baseline не заменён. Сбор160 новых train108 own-policy боёв для обоих PPO вариантов начался; CUDA обучение и480 paired проверок стоят в последовательной очереди. Полные результаты: `docs/testing/combat_spatial_broad_evaluation_20261010.md`.
 
 Spatial PPO update1 для обеих моделей завершён на GPU: по10 принятых actor steps,5877/6206 eligible transitions, KL0.004999/0.004859.16 failed native captures заменены проверенными повторами; resume processor сохранил sealed Instant update при исправлении отсутствующего optional seed metadata. CUDA checkpoint actor/value/std/Adam audit обоих passed. Запущена480-battle paired evaluation v3,16slots ×2; качество PPO и final-test превосходство пока не установлены. Подробности `docs/testing/combat_spatial_ppo_20261010.md`.
+
+Обновление 2026-10-10: все480 проверок завершены. Instant BC→PPO47→51/80,
+Postmove53→51/80, FireBC49/80, rules70/80. Превосходство над правилами не
+подтверждено; Postmove PPO update1 не улучшил родителя. В отдельной far96
+проверке Instant13→13/16, Postmove12→13/16, FireBC13/16, rules14/16.
+Результаты и ограничения повторяемости:
+`docs/testing/combat_spatial_ppo_evaluation_20261010.md` и
+`docs/testing/combat_distance_curriculum_20261010.md`.
+
+По пользовательским демкам найдено полное обнуление диагонального движения
+у стен. Исправленный фильтр сохраняет безопасную составляющую исходной
+команды модели с повторной проверкой геометрии и инерции. В16 повторных боях
+неподвижные кадры снизились72.93→61.16%, но побед осталось8/16 и средний
+полученный урон вырос63.69→67.25. Это исправление исполнения, не улучшение
+качества модели. Подробности `docs/testing/combat_movement_component_20261010.md`.
+
+Начат следующий цикл:160 свежих train112..115 боёв на исправленном фильтре,
+по80 для Instant/Postmove. Возобновление из sealed PPO update1 с Adam;
+объектив/config не меняются. Новый путь экспорта сохраняет native proof и
+проверяет likelihood/value/memory/bootstrap на CUDA, без Go numerical replay.
+После обучения в очередь поставлена480-battle validation28 проверка прежних
+и новых весов под одним исправленным фильтром, с FireBC/rules контролями.
+Результатов этого нового цикла пока нет. Подробности
+`docs/testing/combat_cuda_native_export_20261010.md`.

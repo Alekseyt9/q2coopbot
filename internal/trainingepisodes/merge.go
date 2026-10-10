@@ -35,7 +35,7 @@ func MergeRollouts(dirs []string, out string) error {
 		if meta["version"] != "combat_ppo_rollout_v1" {
 			return fmt.Errorf("unsupported rollout")
 		}
-		keys := []string{"version", "feature_version", "reward_config_sha256", "reward_version", "aim_gamma", "training_monster_health", "policy_version", "model_sha256", "recurrent_version"}
+		keys := []string{"version", "feature_version", "reward_config_sha256", "reward_version", "aim_gamma", "training_monster_health", "policy_version", "model_sha256", "recurrent_version", "numerical_verification"}
 		if reference == nil {
 			reference = meta
 		} else {
@@ -139,6 +139,9 @@ func MergeRollouts(dirs []string, out string) error {
 	reference["terminals"] = terminals
 	reference["source_sha256"] = sources
 	reference["members"] = members
+	// Per-case CUDA receipts are pinned in source_sha256; a merged corpus has
+	// no single per-case verification file representing every member.
+	delete(reference, "cuda_verification_sha256")
 	reference["scope"] = "Joint fresh on-policy curriculum batch; all native receipts pinned; per-episode seeds and memory context retained. Sample share follows eligible transitions."
 	h, err := Hash(filepath.Join(out, "rollout.jsonl"))
 	if err != nil {
