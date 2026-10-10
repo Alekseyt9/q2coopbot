@@ -59,6 +59,9 @@ func TestCampaignGroupLoadoutsHaveDisjointSeeds(t *testing.T) {
 		if ep.Recipe.Loadout != loadout {
 			t.Fatal("incorrect inventory")
 		}
+		if !reflect.DeepEqual(ep.Modes, []string{"rules", "learned"}) || ep.validate() != nil {
+			t.Fatal("group inventory must support both ordinary rules and learned evaluation")
+		}
 		for _, split := range splitNames {
 			current := ep.Splits[split]
 			for _, old := range ranges {

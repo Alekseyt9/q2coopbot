@@ -817,7 +817,7 @@ func (c *Client) run(ctx context.Context) error {
 			// synchronous reset barrier. This does not enable combat decisions.
 			observeInventory := !c.idle || c.testSynchronous && c.testCombatBarrier || c.scenario != nil && c.scenario.Scenario.ActorInventory
 			if !safetyStop && observeInventory && (!c.planner.testSetupHold || c.testWalkThenPlan) && now.Sub(c.planner.World.Updated) <= 300*time.Millisecond {
-				if !directCombat && !c.planner.testSetupHold && !c.idle && !pairSetup && !c.testProjectileComparison && !multiWeaponFixture(c.testWeaponSwitchFixture) && c.testWeaponSwitchFixture != "parasite_shotgun" && c.testWeaponSwitchFixture != "parasite_machinegun" && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
+				if !directCombat && !c.planner.testSetupHold && !c.idle && !pairSetup && !c.testProjectileComparison && (!multiWeaponFixture(c.testWeaponSwitchFixture) || c.combatControl.mode == "rules" && c.testCombatGo) && c.testWeaponSwitchFixture != "parasite_shotgun" && c.testWeaponSwitchFixture != "parasite_machinegun" && !(c.testWeaponSwitchFixture == "hand_grenade_observe" || handGrenadeArmFixture(c.testWeaponSwitchFixture) && !c.testHandGrenadeArmDone) {
 					if !c.planner.grenadeThrowPending(c.planner.World.Snapshot) && !c.planner.grenadeSelectionPending(c.planner.World.Snapshot) {
 						buttonWeapon := c.planner.button != nil && c.planner.button.action == "shoot"
 						if buttonWeapon {

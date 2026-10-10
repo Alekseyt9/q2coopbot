@@ -18,7 +18,8 @@ def main():
     assert before['version']==after['version']=='combat_architecture_checkpoint_v1'
     assert before['architecture']==after['architecture'] and before['config']==after['config']
     assert after['actor_training']==dict(scope='decisions',learning_rate=report['actor_training']['learning_rate'])
-    assert report['device']=='cuda' and report['actor_scope_fork']
+    assert report['device']=='cuda'
+    assert report['actor_scope_fork'] or before.get('actor_training')==after['actor_training'], 'Expected explicit scope fork or same-scope continuation'
     assert report['resume_sha256']==sha(args.before) and report['weights_sha256']==after['weights_sha256']
     assert before['weights_sha256']==report['behavior_sha256']
     assert after['consumed_rollouts']==before['consumed_rollouts']+[report['rollout_sha256']]

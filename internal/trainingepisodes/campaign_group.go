@@ -104,7 +104,7 @@ func CampaignGroupRecipesForLoadout(root string, perMap int, maps, classes []str
 		parent.Title += " / group " + strings.Join(labels, ", ")
 		parent.Recipe.Mixed, parent.Recipe.Loadout = true, loadout
 		parent.Recipe.RewardConfig = "scripts/scenarios/combat-reward-selected-aim-v8.json"
-		parent.Modes = []string{"learned"}
+		parent.Modes = []string{"rules", "learned"}
 		parent.Generator.Kind = "campaign-ground-group-v1"
 		parent.InitialState = "Isolated stock-health distinct-class ground group; Super Shotgun initial, MG/Shotgun/Blaster owned; native no-infighting fixture"
 		if loadout != "weapons-ssg" {

@@ -18,7 +18,16 @@ def save(path, value):
     path=pathlib.Path(path)
     pending=path.with_name(path.name+'.partial')
     pending.write_text(json.dumps(value,indent=2,allow_nan=False),encoding='utf-8')
-    pending.replace(path)
+    # Windows readers can briefly deny rename/delete sharing. Keep the old
+    # complete JSON visible and retry only the atomic publication operation.
+    for attempt in range(51):
+        try:
+            pending.replace(path)
+            return
+        except PermissionError as error:
+            if getattr(error,'winerror',None) not in (5,32,33) or attempt == 50:
+                raise
+            time.sleep(.1)
 
 
 def run(command, log):

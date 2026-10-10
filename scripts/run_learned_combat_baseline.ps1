@@ -32,7 +32,7 @@ $ErrorActionPreference='Stop'
 if($Seed -lt 0 -or [long]$Seed+$Workers*$EpisodesPerWorker-1 -gt 2147483647){throw 'Each independent episode needs its own valid 31-bit game seed'}
 if([long]$Seed+$Workers*$EpisodesPerWorker-1+$PolicySamplingSeedOffset -gt 2147483647){throw 'Effective policy sampling seed exceeds 31-bit range'}
 if($Synchronous -and $Loadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce','weapons-ssg'){throw 'Unsupported synchronous loadout'}
-if($Loadout -in 'weapons','weapons-scarce','weapons-ssg' -and (!$Synchronous -or $CombatMode -ne 'learned' -or $Feedback -or $TrainingMonsterHealth)){throw 'Weapon-choice fixture requires synchronous direct learned control without overrides'}
+if($Loadout -in 'weapons','weapons-scarce','weapons-ssg' -and (!$Synchronous -or $CombatMode -notin 'learned','rules' -or $Feedback -or $TrainingMonsterHealth)){throw 'Weapon-choice fixture requires synchronous rules or direct learned control without overrides'}
 if($Loadout -eq 'machinegun' -and (!$Synchronous -or $Feedback -or $TrainingMonsterHealth)){throw 'Machinegun requires synchronous capture without health/feedback overrides'}
 if($Loadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){throw 'Shotgun exercise requires synchronous rules'}
 if($TeacherVertical -and (!$Synchronous -or $CombatMode -ne 'rules' -or $Loadout -ne 'shotgun' -or $Feedback)){throw 'Vertical exercise requires synchronous fixed Shotgun rules without feedback'}
@@ -67,7 +67,7 @@ $remoteProvider=$false
 $providerKind=$null
 if($ProviderFile){$providerKind=(Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).kind;$remoteProvider=($providerKind -eq 'combat_remote_v1')}
 $ppoProvider=($providerKind -eq 'combat_ppo_v1')
-if($Loadout -in 'weapons','weapons-scarce','weapons-ssg' -and (!$ppoProvider -or (Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).weapon_head -ne 'combat_masked_weapon_v1')){throw 'Weapon-choice fixture requires a versioned PPO weapon head'}
+if($CombatMode -eq 'learned' -and $Loadout -in 'weapons','weapons-scarce','weapons-ssg' -and (!$ppoProvider -or (Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).weapon_head -ne 'combat_masked_weapon_v1')){throw 'Learned weapon-choice fixture requires a versioned PPO weapon head'}
 $trainedProvider=$providerKind -in @('combat_bc_mlp_v1','combat_ppo_v1')
 if($ppoProvider -and !$Synchronous){throw 'PPO pilot requires synchronous mode'}
 if($remoteProvider -and !$Synchronous){throw 'Remote policy requires -Synchronous'}

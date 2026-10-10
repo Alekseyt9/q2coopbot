@@ -215,9 +215,6 @@ func (e Episode) validate() error {
 		switch e.Recipe.Loadout {
 		case "blaster", "machinegun":
 		case "weapons", "weapons-scarce", "weapons-ssg":
-			if seen["rules"] {
-				return fmt.Errorf("fixed MG/multiweapon teacher is unsupported by current harness")
-			}
 		default:
 			return fmt.Errorf("unsupported loadout")
 		}

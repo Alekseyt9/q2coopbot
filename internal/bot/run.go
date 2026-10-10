@@ -201,8 +201,8 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	if multiWeaponFixture(cfg.TestWeaponSwitchFixture) {
 		p, ok := combatProvider.(*policy.PPO)
-		if !cfg.TestSynchronous || cfg.CombatMode != "learned" || !ok || p.WeaponHeadVersion() != policy.WeaponHeadVersion {
-			return fmt.Errorf("multiweapon fixture requires synchronous direct PPO with the masked weapon head")
+		if !cfg.TestSynchronous || cfg.CombatMode != "rules" && (cfg.CombatMode != "learned" || !ok || p.WeaponHeadVersion() != policy.WeaponHeadVersion) {
+			return fmt.Errorf("multiweapon fixture requires synchronous rules or direct PPO with the masked weapon head")
 		}
 	}
 	if closer, ok := combatProvider.(interface{ Close() error }); ok {

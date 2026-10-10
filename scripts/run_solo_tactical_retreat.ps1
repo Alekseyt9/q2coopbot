@@ -33,7 +33,7 @@ if($ParasiteWeapon -and ($Recovery -or $CornerEscape -or $Group -or $GroupRetrea
 if(($ParasiteMixed -or $ParasiteHealthKit) -and !$ParasiteWeapon){throw 'Parasite variants require ParasiteWeapon'}
 if($RequireMixedDetour -and (!$ParasiteMixed -or $ParasiteMixedClass -ne 'monster_gunner')){throw 'Required mixed detour needs observed Gunner/Parasite fixture'}
 if($Synchronous -and (!$Rules -or !$CombatCapture -or !$ParasiteWeapon -or $ParasiteLoadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce','weapons-ssg')){throw 'Unsupported synchronous equipment'}
-if($ParasiteLoadout -in 'weapons','weapons-scarce','weapons-ssg' -and (!$Synchronous -or $CombatMode -ne 'learned' -or $TrainingMonsterHealth)){throw 'Weapon-choice fixture requires synchronous direct learned control'}
+if($ParasiteLoadout -in 'weapons','weapons-scarce','weapons-ssg' -and (!$Synchronous -or $CombatMode -notin 'learned','rules' -or $TrainingMonsterHealth)){throw 'Weapon-choice fixture requires synchronous rules or direct learned control'}
 if($ParasiteLoadout -eq 'machinegun' -and ((!$Synchronous -and !$GuardTeammatePosition) -or $TrainingMonsterHealth)){throw 'Fixed Machinegun requires synchronous capture or the explicit real-time guard probe without health override'}
 if($ParasiteLoadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){throw 'Fixed Shotgun exercise requires synchronous rules'}
 if($ParasiteFixture -ne 'standard' -and (!$Synchronous -or !$ParasiteWeapon -or $ParasiteMixed -or $ParasiteHealthKit -or $ParasiteHealth -ne 100 -or $TrainingMonsterHealth -or $ParasiteLoadout -ne 'blaster' -or $CombatMode -ne 'learned')){throw 'Remaining-Parasite fixture requires stock isolated direct synchronous Blaster'}
