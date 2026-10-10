@@ -144,11 +144,12 @@
           100
         ]
       }
-    }
+    },
+    "seed_revision": 1
   },
   "version": 1,
   "id": "campaign-hangar1-site-01-machinegun",
-  "revision": 1,
+  "revision": 2,
   "title": "hangar1 encounter 83: monster_infantry / machinegun",
   "status": "runnable",
   "map": "hangar1",
@@ -188,7 +189,7 @@
   "recipe": {
     "runner": "combat-baseline",
     "loadout": "machinegun",
-    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
+    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
   },
   "missing": []
 }

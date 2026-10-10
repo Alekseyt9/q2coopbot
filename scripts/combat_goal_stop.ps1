@@ -1,6 +1,6 @@
 # Supervisor-only native truth. This file never changes policy observations.
 function Get-CombatGoalReceipt($Row, $Events, $Release, [string[]]$Classes, [string]$Map='base1') {
-    if($Map -notin @('base1','base2') -or !$Row -or !$Release -or $Row.health -le 0 -or $Row.map -ne $Map -or $Row.connection -ne 1 -or $Row.combat_policy.observation.identity.life -ne 1){return $null}
+    if($Map -notmatch '^[a-z][a-z0-9_]{0,31}$' -or !$Row -or !$Release -or $Row.health -le 0 -or $Row.map -ne $Map -or $Row.connection -ne 1 -or $Row.combat_policy.observation.identity.life -ne 1){return $null}
     if($Row.spawncount -ne $Release.spawncount -or $Row.observation_frame -le $Release.frame){return $null}
     $live=@($Events | Where-Object {$_.spawncount -eq $Release.spawncount -and $_.map -eq $Row.map -and $_.frame -gt $Release.frame})
     if(@($live | Where-Object {$_.target -eq $Row.self_entity -and $_.target_class -eq 'player' -and $_.killed}).Count){return $null}

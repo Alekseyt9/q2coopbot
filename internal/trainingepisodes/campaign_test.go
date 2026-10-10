@@ -6,6 +6,37 @@ import (
 	"testing"
 )
 
+func TestCampaignMapSelectionRejectsInvalidAndDuplicateMaps(t *testing.T) {
+	for _, maps := range [][]string{nil, {"../base1"}, {"base1", "base1"}, {"missing_map"}} {
+		if _, err := CampaignRecipesForMaps("unused", 1, maps); err == nil {
+			t.Fatalf("invalid map selection accepted: %v", maps)
+		}
+	}
+}
+
+func TestCampaignMapSubsetPreservesSeedRanges(t *testing.T) {
+	root, _ := filepath.Abs("../..")
+	if _, err := loadGenerationWorld(root, "base3"); err != nil {
+		t.Skip(err)
+	}
+	selected, err := CampaignRecipesForMaps(root, 1, []string{"base3", "base1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := CampaignRecipes(root, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, split := range splitNames {
+		if selected[1].Splits[split] != legacy[0].Splits[split] {
+			t.Fatalf("subset changed old %s seeds", split)
+		}
+		if selected[0].Splits[split].Start < 2200000 {
+			t.Fatal("base3 reused base1/base2 seed range")
+		}
+	}
+}
+
 func TestCampaignSitesUseDistinctOriginalGeometry(t *testing.T) {
 	root, _ := filepath.Abs("../..")
 	w, err := loadGenerationWorld(root, "base1")

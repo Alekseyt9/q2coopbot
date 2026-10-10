@@ -1,6 +1,6 @@
 # Supervisor-only candidate; the exporter must verify ordered native terminal and reward.
 function Get-CombatFirstLifeDeathReceipt($Row, $Events, $Release, [string]$Map='base1') {
-    if($Map -notin @('base1','base2') -or !$Row -or !$Release -or !$Row.combat_policy.observation){return $null}
+    if($Map -notmatch '^[a-z][a-z0-9_]{0,31}$' -or !$Row -or !$Release -or !$Row.combat_policy.observation){return $null}
     $identity=$Row.combat_policy.observation.identity
     if($null -eq $Row.health -or $null -eq $Row.combat_policy.observation.health -or $Row.health -ne $Row.combat_policy.observation.health){return $null}
     if($Row.health -gt 0 -or $identity.life -ne 1 -or $Row.connection -ne 1 -or $Row.map -ne $Map){return $null}

@@ -144,11 +144,12 @@
           100
         ]
       }
-    }
+    },
+    "seed_revision": 1
   },
   "version": 1,
   "id": "campaign-jail2-site-01-weapons",
-  "revision": 1,
+  "revision": 2,
   "title": "jail2 encounter 191: monster_infantry / weapons",
   "status": "runnable",
   "map": "jail2",
@@ -187,7 +188,7 @@
   "recipe": {
     "runner": "combat-baseline",
     "loadout": "weapons",
-    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
+    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
   },
   "missing": []
 }

@@ -144,11 +144,12 @@
           100
         ]
       }
-    }
+    },
+    "seed_revision": 1
   },
   "version": 1,
   "id": "campaign-bunk1-site-02-blaster",
-  "revision": 1,
+  "revision": 2,
   "title": "bunk1 encounter 246: monster_soldier / blaster",
   "status": "runnable",
   "map": "bunk1",
@@ -188,7 +189,7 @@
   "recipe": {
     "runner": "combat-baseline",
     "loadout": "blaster",
-    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
+    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
   },
   "missing": []
 }

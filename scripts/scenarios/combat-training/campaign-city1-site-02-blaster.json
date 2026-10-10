@@ -144,11 +144,12 @@
           100
         ]
       }
-    }
+    },
+    "seed_revision": 1
   },
   "version": 1,
   "id": "campaign-city1-site-02-blaster",
-  "revision": 1,
+  "revision": 2,
   "title": "city1 encounter 537: monster_soldier / blaster",
   "status": "runnable",
   "map": "city1",
@@ -188,7 +189,7 @@
   "recipe": {
     "runner": "combat-baseline",
     "loadout": "blaster",
-    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
+    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
   },
   "missing": []
 }

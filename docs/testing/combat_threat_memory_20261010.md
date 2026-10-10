@@ -95,4 +95,15 @@ updates_completed6, final approx KL0.004999542. Weights SHA
 `c40ff38e755d2dd49f4a45e9c5041c366de10b3f0c6e37119d1ed8591fec8aba`.
 `threat-input-learning.json`: CUDA подтвердил ненулевые новые columns:
 actor max abs1.379e-5, critic0.05877. Это доказательство участия новых входов
-в обучении, не повышения качества. Новая held-out evaluation необходима.
+в обучении, не повышения качества.
+
+## Итог held-out v2
+
+`coop-threat-eval-v2-20261010`: 96/96 accepted/CUDA, 32 одинаковых сида
+186700..186731 на каждый из трёх вариантов. Исходный v8: 19 learner kills,
+13 episodes with participant death. V9 до обучения: 19/13; после корректного
+update v2: 18/14. Улучшение не подтверждено; дообученные веса не promoted.
+Все три ветки использовали одинаковый SHA клиентского бинарника.
+Diagnostic evaluation v1 завершилась ошибкой несовпадения client binary SHA
+и исключена из quality evidence. Следующие evaluations фиксируют один
+клиент до запуска всех веток.

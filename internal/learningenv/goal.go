@@ -56,7 +56,7 @@ func VerifyGoalStopForClasses(g GoalStop, release *CombatRelease, events []Damag
 	if len(maps) == 1 {
 		expectedMap = maps[0]
 	}
-	if expectedMap != "base1" && expectedMap != "base2" {
+	if expectedMap == "" {
 		return fail()
 	}
 	id := observed.Identity

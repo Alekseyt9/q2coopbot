@@ -238,7 +238,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	if cfg.CheckpointControl != "" && (!cfg.FramePaced || cfg.Host != "127.0.0.1") {
 		return fmt.Errorf("checkpoint control requires frame-paced IPv4 loopback harness")
 	}
-	if cfg.TestCombatBarrier && (!cfg.FramePaced || cfg.TestTeleport == "" || cfg.TestTeleportMap != "base1" && !(cfg.TestSynchronous && cfg.TestTeleportMap == "base2")) {
+	if cfg.TestCombatBarrier && (!cfg.FramePaced || cfg.TestTeleport == "" || cfg.TestTeleportMap != "base1" && !(cfg.TestSynchronous && regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`).MatchString(cfg.TestTeleportMap))) {
 		return fmt.Errorf("combat barrier requires frame pacing and a supported fixture map teleport")
 	}
 	if cfg.TestCombatOnly && !cfg.TestSynchronous {
