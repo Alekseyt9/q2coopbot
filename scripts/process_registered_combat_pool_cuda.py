@@ -23,7 +23,12 @@ def main():
         parser.add_argument('--'+name, type=pathlib.Path, required=True)
     for name in ('config', 'resume', 'anchor', 'bank'):
         parser.add_argument('--'+name, type=pathlib.Path)
+    parser.add_argument('--actor-head-scope', choices=('all','target'), default='all')
+    parser.add_argument('--target-head-lr', type=float, default=.003)
+    parser.add_argument('--fork-head-scope', action='store_true')
+    parser.add_argument('--plan-index', type=int, help='Process one frozen plan from a multi-model evaluation pool')
     args = parser.parse_args()
+    assert args.config or (args.actor_head_scope == 'all' and not args.fork_head_scope), 'Actor scope requires training'
     repo = pathlib.Path(__file__).resolve().parent.parent
     root, out = args.pool.resolve(), args.out.resolve()
     report = read(root/'report.json')
@@ -35,20 +40,23 @@ def main():
         path = pathlib.Path(binding['path'])
         assert sha(path) == binding['sha256']
         plans.append(read(path))
-    models = {str(pathlib.Path(p['model_path']).resolve()) for p in plans}
+    assert args.plan_index is None or 0 <= args.plan_index < len(plans), 'Invalid plan index'
+    selected_plans = plans if args.plan_index is None else [plans[args.plan_index]]
+    models = {str(pathlib.Path(p['model_path']).resolve()) for p in selected_plans}
     assert len(models) == 1
     model = pathlib.Path(models.pop())
-    assert all(sha(model) == p['model_sha256'] for p in plans)
+    assert all(sha(model) == p['model_sha256'] for p in selected_plans)
     if args.config:
         assert args.resume and args.anchor and args.bank
-        assert all(t['split'] == 'train' for p in plans for t in p['tasks']), 'Validation/test data cannot train'
+        assert all(t['split'] == 'train' for p in selected_plans for t in p['tasks']), 'Validation/test data cannot train'
     assert not out.exists(), 'Fresh processing output required'
     out.mkdir(parents=True)
     pool_sha = sha(root/'report.json')
     try:
         exporter = out/'q2ppo-data.exe'
         run(['go', 'build', '-o', exporter, './cmd/q2ppo-data'], out/'build.log', repo)
-        jobs = sorted(report['jobs'], key=lambda j: j['job'])
+        jobs = sorted((j for j in report['jobs'] if args.plan_index is None or j['plan_index'] == args.plan_index), key=lambda j: j['job'])
+        assert jobs, 'Selected plan has no captures'
         cases = []
         for job in jobs:
             plan = plans[job['plan_index']]
@@ -87,14 +95,19 @@ def main():
              '--out', out/'merged'], out/'merge.log', repo)
         merged = read(out/'merged/report.json')
         result = dict(state='complete', device='cuda', pool_sha256=pool_sha,
+                      selected_plan_index=args.plan_index,
                       model_sha256=sha(model), cases=native_cases, rows=merged['rows'],
                       training_performed=False, promotion='Not evaluated')
         if args.config:
             save(out/'progress.json', dict(stage='gpu-training', rows=merged['rows']))
-            run([sys.executable, repo/'scripts/ppo_recurrent.py', '--model', model,
+            training_command=[sys.executable, repo/'scripts/ppo_recurrent.py', '--model', model,
                  '--data', out/'merged', '--config', args.config.resolve(), '--resume', args.resume.resolve(),
                  '--anchor-model', args.anchor.resolve(), '--retention-bank', args.bank.resolve(),
-                 '--retention-weight', '0', '--bank-weight', '0', '--out', out/'update'], out/'train.log', repo)
+                 '--retention-weight', '0', '--bank-weight', '0', '--out', out/'update',
+                 '--actor-head-scope', args.actor_head_scope, '--target-head-lr', str(args.target_head_lr)]
+            if args.fork_head_scope:
+                training_command.append('--fork-head-scope')
+            run(training_command, out/'train.log', repo)
             update = read(out/'update/report.json')
             assert update['device'] == 'cuda' and update['weights_sha256'] == sha(out/'update/weights.json')
             result.update(training_performed=True, update=update)

@@ -10,7 +10,7 @@ import (
 // not assumed to protect from splash. Custom damage and unseen barrels remain
 // outside this observed-state check.
 func (p *Planner) guardBarrelShot(s quake.Snapshot, cmd quake.UserCmd) quake.UserCmd {
-	if s.Health <= 0 || (s.Weapon != "Blaster" && !machinegunWeapon(s.Weapon) && !shotgunWeapon(s.Weapon)) || cmd.Buttons&1 == 0 {
+	if s.Health <= 0 || (s.Weapon != "Blaster" && !directHitscanWeapon(s.Weapon)) || cmd.Buttons&1 == 0 {
 		return cmd
 	}
 	yaw := float64(int16(uint16(cmd.Yaw)+uint16(s.DeltaAngles[1]))) * 2 * math.Pi / 65536
@@ -20,16 +20,20 @@ func (p *Planner) guardBarrelShot(s quake.Snapshot, cmd quake.UserCmd) quake.Use
 	start[2] += s.EyePoint()[2] - s.Self[2] - 8
 	end := start
 	rangeLimit := 1000.0
-	if machinegunWeapon(s.Weapon) || shotgunWeapon(s.Weapon) {
+	if directHitscanWeapon(s.Weapon) {
 		rangeLimit = 8192
 	}
+	if superShotgunWeapon(s.Weapon) {
+		spread := math.Hypot(1000, 500)
+		rangeLimit = math.Hypot(8192, spread) + math.Hypot(8192, 2*spread)
+	}
 	for i := range start {
-		if !machinegunWeapon(s.Weapon) && !shotgunWeapon(s.Weapon) {
+		if !directHitscanWeapon(s.Weapon) {
 			start[i] += 24 * f[i]
 		}
 		end[i] = start[i] + rangeLimit*f[i]
 	}
-	if p.World.Geometry != nil && !machinegunWeapon(s.Weapon) && !shotgunWeapon(s.Weapon) {
+	if p.World.Geometry != nil && !directHitscanWeapon(s.Weapon) {
 		tr := p.World.Geometry.TraceProjectile(start, end)
 		if tr.Valid {
 			end = tr.End
@@ -44,8 +48,12 @@ func (p *Planner) guardBarrelShot(s quake.Snapshot, cmd quake.UserCmd) quake.Use
 				intersects = intersects || paddedBarrelRay(s.Self, muzzle, barrel.Origin, padding) || paddedBarrelRay(muzzle, tip, barrel.Origin, padding)
 			}
 		}
-		if machinegunWeapon(s.Weapon) || shotgunWeapon(s.Weapon) {
-			intersects = barrelRay(s.Self, start, barrel.Origin) || machinegunBarrelCone(start, end, barrel.Origin)
+		if directHitscanWeapon(s.Weapon) {
+			degrees := 18.0
+			if superShotgunWeapon(s.Weapon) {
+				degrees = 30
+			}
+			intersects = barrelRay(s.Self, start, barrel.Origin) || hitscanBarrelCone(start, end, barrel.Origin, degrees)
 		}
 		if !intersects {
 			continue
@@ -116,6 +124,10 @@ func paddedBarrelRay(from, to, at quake.Vec3, padding float64) bool {
 // its padded observed box; the extra 12 covers muzzle offset/quantization.
 // This neither corrects aim nor assumes central-ray walls block spread rays.
 func machinegunBarrelCone(from, to, at quake.Vec3) bool {
+	return hitscanBarrelCone(from, to, at, 18)
+}
+
+func hitscanBarrelCone(from, to, at quake.Vec3, degrees float64) bool {
 	length := quake.Distance(from, to)
 	if length == 0 {
 		return false
@@ -132,6 +144,6 @@ func machinegunBarrelCone(from, to, at quake.Vec3) bool {
 	if along < -radius || along > length+radius {
 		return false
 	}
-	width := radius + math.Max(0, along)*math.Tan(18*math.Pi/180)
+	width := radius + math.Max(0, along)*math.Tan(degrees*math.Pi/180)
 	return math.Max(0, distance2-along*along) <= width*width
 }

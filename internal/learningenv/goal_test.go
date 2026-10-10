@@ -8,7 +8,7 @@ import (
 )
 
 func TestNativeGoalStopEvidence(t *testing.T) {
-	for _, scenario := range []string{"win", "solo", "missing", "corpse", "prop", "death", "setup", "wrong_world", "unclosed", "forged_target", "second_life"} {
+	for _, scenario := range []string{"win", "solo", "release_frame", "missing", "corpse", "prop", "death", "setup", "wrong_world", "unclosed", "forged_target", "second_life"} {
 		t.Run(scenario, func(t *testing.T) {
 			var g GoalStop
 			if err := json.Unmarshal([]byte(`{"version":"combat_goal_stop_v1","reason":"combat_goal_complete","spawncount":42,"actor":1,"classes":["monster_parasite","monster_gunner"],"kill_frame":20,"observed_frame":21,"health":56,"kills":[{"frame":15,"target":352,"target_class":"monster_parasite"},{"frame":20,"target":343,"target_class":"monster_gunner"}]}`), &g); err != nil {
@@ -24,6 +24,12 @@ func TestNativeGoalStopEvidence(t *testing.T) {
 				g.Classes = g.Classes[:1]
 				g.Kills = g.Kills[:1]
 				g.KillFrame = 15
+			case "release_frame":
+				mixed = false
+				g.Classes = g.Classes[:1]
+				g.Kills = g.Kills[:1]
+				g.KillFrame = 15
+				release.Frame = 15
 			case "missing":
 				events = events[:1]
 			case "corpse":
@@ -45,7 +51,7 @@ func TestNativeGoalStopEvidence(t *testing.T) {
 				o.Identity.Life = 2
 			}
 			err := VerifyGoalStop(g, release, events, o, mixed)
-			if (err == nil) != (scenario == "win" || scenario == "solo") {
+			if (err == nil) != (scenario == "win" || scenario == "solo" || scenario == "release_frame") {
 				t.Fatalf("%s: %v", scenario, err)
 			}
 		})
@@ -79,6 +85,39 @@ func TestGoalStopUsesFrozenFixtureClass(t *testing.T) {
 		events[0].Mod = 21
 		if err := VerifyGoalStopForClasses(goal, release, events, observed, []string{class}); err == nil {
 			t.Fatal("setup telefrag counted as learned kill")
+		}
+	}
+}
+
+func TestGoalStopRequiresEveryGroupMember(t *testing.T) {
+	classes := []string{"monster_parasite", "monster_soldier", "monster_infantry", "monster_gunner"}
+	for _, count := range []int{3, 4} {
+		var goal GoalStop
+		if err := json.Unmarshal([]byte(`{"version":"combat_goal_stop_v1","reason":"combat_goal_complete","spawncount":42,"actor":1,"kill_frame":20,"observed_frame":21,"health":80}`), &goal); err != nil {
+			t.Fatal(err)
+		}
+		goal.Classes = classes[:count]
+		observed := policy.Observation{Identity: policy.Identity{Map: "city1", Spawncount: 42, Actor: 1, Connection: 1, Life: 1, Frame: 21}, Health: 80}
+		release := &CombatRelease{Spawncount: 42, Frame: 10}
+		var events []DamageEvent
+		for i, class := range goal.Classes {
+			events = append(events, DamageEvent{Map: "city1", Spawncount: 42, Frame: 20, Attacker: 1, AttackerClass: "player", Target: 350 + i, TargetClass: class, Mod: 4, HealthBefore: 7, HealthAfter: -1})
+			goal.Kills = append(goal.Kills, struct {
+				Frame  int    `json:"frame"`
+				Target int    `json:"target"`
+				Class  string `json:"target_class"`
+			}{20, 350 + i, class})
+		}
+		if err := VerifyGoalStopForClasses(goal, release, events, observed, classes[:count], "city1"); err != nil {
+			t.Fatal(err)
+		}
+		if VerifyGoalStopForClasses(goal, release, events[:count-1], observed, classes[:count], "city1") == nil {
+			t.Fatal("missing native kill accepted")
+		}
+		goal.Classes = goal.Classes[:count-1]
+		goal.Kills = goal.Kills[:count-1]
+		if VerifyGoalStopForClasses(goal, release, events, observed, classes[:count], "city1") == nil {
+			t.Fatal("receipt omitted required group member")
 		}
 	}
 }

@@ -113,11 +113,16 @@ def main():
     ap.add_argument('--sequence-retention-weight',type=float,default=0.)
     ap.add_argument('--fork-sequence-retention',action='store_true',
                     help='Explicit objective fork preserving actor/critic/Adam for sequence retention')
+    ap.add_argument('--actor-head-scope',choices=('all','target'),default='all')
+    ap.add_argument('--target-head-lr',type=float,default=.003)
+    ap.add_argument('--fork-head-scope',action='store_true',help='Explicit optimizer-scope fork from a resumed checkpoint')
     args=ap.parse_args();training_devices();torch.set_num_threads(2);torch.manual_seed(20261006);torch.use_deterministic_algorithms(True)
     assert all(math.isfinite(w) and w >= 0 for w in (args.retention_weight,args.bank_weight))
     assert math.isfinite(args.sequence_retention_weight) and args.sequence_retention_weight >= 0
     assert args.sequence_retention_spec is not None or args.sequence_retention_weight == 0
     assert not args.fork_sequence_retention or (args.resume and args.sequence_retention_spec)
+    assert not args.fork_head_scope or args.resume
+    assert math.isfinite(args.target_head_lr) and 0 < args.target_head_lr <= .01
     # cuDNN GRU TF32 drifts from Go FP64 by ~2e-3 on real traces.
     # Keep FP32 CUDA training and the existing state parity tolerance.
     torch.backends.cudnn.allow_tf32=False;torch.backends.cuda.matmul.allow_tf32=False
@@ -141,6 +146,8 @@ def main():
         (args.out/'weights.json').write_text(json.dumps(updated,allow_nan=False))
         return
     config=read(args.config);meta=read(args.data/'report.json');validate_objective(config,meta)
+    assert args.actor_head_scope == 'all' or (target_head and not args.sequence_retention_spec)
+    actor_training=dict(scope=args.actor_head_scope,learning_rate=args.target_head_lr if args.actor_head_scope=='target' else config['actor_lr'])
     assert meta['feature_version']==model['feature_version'], 'Rollout feature contract differs'
     key=next(k for k in ('memory','attention','entity_attention') if model.get(k));spec=model[key];entity=key=='entity_attention'
     expected_version={'memory':VERSION,'attention':TEMPORAL,'entity_attention':ENTITY}[key];assert spec['version']==expected_version
@@ -224,13 +231,16 @@ def main():
         if args.sequence_retention_weight:loss=loss+args.sequence_retention_weight*sequence_loss(raw)
         return loss,((ratio-1)-(lp-old)).mean()
     actor_opt=torch.optim.Adam(list(actor.parameters())+[std],lr=config['actor_lr']);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
-    consumed=[];updates=0;total=0;migrations=[]
+    consumed=[];updates=0;total=0;migrations=[];config_forks=[]
     if args.resume:
         cp=torch.load(args.resume,map_location='cpu',weights_only=True)
         migrations=cp.get('model_migrations',[])
+        config_forks=cp.get('training_config_forks',[])
         assert cp['version']=='combat_architecture_checkpoint_v1' and cp['architecture']==expected_version and cp['weights_sha256']==sha(args.model) and cp['config']==config
         assert cp['anchor_sha256']==sha(args.anchor_model) and cp['bank_sha256']==sha(args.retention_bank)
         assert cp.get('retention_weights',[1.,1.])==[args.retention_weight,args.bank_weight]
+        previous_training=cp.get('actor_training',dict(scope='all',learning_rate=config['actor_lr']))
+        assert previous_training == actor_training or args.fork_head_scope, 'Explicit actor scope fork required'
         if not args.fork_sequence_retention:
             assert cp.get('sequence_retention') == sequence_retention, 'Explicit sequence objective fork required'
         for module_name,module in [('actor',actor),('value',value)]:
@@ -244,11 +254,16 @@ def main():
     with torch.no_grad():initial_bank={s:float(bank_loss(s)) for s in bank_tensors}
     with torch.no_grad():sequence_kl_before=float(sequence_loss(raw)) if sequence_retention else None
     trials=[];start=time.perf_counter();parameters=list(actor.parameters())+[std]
+    project=lambda:std.clamp_(-8,1)
+    trainable_actor_parameters=sum(p.numel() for p in parameters)
+    if args.actor_head_scope=='target':
+        from combat_target_head_scope import freeze_target_scope
+        project,trainable_actor_parameters=freeze_target_scope(actor,std,actor_opt)
     for _ in range(config['actor_steps']):
         loss,kl=objective()
         if float(kl.detach())>config['target_kl']:break
         actor_opt.zero_grad();loss.backward();nn.utils.clip_grad_norm_(parameters,config['max_grad_norm'])
-        trial=guarded_actor_step(parameters,actor_opt,objective,loss.detach(),config['actor_lr'],config['target_kl'],lambda:std.clamp_(-8,1));trials.append(trial)
+        trial=guarded_actor_step(parameters,actor_opt,objective,loss.detach(),actor_training['learning_rate'],config['target_kl'],project);trials.append(trial)
         if not trial['accepted']:break
     for _ in range(config['value_steps']):
         prediction,_=compute(value);loss=(prediction[:,0]-ret).square().mean();assert torch.isfinite(loss)
@@ -268,6 +283,8 @@ def main():
     args.out.mkdir(exist_ok=False);durable_json(args.out/'weights.json',updated)
     cp={'version':'combat_architecture_checkpoint_v1','architecture':expected_version,'weights_sha256':sha(args.out/'weights.json'),'config':config,'anchor_sha256':sha(args.anchor_model),'bank_sha256':sha(args.retention_bank),'actor':actor.state_dict(),'value':value.state_dict(),'log_std':std.detach(),'actor_optimizer':actor_opt.state_dict(),'value_optimizer':value_opt.state_dict(),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all(),'consumed_rollouts':consumed+[meta['rollout_sha256']],'updates_completed':updates+1,'total_actor_steps':total+done}
     cp['retention_weights']=[args.retention_weight,args.bank_weight]
+    cp['actor_training']=actor_training
+    if config_forks:cp['training_config_forks']=config_forks
     if sequence_retention:cp['sequence_retention']=sequence_retention
     if migrations:cp['model_migrations']=migrations
     durable_write(args.out/'checkpoint.pt',lambda output:torch.save(cp,output))
@@ -280,6 +297,11 @@ def main():
     report['sequence_retention_kl_before']=sequence_kl_before
     report['sequence_retention_kl_after']=sequence_kl_after
     report['sequence_retention_objective_fork']=args.fork_sequence_retention
+    report['actor_training']=actor_training
+    report['actor_scope_fork']=args.fork_head_scope
+    report['training_config_forks']=config_forks
+    report['trainable_actor_parameters']=trainable_actor_parameters
+    if args.actor_head_scope=='target':report['scope']+=' Projected target rows20:29 only; other actor outputs/encoder/spatial/std and their Adam moments preserved. Output tensor Adam clocks advance for target updates; switching scope requires explicit checkpoint fork.'
     if sequence_retention:
         report['scope']+=' Sequence retention uses pinned train-only rows and frozen initial actor on actual full histories; target/weapon masks and all aim branches included. No zero-memory anchor or validation bank.'
     report['scope']=report['scope'].replace('No learned weapon choice or live promotion.','Masked weapon likelihood enabled only with the explicit V6 weapon head; weapon learning acceptance and live promotion are not established.')

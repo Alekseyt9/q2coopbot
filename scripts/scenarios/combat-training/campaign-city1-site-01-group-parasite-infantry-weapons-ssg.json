@@ -1,0 +1,251 @@
+{
+  "generator": {
+    "site": {
+      "map": "city1",
+      "entity_index": 6,
+      "source_class": "monster_soldier",
+      "source_origin": [
+        -2632,
+        -168,
+        -280
+      ],
+      "bsp_sha256": "459f5312a2346d2e62fc25c0f87d0237844fd2d981c3b0de8efc525907f2c014",
+      "wall_distances": [
+        465,
+        32,
+        22,
+        54,
+        319,
+        172,
+        105,
+        172
+      ]
+    },
+    "version": 1,
+    "kind": "campaign-ground-group-v1",
+    "distributions": {
+      "confirmation": {
+        "player": {
+          "min": [
+            -2813.375,
+            -98.5,
+            -279.875
+          ],
+          "max": [
+            -2805.375,
+            -90.5,
+            -279.875
+          ]
+        },
+        "primary": {
+          "min": [
+            -2628,
+            -170,
+            -279.875
+          ],
+          "max": [
+            -2626,
+            -166,
+            -279.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              -2576,
+              -169,
+              -279.875
+            ],
+            "max": [
+              -2574,
+              -167,
+              -279.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "test": {
+        "player": {
+          "min": [
+            -2813.375,
+            -98.5,
+            -279.875
+          ],
+          "max": [
+            -2805.375,
+            -90.5,
+            -279.875
+          ]
+        },
+        "primary": {
+          "min": [
+            -2632,
+            -170,
+            -279.875
+          ],
+          "max": [
+            -2630,
+            -166,
+            -279.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              -2576,
+              -169,
+              -279.875
+            ],
+            "max": [
+              -2574,
+              -167,
+              -279.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "train": {
+        "player": {
+          "min": [
+            -2813.375,
+            -98.5,
+            -279.875
+          ],
+          "max": [
+            -2805.375,
+            -90.5,
+            -279.875
+          ]
+        },
+        "primary": {
+          "min": [
+            -2640,
+            -170,
+            -279.875
+          ],
+          "max": [
+            -2638,
+            -166,
+            -279.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              -2576,
+              -169,
+              -279.875
+            ],
+            "max": [
+              -2574,
+              -167,
+              -279.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "validation": {
+        "player": {
+          "min": [
+            -2813.375,
+            -98.5,
+            -279.875
+          ],
+          "max": [
+            -2805.375,
+            -90.5,
+            -279.875
+          ]
+        },
+        "primary": {
+          "min": [
+            -2636,
+            -170,
+            -279.875
+          ],
+          "max": [
+            -2634,
+            -166,
+            -279.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              -2576,
+              -169,
+              -279.875
+            ],
+            "max": [
+              -2574,
+              -167,
+              -279.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "id": "campaign-city1-site-01-group-parasite-infantry-weapons-ssg",
+  "revision": 1,
+  "title": "city1 encounter 6: monster_soldier / group parasite, infantry",
+  "status": "runnable",
+  "map": "city1",
+  "scope": "first_life_combat",
+  "goal": "alive_native_kills_then_observed_effect",
+  "monsters": [
+    "monster_parasite",
+    "monster_infantry"
+  ],
+  "geometry": "Original campaign BSP encounter; distinct location; static hull/floor/visibility verified; native doors and movers retained",
+  "initial_state": "Isolated stock-health distinct-class ground group; Super Shotgun initial, MG/Shotgun/Blaster owned; native no-infighting fixture",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 300,
+  "modes": [
+    "learned"
+  ],
+  "ppo_trainable": true,
+  "splits": {
+    "confirmation": {
+      "start": 744230000,
+      "count": 4096
+    },
+    "test": {
+      "start": 744220000,
+      "count": 4096
+    },
+    "train": {
+      "start": 744200000,
+      "count": 4096
+    },
+    "validation": {
+      "start": 744210000,
+      "count": 4096
+    }
+  },
+  "recipe": {
+    "runner": "combat-baseline",
+    "loadout": "weapons-ssg",
+    "mixed": true,
+    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
+  },
+  "missing": []
+}

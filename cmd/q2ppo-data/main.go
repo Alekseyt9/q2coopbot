@@ -124,15 +124,16 @@ func run() error {
 		Valid    bool `json:"provenance_valid"`
 		Complete bool `json:"capture_complete"`
 		Results  []struct {
-			Root      string                 `json:"root"`
-			Seed      int                    `json:"seed"`
-			Valid     bool                   `json:"capture_valid"`
-			Dispatch  bool                   `json:"dispatch_valid"`
-			ConfigSHA string                 `json:"provider_config_sha256"`
-			Worker    int                    `json:"worker"`
-			Mixed     bool                   `json:"fixture_mixed"`
-			Goal      *learningenv.GoalStop  `json:"goal_stop"`
-			Death     *learningenv.DeathStop `json:"death_stop"`
+			Root      string                     `json:"root"`
+			Seed      int                        `json:"seed"`
+			Valid     bool                       `json:"capture_valid"`
+			Dispatch  bool                       `json:"dispatch_valid"`
+			ConfigSHA string                     `json:"provider_config_sha256"`
+			Worker    int                        `json:"worker"`
+			Mixed     bool                       `json:"fixture_mixed"`
+			Fixture   *trainingepisodes.Instance `json:"generated_fixture"`
+			Goal      *learningenv.GoalStop      `json:"goal_stop"`
+			Death     *learningenv.DeathStop     `json:"death_stop"`
 		} `json:"results"`
 	}
 	if e = read(filepath.Join(*batch, "report.json"), &report); e != nil {
@@ -287,7 +288,23 @@ func run() error {
 				}
 			}
 			expectedClasses := []string{cfg.Test.SpawnClass}
-			if r.Mixed {
+			if r.Fixture != nil {
+				var frozen trainingepisodes.Instance
+				path := filepath.Join(*batch, fmt.Sprintf("fixture-%d.json", i))
+				if err = read(path, &frozen); err != nil {
+					return err
+				}
+				if !reflect.DeepEqual(frozen, *r.Fixture) || frozen.EngineSeed != r.Seed || frozen.Map != cfg.Test.TeleportMap || len(frozen.Monsters) == 0 || frozen.Monsters[0].Class != cfg.Test.SpawnClass {
+					return fmt.Errorf("generated goal composition differs from frozen fixture")
+				}
+				if err = remember(path); err != nil {
+					return err
+				}
+				expectedClasses = nil
+				for _, monster := range frozen.Monsters {
+					expectedClasses = append(expectedClasses, monster.Class)
+				}
+			} else if r.Mixed {
 				expectedClasses = append(expectedClasses, "monster_gunner")
 			}
 			if err = learningenv.VerifyGoalStopForClasses(goal, native.Release, events, observed, expectedClasses, cfg.Test.TeleportMap); err != nil {
@@ -403,6 +420,9 @@ func run() error {
 			if manifest.Loadout == "machinegun" || manifest.Loadout == "weapons" || manifest.Loadout == "weapons-scarce" {
 				weapon = "Machinegun"
 			}
+			if manifest.Loadout == "weapons-ssg" {
+				weapon = "Super Shotgun"
+			}
 			proofErr = learningenv.VerifyPostFrameRNG(logFile, r.Seed, manifest.ReleaseFrame, weapon)
 			logFile.Close()
 			if proofErr != nil {
@@ -412,6 +432,9 @@ func run() error {
 				idleFrame := 9
 				if weapon == "Machinegun" {
 					idleFrame = 6
+				}
+				if weapon == "Super Shotgun" {
+					idleFrame = 18
 				}
 				for _, step := range steps {
 					if step.Owner == "provider" {

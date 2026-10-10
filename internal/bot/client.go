@@ -648,6 +648,9 @@ func (c *Client) run(ctx context.Context) error {
 					} else if multiWeaponFixture(c.testWeaponSwitchFixture) {
 						bullets, shells := multiWeaponStock(c.testWeaponSwitchFixture)
 						setup = []string{"give Machinegun", fmt.Sprintf("give Bullets %d", bullets), "give Shotgun", fmt.Sprintf("give Shells %d", shells), "use Machinegun"}
+						if c.testWeaponSwitchFixture == "parasite_weapons-ssg" {
+							setup = []string{"give Machinegun", fmt.Sprintf("give Bullets %d", bullets), "give Shotgun", "give Super Shotgun", fmt.Sprintf("give Shells %d", shells), "use Super Shotgun"}
+						}
 					} else if c.testWeaponSwitchFixture == "parasite_shotgun" {
 						setup = []string{"give Shotgun", "give Shells 20", "use Shotgun"}
 					}

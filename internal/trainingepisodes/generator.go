@@ -16,10 +16,11 @@ type PositionRange struct {
 	Max quake.Vec3 `json:"max"`
 }
 type StartDistribution struct {
-	Player  PositionRange  `json:"player"`
-	Primary PositionRange  `json:"primary"`
-	Flank   *PositionRange `json:"flank,omitempty"`
-	Health  []int          `json:"health"`
+	Player     PositionRange   `json:"player"`
+	Primary    PositionRange   `json:"primary"`
+	Flank      *PositionRange  `json:"flank,omitempty"`
+	Additional []PositionRange `json:"additional,omitempty"`
+	Health     []int           `json:"health"`
 }
 type Generator struct {
 	SeedRevision  *int                         `json:"seed_revision,omitempty"`
@@ -54,23 +55,39 @@ func (g *Generator) validate(ep Episode) error {
 	if g.SeedRevision != nil && (*g.SeedRevision < 1 || *g.SeedRevision > ep.Revision) {
 		return fmt.Errorf("invalid generator seed revision")
 	}
-	if g.Version != 1 || (g.Kind != "base1-ground-combat-v1" && g.Kind != "campaign-ground-combat-v1") || (g.Kind == "base1-ground-combat-v1" && ep.Map != "base1") || ep.Recipe.Runner != "combat-baseline" || len(g.Distributions) != 4 {
+	group := g.Kind == "campaign-ground-group-v1"
+	if g.Version != 1 || (g.Kind != "base1-ground-combat-v1" && g.Kind != "campaign-ground-combat-v1" && !group) || (g.Kind == "base1-ground-combat-v1" && ep.Map != "base1") || ep.Recipe.Runner != "combat-baseline" || len(g.Distributions) != 4 {
 		return fmt.Errorf("unsupported generator binding")
 	}
-	if g.Kind == "campaign-ground-combat-v1" && (g.Site == nil || g.Site.Map != ep.Map || len(g.Site.BSPSHA256) != 64 || len(g.Site.WallDistances) != 8) {
+	if (g.Kind == "campaign-ground-combat-v1" || group) && (g.Site == nil || g.Site.Map != ep.Map || len(g.Site.BSPSHA256) != 64 || len(g.Site.WallDistances) != 8) {
 		return fmt.Errorf("missing campaign site binding")
 	}
-	if len(ep.Monsters) == 0 || (!ep.Recipe.Mixed && len(ep.Monsters) != 1) || (ep.Recipe.Mixed && !reflect.DeepEqual(ep.Monsters, []string{"monster_parasite", "monster_gunner"})) {
+	if group {
+		if !ep.Recipe.Mixed || len(ep.Monsters) < 2 || len(ep.Monsters) > 4 {
+			return fmt.Errorf("group requires two to four monsters")
+		}
+		seen := map[string]bool{}
+		for _, class := range ep.Monsters {
+			if (class != "monster_parasite" && class != "monster_soldier" && class != "monster_infantry" && class != "monster_gunner") || seen[class] {
+				return fmt.Errorf("unsupported or duplicate group class")
+			}
+			seen[class] = true
+		}
+	} else if len(ep.Monsters) == 0 || (!ep.Recipe.Mixed && len(ep.Monsters) != 1) || (ep.Recipe.Mixed && !reflect.DeepEqual(ep.Monsters, []string{"monster_parasite", "monster_gunner"})) {
 		return fmt.Errorf("generator composition differs from recipe")
 	}
 	switch ep.Monsters[0] {
 	case "monster_parasite", "monster_soldier", "monster_infantry":
+	case "monster_gunner":
+		if !group {
+			return fmt.Errorf("unsupported primary monster")
+		}
 	default:
 		return fmt.Errorf("unsupported primary monster")
 	}
 	for _, split := range splitNames {
 		d, ok := g.Distributions[split]
-		if !ok || len(d.Health) == 0 || (d.Flank != nil) != ep.Recipe.Mixed {
+		if !ok || len(d.Health) == 0 || (!group && ((d.Flank != nil) != ep.Recipe.Mixed || len(d.Additional) != 0)) || (group && (d.Flank != nil || len(d.Additional) != len(ep.Monsters)-1)) {
 			return fmt.Errorf("incomplete generator distribution %s", split)
 		}
 		for _, h := range d.Health {
@@ -79,6 +96,7 @@ func (g *Generator) validate(ep Episode) error {
 			}
 		}
 		boxes := []PositionRange{d.Player, d.Primary}
+		boxes = append(boxes, d.Additional...)
 		if d.Flank != nil {
 			boxes = append(boxes, *d.Flank)
 		}
@@ -133,7 +151,7 @@ func generate(ep Episode, split string, seed int, world *quake.MapInfo) (Instanc
 	r := rand.New(rand.NewSource(int64(gs)))
 	d := ep.Generator.Distributions[split]
 	v := Instance{Version: 1, EpisodeID: ep.ID, Split: split, EngineSeed: seed, GenerationSeed: gs, Loadout: ep.Recipe.Loadout, Skill: ep.Skill, GeometrySource: world.BSPSource, GeometrySHA256: world.BSPSHA256, Rejections: map[string]int{}}
-	if ep.Generator.Kind == "campaign-ground-combat-v1" {
+	if ep.Generator.Kind == "campaign-ground-combat-v1" || ep.Generator.Kind == "campaign-ground-group-v1" {
 		v.Map = ep.Map
 	}
 	for attempt := 1; attempt <= 128; attempt++ {
@@ -143,6 +161,9 @@ func generate(ep Episode, split string, seed int, world *quake.MapInfo) (Instanc
 		v.Monsters = []GeneratedMonster{{ep.Monsters[0], samplePosition(r, d.Primary)}}
 		if d.Flank != nil {
 			v.Monsters = append(v.Monsters, GeneratedMonster{"monster_gunner", samplePosition(r, *d.Flank)})
+		}
+		for i, box := range d.Additional {
+			v.Monsters = append(v.Monsters, GeneratedMonster{ep.Monsters[i+1], samplePosition(r, box)})
 		}
 		if reason := checkStart(v, world); reason != "" {
 			v.Rejections[reason]++

@@ -10,6 +10,9 @@ func synchronousFixtureWeaponReady(fixture string, s quake.Snapshot) bool {
 	}
 	if multiWeaponFixture(fixture) {
 		bullets, shells := multiWeaponStock(fixture)
+		if fixture == "parasite_weapons-ssg" {
+			return superShotgunWeapon(s.Weapon) && int(s.Ammo) == shells && inventoryCount(s, "Super Shotgun") > 0 && inventoryCount(s, "Bullets") == bullets && inventoryCount(s, "Shells") == shells && inventoryCount(s, "Machinegun") > 0 && inventoryCount(s, "Shotgun") > 0 && inventoryCount(s, "Blaster") > 0
+		}
 		return machinegunWeapon(s.Weapon) && int(s.Ammo) == bullets && inventoryCount(s, "Bullets") == bullets && inventoryCount(s, "Shells") == shells && inventoryCount(s, "Machinegun") > 0 && inventoryCount(s, "Shotgun") > 0 && inventoryCount(s, "Blaster") > 0
 	}
 	switch fixture {

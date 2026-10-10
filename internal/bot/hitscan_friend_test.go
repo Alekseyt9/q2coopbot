@@ -30,7 +30,7 @@ func TestHitscanFriendNativePathCoverage(t *testing.T) {
 		return d
 	}
 	cases := 0
-	for _, weapon := range []string{"Machinegun", "Shotgun"} {
+	for _, weapon := range []string{"Machinegun", "Shotgun", "Super Shotgun"} {
 		for _, cmd := range []quake.UserCmd{{Msec: 100}, {Msec: 100, Yaw: 16384}, {Msec: 100, Pitch: -5461}, {Msec: 100, Pitch: 10922}} {
 			yaw := float64(cmd.Yaw) * 2 * math.Pi / 65536
 			pitch := float64(cmd.Pitch) * 2 * math.Pi / 65536
@@ -42,6 +42,10 @@ func TestHitscanFriendNativePathCoverage(t *testing.T) {
 						h = 300
 						rp -= float64(kick) * 1.5 * math.Pi / 180
 						ry += yawKick * math.Pi / 180
+					}
+					if weapon == "Super Shotgun" {
+						h = 1000
+						ry += yawKick / .7 * 5 * math.Pi / 180
 					}
 					f, right, up := basis(ry, rp)
 					for _, a := range []float64{-1, 0, 1} {

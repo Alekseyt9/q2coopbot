@@ -1,0 +1,251 @@
+{
+  "generator": {
+    "site": {
+      "map": "jail1",
+      "entity_index": 279,
+      "source_class": "monster_infantry",
+      "source_origin": [
+        -1024,
+        -1112,
+        48
+      ],
+      "bsp_sha256": "50fa8303d398561e80af0d41eb3743c406901adabc6e963c84d627613513b2f9",
+      "wall_distances": [
+        424,
+        133,
+        88,
+        124,
+        384,
+        509,
+        321,
+        73
+      ]
+    },
+    "version": 1,
+    "kind": "campaign-ground-group-v1",
+    "distributions": {
+      "confirmation": {
+        "player": {
+          "min": [
+            -836,
+            -1116,
+            40.125
+          ],
+          "max": [
+            -828,
+            -1108,
+            40.125
+          ]
+        },
+        "primary": {
+          "min": [
+            -1020,
+            -1114,
+            40.125
+          ],
+          "max": [
+            -1018,
+            -1110,
+            40.125
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              -968,
+              -1113,
+              40.125
+            ],
+            "max": [
+              -966,
+              -1111,
+              40.125
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "test": {
+        "player": {
+          "min": [
+            -836,
+            -1116,
+            40.125
+          ],
+          "max": [
+            -828,
+            -1108,
+            40.125
+          ]
+        },
+        "primary": {
+          "min": [
+            -1024,
+            -1114,
+            40.125
+          ],
+          "max": [
+            -1022,
+            -1110,
+            40.125
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              -968,
+              -1113,
+              40.125
+            ],
+            "max": [
+              -966,
+              -1111,
+              40.125
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "train": {
+        "player": {
+          "min": [
+            -836,
+            -1116,
+            40.125
+          ],
+          "max": [
+            -828,
+            -1108,
+            40.125
+          ]
+        },
+        "primary": {
+          "min": [
+            -1032,
+            -1114,
+            40.125
+          ],
+          "max": [
+            -1030,
+            -1110,
+            40.125
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              -968,
+              -1113,
+              40.125
+            ],
+            "max": [
+              -966,
+              -1111,
+              40.125
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "validation": {
+        "player": {
+          "min": [
+            -836,
+            -1116,
+            40.125
+          ],
+          "max": [
+            -828,
+            -1108,
+            40.125
+          ]
+        },
+        "primary": {
+          "min": [
+            -1028,
+            -1114,
+            40.125
+          ],
+          "max": [
+            -1026,
+            -1110,
+            40.125
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              -968,
+              -1113,
+              40.125
+            ],
+            "max": [
+              -966,
+              -1111,
+              40.125
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "id": "campaign-jail1-site-01-group-parasite-infantry-weapons-ssg",
+  "revision": 1,
+  "title": "jail1 encounter 279: monster_infantry / group parasite, infantry",
+  "status": "runnable",
+  "map": "jail1",
+  "scope": "first_life_combat",
+  "goal": "alive_native_kills_then_observed_effect",
+  "monsters": [
+    "monster_parasite",
+    "monster_infantry"
+  ],
+  "geometry": "Original campaign BSP encounter; distinct location; static hull/floor/visibility verified; native doors and movers retained",
+  "initial_state": "Isolated stock-health distinct-class ground group; Super Shotgun initial, MG/Shotgun/Blaster owned; native no-infighting fixture",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 300,
+  "modes": [
+    "learned"
+  ],
+  "ppo_trainable": true,
+  "splits": {
+    "confirmation": {
+      "start": 312230000,
+      "count": 4096
+    },
+    "test": {
+      "start": 312220000,
+      "count": 4096
+    },
+    "train": {
+      "start": 312200000,
+      "count": 4096
+    },
+    "validation": {
+      "start": 312210000,
+      "count": 4096
+    }
+  },
+  "recipe": {
+    "runner": "combat-baseline",
+    "loadout": "weapons-ssg",
+    "mixed": true,
+    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
+  },
+  "missing": []
+}

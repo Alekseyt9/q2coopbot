@@ -2,7 +2,9 @@
 function Read-GeneratedCombatFixture([string]$Path,[int]$Seed,[string]$Loadout,[bool]$Mixed){
     $v=Get-Content -LiteralPath $Path -Raw|ConvertFrom-Json
     if($v.map -and $v.map -notmatch '^[a-z][a-z0-9_]{0,31}$'){throw 'Invalid generated map name'}
-    if($v.version -ne 1 -or $v.engine_seed -ne $Seed -or $v.loadout -ne $Loadout -or $v.health -lt 1 -or $v.health -gt 100 -or $v.monsters.Count -ne (1+[int]$Mixed) -or $v.monsters[0].class -notin @('monster_parasite','monster_soldier','monster_infantry') -or ($Mixed -and ($v.monsters[0].class -ne 'monster_parasite' -or $v.monsters[1].class -ne 'monster_gunner'))){throw 'Invalid sampled combat fixture'}
+    if($v.version -ne 1 -or $v.engine_seed -ne $Seed -or $v.loadout -ne $Loadout -or $v.health -lt 1 -or $v.health -gt 100 -or (!$Mixed -and $v.monsters.Count -ne 1) -or ($Mixed -and ($v.monsters.Count -lt 2 -or $v.monsters.Count -gt 4))){throw 'Invalid sampled combat fixture'}
+    $classes=@($v.monsters.class)
+    if(@($classes|Sort-Object -Unique).Count -ne $classes.Count -or @($classes|Where-Object {$_ -notin @('monster_parasite','monster_soldier','monster_infantry','monster_gunner')}).Count){throw 'Unsupported or duplicate sampled class'}
     foreach($position in @(@{p=$v.player})+@($v.monsters|ForEach-Object {@{p=$_.position}})){
         if($position.p.Count -ne 3){throw 'Invalid position dimension'}
         foreach($x in $position.p){$n=[double]$x;if([double]::IsNaN($n) -or [double]::IsInfinity($n) -or [math]::Abs($n) -gt 8192){throw 'Invalid sampled coordinate'}}

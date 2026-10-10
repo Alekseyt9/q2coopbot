@@ -5,11 +5,11 @@ import (
 	"q2coopbot/internal/quake"
 )
 
-// hitscanTeammateRisk bounds stock Machinegun/Shotgun paths, including a water
+// hitscanTeammateRisk bounds stock Machinegun/Shotgun/Super Shotgun paths, including a water
 // transition. It does not grant safety from unseen players or arbitrary future
 // movement. Geometry only: it never changes aim, weapon or adds an attack.
 func hitscanTeammateRisk(s quake.Snapshot, cmd quake.UserCmd) bool {
-	if !machinegunWeapon(s.Weapon) && !shotgunWeapon(s.Weapon) {
+	if !directHitscanWeapon(s.Weapon) {
 		return false
 	}
 	yaw := float64(int16(uint16(cmd.Yaw)+uint16(s.DeltaAngles[1]))) * 2 * math.Pi / 65536
@@ -21,6 +21,12 @@ func hitscanTeammateRisk(s quake.Snapshot, cmd quake.UserCmd) bool {
 		// Native new yaw kick is random +/-0.7, not the previous rendered kick.
 		pitch -= 6.75 * math.Pi / 180
 		recoil = (6.75 + 0.7) * math.Pi / 180
+	}
+	if superShotgunWeapon(s.Weapon) {
+		horizontal, vertical = 1000, 500
+		// Both native pellet groups: v_angle yaw -5/+5; kick does not
+		// change their firing direction. Include doubled underwater spread.
+		recoil = 5 * math.Pi / 180
 	}
 	spread := math.Hypot(horizontal, vertical)
 	angle := recoil + math.Atan(spread/8192) + math.Atan(2*spread/8192)

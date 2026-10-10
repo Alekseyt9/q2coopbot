@@ -1,0 +1,251 @@
+{
+  "generator": {
+    "site": {
+      "map": "jail1",
+      "entity_index": 295,
+      "source_class": "monster_infantry",
+      "source_origin": [
+        -360,
+        -3248,
+        88
+      ],
+      "bsp_sha256": "50fa8303d398561e80af0d41eb3743c406901adabc6e963c84d627613513b2f9",
+      "wall_distances": [
+        360,
+        113,
+        512,
+        113,
+        88,
+        124,
+        80,
+        249
+      ]
+    },
+    "version": 1,
+    "kind": "campaign-ground-group-v1",
+    "distributions": {
+      "confirmation": {
+        "player": {
+          "min": [
+            -364,
+            -3444,
+            88.125
+          ],
+          "max": [
+            -356,
+            -3436,
+            88.125
+          ]
+        },
+        "primary": {
+          "min": [
+            -356,
+            -3250,
+            88.125
+          ],
+          "max": [
+            -354,
+            -3246,
+            88.125
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              -322.74516600406093,
+              -3203.745166004061,
+              88.125
+            ],
+            "max": [
+              -320.74516600406093,
+              -3201.745166004061,
+              88.125
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "test": {
+        "player": {
+          "min": [
+            -364,
+            -3444,
+            88.125
+          ],
+          "max": [
+            -356,
+            -3436,
+            88.125
+          ]
+        },
+        "primary": {
+          "min": [
+            -360,
+            -3250,
+            88.125
+          ],
+          "max": [
+            -358,
+            -3246,
+            88.125
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              -322.74516600406093,
+              -3203.745166004061,
+              88.125
+            ],
+            "max": [
+              -320.74516600406093,
+              -3201.745166004061,
+              88.125
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "train": {
+        "player": {
+          "min": [
+            -364,
+            -3444,
+            88.125
+          ],
+          "max": [
+            -356,
+            -3436,
+            88.125
+          ]
+        },
+        "primary": {
+          "min": [
+            -368,
+            -3250,
+            88.125
+          ],
+          "max": [
+            -366,
+            -3246,
+            88.125
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              -322.74516600406093,
+              -3203.745166004061,
+              88.125
+            ],
+            "max": [
+              -320.74516600406093,
+              -3201.745166004061,
+              88.125
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "validation": {
+        "player": {
+          "min": [
+            -364,
+            -3444,
+            88.125
+          ],
+          "max": [
+            -356,
+            -3436,
+            88.125
+          ]
+        },
+        "primary": {
+          "min": [
+            -364,
+            -3250,
+            88.125
+          ],
+          "max": [
+            -362,
+            -3246,
+            88.125
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              -322.74516600406093,
+              -3203.745166004061,
+              88.125
+            ],
+            "max": [
+              -320.74516600406093,
+              -3201.745166004061,
+              88.125
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "id": "campaign-jail1-site-02-group-parasite-infantry-weapons",
+  "revision": 1,
+  "title": "jail1 encounter 295: monster_infantry / group parasite, infantry",
+  "status": "runnable",
+  "map": "jail1",
+  "scope": "first_life_combat",
+  "goal": "alive_native_kills_then_observed_effect",
+  "monsters": [
+    "monster_parasite",
+    "monster_infantry"
+  ],
+  "geometry": "Original campaign BSP encounter; distinct location; static hull/floor/visibility verified; native doors and movers retained",
+  "initial_state": "Isolated stock-health distinct-class ground group; weapons inventory; native no-infighting fixture",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 300,
+  "modes": [
+    "learned"
+  ],
+  "ppo_trainable": true,
+  "splits": {
+    "confirmation": {
+      "start": 1174128000,
+      "count": 512
+    },
+    "test": {
+      "start": 1174127000,
+      "count": 512
+    },
+    "train": {
+      "start": 1174125000,
+      "count": 512
+    },
+    "validation": {
+      "start": 1174126000,
+      "count": 512
+    }
+  },
+  "recipe": {
+    "runner": "combat-baseline",
+    "loadout": "weapons",
+    "mixed": true,
+    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
+  },
+  "missing": []
+}

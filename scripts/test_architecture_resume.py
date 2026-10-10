@@ -22,13 +22,14 @@ class ExportResumeTest(unittest.TestCase):
                     for update in (1,2):
                         current=json.loads(weights.read_text());key={'gru':'memory','attention':'attention','entity':'entity_attention'}[architecture];spec=current[key]
                         modules={n:Recurrent(current[n],spec[n]) if architecture=='gru' else CausalAttention(current[n],spec[n],4,32) if architecture=='attention' else EntityAttention(current[n],spec[n],4) for n in ('actor','value')}
-                        x=torch.tensor([features,[.5]+[0.]*809,[.8]+[0.]*809],dtype=torch.float32);states={};raw={}
+                        modules={name:module.to('cuda') for name,module in modules.items()}
+                        x=torch.tensor([features,[.5]+[0.]*809,[.8]+[0.]*809],dtype=torch.float32,device='cuda');states={};raw={}
                         with torch.no_grad():
                             for name,module in modules.items():
                                 if architecture=='gru':raw[name],_,states[name]=module(x[None]);raw[name]=raw[name][0]
                                 elif architecture=='attention':raw[name],states[name]=module(x[None]);raw[name]=raw[name][0]
                                 else:raw[name]=module.single(x)
-                            z=raw['actor'][:,:4]+.001;attack=torch.zeros(3);vertical=torch.zeros(3,dtype=torch.long);lp,_=probabilities(raw['actor'],torch.tensor(current['log_std']),z,attack,vertical)
+                            z=raw['actor'][:,:4]+.001;attack=torch.zeros(3,device='cuda');vertical=torch.zeros(3,dtype=torch.long,device='cuda');lp,_=probabilities(raw['actor'],torch.tensor(current['log_std'],device='cuda'),z,attack,vertical)
                         rows=[];context=[]
                         for i in range(3):
                             memory=None

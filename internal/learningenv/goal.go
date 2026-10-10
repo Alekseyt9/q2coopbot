@@ -60,7 +60,7 @@ func VerifyGoalStopForClasses(g GoalStop, release *CombatRelease, events []Damag
 		return fail()
 	}
 	id := observed.Identity
-	if release == nil || g.Version != "combat_goal_stop_v1" || g.Reason != "combat_goal_complete" || id.Life != 1 || id.Connection != 1 || id.Map != expectedMap || id.Spawncount != release.Spawncount || g.Spawncount != id.Spawncount || g.Actor != id.Actor || g.ObservedFrame != id.Frame || g.Health != int(observed.Health) || g.Health <= 0 || g.KillFrame <= release.Frame || g.ObservedFrame <= g.KillFrame {
+	if release == nil || g.Version != "combat_goal_stop_v1" || g.Reason != "combat_goal_complete" || id.Life != 1 || id.Connection != 1 || id.Map != expectedMap || id.Spawncount != release.Spawncount || g.Spawncount != id.Spawncount || g.Actor != id.Actor || g.ObservedFrame != id.Frame || g.Health != int(observed.Health) || g.Health <= 0 || g.KillFrame < release.Frame || g.ObservedFrame <= g.KillFrame {
 		return fail()
 	}
 	expected := map[string]bool{}
@@ -75,7 +75,7 @@ func VerifyGoalStopForClasses(g GoalStop, release *CombatRelease, events []Damag
 		}
 		expected[class] = true
 	}
-	if len(expected) == 0 || len(expected) > 2 {
+	if len(expected) == 0 || len(expected) > 4 {
 		return fail()
 	}
 	if len(g.Classes) != len(expected) || len(g.Kills) != len(expected) {
@@ -90,7 +90,7 @@ func VerifyGoalStopForClasses(g GoalStop, release *CombatRelease, events []Damag
 	}
 	killed := map[string]DamageEvent{}
 	for _, e := range events {
-		if e.Spawncount != id.Spawncount || e.Map != id.Map || e.Frame <= release.Frame || e.Frame > id.Frame || e.HealthBefore <= 0 || e.HealthAfter > 0 {
+		if e.Spawncount != id.Spawncount || e.Map != id.Map || e.Frame < release.Frame || e.Frame > id.Frame || e.HealthBefore <= 0 || e.HealthAfter > 0 {
 			continue
 		}
 		if e.Target == id.Actor && e.TargetClass == "player" {

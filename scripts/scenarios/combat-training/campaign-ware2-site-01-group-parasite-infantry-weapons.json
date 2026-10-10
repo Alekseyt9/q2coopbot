@@ -1,0 +1,251 @@
+{
+  "generator": {
+    "site": {
+      "map": "ware2",
+      "entity_index": 132,
+      "source_class": "monster_soldier_ss",
+      "source_origin": [
+        272,
+        1256,
+        -104
+      ],
+      "bsp_sha256": "3db193dd6bec2681754187361af2907b46b11747bb6f37d8cb67e9969cec5bc1",
+      "wall_distances": [
+        304,
+        124,
+        88,
+        124,
+        400,
+        57,
+        40,
+        57
+      ]
+    },
+    "version": 1,
+    "kind": "campaign-ground-group-v1",
+    "distributions": {
+      "confirmation": {
+        "player": {
+          "min": [
+            460,
+            1252,
+            -103.875
+          ],
+          "max": [
+            468,
+            1260,
+            -103.875
+          ]
+        },
+        "primary": {
+          "min": [
+            276,
+            1254,
+            -103.875
+          ],
+          "max": [
+            278,
+            1258,
+            -103.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              328,
+              1255,
+              -103.875
+            ],
+            "max": [
+              330,
+              1257,
+              -103.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "test": {
+        "player": {
+          "min": [
+            460,
+            1252,
+            -103.875
+          ],
+          "max": [
+            468,
+            1260,
+            -103.875
+          ]
+        },
+        "primary": {
+          "min": [
+            272,
+            1254,
+            -103.875
+          ],
+          "max": [
+            274,
+            1258,
+            -103.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              328,
+              1255,
+              -103.875
+            ],
+            "max": [
+              330,
+              1257,
+              -103.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "train": {
+        "player": {
+          "min": [
+            460,
+            1252,
+            -103.875
+          ],
+          "max": [
+            468,
+            1260,
+            -103.875
+          ]
+        },
+        "primary": {
+          "min": [
+            264,
+            1254,
+            -103.875
+          ],
+          "max": [
+            266,
+            1258,
+            -103.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              328,
+              1255,
+              -103.875
+            ],
+            "max": [
+              330,
+              1257,
+              -103.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "validation": {
+        "player": {
+          "min": [
+            460,
+            1252,
+            -103.875
+          ],
+          "max": [
+            468,
+            1260,
+            -103.875
+          ]
+        },
+        "primary": {
+          "min": [
+            268,
+            1254,
+            -103.875
+          ],
+          "max": [
+            270,
+            1258,
+            -103.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              328,
+              1255,
+              -103.875
+            ],
+            "max": [
+              330,
+              1257,
+              -103.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "id": "campaign-ware2-site-01-group-parasite-infantry-weapons",
+  "revision": 1,
+  "title": "ware2 encounter 132: monster_soldier / group parasite, infantry",
+  "status": "runnable",
+  "map": "ware2",
+  "scope": "first_life_combat",
+  "goal": "alive_native_kills_then_observed_effect",
+  "monsters": [
+    "monster_parasite",
+    "monster_infantry"
+  ],
+  "geometry": "Original campaign BSP encounter; distinct location; static hull/floor/visibility verified; native doors and movers retained",
+  "initial_state": "Isolated stock-health distinct-class ground group; weapons inventory; native no-infighting fixture",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 300,
+  "modes": [
+    "learned"
+  ],
+  "ppo_trainable": true,
+  "splits": {
+    "confirmation": {
+      "start": 1172028000,
+      "count": 512
+    },
+    "test": {
+      "start": 1172027000,
+      "count": 512
+    },
+    "train": {
+      "start": 1172025000,
+      "count": 512
+    },
+    "validation": {
+      "start": 1172026000,
+      "count": 512
+    }
+  },
+  "recipe": {
+    "runner": "combat-baseline",
+    "loadout": "weapons",
+    "mixed": true,
+    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
+  },
+  "missing": []
+}

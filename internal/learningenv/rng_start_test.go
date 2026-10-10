@@ -43,3 +43,20 @@ func TestMachinegunReceiptRequiresDeclaredWeaponAndIdlePhase(t *testing.T) {
 		}
 	}
 }
+
+func TestSuperShotgunReceiptRequiresDeclaredWeaponAndIdlePhase(t *testing.T) {
+	release := "sv_test_combat spawncount=7 server_frame=35 g_test_combat_start game_frame=37 ready=1 seed=14900\n"
+	marker := "g_test_rng_start game_frame=37 phase=post_frame seed=14900 cursor_before=257 cursor_after=256\n"
+	w := "g_test_weapon_start game_frame=37 actor=1 weapon=Super Shotgun gunframe_before=54 gunframe_after=18\n"
+	if err := VerifyPostFrameRNG(strings.NewReader(release+w+marker), 14900, 37, "Super Shotgun"); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{strings.ReplaceAll(w, "after=18", "after=7"), strings.ReplaceAll(w, "before=54", "before=17"), strings.ReplaceAll(w, "before=54", "before=58"), strings.ReplaceAll(w, "actor=1", "actor=2"), w + w} {
+		if err := VerifyPostFrameRNG(strings.NewReader(release+bad+marker), 14900, 37, "Super Shotgun"); err == nil {
+			t.Fatal("bad Super Shotgun receipt accepted")
+		}
+	}
+	if err := VerifyPostFrameRNG(strings.NewReader(release+w+marker), 14900, 37, "Machinegun"); err == nil {
+		t.Fatal("SSG accepted as MG")
+	}
+}

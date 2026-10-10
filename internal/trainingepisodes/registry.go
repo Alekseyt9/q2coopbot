@@ -163,7 +163,7 @@ func (e Episode) validate() error {
 		return fmt.Errorf("unknown episode status")
 	}
 	mapSupported := e.Map == "base1" || e.Map == "base2"
-	if e.Generator != nil && e.Generator.Kind == "campaign-ground-combat-v1" {
+	if e.Generator != nil && (e.Generator.Kind == "campaign-ground-combat-v1" || e.Generator.Kind == "campaign-ground-group-v1") {
 		for _, name := range campaignMapOrder {
 			mapSupported = mapSupported || e.Map == name
 		}
@@ -214,7 +214,7 @@ func (e Episode) validate() error {
 		}
 		switch e.Recipe.Loadout {
 		case "blaster", "machinegun":
-		case "weapons", "weapons-scarce":
+		case "weapons", "weapons-scarce", "weapons-ssg":
 			if seen["rules"] {
 				return fmt.Errorf("fixed MG/multiweapon teacher is unsupported by current harness")
 			}

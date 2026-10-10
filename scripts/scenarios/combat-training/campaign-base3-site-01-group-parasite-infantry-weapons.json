@@ -1,0 +1,251 @@
+{
+  "generator": {
+    "site": {
+      "map": "base3",
+      "entity_index": 3,
+      "source_class": "monster_soldier_ss",
+      "source_origin": [
+        1696,
+        32,
+        -488
+      ],
+      "bsp_sha256": "dc15095a381b47f68b72f60f7ecdc9cf5e60970629394321e0cc25e4c388308d",
+      "wall_distances": [
+        192,
+        271,
+        512,
+        306,
+        456,
+        509,
+        488,
+        237
+      ]
+    },
+    "version": 1,
+    "kind": "campaign-ground-group-v1",
+    "distributions": {
+      "confirmation": {
+        "player": {
+          "min": [
+            1556.25,
+            163.75,
+            -487.875
+          ],
+          "max": [
+            1564.25,
+            171.75,
+            -487.875
+          ]
+        },
+        "primary": {
+          "min": [
+            1700,
+            30,
+            -495.875
+          ],
+          "max": [
+            1702,
+            34,
+            -495.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              1663.5082603286342,
+              90.12829008072235,
+              -495.875
+            ],
+            "max": [
+              1665.5082603286342,
+              92.12829008072235,
+              -495.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "test": {
+        "player": {
+          "min": [
+            1556.25,
+            163.75,
+            -487.875
+          ],
+          "max": [
+            1564.25,
+            171.75,
+            -487.875
+          ]
+        },
+        "primary": {
+          "min": [
+            1696,
+            30,
+            -495.875
+          ],
+          "max": [
+            1698,
+            34,
+            -495.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              1663.5082603286342,
+              90.12829008072235,
+              -495.875
+            ],
+            "max": [
+              1665.5082603286342,
+              92.12829008072235,
+              -495.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "train": {
+        "player": {
+          "min": [
+            1556.25,
+            163.75,
+            -487.875
+          ],
+          "max": [
+            1564.25,
+            171.75,
+            -487.875
+          ]
+        },
+        "primary": {
+          "min": [
+            1688,
+            30,
+            -495.875
+          ],
+          "max": [
+            1690,
+            34,
+            -495.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              1663.5082603286342,
+              90.12829008072235,
+              -495.875
+            ],
+            "max": [
+              1665.5082603286342,
+              92.12829008072235,
+              -495.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "validation": {
+        "player": {
+          "min": [
+            1556.25,
+            163.75,
+            -487.875
+          ],
+          "max": [
+            1564.25,
+            171.75,
+            -487.875
+          ]
+        },
+        "primary": {
+          "min": [
+            1692,
+            30,
+            -495.875
+          ],
+          "max": [
+            1694,
+            34,
+            -495.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              1663.5082603286342,
+              90.12829008072235,
+              -495.875
+            ],
+            "max": [
+              1665.5082603286342,
+              92.12829008072235,
+              -495.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "id": "campaign-base3-site-01-group-parasite-infantry-weapons",
+  "revision": 1,
+  "title": "base3 encounter 3: monster_soldier / group parasite, infantry",
+  "status": "runnable",
+  "map": "base3",
+  "scope": "first_life_combat",
+  "goal": "alive_native_kills_then_observed_effect",
+  "monsters": [
+    "monster_parasite",
+    "monster_infantry"
+  ],
+  "geometry": "Original campaign BSP encounter; distinct location; static hull/floor/visibility verified; native doors and movers retained",
+  "initial_state": "Isolated stock-health distinct-class ground group; weapons inventory; native no-infighting fixture",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 300,
+  "modes": [
+    "learned"
+  ],
+  "ppo_trainable": true,
+  "splits": {
+    "confirmation": {
+      "start": 1164028000,
+      "count": 512
+    },
+    "test": {
+      "start": 1164027000,
+      "count": 512
+    },
+    "train": {
+      "start": 1164025000,
+      "count": 512
+    },
+    "validation": {
+      "start": 1164026000,
+      "count": 512
+    }
+  },
+  "recipe": {
+    "runner": "combat-baseline",
+    "loadout": "weapons",
+    "mixed": true,
+    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
+  },
+  "missing": []
+}

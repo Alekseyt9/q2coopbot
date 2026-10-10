@@ -32,6 +32,8 @@ func run() error {
 	artifacts := flag.String("artifacts", "", "fresh runtime output root")
 	campaign := flag.Int("campaign-sites", 0, "generate this many distinct original encounter sites per selected map into out")
 	campaignMaps := flag.String("campaign-maps", "base1,base2", "comma-separated stock campaign maps for site generation")
+	campaignGroup := flag.String("campaign-group", "", "comma-separated distinct ground monster classes; generate group recipes with Super Shotgun inventory")
+	campaignGroupLoadout := flag.String("campaign-group-loadout", "weapons-ssg", "group starting inventory: blaster, machinegun, weapons or weapons-ssg")
 	flag.Parse()
 	if *campaign != 0 {
 		abs, err := filepath.Abs(*root)
@@ -43,6 +45,9 @@ func run() error {
 			maps[i] = strings.TrimSpace(maps[i])
 		}
 		episodes, err := trainingepisodes.CampaignRecipesForMaps(abs, *campaign, maps)
+		if *campaignGroup != "" {
+			episodes, err = trainingepisodes.CampaignGroupRecipesForLoadout(abs, *campaign, maps, strings.Split(*campaignGroup, ","), *campaignGroupLoadout)
+		}
 		if err != nil {
 			return err
 		}

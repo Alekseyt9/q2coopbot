@@ -2,7 +2,9 @@
 function Get-CombatGoalReceipt($Row, $Events, $Release, [string[]]$Classes, [string]$Map='base1') {
     if($Map -notmatch '^[a-z][a-z0-9_]{0,31}$' -or !$Row -or !$Release -or $Row.health -le 0 -or $Row.map -ne $Map -or $Row.connection -ne 1 -or $Row.combat_policy.observation.identity.life -ne 1){return $null}
     if($Row.spawncount -ne $Release.spawncount -or $Row.observation_frame -le $Release.frame){return $null}
-    $live=@($Events | Where-Object {$_.spawncount -eq $Release.spawncount -and $_.map -eq $Row.map -and $_.frame -gt $Release.frame})
+    # The first released ClientThink can kill inside the release server frame.
+    # Its complete following observation is still required below.
+    $live=@($Events | Where-Object {$_.spawncount -eq $Release.spawncount -and $_.map -eq $Row.map -and $_.frame -ge $Release.frame})
     if(@($live | Where-Object {$_.target -eq $Row.self_entity -and $_.target_class -eq 'player' -and $_.killed}).Count){return $null}
     $kills=@($live | Where-Object {$_.attacker -eq $Row.self_entity -and $_.attacker_class -eq 'player' -and $_.mod -ne 21 -and $_.killed -and $_.target_class -in $Classes})
     $selected=@(foreach($class in $Classes){

@@ -1,0 +1,251 @@
+{
+  "generator": {
+    "site": {
+      "map": "ware2",
+      "entity_index": 157,
+      "source_class": "monster_infantry",
+      "source_origin": [
+        1952,
+        -16,
+        -232
+      ],
+      "bsp_sha256": "3db193dd6bec2681754187361af2907b46b11747bb6f37d8cb67e9969cec5bc1",
+      "wall_distances": [
+        94,
+        100,
+        70,
+        100,
+        90,
+        42,
+        79,
+        296
+      ]
+    },
+    "version": 1,
+    "kind": "campaign-ground-group-v1",
+    "distributions": {
+      "confirmation": {
+        "player": {
+          "min": [
+            1770.625,
+            53.5,
+            -231.875
+          ],
+          "max": [
+            1778.625,
+            61.5,
+            -231.875
+          ]
+        },
+        "primary": {
+          "min": [
+            1956,
+            -18,
+            -231.875
+          ],
+          "max": [
+            1958,
+            -14,
+            -231.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              1968.4917396713658,
+              42.12829008072235,
+              -231.875
+            ],
+            "max": [
+              1970.4917396713658,
+              44.12829008072235,
+              -231.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "test": {
+        "player": {
+          "min": [
+            1770.625,
+            53.5,
+            -231.875
+          ],
+          "max": [
+            1778.625,
+            61.5,
+            -231.875
+          ]
+        },
+        "primary": {
+          "min": [
+            1952,
+            -18,
+            -231.875
+          ],
+          "max": [
+            1954,
+            -14,
+            -231.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              1968.4917396713658,
+              42.12829008072235,
+              -231.875
+            ],
+            "max": [
+              1970.4917396713658,
+              44.12829008072235,
+              -231.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "train": {
+        "player": {
+          "min": [
+            1770.625,
+            53.5,
+            -231.875
+          ],
+          "max": [
+            1778.625,
+            61.5,
+            -231.875
+          ]
+        },
+        "primary": {
+          "min": [
+            1944,
+            -18,
+            -231.875
+          ],
+          "max": [
+            1946,
+            -14,
+            -231.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              1968.4917396713658,
+              42.12829008072235,
+              -231.875
+            ],
+            "max": [
+              1970.4917396713658,
+              44.12829008072235,
+              -231.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      },
+      "validation": {
+        "player": {
+          "min": [
+            1770.625,
+            53.5,
+            -231.875
+          ],
+          "max": [
+            1778.625,
+            61.5,
+            -231.875
+          ]
+        },
+        "primary": {
+          "min": [
+            1948,
+            -18,
+            -231.875
+          ],
+          "max": [
+            1950,
+            -14,
+            -231.875
+          ]
+        },
+        "additional": [
+          {
+            "min": [
+              1968.4917396713658,
+              42.12829008072235,
+              -231.875
+            ],
+            "max": [
+              1970.4917396713658,
+              44.12829008072235,
+              -231.875
+            ]
+          }
+        ],
+        "health": [
+          80,
+          100
+        ]
+      }
+    }
+  },
+  "version": 1,
+  "id": "campaign-ware2-site-02-group-parasite-infantry-weapons-ssg",
+  "revision": 1,
+  "title": "ware2 encounter 157: monster_infantry / group parasite, infantry",
+  "status": "runnable",
+  "map": "ware2",
+  "scope": "first_life_combat",
+  "goal": "alive_native_kills_then_observed_effect",
+  "monsters": [
+    "monster_parasite",
+    "monster_infantry"
+  ],
+  "geometry": "Original campaign BSP encounter; distinct location; static hull/floor/visibility verified; native doors and movers retained",
+  "initial_state": "Isolated stock-health distinct-class ground group; Super Shotgun initial, MG/Shotgun/Blaster owned; native no-infighting fixture",
+  "skill": 1,
+  "timescale": 2,
+  "game_frames": 300,
+  "modes": [
+    "learned"
+  ],
+  "ppo_trainable": true,
+  "splits": {
+    "confirmation": {
+      "start": 297230000,
+      "count": 4096
+    },
+    "test": {
+      "start": 297220000,
+      "count": 4096
+    },
+    "train": {
+      "start": 297200000,
+      "count": 4096
+    },
+    "validation": {
+      "start": 297210000,
+      "count": 4096
+    }
+  },
+  "recipe": {
+    "runner": "combat-baseline",
+    "loadout": "weapons-ssg",
+    "mixed": true,
+    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
+  },
+  "missing": []
+}

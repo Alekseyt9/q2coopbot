@@ -9,7 +9,7 @@ param(
     [ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,
     [ValidateSet(0,100)][int]$ReleaseGameFrame=0,
     [ValidateRange(1024,65530)][int]$Port=32940,
-    [ValidateSet('stocked','blaster','machinegun','weapons','weapons-scarce','shotgun','hyper','rail','scarce')][string]$Loadout='stocked',
+    [ValidateSet('stocked','blaster','machinegun','weapons','weapons-scarce','weapons-ssg','shotgun','hyper','rail','scarce')][string]$Loadout='stocked',
     [switch]$Mixed,
     [ValidateSet('uniform','mixed-solo-mixed')][string]$EpisodePattern='uniform',
     [ValidateSet('standard','remaining-far')][string]$SoloFixture='standard',
@@ -31,15 +31,15 @@ param(
 $ErrorActionPreference='Stop'
 if($Seed -lt 0 -or [long]$Seed+$Workers*$EpisodesPerWorker-1 -gt 2147483647){throw 'Each independent episode needs its own valid 31-bit game seed'}
 if([long]$Seed+$Workers*$EpisodesPerWorker-1+$PolicySamplingSeedOffset -gt 2147483647){throw 'Effective policy sampling seed exceeds 31-bit range'}
-if($Synchronous -and $Loadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce'){throw 'Unsupported synchronous loadout'}
-if($Loadout -in 'weapons','weapons-scarce' -and (!$Synchronous -or $CombatMode -ne 'learned' -or $Feedback -or $TrainingMonsterHealth)){throw 'Weapon-choice fixture requires synchronous direct learned control without overrides'}
+if($Synchronous -and $Loadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce','weapons-ssg'){throw 'Unsupported synchronous loadout'}
+if($Loadout -in 'weapons','weapons-scarce','weapons-ssg' -and (!$Synchronous -or $CombatMode -ne 'learned' -or $Feedback -or $TrainingMonsterHealth)){throw 'Weapon-choice fixture requires synchronous direct learned control without overrides'}
 if($Loadout -eq 'machinegun' -and (!$Synchronous -or $Feedback -or $TrainingMonsterHealth)){throw 'Machinegun requires synchronous capture without health/feedback overrides'}
 if($Loadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){throw 'Shotgun exercise requires synchronous rules'}
 if($TeacherVertical -and (!$Synchronous -or $CombatMode -ne 'rules' -or $Loadout -ne 'shotgun' -or $Feedback)){throw 'Vertical exercise requires synchronous fixed Shotgun rules without feedback'}
 if($RewardConfig -and !$Synchronous){throw 'Reward export requires -Synchronous'}
 if($TrainingMonsterHealth -and (!$Synchronous -or $Loadout -ne 'blaster' -or $Mixed -or $HealthKit -or $Feedback)){throw 'Curriculum requires isolated synchronous Blaster fixture'}
-if($ReleaseGameFrame -and (!$Synchronous -or $Loadout -notin 'blaster','machinegun','weapons','weapons-scarce' -or $HealthKit -or $GameFrames -lt 150)){throw 'Fixed release requires a supported synchronous fixture without health kit and >=150 game frames'}
-if($EpisodePattern -ne 'uniform' -and (!$Mixed -or $EpisodesPerWorker -ne 3 -or !$Synchronous -or $Loadout -notin 'blaster','machinegun','weapons','weapons-scarce' -or $CombatMode -ne 'learned' -or $Feedback -or $HealthKit -or $TrainingMonsterHealth)){throw 'Unsupported Mixed/Solo pattern'}
+if($ReleaseGameFrame -and (!$Synchronous -or $Loadout -notin 'blaster','machinegun','weapons','weapons-scarce','weapons-ssg' -or $HealthKit -or $GameFrames -lt 150)){throw 'Fixed release requires a supported synchronous fixture without health kit and >=150 game frames'}
+if($EpisodePattern -ne 'uniform' -and (!$Mixed -or $EpisodesPerWorker -ne 3 -or !$Synchronous -or $Loadout -notin 'blaster','machinegun','weapons','weapons-scarce','weapons-ssg' -or $CombatMode -ne 'learned' -or $Feedback -or $HealthKit -or $TrainingMonsterHealth)){throw 'Unsupported Mixed/Solo pattern'}
 if($SoloFixture -ne 'standard' -and (!$Synchronous -or $Loadout -ne 'blaster' -or $CombatMode -ne 'learned' -or $Feedback -or $HealthKit -or $TrainingMonsterHealth -or ($Mixed -and $EpisodePattern -eq 'uniform'))){throw 'Remaining-Parasite fixture requires isolated direct synchronous Blaster Solo episodes without health overrides'}
 if($StopOnGoal -and (!$Synchronous -or $Feedback)){throw 'Goal stop requires synchronous capture without a live feedback relay'}
 if($StopOnFirstDeath -and (!$StopOnGoal -or !$RewardConfig)){throw 'First-life death stop requires goal supervision and an explicit reward'}
@@ -60,14 +60,14 @@ if(!$OutputRoot){$OutputRoot=Join-Path $repo ('workspace/artifacts/learned-comba
 if(Test-Path -LiteralPath $OutputRoot){throw 'Fresh output directory required'}
 New-Item -ItemType Directory -Path $OutputRoot | Out-Null
 $OutputRoot=(Resolve-Path -LiteralPath $OutputRoot).Path
-if($CombatMode -ne 'rules' -and $Loadout -notin 'blaster','machinegun','weapons','weapons-scarce'){throw 'Unsupported direct/shadow loadout'}
+if($CombatMode -ne 'rules' -and $Loadout -notin 'blaster','machinegun','weapons','weapons-scarce','weapons-ssg'){throw 'Unsupported direct/shadow loadout'}
 if($CombatMode -ne 'rules' -and !$ProviderFile){$ProviderFile=Join-Path $PSScriptRoot 'scenarios/combat-control-probe.json'}
 if($ProviderFile){$ProviderFile=(Resolve-Path -LiteralPath $ProviderFile).Path}
 $remoteProvider=$false
 $providerKind=$null
 if($ProviderFile){$providerKind=(Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).kind;$remoteProvider=($providerKind -eq 'combat_remote_v1')}
 $ppoProvider=($providerKind -eq 'combat_ppo_v1')
-if($Loadout -in 'weapons','weapons-scarce' -and (!$ppoProvider -or (Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).weapon_head -ne 'combat_masked_weapon_v1')){throw 'Weapon-choice fixture requires a versioned PPO weapon head'}
+if($Loadout -in 'weapons','weapons-scarce','weapons-ssg' -and (!$ppoProvider -or (Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).weapon_head -ne 'combat_masked_weapon_v1')){throw 'Weapon-choice fixture requires a versioned PPO weapon head'}
 $trainedProvider=$providerKind -in @('combat_bc_mlp_v1','combat_ppo_v1')
 if($ppoProvider -and !$Synchronous){throw 'PPO pilot requires synchronous mode'}
 if($remoteProvider -and !$Synchronous){throw 'Remote policy requires -Synchronous'}
@@ -227,8 +227,8 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             $resetExpectation=Join-Path $out 'reset-expectation.json'
             @{version='observed_fixture_reset_v1';map=$config.test.teleport_map;seed=$(if($using:Synchronous){$using:Seed+$index}else{$null})
                 position=@($config.test.teleport.Split(',')|ForEach-Object {[double]::Parse($_,[Globalization.CultureInfo]::InvariantCulture)})
-                health=$config.test.initial_health;armor=0;weapon=$(if($using:Loadout -in 'machinegun','weapons','weapons-scarce'){'Machinegun'}elseif($using:Synchronous -and $using:Loadout -eq 'blaster'){'Blaster'}else{'Shotgun'});ammo=$(switch($using:Loadout){machinegun{100};weapons{40};weapons-scarce{10};blaster{if($using:Synchronous){0}else{20}};default{20}});enemy_class=$config.test.spawn_class
-                inventory=$(if($using:Loadout -in 'weapons','weapons-scarce'){@(@{name='Blaster';count=1},@{name='Machinegun';count=1},@{name='Shotgun';count=1},@{name='Bullets';count=$(if($using:Loadout -eq 'weapons'){40}else{10})},@{name='Shells';count=$(if($using:Loadout -eq 'weapons'){20}else{6})})}else{$null})
+                health=$config.test.initial_health;armor=0;weapon=$(if($using:Loadout -eq 'weapons-ssg'){'Super Shotgun'}elseif($using:Loadout -in 'machinegun','weapons','weapons-scarce'){'Machinegun'}elseif($using:Synchronous -and $using:Loadout -eq 'blaster'){'Blaster'}else{'Shotgun'});ammo=$(switch($using:Loadout){machinegun{100};weapons{40};weapons-scarce{10};blaster{if($using:Synchronous){0}else{20}};default{20}});enemy_class=$config.test.spawn_class
+                inventory=$(if($using:Loadout -in 'weapons','weapons-scarce','weapons-ssg'){@(@{name='Blaster';count=1},@{name='Machinegun';count=1},@{name='Shotgun';count=1},@{name='Bullets';count=$(if($using:Loadout -eq 'weapons-scarce'){10}else{40})},@{name='Shells';count=$(if($using:Loadout -eq 'weapons-scarce'){6}else{20})})+$(if($using:Loadout -eq 'weapons-ssg'){@(@{name='Super Shotgun';count=1})}else{@()})}else{$null})
                 enemy_position=@($config.test.spawn_soldier.Split(',')|ForEach-Object {[double]::Parse($_,[Globalization.CultureInfo]::InvariantCulture)})
             }|ConvertTo-Json|Set-Content -LiteralPath $resetExpectation -Encoding utf8NoBOM
             $exportArguments=@('--trace',(Join-Path $out 'bot.jsonl'),'--out',$dataset,'--worker',"worker-$worker",'--episode',"seed-$($using:Seed+$index)",'--end-reason',$(if($goalValid){'combat_goal_complete'}elseif($deathValid){'combat_first_life_death'}else{'game_frame_limit'}),'--server-log',(Join-Path $out 'server.log'),'--client-name','SoloRetreatBot','--require-execution','--reset-expectation',$resetExpectation)
@@ -249,7 +249,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 if($using:ReleaseGameFrame){
                     $skillProof=@($rngLog|Select-String '^g_test_skill_start game_frame=(\d+) skill=(\d+)$')
                     if($skillProof.Count -ne 1 -or [int]$skillProof[0].Matches[0].Groups[1].Value -ne $using:ReleaseGameFrame -or [int]$skillProof[0].Matches[0].Groups[2].Value -ne $using:Skill){throw 'Native skill not confirmed at release'}
-                    $expectedWeaponPhase=if($using:Loadout -in 'machinegun','weapons','weapons-scarce'){'Machinegun gunframe_before=\d+ gunframe_after=6'}else{'Blaster gunframe_before=\d+ gunframe_after=9'}
+                    $expectedWeaponPhase=if($using:Loadout -eq 'weapons-ssg'){'Super Shotgun gunframe_before=\d+ gunframe_after=18'}elseif($using:Loadout -in 'machinegun','weapons','weapons-scarce'){'Machinegun gunframe_before=\d+ gunframe_after=6'}else{'Blaster gunframe_before=\d+ gunframe_after=9'}
                     $weapon=@($rngLog|Select-String ("^g_test_weapon_start game_frame=(\d+) actor=1 weapon="+$expectedWeaponPhase+'$'))
                     if($weapon.Count -ne 1 -or [int]$weapon[0].Matches[0].Groups[1].Value -ne $using:ReleaseGameFrame){throw 'Fixed weapon phase differs'}
                     $world=@($rngLog|Select-String '^g_test_world_start frame=(\d+) phase=fixed_map_hold free_pool_reset=1$')
@@ -277,7 +277,8 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             $captureMap=if($sample -and $sample.map){$sample.map}else{'base1'}
             $entities=Get-Content -LiteralPath (Join-Path $out "runtime/baseq2/maps/$captureMap.ent") -Raw
             $gunnerCount=[regex]::Matches($entities,'"classname"\s+"monster_gunner"').Count
-            if($gunnerCount -ne [int]$episodeMixed){throw 'Episode composition differs from declared pattern'}
+            $expectedGunners=if($sample){@($sample.monsters|Where-Object class -eq 'monster_gunner').Count}else{[int]$episodeMixed}
+            if($gunnerCount -ne $expectedGunners){throw 'Episode composition differs from declared pattern'}
             $life=Get-Content -LiteralPath (Join-Path $out 'combat-first-life.json') -Raw | ConvertFrom-Json
             $files=@('q2ded.exe','baseq2/game.dll',"baseq2/maps/$captureMap.ent","baseq2/maps/$captureMap.aas") | ForEach-Object {
                 $path=Join-Path (Join-Path $out 'runtime') $_
