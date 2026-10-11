@@ -585,3 +585,5 @@ recovery0/32. Принятия в live нет. См. testing/combat_target_commi
 циклов (672 train боя), с прежними reward/LR/архитектурой и без promotion.
 Качество v12, превосходство rules и campaign/coop acceptance не доказаны.
 См. testing/combat_target_commitment_plan_20261011.md.
+
+11.10, первый дополнительный target-commitment cycle закрыт:336 native/CUDA,45657 rows, все3 GPU updates и Adam/input-use audits проверены. NTFS compression сбой восстановлен без повторного capture/replay/train. Второй native cycle336 уже начался с fresh train offset260,16×2; текущая queue затем выполнит smoke12 и held-out1456 before/after. Новый report CLI проверен на старых реальных outcomes через явный schema adapter; это не acceptance нового driver. Reward-credit audit первого train корпуса:positive bonus283/12938 rows (2,19%),76/112 боёв, churn237 rows,58/112; слабая плотность сигнала —диагностика, не причина/приёмка и не основание менять текущий frozen experiment. Новое held-out качество, superiority rules, campaign/coop acceptance по-прежнему отсутствуют. См. testing/combat_target_commitment_results_20261011.md.

@@ -1,0 +1,60 @@
+{
+  "version": "combat_model_candidate_snapshot_v1",
+  "created_utc": "2026-10-11T21:04:56.410910+00:00",
+  "status": "experimental_candidates_evaluation_pending",
+  "source_completion": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-target-commitment-continuation-v1-20261011\\complete.json",
+  "source_completion_sha256": "b0b21d2b083356629f5e6e691de39b1cf22647ad2f2483577024f197a53ab1c4",
+  "files": [
+    {
+      "label": "control",
+      "file": "control.weights.json",
+      "source": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-target-commitment-continuation-v1-20261011\\round-2\\update-control\\weights.json",
+      "sha256": "356ecdd8f1a6c22181ac24320502574f7c5c9580b73d5ae39003d4f258d2ca9f",
+      "bytes": 5787054,
+      "architecture": "combat_causal_attention_v1",
+      "feature_version": "combat_features_v10",
+      "training_report_sha256": "be6a7ddfdff977326279129fe3d331ffe5a089f20ee315d5ad17ea01821e7fca",
+      "training_completion_sha256": "2a3b0bc68a3035f6806e61788616d4fa289eae0068a6d3c1731cfedd2355e7fa",
+      "checkpoint_sha256": "e472c3358d3482f8cc92dd41b5893b7d95c3c186c18da2c9cc7265f1f380d73c",
+      "checkpoint_included": false,
+      "actor_steps_in_latest_update": 10,
+      "eligible_rows_in_latest_update": 13146,
+      "training_device": "cuda"
+    },
+    {
+      "label": "cost",
+      "file": "cost.weights.json",
+      "source": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-target-commitment-continuation-v1-20261011\\round-2\\update-cost\\weights.json",
+      "sha256": "1b6a886b342790e3dad1d488e65473db7ee256df5a3cb1a70cab96b7e66887a7",
+      "bytes": 5784861,
+      "architecture": "combat_causal_attention_v1",
+      "feature_version": "combat_features_v10",
+      "training_report_sha256": "223b0298353c60086fd05c4b810ce4b26f9cd7244dc5faf5c2e41cc1ae760750",
+      "training_completion_sha256": "d67c7d6e7e4e31f514302e4ef170da84634d2d7592f05cb1af1e8f8ea1cb2df9",
+      "checkpoint_sha256": "e1086c8c6caa0ecd2d99227eba7e26258b079fc0cf436900ab948f48d20b508f",
+      "checkpoint_included": false,
+      "actor_steps_in_latest_update": 10,
+      "eligible_rows_in_latest_update": 13126,
+      "training_device": "cuda"
+    },
+    {
+      "label": "bonus",
+      "file": "bonus.weights.json",
+      "source": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-target-commitment-continuation-v1-20261011\\round-2\\update-bonus\\weights.json",
+      "sha256": "88daf5303af41d15009ba15c2460d5d18594731beb67df3fdb9b93a6f0e0ff3c",
+      "bytes": 5791090,
+      "architecture": "combat_causal_attention_v1",
+      "feature_version": "combat_features_v10",
+      "training_report_sha256": "2074780d701af2b7db469a2de0ff19c52a17487b247acb33674152468f497ff5",
+      "training_completion_sha256": "31e963eefddd48c29ba1c2320c3105b8e8476e080e0fe3e7b79730dfa7c99262",
+      "checkpoint_sha256": "05a1a83f7d5cd142f7e3f3868df866934a01c5d738cc7126c01b6f3b34ff46a5",
+      "checkpoint_included": false,
+      "actor_steps_in_latest_update": 10,
+      "eligible_rows_in_latest_update": 13828,
+      "training_device": "cuda"
+    }
+  ],
+  "training_performed_by_export": false,
+  "live_promotion": false,
+  "scope": "Three reward variants of the same Temporal Attention architecture. Full CUDA training/audits closed; fresh1456-battle evaluation pending. Byte-identical inference weights only; full Adam checkpoints remain in original folders. No game assets/corpora, commits or pushes."
+}
