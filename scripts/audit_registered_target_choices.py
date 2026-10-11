@@ -4,6 +4,7 @@ import collections
 import json
 import pathlib
 import math
+import re
 
 from process_combat_architecture_pool import read, save, sha
 from process_registered_combat_pool_cuda import select_learned_jobs
@@ -26,8 +27,21 @@ def audit(root, plan_index=None):
         assert result['capture_valid'] and result['generated_start']['confirmed']
         manifest_path = case / 'manifest.json'
         manifest = read(manifest_path)
-        release_frame = manifest['release_game_frame']
-        assert manifest['synchronous'] and manifest['fixed_world_hold'] and release_frame > 0
+        native_release = manifest['release_game_frame']
+        assert manifest['synchronous'] and manifest['fixed_world_hold'] and native_release > 0
+        server_log = pathlib.Path(result['root'])/'server.log'
+        server_log_digest = sha(server_log)
+        pattern = re.compile(r'^sv_test_combat spawncount=(\d+) server_frame=(\d+) g_test_combat_start game_frame=(\d+) ready=1 seed=(\d+)$')
+        releases = []
+        with server_log.open(encoding='utf-8-sig') as stream:
+            for line in stream:
+                if 'g_test_combat_start game_frame=' in line:
+                    match = pattern.fullmatch(line.strip())
+                    assert match, 'Malformed release telemetry'
+                    releases.append(tuple(map(int, match.groups())))
+        assert len(releases) == 1, 'Exactly one native release required'
+        generation, release_frame, game_frame, seed = releases[0]
+        assert game_frame == native_release and seed == job['seed']
         trace = pathlib.Path(result['root']) / 'bot.jsonl'
         trace_digest = sha(trace)
         counts = collections.Counter()
@@ -51,6 +65,7 @@ def audit(root, plan_index=None):
                 previous = None
                 continue
             frame = identity['frame']
+            assert identity['spawncount'] == generation
             frame_key = tuple(identity.get(k) for k in ('map', 'spawncount', 'connection', 'actor', 'life', 'frame'))
             assert frame_key not in seen, 'Duplicate provider decision frame'
             seen.add(frame_key)
@@ -87,6 +102,11 @@ def audit(root, plan_index=None):
                 counts['attack_command_frames'] += 1
                 counts['stationary_attack_command_frames']+=int(not moving)
                 counts['attack_with_no_selected_target_frames']+=int(not entity)
+                if not entity:
+                    clear_enemies = any(e.get('clear_shot') for e in enemies.values())
+                    counts['targetless_attack_clear_enemy_frames' if clear_enemies else
+                           'targetless_attack_occluded_enemy_frames' if enemies else
+                           'targetless_attack_no_observed_enemy_frames'] += 1
                 attacking[name] += 1
             if any(e['class'] == 'monster_parasite' and e['distance'] < 288 for e in enemies.values()):
                 counts['parasite_near_frames'] += 1
@@ -107,7 +127,9 @@ def audit(root, plan_index=None):
                 runs[-1]['frames'] += 1
             previous = dict(key=key, frame=frame, world=frame_key[:-1])
         assert sha(trace) == trace_digest
+        assert sha(server_log) == server_log_digest
         cases.append(dict(job=job['job'], seed=job['seed'], release_frame=release_frame,
+                          native_release_game_frame=native_release,release_generation=generation,server_log_sha256=server_log_digest,
                           manifest_sha256=sha(manifest_path), map=result['generated_fixture']['map'],
                           episode=result['generated_fixture']['episode_id'], counts=dict(counts),
                           chosen_frames=dict(chosen), attack_intent_frames=dict(attacking), runs=runs,
@@ -119,9 +141,10 @@ def audit(root, plan_index=None):
                           max_stationary_clear_enemy_run_frames=max_stationary_run,
                           trace_sha256=trace_digest, capture_sha256=sha(case / 'report.json')))
     assert sha(root/'report.json')==pool_sha
-    return dict(version='registered_target_intent_audit_v3', pool_sha256=pool_sha,
+    return dict(version='registered_target_intent_audit_v4', pool_sha256=pool_sha,
+                release_clock='verified_server_network_frame',
                 selected_plan_index=plan_index,script_sha256=sha(pathlib.Path(__file__)),cases=cases,
-                scope='Post-release first-life provider intent bounded by the sealed synchronous fixed-world-hold manifest release frame, keyed by entity and visible track, not distance-sorted slots. Consecutive same-world frames required for switches/runs; clear is client BSP evidence. Observed horizontal speed>=10 defines moving; requested movement norm>0.1 and applied turn magnitude>=30 degrees are descriptive. Initial delay begins at first provider frame, not reset/weapon setup. Attack frames are not native shots or hit attribution. Stationary/turn/switch actions are not labelled useless, and a maximum run is not a causal penalty recommendation. No neural execution; whole mixed pool acceptance is required before explicit learned plan selection.')
+                scope='Post-release first-life provider intent uses verified network server_frame of native release telemetry; native game_frame is checked against manifest but never compared to observation frame. Keyed by entity and visible track. Consecutive same-world frames required for switches/runs; clear is client BSP evidence and does not establish target-mask availability. Horizontal speed>=10 defines moving; movement norm>0.1 and turn>=30 degrees descriptive. Targetless attack partitions clear/occluded/no observed enemy contexts, not physical shots. Initial delay starts at first provider frame. No neural execution or causal waste labels.')
 
 
 def main():

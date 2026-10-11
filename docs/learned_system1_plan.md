@@ -572,7 +572,16 @@ Deterministic224 native закрыта:36→38/112 побед против58 rul
 служат только offline reward. Focused reward/legacy checks, label calibration
 на16 train боях и live CUDA smoke3 cases/270 rows прошли. Три CUDA warm
 objective fork сохраняют один actor/critic/std/Adam/RNG/history; residual LR
-сохранён отдельно. Запущен own-policy train336, control/cost/bonus,28 семейств,
-fresh offset248 seeds,16×2. После сбора — одинаковый GPU full-actor budget
-и независимая оценка; качество v12 и campaign/coop acceptance не доказаны.
+сохранён отдельно. Own-policy train336, control/cost/bonus,28 семейств,
+fresh offset248 seeds,16×2 и все3 CUDA updates закрыты:38821 rows,
+по10 actor/40 value steps, подтверждено saved Adam clocks на GPU.
+Независимая evaluation784 (3 награды ×2 режима +rules) закрыта на offset384,
+вместе с336 CUDA cases/41374 rows и8 factor comparisons. Bonus stochastic
+дал34/112 побед против27 control и55 rules; switches/turns уменьшились,
+но attack commands без цели выросли. Deterministic bonus33 против36 control;
+recovery0/32. Принятия в live нет. См. testing/combat_target_commitment_results_20261011.md. Common-history CUDA probe показывает лишь
+слабый сдвиг повторного выбора цели после одного обновления. После
+полной оценки и factor analysis начат первый из2 fresh own-policy
+циклов (672 train боя), с прежними reward/LR/архитектурой и без promotion.
+Качество v12, превосходство rules и campaign/coop acceptance не доказаны.
 См. testing/combat_target_commitment_plan_20261011.md.

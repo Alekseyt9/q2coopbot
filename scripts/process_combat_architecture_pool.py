@@ -11,7 +11,8 @@ def read(path):
 
 
 def sha(path):
-    return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+    with pathlib.Path(path).open('rb') as source:
+        return hashlib.file_digest(source, 'sha256').hexdigest()
 
 
 def save(path, value):
@@ -44,9 +45,16 @@ def compact_closed_exports(folder):
     for path in folder.rglob('*.jsonl'):
         if path.stat().st_size < 131072:continue
         digest=sha(path)
-        subprocess.run(['compact.exe','/C','/EXE:LZX','/F','/Q',str(path)],
-                       stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,
-                       creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),check=True)
+        for attempt in range(3):
+            result=subprocess.run(['compact.exe','/C','/EXE:LZX','/F','/Q',str(path)],
+                                  stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                                  creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            assert sha(path)==digest,'Export bytes changed during compression'
+            if result.returncode==0:break
+            if attempt==2:
+                raise RuntimeError('NTFS compression failed for '+str(path)+': '+
+                                   result.stdout.decode(errors='replace')[-4000:])
+            time.sleep(.5)
         assert sha(path)==digest,'Export bytes changed during compression'
         records.append(dict(path=str(path),sha256=digest,logical_bytes=path.stat().st_size))
     save(folder/'compression-sha.json',dict(state='complete',files=records))

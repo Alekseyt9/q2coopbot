@@ -57,12 +57,16 @@ def main():
     assert damage['state'] == 'complete' and damage['version'] == 'registered_native_damage_timing_v1'
     native = {c['job']: c for c in damage['cases']}
     assert len(native) == len(damage['cases']), 'Duplicate damage job'
-    variants = {}; sample = None
+    variants = {}; sample = None; clock_version = None
     for binding in args.audit:
         label, filename = binding.split('=', 1)
         path = pathlib.Path(filename).resolve(); before = sha(path); audit = read(path)
         assert label and label not in variants
-        assert audit['version'] == 'registered_target_intent_audit_v3', 'Post-release behavior required'
+        assert audit['version'] in ('registered_target_intent_audit_v3','registered_target_intent_audit_v4'), 'Post-release behavior required'
+        if clock_version is None: clock_version = audit['version']
+        assert audit['version'] == clock_version, 'Behavior release clocks must not be mixed'
+        if clock_version == 'registered_target_intent_audit_v4':
+            assert audit['release_clock'] == 'verified_server_network_frame'
         assert audit['pool_sha256'] == damage['pool_sha256']
         rows = []; groups = collections.defaultdict(list)
         keys = set()
@@ -85,6 +89,7 @@ def main():
         assert sha(path) == before
     assert sha(args.damage) == digest
     result = dict(version='registered_action_efficiency_summary_v1', state='complete',
+                  behavior_clock_version=clock_version,
                   pool_sha256=damage['pool_sha256'], damage_sha256=digest, script_sha256=sha(pathlib.Path(__file__)),
                   cases_per_variant=len(sample), variants=variants,
                   scope='Descriptive post-release first-life provider behavior joined to sealed native monster health damage. Command-delay and native-damage-delay clocks stay separate. Large yaw means applied command >=30 degrees; stationary means horizontal speed <10. A stationary run is consecutive observed frames. These are not confirmed waste, hit accuracy, causal effects, or reward recommendations. Native shot/impact evidence is required to diagnose bullets hitting walls. No inference, fitting, or promotion.')
