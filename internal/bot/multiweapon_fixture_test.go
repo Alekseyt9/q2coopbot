@@ -39,6 +39,22 @@ func TestSuperShotgunFixtureRequiresOwnedWeaponAndBothShells(t *testing.T) {
 	}
 }
 
+func TestGrenadesRecoveryFixtureRequiresFreshCompleteStock(t *testing.T) {
+	s := quake.Snapshot{Weapon: "models/weapons/v_handgr/tris.md2", Ammo: 5, InventoryKnown: true, InventoryAgeFrames: 0, Inventory: []quake.InventoryItem{{Name: "Blaster", Count: 1}, {Name: "Machinegun", Count: 1}, {Name: "Shotgun", Count: 1}, {Name: "Grenades", Count: 5}, {Name: "Bullets", Count: 40}, {Name: "Shells", Count: 20}}}
+	const fixture = "parasite_weapons-grenades-recovery"
+	if !synchronousFixtureWeaponReady(fixture, s) {
+		t.Fatal("complete recovery stock rejected")
+	}
+	for _, change := range []func(*quake.Snapshot){func(s *quake.Snapshot) { s.Weapon = "Machinegun" }, func(s *quake.Snapshot) { s.InventoryAgeFrames = 3 }, func(s *quake.Snapshot) { s.Ammo = 4 }, func(s *quake.Snapshot) { s.Inventory[3].Count = 4 }, func(s *quake.Snapshot) { s.Inventory[1].Count = 0 }, func(s *quake.Snapshot) { s.Inventory[4].Count = 0 }} {
+		bad := s
+		bad.Inventory = append([]quake.InventoryItem(nil), s.Inventory...)
+		change(&bad)
+		if synchronousFixtureWeaponReady(fixture, bad) {
+			t.Fatal("incomplete or stale recovery stock released")
+		}
+	}
+}
+
 func TestSuperShotgunBarrelGuardIncludesWaterRange(t *testing.T) {
 	mate := quake.Vec3{8700, 1200, 0}
 	s := quake.Snapshot{Health: 100, Weapon: "Super Shotgun", Teammate: &mate, Barrels: []quake.Object{{Origin: mate}}}

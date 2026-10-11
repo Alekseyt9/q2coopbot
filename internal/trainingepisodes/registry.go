@@ -214,7 +214,7 @@ func (e Episode) validate() error {
 		}
 		switch e.Recipe.Loadout {
 		case "blaster", "machinegun":
-		case "weapons", "weapons-scarce", "weapons-ssg":
+		case "weapons", "weapons-scarce", "weapons-ssg", "weapons-grenades-recovery":
 		default:
 			return fmt.Errorf("unsupported loadout")
 		}
@@ -374,7 +374,7 @@ func Build(r *Registry, root string, ids []string, split, mode, model, out strin
 			return nil, fmt.Errorf("model cannot run through the current Go inference adapter: %w", e)
 		}
 		for _, t := range p.Tasks {
-			if (t.Episode.Recipe.Loadout == "weapons" || t.Episode.Recipe.Loadout == "weapons-scarce") && header.WeaponHead != "combat_masked_weapon_v1" {
+			if (t.Episode.Recipe.Loadout == "weapons" || t.Episode.Recipe.Loadout == "weapons-scarce" || t.Episode.Recipe.Loadout == "weapons-ssg" || t.Episode.Recipe.Loadout == "weapons-grenades-recovery") && header.WeaponHead != "combat_masked_weapon_v1" {
 				return nil, fmt.Errorf("%s requires the masked weapon head", t.Episode.ID)
 			}
 		}

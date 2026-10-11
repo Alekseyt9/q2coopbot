@@ -50,7 +50,7 @@ func TestCampaignGroupLoadoutsHaveDisjointSeeds(t *testing.T) {
 	}
 	classes := []string{"monster_parasite", "monster_infantry", "monster_gunner"}
 	var ranges []Seeds
-	for _, loadout := range []string{"blaster", "machinegun", "weapons", "weapons-ssg"} {
+	for _, loadout := range []string{"blaster", "machinegun", "weapons", "weapons-ssg", "weapons-grenades-recovery"} {
 		episodes, err := CampaignGroupRecipesForLoadout(root, 1, []string{"base3"}, classes, loadout)
 		if err != nil {
 			t.Fatal(err)

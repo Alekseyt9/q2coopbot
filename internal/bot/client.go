@@ -650,6 +650,8 @@ func (c *Client) run(ctx context.Context) error {
 						setup = []string{"give Machinegun", fmt.Sprintf("give Bullets %d", bullets), "give Shotgun", fmt.Sprintf("give Shells %d", shells), "use Machinegun"}
 						if c.testWeaponSwitchFixture == "parasite_weapons-ssg" {
 							setup = []string{"give Machinegun", fmt.Sprintf("give Bullets %d", bullets), "give Shotgun", "give Super Shotgun", fmt.Sprintf("give Shells %d", shells), "use Super Shotgun"}
+						} else if c.testWeaponSwitchFixture == "parasite_weapons-grenades-recovery" {
+							setup = []string{"give Machinegun", fmt.Sprintf("give Bullets %d", bullets), "give Shotgun", fmt.Sprintf("give Shells %d", shells), "give Grenades 5", "use Grenades"}
 						}
 					} else if c.testWeaponSwitchFixture == "parasite_shotgun" {
 						setup = []string{"give Shotgun", "give Shells 20", "use Shotgun"}
@@ -852,6 +854,9 @@ func (c *Client) run(ctx context.Context) error {
 				if weaponRequest != "" {
 					if err := c.command(weaponRequest); err != nil {
 						return err
+					}
+					if strings.HasPrefix(weaponRequest, "use ") && c.combatControl.last.Frame == c.planner.World.Snapshot.Frame {
+						c.combatControl.weaponRequests.record(c.combatControl.last, strings.TrimPrefix(weaponRequest, "use "))
 					}
 				}
 			}

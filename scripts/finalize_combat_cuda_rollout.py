@@ -40,6 +40,12 @@ def finalize(model_path, data, out):
                     str(pathlib.Path(__file__).resolve()): sha(__file__),
                     str(pathlib.Path(__file__).with_name('combat_cuda_bootstrap.py').resolve()):
                         sha(pathlib.Path(__file__).with_name('combat_cuda_bootstrap.py'))})
+    weapon_helpers=[]
+    if model.get('weapon_state_residual'):
+        weapon_helpers=[pathlib.Path(__file__).with_name(name).resolve() for name in
+            ('combat_weapon_state_residual.py','combat_spatial_aim.py','ppo_recurrent.py','ppo_combat.py',
+             'combat_target_head.py','combat_precision_head.py','combat_weapon_head.py','combat_attention.py')]
+        sources.update({str(path):sha(path) for path in weapon_helpers})
     for path, digest in sources.items():
         assert sha(path) == digest, 'Native source changed: ' + path
     rows = [json.loads(line) for line in (data / 'native-rollout.jsonl').read_text().splitlines()]
@@ -122,10 +128,11 @@ def finalize(model_path, data, out):
     frozen = out / 'verifier-sources'
     frozen.mkdir()
     helper_paths=[pathlib.Path(__file__).resolve(), pathlib.Path(__file__).with_name('combat_cuda_bootstrap.py').resolve()]
+    helper_paths.extend(weapon_helpers)
     if model.get('shared_target'):
         helper_paths.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
                             ('combat_shared_target.py','combat_spatial_aim.py'))
-    for path in helper_paths:
+    for path in dict.fromkeys(helper_paths):
         target = frozen / path.name
         shutil.copy2(path, target)
         sources.pop(str(path), None)

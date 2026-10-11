@@ -10,7 +10,7 @@ import (
 )
 
 var rngStartPattern = regexp.MustCompile(`^g_test_rng_start game_frame=(\d+) phase=post_frame seed=(\d+) cursor_before=(\d+) cursor_after=256$`)
-var weaponStartPattern = regexp.MustCompile(`^g_test_weapon_start game_frame=(\d+) actor=1 weapon=(Blaster|Machinegun|Super Shotgun) gunframe_before=(\d+) gunframe_after=(\d+)$`)
+var weaponStartPattern = regexp.MustCompile(`^g_test_weapon_start game_frame=(\d+) actor=1 weapon=(Blaster|Machinegun|Super Shotgun|Grenades) gunframe_before=(\d+) gunframe_after=(\d+)$`)
 
 // VerifyPostFrameRNG verifies the native post-frame seeding receipt. The cursor
 // is a diagnostic, not proof of complete RNG/world snapshot equivalence.
@@ -27,6 +27,8 @@ func VerifyPostFrameRNG(r io.Reader, seed, expectedFrame int, expectedWeapon ...
 		minFrame, maxFrame = 6, 45
 	} else if weapon == "Super Shotgun" {
 		minFrame, maxFrame = 18, 57
+	} else if weapon == "Grenades" {
+		minFrame, maxFrame = 16, 48
 	} else if weapon != "Blaster" {
 		return fmt.Errorf("unsupported fixed weapon")
 	}

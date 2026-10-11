@@ -15,21 +15,22 @@ import (
 const PPOKind = "combat_ppo_v1"
 
 type PPOFile struct {
-	Kind            string               `json:"kind"`
-	Features        string               `json:"feature_version"`
-	Actor           []DenseLayer         `json:"actor"`
-	Value           []DenseLayer         `json:"value"`
-	LogStd          [4]float64           `json:"log_std"`
-	SamplingSeed    int64                `json:"sampling_seed"`
-	Deterministic   bool                 `json:"deterministic"`
-	Memory          *GRUFile             `json:"memory,omitempty"`
-	Attention       *AttentionFile       `json:"attention,omitempty"`
-	EntityAttention *EntityAttentionFile `json:"entity_attention,omitempty"`
-	WeaponHead      string               `json:"weapon_head,omitempty"`
-	TargetHead      string               `json:"target_head,omitempty"`
-	AimModeHead     string               `json:"aim_mode_head,omitempty"`
-	SpatialAim      *SpatialAimFile      `json:"spatial_aim,omitempty"`
-	SharedTarget    *SpatialAimFile      `json:"shared_target,omitempty"`
+	Kind                string               `json:"kind"`
+	Features            string               `json:"feature_version"`
+	Actor               []DenseLayer         `json:"actor"`
+	Value               []DenseLayer         `json:"value"`
+	LogStd              [4]float64           `json:"log_std"`
+	SamplingSeed        int64                `json:"sampling_seed"`
+	Deterministic       bool                 `json:"deterministic"`
+	Memory              *GRUFile             `json:"memory,omitempty"`
+	Attention           *AttentionFile       `json:"attention,omitempty"`
+	EntityAttention     *EntityAttentionFile `json:"entity_attention,omitempty"`
+	WeaponHead          string               `json:"weapon_head,omitempty"`
+	TargetHead          string               `json:"target_head,omitempty"`
+	AimModeHead         string               `json:"aim_mode_head,omitempty"`
+	SpatialAim          *SpatialAimFile      `json:"spatial_aim,omitempty"`
+	SharedTarget        *SpatialAimFile      `json:"shared_target,omitempty"`
+	WeaponStateResidual *SpatialAimFile      `json:"weapon_state_residual,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
@@ -74,22 +75,22 @@ func LoadPPO(path string) (*PPO, error) {
 	if d.Decode(new(any)) != io.EOF {
 		return nil, fmt.Errorf("trailing PPO data")
 	}
-	if f.Kind != PPOKind || (f.Features != FeatureVersion && f.Features != AimFeatureVersion && f.Features != BBoxFeatureVersion && f.Features != TypedFeatureVersion && f.Features != RecoilFeatureVersion && f.Features != WeaponFeatureVersion && f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion && f.Features != ThreatFeatureVersion) || f.SamplingSeed < 0 {
+	if f.Kind != PPOKind || (f.Features != FeatureVersion && f.Features != AimFeatureVersion && f.Features != BBoxFeatureVersion && f.Features != TypedFeatureVersion && f.Features != RecoilFeatureVersion && f.Features != WeaponFeatureVersion && f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion && f.Features != ThreatFeatureVersion && f.Features != EquippedWeaponFeatureVersion) || f.SamplingSeed < 0 {
 		return nil, fmt.Errorf("invalid PPO header")
 	}
 	outputs := 8
 	if f.WeaponHead != "" {
-		if f.WeaponHead != WeaponHeadVersion || (f.Features != WeaponFeatureVersion && f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion && f.Features != ThreatFeatureVersion) || f.EntityAttention != nil {
+		if f.WeaponHead != WeaponHeadVersion || (f.Features != WeaponFeatureVersion && f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion && f.Features != ThreatFeatureVersion && f.Features != EquippedWeaponFeatureVersion) || f.EntityAttention != nil {
 			return nil, fmt.Errorf("invalid PPO weapon contract")
 		}
 		outputs += len(weaponNames)
 	}
 	if f.TargetHead != "" {
-		if f.TargetHead != TargetHeadVersion || (f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion && f.Features != ThreatFeatureVersion) || f.WeaponHead != WeaponHeadVersion || f.EntityAttention != nil {
+		if f.TargetHead != TargetHeadVersion || (f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion && f.Features != ThreatFeatureVersion && f.Features != EquippedWeaponFeatureVersion) || f.WeaponHead != WeaponHeadVersion || f.EntityAttention != nil {
 			return nil, fmt.Errorf("invalid PPO target contract")
 		}
 		outputs = TargetOutputWidth
-	} else if f.Features == TargetFeatureVersion || f.Features == NavigationFeatureVersion || f.Features == ThreatFeatureVersion {
+	} else if f.Features == TargetFeatureVersion || f.Features == NavigationFeatureVersion || f.Features == ThreatFeatureVersion || f.Features == EquippedWeaponFeatureVersion {
 		return nil, fmt.Errorf("target features require target head")
 	}
 	if f.AimModeHead != "" {
@@ -108,6 +109,9 @@ func LoadPPO(path string) (*PPO, error) {
 		return nil, e
 	}
 	if e = validateSharedTarget(f); e != nil {
+		return nil, e
+	}
+	if e = validateWeaponStateResidual(f); e != nil {
 		return nil, e
 	}
 	if e = validateFeatureLayers(f.Value, 1, f.Features); e != nil {
@@ -187,6 +191,10 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 		return Action{}, 0, 0, e
 	}
 	x, e = p.spatialRaw(o, x)
+	if e != nil {
+		return Action{}, 0, 0, e
+	}
+	x, e = p.weaponStateRaw(o, x)
 	if e != nil {
 		return Action{}, 0, 0, e
 	}
@@ -273,6 +281,10 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		return Action{}, e
 	}
 	x, e = p.spatialRaw(o, x)
+	if e != nil {
+		return Action{}, e
+	}
+	x, e = p.weaponStateRaw(o, x)
 	if e != nil {
 		return Action{}, e
 	}

@@ -40,14 +40,16 @@ def main():
     args = parser.parse_args()
     assert not args.out.exists(), 'Fresh output required'
     variants = {}
-    pool_hash = keys = None
+    pool_hash = keys = audit_version = None
     for argument in args.audit:
         label, filename = argument.split('=', 1)
         assert label and label not in variants
         path = pathlib.Path(filename).resolve()
         before = digest(path)
         audit = json.loads(path.read_text(encoding='utf-8-sig'))
-        assert audit['version'] == 'registered_target_intent_audit_v2'
+        assert audit['version'] in ('registered_target_intent_audit_v2','registered_target_intent_audit_v3')
+        if audit_version is None: audit_version=audit['version']
+        assert audit['version']==audit_version, 'Cannot mix pre-release and post-release audit scopes'
         cases = audit['cases']
         identities = {(c['episode'], c['seed'], c['map']) for c in cases}
         assert cases and len(identities) == len(cases)
@@ -61,9 +63,9 @@ def main():
                                selected_plan_index=audit['selected_plan_index'],
                                totals=summarize(cases), maps={name:summarize(rows) for name, rows in sorted(by_map.items())})
         assert digest(path) == before, 'Input changed during summary'
-    result = dict(version='registered_combat_behavior_summary_v1', state='complete',
+    result = dict(version='registered_combat_behavior_summary_v2', state='complete', audit_version=audit_version,
                   pool_sha256=pool_hash, cases_per_variant=len(keys), variants=variants,
-                  scope='Descriptive first-life provider commands and observed motion from accepted audits. Delays begin at first provider frame, excluding harness setup. Stationary fractions and target/turn counts do not prove wasted actions; attack commands are not bullets or hit accuracy. No training or neural execution.')
+                  scope='Descriptive first-life provider commands and observed motion from accepted audits. Delays begin at first provider frame. V3 filters all pre-release frames; legacy V2 may include provider-owned setup frames. Stationary fractions and target/turn counts do not prove wasted actions; attack commands are not bullets or hit accuracy. No training or neural execution.')
     with args.out.open('x', encoding='utf-8') as output:
         json.dump(result, output, indent=2, allow_nan=False)
     print(json.dumps({name:value['totals'] for name, value in variants.items()}, indent=2))

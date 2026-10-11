@@ -22,6 +22,8 @@ def verify_memory_export(trace, dataset):
             if o is None: continue
             raw=own[tuple(o['identity'][k] for k in identities)]
             assert o.get('remembered_threats',[])==raw.get('remembered_threats',[]), 'Exporter changed/dropped observed threat memory'
+            for field in ('previous_weapon_request','previous_weapon_request_age_frames'):
+                assert o.get(field)==raw.get(field), 'Exporter changed/dropped own weapon request history'
 
 
 def run(command, log, cwd):
@@ -68,7 +70,7 @@ def main():
              '--reset-expectation',directory/'reset-role-0.json','--synchronous','--require-execution',
                  '--worker',f'paired-{seed}','--episode',f'paired-{seed}','--out',dataset], directory/'export.log', repo)
         native, cuda = directory/('native'+suffix), directory/('cuda'+suffix)
-        if model_feature_version=='combat_features_v9':
+        if model_feature_version in ('combat_features_v9','combat_features_v10'):
             verify_memory_export(directory/'PairLearner.jsonl',dataset)
         if cuda.exists():
             meta = read(cuda/'report.json')
@@ -84,9 +86,9 @@ def main():
                      '--out',native,'--allow-horizon'], directory/'prepare-retry.log', repo)
             verification = finalize(model, native, cuda)
         meta = read(cuda/'report.json')
-        if meta['feature_version']=='combat_features_v9':
+        if meta['feature_version'] in ('combat_features_v9','combat_features_v10'):
             rollout_rows=[json.loads(line) for line in (cuda/'rollout.jsonl').read_text().splitlines()]
-            assert any(any(row['features'][881:]) for row in rollout_rows), 'V9 memory missing from exported learning features'
+            assert any(any(row['features'][881:1121]) for row in rollout_rows), 'V9 memory missing from exported learning features'
         outcomes = [json.loads(line) for line in (dataset/'server_outcomes.jsonl').read_text().splitlines()]
         results.append(dict(seed=seed, root=str(directory), rows=meta['rows'], terminals=meta['terminals'],
                             joint_death=case['joint_death'], learner_monster_kills=sum(o['monster_kills'] for o in outcomes),

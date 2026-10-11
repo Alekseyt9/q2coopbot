@@ -117,6 +117,7 @@ def main():
     ap.add_argument('--target-head-lr',type=float,default=.003)
     ap.add_argument('--decision-head-lr',type=float,default=.003)
     ap.add_argument('--fork-head-scope',action='store_true',help='Explicit optimizer-scope fork from a resumed checkpoint')
+    ap.add_argument('--weapon-state-lr',type=float,default=.0003)
     args=ap.parse_args();training_devices();torch.set_num_threads(2);torch.manual_seed(20261006);torch.use_deterministic_algorithms(True)
     assert all(math.isfinite(w) and w >= 0 for w in (args.retention_weight,args.bank_weight))
     assert math.isfinite(args.sequence_retention_weight) and args.sequence_retention_weight >= 0
@@ -151,6 +152,12 @@ def main():
     assert args.actor_head_scope == 'all' or (target_head and not args.sequence_retention_spec)
     assert args.actor_head_scope != 'decisions' or weapon_head, 'Decision scope requires the masked weapon head'
     actor_training=dict(scope=args.actor_head_scope,learning_rate={'target':args.target_head_lr,'decisions':args.decision_head_lr,'all':config['actor_lr']}[args.actor_head_scope])
+    if model.get('weapon_state_residual'):
+        from combat_weapon_state_residual import validate as validate_weapon_state,CONTRACT_VERSION
+        validate_weapon_state(model)
+        assert args.actor_head_scope=='all', 'Observed weapon residual requires full-actor PPO'
+        assert math.isfinite(args.weapon_state_lr) and 0<args.weapon_state_lr<=.01
+        actor_training['weapon_state_residual']=dict(version=CONTRACT_VERSION,learning_rate=args.weapon_state_lr)
     assert meta['feature_version']==model['feature_version'], 'Rollout feature contract differs'
     key=next(k for k in ('memory','attention','entity_attention') if model.get(k));spec=model[key];entity=key=='entity_attention'
     expected_version={'memory':VERSION,'attention':TEMPORAL,'entity_attention':ENTITY}[key];assert spec['version']==expected_version
@@ -233,7 +240,8 @@ def main():
         if args.bank_weight:loss=loss+args.bank_weight*bank_loss()
         if args.sequence_retention_weight:loss=loss+args.sequence_retention_weight*sequence_loss(raw)
         return loss,((ratio-1)-(lp-old)).mean()
-    actor_opt=torch.optim.Adam(list(actor.parameters())+[std],lr=config['actor_lr']);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
+    from combat_weapon_state_residual import optimizer as actor_optimizer
+    actor_opt=actor_optimizer(actor,std,config['actor_lr'],args.weapon_state_lr);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
     consumed=[];updates=0;total=0;migrations=[];config_forks=[]
     if args.resume:
         cp=torch.load(args.resume,map_location='cpu',weights_only=True)
@@ -266,7 +274,8 @@ def main():
         loss,kl=objective()
         if float(kl.detach())>config['target_kl']:break
         actor_opt.zero_grad();loss.backward();nn.utils.clip_grad_norm_(parameters,config['max_grad_norm'])
-        trial=guarded_actor_step(parameters,actor_opt,objective,loss.detach(),actor_training['learning_rate'],config['target_kl'],project);trials.append(trial)
+        group_lrs=[actor_training['learning_rate'],args.weapon_state_lr] if model.get('weapon_state_residual') else None
+        trial=guarded_actor_step(parameters,actor_opt,objective,loss.detach(),actor_training['learning_rate'],config['target_kl'],project,group_lrs=group_lrs);trials.append(trial)
         if not trial['accepted']:break
     for _ in range(config['value_steps']):
         prediction,_=compute(value);loss=(prediction[:,0]-ret).square().mean();assert torch.isfinite(loss)
@@ -304,6 +313,10 @@ def main():
     report['actor_scope_fork']=args.fork_head_scope
     report['training_config_forks']=config_forks
     report['trainable_actor_parameters']=trainable_actor_parameters
+    if model.get('weapon_state_residual'):
+        report['scope']+=' Observed weapon-state residual uses a separate Adam group with explicit LR; old log_std and parameter IDs stay in group1. Both groups backtrack by the same factor. Full actor remains trainable.'
+        report['weapon_state_residual']=actor_training['weapon_state_residual']
+        report['actor_optimizer_group_lrs']=[group['lr'] for group in actor_opt.param_groups]
     if args.actor_head_scope=='target':report['scope']+=' Projected target rows20:29 only; other actor outputs/encoder/spatial/std and their Adam moments preserved. Output tensor Adam clocks advance for target updates; switching scope requires explicit checkpoint fork.'
     if args.actor_head_scope=='decisions':report['scope']+=' Projected attack row4, weapon rows8:20 and target rows20:29 only; movement/vertical/aim/mode/encoder/spatial/std and their Adam moments preserved. Shared output tensor Adam clocks advance; changing scope or its learning rate requires explicit checkpoint fork. Joint on-policy PPO likelihood and masks unchanged.'
     if model.get('shared_target'):

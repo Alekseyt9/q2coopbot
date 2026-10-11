@@ -1,7 +1,7 @@
 package bot
 
 func multiWeaponFixture(fixture string) bool {
-	return fixture == "parasite_weapons" || fixture == "parasite_weapons-scarce" || fixture == "parasite_weapons-ssg"
+	return fixture == "parasite_weapons" || fixture == "parasite_weapons-scarce" || fixture == "parasite_weapons-ssg" || fixture == "parasite_weapons-grenades-recovery"
 }
 
 func multiWeaponStock(fixture string) (bullets, shells int) {

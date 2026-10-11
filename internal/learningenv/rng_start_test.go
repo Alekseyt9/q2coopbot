@@ -60,3 +60,20 @@ func TestSuperShotgunReceiptRequiresDeclaredWeaponAndIdlePhase(t *testing.T) {
 		t.Fatal("SSG accepted as MG")
 	}
 }
+
+func TestGrenadesReceiptRequiresDeclaredWeaponAndIdlePhase(t *testing.T) {
+	release := "sv_test_combat spawncount=7 server_frame=35 g_test_combat_start game_frame=37 ready=1 seed=14900\n"
+	marker := "g_test_rng_start game_frame=37 phase=post_frame seed=14900 cursor_before=257 cursor_after=256\n"
+	w := "g_test_weapon_start game_frame=37 actor=1 weapon=Grenades gunframe_before=48 gunframe_after=16\n"
+	if err := VerifyPostFrameRNG(strings.NewReader(release+w+marker), 14900, 37, "Grenades"); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{strings.ReplaceAll(w, "after=16", "after=9"), strings.ReplaceAll(w, "before=48", "before=15"), strings.ReplaceAll(w, "before=48", "before=49"), strings.ReplaceAll(w, "actor=1", "actor=2"), w + w} {
+		if err := VerifyPostFrameRNG(strings.NewReader(release+bad+marker), 14900, 37, "Grenades"); err == nil {
+			t.Fatal("bad Grenades receipt accepted")
+		}
+	}
+	if err := VerifyPostFrameRNG(strings.NewReader(release+w+marker), 14900, 37, "Machinegun"); err == nil {
+		t.Fatal("Grenades accepted as Machinegun")
+	}
+}

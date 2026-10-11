@@ -24,7 +24,12 @@ def audit(root, plan_index=None):
         assert len(capture['results']) == 1
         result = capture['results'][0]
         assert result['capture_valid'] and result['generated_start']['confirmed']
+        manifest_path = case / 'manifest.json'
+        manifest = read(manifest_path)
+        release_frame = manifest['release_game_frame']
+        assert manifest['synchronous'] and manifest['fixed_world_hold'] and release_frame > 0
         trace = pathlib.Path(result['root']) / 'bot.jsonl'
+        trace_digest = sha(trace)
         counts = collections.Counter()
         chosen = collections.Counter()
         attacking = collections.Counter()
@@ -42,7 +47,7 @@ def audit(root, plan_index=None):
                 continue
             obs, intent, applied = c['observation'], c['proposed'], c['applied']
             identity = obs['identity']
-            if identity['life'] != 1 or obs['health'] <= 0:
+            if identity['life'] != 1 or obs['health'] <= 0 or identity['frame'] < release_frame:
                 previous = None
                 continue
             frame = identity['frame']
@@ -101,7 +106,9 @@ def audit(root, plan_index=None):
                 runs[-1]['last_frame'] = frame
                 runs[-1]['frames'] += 1
             previous = dict(key=key, frame=frame, world=frame_key[:-1])
-        cases.append(dict(job=job['job'], seed=job['seed'], map=result['generated_fixture']['map'],
+        assert sha(trace) == trace_digest
+        cases.append(dict(job=job['job'], seed=job['seed'], release_frame=release_frame,
+                          manifest_sha256=sha(manifest_path), map=result['generated_fixture']['map'],
                           episode=result['generated_fixture']['episode_id'], counts=dict(counts),
                           chosen_frames=dict(chosen), attack_intent_frames=dict(attacking), runs=runs,
                           goal=bool(result['goal_stop']), death=bool(result['death_stop']),
@@ -110,11 +117,11 @@ def audit(root, plan_index=None):
                           first_provider_frame=first_provider_frame,first_attack_frame=first_attack_frame,
                           initial_attack_delay_frames=first_attack_frame-first_provider_frame if first_attack_frame is not None else None,
                           max_stationary_clear_enemy_run_frames=max_stationary_run,
-                          trace_sha256=sha(trace), capture_sha256=sha(case / 'report.json')))
+                          trace_sha256=trace_digest, capture_sha256=sha(case / 'report.json')))
     assert sha(root/'report.json')==pool_sha
-    return dict(version='registered_target_intent_audit_v2', pool_sha256=pool_sha,
+    return dict(version='registered_target_intent_audit_v3', pool_sha256=pool_sha,
                 selected_plan_index=plan_index,script_sha256=sha(pathlib.Path(__file__)),cases=cases,
-                scope='Actual captured first-life provider intent, keyed by entity and visible track, not distance-sorted slots. Consecutive same-world frames required for switches/runs; clear is client BSP evidence. Observed horizontal speed>=10 defines moving; requested movement norm>0.1 and applied turn magnitude>=30 degrees are descriptive. Initial delay begins at first provider frame, not reset/weapon setup. Attack frames are not native shots or hit attribution. Stationary/turn/switch actions are not labelled useless, and a maximum run is not a causal penalty recommendation. No neural execution; whole mixed pool acceptance is required before explicit learned plan selection.')
+                scope='Post-release first-life provider intent bounded by the sealed synchronous fixed-world-hold manifest release frame, keyed by entity and visible track, not distance-sorted slots. Consecutive same-world frames required for switches/runs; clear is client BSP evidence. Observed horizontal speed>=10 defines moving; requested movement norm>0.1 and applied turn magnitude>=30 degrees are descriptive. Initial delay begins at first provider frame, not reset/weapon setup. Attack frames are not native shots or hit attribution. Stationary/turn/switch actions are not labelled useless, and a maximum run is not a causal penalty recommendation. No neural execution; whole mixed pool acceptance is required before explicit learned plan selection.')
 
 
 def main():

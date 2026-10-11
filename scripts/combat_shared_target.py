@@ -16,7 +16,7 @@ def validate(model):
     spec = model.get('shared_target')
     if spec is None:
         return
-    if (model.get('feature_version') != 'combat_features_v9' or
+    if (model.get('feature_version') not in ('combat_features_v9','combat_features_v10') or
             not model.get('spatial_aim') or not model.get('aim_mode_head') or
             spec.get('version') != VERSION or len(spec.get('layers', [])) != 3):
         raise ValueError('invalid shared target contract')
@@ -51,7 +51,7 @@ def masked_summary(values):
 
 
 def inputs(features, raw):
-    if features.shape[-1] != 1121 or raw.shape[-1] != 81:
+    if features.shape[-1] not in (1121,1147) or raw.shape[-1] != 81:
         raise ValueError('shared target requires v9 features and precision outputs')
     enemy = features[..., 73:169].reshape(*features.shape[:-1], 8, 12)
     memory = features[..., 881:1121].reshape(*features.shape[:-1], 8, 30)

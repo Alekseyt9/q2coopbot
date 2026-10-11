@@ -23,7 +23,7 @@ def restore_optimizer(optimizer,snapshot):
     # the baseline used by later retries or the final rejection restore.
     optimizer.load_state_dict(copy.deepcopy(snapshot))
 
-def guarded_actor_step(parameters,optimizer,objective,loss_before,base_lr,target_kl,project=None):
+def guarded_actor_step(parameters,optimizer,objective,loss_before,base_lr,target_kl,project=None,group_lrs=None):
     """Backtrack Adam; repair only a confirmed uphill first-moment direction.
 
     Keep second moments and step counters. A rejected fallback restores every
@@ -32,6 +32,11 @@ def guarded_actor_step(parameters,optimizer,objective,loss_before,base_lr,target
     parameters=list(parameters);saved=[p.detach().clone() for p in parameters]
     snapshot=copy.deepcopy(optimizer.state_dict());gradients=[p.grad.detach().clone() if p.grad is not None else None for p in parameters]
     result=dict(accepted=False,retry=None,direction_fallback=False,initial_grad_dot_delta=None)
+    rates=[base_lr]*len(optimizer.param_groups) if group_lrs is None else list(group_lrs)
+    if len(rates)!=len(optimizer.param_groups) or any(not math.isfinite(rate) or rate<=0 for rate in rates):
+        raise ValueError('Invalid guarded optimizer group learning rates')
+    def set_rates(scale=1.):
+        for group,rate in zip(optimizer.param_groups,rates):group['lr']=rate*scale
     def restore():
         with torch.no_grad():
             for p,v in zip(parameters,saved):p.copy_(v)
@@ -44,7 +49,7 @@ def guarded_actor_step(parameters,optimizer,objective,loss_before,base_lr,target
             # replacing only momentum makes this proposal follow today's grad.
             for state in optimizer.state.values():
                 if 'exp_avg' in state:state['exp_avg'].zero_()
-        for group in optimizer.param_groups:group['lr']=base_lr*(.5**retry)
+        set_rates(.5**retry)
         optimizer.step()
         with torch.no_grad():
             if project is not None:project()
@@ -57,14 +62,14 @@ def guarded_actor_step(parameters,optimizer,objective,loss_before,base_lr,target
                     restore()
                     for state in optimizer.state.values():
                         if 'exp_avg' in state:state['exp_avg'].zero_()
-                    for group in optimizer.param_groups:group['lr']=base_lr
+                    set_rates()
                     optimizer.step()
                     if project is not None:project()
                     dot=sum((g*(p-v)).sum() for p,v,g in zip(parameters,saved,gradients) if g is not None)
             candidate_loss,candidate_kl=objective()
             accepted=bool(torch.isfinite(dot) and dot<=0 and torch.isfinite(candidate_loss) and torch.isfinite(candidate_kl) and candidate_kl<=target_kl and candidate_loss<=loss_before+1e-7)
         if accepted:
-            for group in optimizer.param_groups:group['lr']=base_lr
+            set_rates()
             result.update(accepted=True,retry=retry,accepted_grad_dot_delta=float(dot));return result
     restore();return result
 
@@ -158,7 +163,8 @@ def validate_objective(config,meta):
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--init-bc');ap.add_argument('--model');ap.add_argument('--data');ap.add_argument('--resume');ap.add_argument('--config',required=True);ap.add_argument('--out',required=True)
     ap.add_argument('--anchor-model',type=pathlib.Path);ap.add_argument('--retention-weight',type=float,default=1.);ap.add_argument('--retention-updates',type=int,default=4);ap.add_argument('--retention-mode',choices=('linear','constant'),default='linear')
-    ap.add_argument('--retention-bank',type=pathlib.Path);ap.add_argument('--bank-weight',type=float,default=1.);a=ap.parse_args()
+    ap.add_argument('--retention-bank',type=pathlib.Path);ap.add_argument('--bank-weight',type=float,default=1.)
+    ap.add_argument('--weapon-state-lr',type=float,default=.0003);a=ap.parse_args()
     out=pathlib.Path(a.out);out.mkdir(exist_ok=False);config=json.loads(pathlib.Path(a.config).read_text(encoding='utf-8-sig'))
     assert config['version']=='combat_ppo_training_v1';torch.set_num_threads(2);torch.manual_seed(config['seed']);torch.use_deterministic_algorithms(True)
     if a.init_bc:
@@ -201,9 +207,17 @@ def main():
     if mode is None:assert all(r['sample'].get('aim_mode',0)==0 for r in rows)
     if not target_head:assert all(r['sample'].get('target',0)==0 for r in rows)
     from combat_spatial_aim import wrap as wrap_spatial,export as export_spatial
+    from combat_weapon_state_residual import optimizer as actor_optimizer
     actor=wrap_spatial(network(model['actor']),model).to('cuda');value=network(model['value']).to('cuda');std=nn.Parameter(torch.tensor(model['log_std'],device='cuda'))
     checkpoint=None;consumed=[];updates=0;total_steps=0;resume_sha=sha(pathlib.Path(a.resume)) if a.resume else None
     if a.resume:checkpoint,consumed,updates,total_steps=restore_checkpoint(a.resume,model_path,config,actor,value,std,meta['rollout_sha256'])
+    weapon_state_training=None
+    if model.get('weapon_state_residual'):
+        from combat_weapon_state_residual import CONTRACT_VERSION
+        assert math.isfinite(a.weapon_state_lr) and 0<a.weapon_state_lr<=.01
+        weapon_state_training=dict(version=CONTRACT_VERSION,learning_rate=a.weapon_state_lr)
+    if checkpoint:
+        assert checkpoint.get('weapon_state_optimizer')==weapon_state_training, 'Explicit weapon-state optimizer migration required'
     anchor_sha=sha(a.anchor_model) if a.anchor_model else None
     retention,retention_weight=retention_schedule(anchor_sha,a.retention_weight,a.retention_updates,updates,checkpoint.get('retention') if checkpoint else None,a.retention_mode)
     teacher,teacher_std=None,None
@@ -228,7 +242,7 @@ def main():
         assert log_error<1e-3 and value_error<1e-4, (log_error,value_error)
     benchmarks={}
     for device in training_devices():
-        probe=wrap_spatial(network(model['actor']),model).to(device);pstd=nn.Parameter(torch.tensor(model['log_std'],device=device));px,pz,pa,pv,po,pad,pret=[t.to(device) for t in data];opt=torch.optim.Adam(list(probe.parameters())+[pstd],lr=config['actor_lr'])
+        probe=wrap_spatial(network(model['actor']),model).to(device);pstd=nn.Parameter(torch.tensor(model['log_std'],device=device));px,pz,pa,pv,po,pad,pret=[t.to(device) for t in data];opt=actor_optimizer(probe,pstd,config['actor_lr'],a.weapon_state_lr)
         def step():
             opt.zero_grad();plp,ent=log_prob(probe,pstd,px,pz,pa,pv,weapon,target,mode);ratio=(plp-po).exp();loss=-torch.minimum(ratio*pad,ratio.clamp(1-config['clip'],1+config['clip'])*pad).mean()-config['entropy']*ent.mean()
             if teacher is not None:loss=loss+retention_weight*anchor_kl(probe(px),pstd,teacher.to(device),teacher_std.to(device),weapon_mask=feature_mask(px) if weapon_head else None)
@@ -252,7 +266,7 @@ def main():
     with torch.no_grad():initial_anchor_kl=float(retention_loss())
     with torch.no_grad():initial_bank_kl={s:float(bank_loss(s)) for s in bank_tensors}
     ad=(ad-ad.mean())/(ad.std(unbiased=False)+1e-8)
-    actor_opt=torch.optim.Adam(list(actor.parameters())+[std],lr=config['actor_lr']);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
+    actor_opt=actor_optimizer(actor,std,config['actor_lr'],a.weapon_state_lr);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
     if checkpoint:
         actor_opt.load_state_dict(checkpoint['actor_optimizer']);value_opt.load_state_dict(checkpoint['value_optimizer'])
         # Restore after benchmark, which constructs temporary networks.
@@ -275,7 +289,8 @@ def main():
                 candidate_loss=-torch.minimum(candidate_ratio*ad,candidate_ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*candidate_entropy.mean()
                 candidate_loss=candidate_loss+retention_weight*retention_loss()+a.bank_weight*bank_loss()
                 return candidate_loss,candidate_kl
-        trial=guarded_actor_step(list(actor.parameters())+[std],actor_opt,candidate_objective,loss.detach(),config['actor_lr'],config['target_kl'],lambda:std.clamp_(-8,1))
+        group_lrs=[config['actor_lr'],a.weapon_state_lr] if weapon_state_training else None
+        trial=guarded_actor_step(list(actor.parameters())+[std],actor_opt,candidate_objective,loss.detach(),config['actor_lr'],config['target_kl'],lambda:std.clamp_(-8,1),group_lrs=group_lrs)
         actor_trials.append(trial)
         if not trial['accepted']:rejected_steps+=1;break
         backtracks+=trial['retry']
@@ -296,6 +311,7 @@ def main():
     (out/'weights.json').write_text(json.dumps(updated,allow_nan=False))
     # Save optimizer/RNG with the checkpoint; future rollout still needs fresh seeds.
     checkpoint_output={'version':'combat_ppo_checkpoint_v2','weights_sha256':sha(out/'weights.json'),'consumed_rollouts':consumed+[meta['rollout_sha256']],'updates_completed':updates+1,'total_actor_steps':total_steps+done,'actor':actor.state_dict(),'value':value.state_dict(),'log_std':std.detach(),'actor_optimizer':actor_opt.state_dict(),'value_optimizer':value_opt.state_dict(),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,'config':config,'retention':retention}
+    if weapon_state_training:checkpoint_output['weapon_state_optimizer']=weapon_state_training
     if bank_spec is not None:checkpoint_output['retention_bank']=bank_spec
     torch.save(checkpoint_output,out/'checkpoint.pt')
     assert math.isfinite(final_kl) and final_kl<=config['target_kl']+1e-6
@@ -305,6 +321,8 @@ def main():
     if bank_spec is not None:report.update(retention_bank=bank_spec,bank_kl_before=initial_bank_kl,bank_kl_after=final_bank_kl,bank_rows={s:len(bank[s]) for s in bank_tensors})
     if bank_spec is not None:report['bank_helper_sha256']=sha(pathlib.Path(__file__).with_name('combat_retention_bank.py'))
     report.update(weapon_head=weapon_head,actor_parameters=sum(p.numel() for p in actor.parameters())+std.numel(),critic_parameters=sum(p.numel() for p in value.parameters()))
+    if weapon_state_training:
+        report.update(weapon_state_optimizer=weapon_state_training,actor_optimizer_group_lrs=[g['lr'] for g in actor_opt.param_groups])
     report.update(actor_step_guard='uphill_first_moment_v1',actor_trials=actor_trials,direction_fallbacks=sum(t['direction_fallback'] for t in actor_trials))
     if a.resume:assert sha(pathlib.Path(a.resume))==report['resume_sha256']
     (out/'trainer.py').write_bytes(pathlib.Path(__file__).read_bytes())

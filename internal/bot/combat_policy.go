@@ -10,6 +10,7 @@ import (
 )
 
 type combatControl struct {
+	weaponRequests     weaponRequestHistory
 	actionQualityGuard bool
 	campaignEvaluation bool
 	engagement         combatEngagement
@@ -46,6 +47,7 @@ func (c *Client) combatObservation(now time.Time) policy.Observation {
 		return o
 	}
 	o := policy.Observe(s, id, c.previous)
+	b.weaponRequests.enrich(&o)
 	o.AgeMS = now.Sub(c.planner.World.Updated).Milliseconds()
 	policy.EnrichEnvironment(&o, s, c.planner.World.Geometry)
 	o.Navigation = c.planner.combatNavigationContext()
@@ -85,7 +87,7 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		return rules()
 	}
 	grace := combatOcclusionFrames
-	if p, ok := b.provider.(*policy.PPO); ok && p.FeatureVersion() == policy.ThreatFeatureVersion {
+	if p, ok := b.provider.(*policy.PPO); ok && (p.FeatureVersion() == policy.ThreatFeatureVersion || p.FeatureVersion() == policy.EquippedWeaponFeatureVersion) {
 		grace = policy.ThreatMemoryFrames
 	}
 	active, continuation, fallback := b.engagement.observe(o, c.planner.World.Snapshot.Defeated, grace)
@@ -96,7 +98,13 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 	}
 	supportedFixture := c.testWeaponSwitchFixture == "parasite_blaster" || c.testWeaponSwitchFixture == "parasite_machinegun" || multiWeaponFixture(c.testWeaponSwitchFixture)
 	fixtureWeapon := (c.testSynchronous || c.testHitscanGuardProbe) && supportedFixture && directHitscanWeapon(o.Weapon)
-	if o.Weapon != "Blaster" && !(b.campaignEvaluation && directHitscanWeapon(o.Weapon)) && !fixtureWeapon {
+	weaponPolicy, choosesWeapons := b.provider.(interface{ WeaponHeadVersion() string })
+	// An equipped pickup must not prevent a weapon-enabled policy from
+	// requesting its own replacement. Unsupported firing remains blocked by
+	// guardDirectCombat; this does not choose a weapon or enable new projectiles.
+	weaponRecovery := (b.campaignEvaluation || (c.testSynchronous || c.testHitscanGuardProbe) && supportedFixture) &&
+		choosesWeapons && weaponPolicy.WeaponHeadVersion() == policy.WeaponHeadVersion
+	if o.Weapon != "Blaster" && !(b.campaignEvaluation && directHitscanWeapon(o.Weapon)) && !fixtureWeapon && !weaponRecovery {
 		sel.Fallback = "pilot_equip_not_ready"
 		return rules()
 	}

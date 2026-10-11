@@ -36,7 +36,9 @@ def main():
     torch.backends.cuda.enable_math_sdp(True)
     behavior,model,meta=read(args.behavior),read(args.model),read(args.data/'report.json')
     assert sha(args.behavior)==meta['model_sha256']
-    assert model['feature_version']==behavior['feature_version']==meta['feature_version']=='combat_features_v9'
+    version=model['feature_version']
+    assert version==behavior['feature_version']==meta['feature_version']
+    assert version in ('combat_features_v9','combat_features_v10')
     assert model.get('target_head')==behavior.get('target_head') and model.get('aim_mode_head')==behavior.get('aim_mode_head')
     for path,digest in meta['source_sha256'].items():
         assert sha(pathlib.Path(path))==digest,path
@@ -63,7 +65,10 @@ def main():
         raw,_=sequence(actor,prepared)
         original=distribution(raw[:,:45],features).probs
         results={}
-        for band,(start,end) in dict(previous_target=(845,854),navigation=(854,881),remembered_threats=(881,1121)).items():
+        bands=dict(previous_target=(845,854),navigation=(854,881),remembered_threats=(881,1121))
+        if version=='combat_features_v10':
+            bands.update(equipped_weapon=(1121,1133),previous_weapon_request=(1133,1147))
+        for band,(start,end) in bands.items():
             x=prepared[0].clone();x[...,start:end]=0
             changed,_=sequence(actor,(x,*prepared[1:]))
             choice=distribution(changed[:,:45],features).probs
@@ -73,7 +78,7 @@ def main():
                                target_argmax_changed_rows=int((original.argmax(-1)!=choice.argmax(-1)).sum()),
                                heads_kl_mean={name:float(value.mean()) for name,value in terms.items()})
     report=dict(version='combat_input_use_cuda_v1',device='cuda',rows=len(rows),
-                model_sha256=sha(args.model),behavior_sha256=sha(args.behavior),
+                feature_version=version,model_sha256=sha(args.model),behavior_sha256=sha(args.behavior),
                 data_sha256=sha(args.data/'report.json'),script_sha256=sha(pathlib.Path(__file__)),
                 behavior_log_probability_max_error=log_error,behavior_memory_max_error=state_error,
                 bands=results,scope='Counterfactual zero-band replay over full captured histories, holding current physical availability masks fixed. No fitting, gameplay trajectory, causal reward attribution or quality claim; no CPU neural fallback.')

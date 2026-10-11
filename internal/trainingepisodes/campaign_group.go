@@ -18,7 +18,7 @@ func CampaignGroupRecipes(root string, perMap int, maps, classes []string) ([]Ep
 // domains for other supported inventories. It never changes the policy contract.
 func CampaignGroupRecipesForLoadout(root string, perMap int, maps, classes []string, loadout string) ([]Episode, error) {
 	loadoutIndex := -1
-	for i, name := range []string{"blaster", "machinegun", "weapons"} {
+	for i, name := range []string{"blaster", "machinegun", "weapons", "weapons-grenades-recovery"} {
 		if name == loadout {
 			loadoutIndex = i
 		}

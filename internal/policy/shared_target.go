@@ -13,7 +13,7 @@ func validateSharedTarget(f PPOFile) error {
 		return nil
 	}
 	spec := f.SharedTarget
-	if f.Features != ThreatFeatureVersion || f.SpatialAim == nil || f.AimModeHead != PrecisionHeadVersion || spec.Version != SharedTargetVersion || len(spec.Layers) != 3 {
+	if (f.Features != ThreatFeatureVersion && f.Features != EquippedWeaponFeatureVersion) || f.SpatialAim == nil || f.AimModeHead != PrecisionHeadVersion || spec.Version != SharedTargetVersion || len(spec.Layers) != 3 {
 		return fmt.Errorf("invalid shared target contract")
 	}
 	width := SharedTargetInputWidth

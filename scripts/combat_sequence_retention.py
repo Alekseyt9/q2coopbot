@@ -1,6 +1,7 @@
 """Full target-conditioned policy KL on pinned own-policy training histories."""
 import math
 import pathlib
+import collections
 from process_combat_architecture_pool import read, sha
 from combat_target_head import availability
 from combat_weapon_head import feature_mask
@@ -67,20 +68,26 @@ def policy_kl(raw, std, teacher, teacher_std, features):
 
 def load_spec(path, meta, rows, model_sha):
     spec = read(path)
-    assert spec['version'] == VERSION and spec['feature_version'] == meta['feature_version']
+    assert spec['version'] in (VERSION, 'combat_sequence_retention_v2') and spec['feature_version'] == meta['feature_version']
     assert spec['model_sha256'] == model_sha == meta['model_sha256']
     assert spec['rollout_sha256'] == meta['rollout_sha256']
     assert spec['sequence_sha256'] == meta['sequence_sha256']
     plan = read(spec['training_plan'])
     assert sha(spec['training_plan']) == spec['training_plan_sha256']
     assert plan['model_sha256'] == model_sha and all(t['split'] == 'train' for t in plan['tasks'])
-    pool_path = pathlib.Path(spec['training_plan']).parent.parent / 'pool/report.json'
+    registered = spec['version'] == 'combat_sequence_retention_v2'
+    if registered:
+        from combat_registered_retention import validate
+        validate(spec, meta)
+    pool_path = pathlib.Path(spec['registered_pool']) if registered else pathlib.Path(spec['training_plan']).parent.parent / 'pool/report.json'
     assert sha(pool_path) == spec['pool_sha256']
     pool = read(pool_path)
     assert pool['state'] == 'complete' and pool['source_unchanged'] and not any(j['error'] for j in pool['jobs'])
-    expected_jobs = {(0,i,s,'learned') for i,t in enumerate(plan['tasks']) for s in t['seeds']}
-    actual_jobs = {(j['plan_index'],j['task_index'],j['seed'],j['mode']) for j in pool['jobs']}
-    assert actual_jobs == expected_jobs and len(actual_jobs) == len(pool['jobs'])
+    plan_index = spec['plan_index'] if registered else 0
+    jobs = [j for j in pool['jobs'] if j['plan_index'] == plan_index] if registered else pool['jobs']
+    expected_jobs = {(plan_index,i,s,'learned') for i,t in enumerate(plan['tasks']) for s in t['seeds']}
+    actual_jobs = {(j['plan_index'],j['task_index'],j['seed'],j['mode']) for j in jobs}
+    assert actual_jobs == expected_jobs and len(actual_jobs) == len(jobs)
     retained = set(spec['retained_families'])
     assert retained and retained <= {t['episode']['id'] for t in plan['tasks']}
     seed_family = {seed:t['episode']['id'] for t in plan['tasks'] for seed in t['seeds']}
@@ -92,5 +99,14 @@ def load_spec(path, meta, rows, model_sha):
     for member in spec['members']:
         assert member['family'] == seed_family[member['seed']]
         assert math.isfinite(member['weight']) and member['weight'] > 0
+    if registered:
+        counts = collections.Counter(m['seed'] for m in spec['members'])
+        for family in retained:
+            seeds = {seed for seed, name in seed_family.items() if name == family}
+            assert seeds <= set(counts), 'Every retained training seed must have histories'
+            for member in spec['members']:
+                if member['family'] == family:
+                    expected_weight = 1 / len(retained) / len(seeds) / counts[member['seed']]
+                    assert math.isclose(member['weight'], expected_weight, rel_tol=1e-12, abs_tol=1e-15)
     assert math.isclose(sum(m['weight'] for m in spec['members']), 1., abs_tol=1e-10)
     return spec, [lookup[(m['seed'],m['index'])] for m in spec['members']]

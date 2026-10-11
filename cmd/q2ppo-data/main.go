@@ -423,6 +423,9 @@ func run() error {
 			if manifest.Loadout == "weapons-ssg" {
 				weapon = "Super Shotgun"
 			}
+			if manifest.Loadout == "weapons-grenades-recovery" {
+				weapon = "Grenades"
+			}
 			proofErr = learningenv.VerifyPostFrameRNG(logFile, r.Seed, manifest.ReleaseFrame, weapon)
 			logFile.Close()
 			if proofErr != nil {
@@ -435,6 +438,9 @@ func run() error {
 				}
 				if weapon == "Super Shotgun" {
 					idleFrame = 18
+				}
+				if weapon == "Grenades" {
+					idleFrame = 16
 				}
 				for _, step := range steps {
 					if step.Owner == "provider" {

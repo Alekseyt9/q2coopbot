@@ -53,3 +53,13 @@ behavior audits with a matched-fixture summary. It produces `complete.json`
 only after all stages succeed; failure leaves an explicit failed progress
 record. This is one finite experiment, not a recurring job. No promotion is
 performed by the coordinator.
+
+Evaluation and all analysis stages completed:480 native cases,400 CUDA-replayed
+learned cases,44733 eligible rows. Native goals parent31,decision control34,
+decision shared37,target-only control33,target-only shared35,rules29 per80.
+Target-only does not win this comparison. Across both seed blocks the same
+shared decisions weights have65/160 goals versus parent64/160, so there is no
+robust reference replacement. Additional post-release ownership checks found
+grenade-related equip fallback in lost cases; none of the winning cases has
+clear-enemy rules frames. Details and next actions:
+`combat_target_scope_quality_20261011.md`.

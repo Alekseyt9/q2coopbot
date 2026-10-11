@@ -421,3 +421,125 @@ update9, дообученный контроль, дообученный общ�
 два предыдущих decisions-варианта, два target-only и rules, новые test-сиды
 12:16, общий пул16×2. Это проверка причины регрессии, а не отказ от обучения
 полной боевой политики. См. `testing/combat_target_scope_20261011.md`.
+
+11.10, новая оценка480/480 и CUDA-сверка400 learned-боёв завершены,
+44733 eligible строки. Победы по80:основа31,decisions-контроль34,
+decisions-shared37,target-only33/35,rules29. На двух наборах сидов одинаковые
+веса shared дают65/160 против64/160 у основы:устойчивого роста ещё нет,
+модели не повышены. Найден конкретный переход на rules после выбора ручных
+гранат в двух проигрышах shared:pilot_equip_not_ready мешает модели самой
+сменить оружие обратно. Следующий этап — исправить эту границу управления,
+проверить native/GPU, затем balanced full-actor PPO с сохранением полезного
+поведения на train-историях, а не замораживать движение/прицел навсегда.
+Отчёт: `testing/combat_target_scope_quality_20261011.md`.
+
+11.10, weapon recovery исправлен и проверен на 16/16 native боях и
+1566 CUDA replay кадрах: при гранатах управление остаётся у модели,
+неподдерживаемая стрельба блокируется. Задержка переключения в одном
+проигрыше составляет 33 кадра при свежем инвентаре; обучение выбора
+оружия остаётся необходимым. Добавлен registered sequence retention v2
+с проверкой полного пула, CUDA receipt и train-only историй; реальные
+8376 учебных кадров приняты, test истории отклонены. Запущен сбор 160
+новых own-policy train боёв для balanced full-actor PPO, все 20 рецептов,
+parent/shared, 16 слотов ×2. См. `testing/combat_weapon_recovery_20261011.md`.
+
+11.10, balanced full-actor этап обучен на CUDA: 160/160 собственных train
+боёв, 18700 кадров, по10 actor steps. Parent update10 и shared update11,
+retention KL0,004896/0,005202. Оба CUDA checkpoint audit прошли: encoder,
+движение и прицел действительно обновлены, Adam/corpus counters продолжены.
+Запущена независимая confirmation оценка400 боёв: before/after обоих
+вариантов и rules, 16×2. Качество новых весов пока не оценено, повышение
+не выполнено. См. `testing/combat_balanced_full_actor_20261011.md`.
+
+11.10, confirmation400/400 и CUDA320/320 (35692 кадра) закрыты. Победы
+parent27→31,shared29→35,rules29/80. Ownership:0 rules frames с видимым
+врагом. Аудит поведения v3 исключает setup по native release frame;
+320 case counts совпали с независимым ownership. Доля стояния и средний
+first attack delay выросли, поэтому повышения по одному набору нет.
+Найдена связка switch/fire:request Shotgun102,MG fire до ammo0,
+Shotgun145; native WEAPON_FIRING откладывает смену. Добавлена собственная
+история успешно очередированного use-запроса и возраста в observation,
+с reset и immutable same-frame cache, v9 features неизменны.
+Следующий этап — новая версия признаков оружия/own-request и CUDA
+миграция, затем native hold/release control и full-actor own-policy A/B.
+См. `testing/combat_weapon_attack_coordination_20261011.md`.
+
+11.10, v10 implemented: старый префикс1121 + current weapon12 + own request12
++ age-known1 + age1 =1147. CUDA migration parent10/shared11 сохранила
+параметры, Adam, счётчики и RNG; обучения нет. Native smoke16/16 и
+CUDA replay1412 кадров закрыты, новые поля export проверены, visible rules0.
+Запущен train pool320:20 семейств×4 сида×2 линии×v9/v10, offset44,
+16×2. Условия совпадают между вариантами. Следом одинаковый полный
+actor GPU budget с own-history retention и независимая оценка.
+См. `testing/combat_equipped_weapon_features_plan_20261011.md`.
+
+11.10, новый own-policy train pool320/320 принят, source unchanged,
+wall899,25 с. Parent-v9/v10 обучены только CUDA:9219/9211 кадров,
+10 actor steps каждый, оба update11. Full checkpoint audits прошли.
+Input-use parent-v10 впервые подтверждает ненулевое влияние current weapon
+и own request bands; полезность для боя пока не установлена. Shared-v9
+обрабатывается, затем shared-v10. Подготовлен последовательный запуск
+confirmation400 на новых offset4 seeds после четырёх закрытых GPU updates,
+с rules, CUDA replay320 и behavior/ownership/weapon audits без обучения.
+См. `testing/combat_equipped_balanced_ab_20261011.md`.
+
+11.10, все4 GPU updates v9/v10 закрыты:parent update11,shared update12,
+по10 принятых full-actor steps;36308 own-policy train кадров. Seals и
+checkpoint audits проверены. Обе v10 используют current weapon/own request
+inputs (ненулевая CUDA policy ablation). Запущена независимая confirmation400
+на offset4:4 обновлённые модели+rules,16×2. Fixtures/seeds всех пяти планов
+совпали, rules model-free. Оценка качества пока не закрыта; live promotion нет.
+
+11.10, confirmation закрыта: 400/400 native боёв, 320/320 CUDA replay,
+38385 кадров. Победы parent-v9/v10: 29/27 из 80, shared-v9/v10: 29/25,
+rules: 29. Улучшение v10 не подтверждено, продвижения весов нет. Все 12
+независимых native аудитов и агрегаты совпали. Аудит фактического первого
+урона сверяет две шкалы кадров и весь урон первой жизни с каноническим отчётом.
+Выделен сбой после подбора Grenades: модель предлагает огонь, исполнитель
+его ограничивает, вероятность оставить оружие в одном проверенном эпизоде
+около 98,5%. Следующий этап — отдельный curriculum восстановления оружия
+с GPU-обучением полного actor и широким контролем регрессий.
+Подробности: `testing/combat_equipped_confirmation_20261011.md`.
+
+11.10, добавлен учебный loadout `weapons-grenades-recovery`: начальные гранаты5,
+автомат40 и дробовик20 доступны для самостоятельного выбора. В основной
+реестр добавлены 8 семейств на base3/city1/jail1/ware2, по две точки на карту;
+сидовый домен отделён от прежних. Нативная проверка16/16 и CUDA replay
+549+533 кадров закрыты. Смешанный учебный пул28семейств×4train-сида×2модели
+закрыт:224/224, без ошибок, source unchanged,645,15с. Начата CUDA-обработка
+для двух full-actor updates с собственными PT-чекпоинтами. После закрытия
+обновлений подготовлена confirmation560 на offset12: исходные/новые веса
+двух линий и rules; отдельные recovery/обычные strata по дескрипторам.
+Качество ещё не подтверждено. См. `testing/combat_grenades_recovery_20261011.md`.
+
+11.10, оба recovery full-actor GPU updates закрыты: parent12654 и shared12905
+кадров, по10 actor steps. Проверены checkpoint/optimizer/corpus seals и
+ненулевое влияние current-weapon/own-request inputs. Началась confirmation560:
+пять одинаковых по условиям планов, train/confirmation сиды не пересекаются.
+Качество ещё не получено; live/published promotion отсутствует.
+
+11.10, recovery confirmation native560 закрыта:parent35→35 побед/112,
+shared33→25,rules32. На recovery32:parent1→1/shared1→2/rules3;
+на обычных80:parent34→34/shared32→23/rules29. Прирост не принят;
+новые веса не продвигаются. CUDA448 и поведенческие аудиты продолжаются.
+Добавлен отдельный диагностический аудит предложенных/применённых действий:
+клиентский сетевой98 соответствует native game100 в отпускании сцены;
+исправлен порог диагностики, подтверждены112 независимых сверок прежних
+счётчиков и восстановление224 первых отпущенных кадров. Учебные данные,
+награда и нативные исходы не менялись. См. `testing/combat_grenades_recovery_native_results_20261011.md`.
+
+11.10: evaluation полностью закрыта: native560/CUDA448,53265 проверенных кадров; новые веса отклонены. CUDA initial-policy probe по32 recovery-сценам на контроллер показала keep98,39–98,72%, парные начальные признаки совпадают. Добавлены8 отдельных recovery-пар на base3/city1/jail1/ware2, все588 seed ranges раздельны; следующий этап —64 диагностических боя исходного parent против rules, пул16×2. См. testing/combat_recovery_pairs_curriculum_20261011.md.
+
+11.10: recovery-pairs difficulty diagnostic закрыт: native64/CUDA32,5157 кадров. Исходный parent9/32 побед,rules30/32;11 против2 случаев без урона. Новые рецепты исполнимы; следующий эксперимент —исследование weapon-head с собственными свежими train-данными и обычными боями для контроля регрессий. См. testing/combat_recovery_pairs_curriculum_20261011.md.
+
+11.10: создан sealed weapon-temperature2 exploration fork исходного parent. CUDA5157 кадров: прочие выходы не изменены; на32 начальных состояниях keep98,388→79,667%, вероятность поддерживаемого оружия1,141→14,824%. Подготовлен matched train224 control/exploration с20 обычными и8 recovery-парами, offset160 вне1548 ранее планированных сидов; full-actor GPU-обучение, own-policy data. См. testing/combat_weapon_exploration_20261011.md.
+
+11.10: автоматическая exploration confirmation560 подготовлена и ожидает фактического завершения живого training PID31140. Offset192,5 контроллеров,28 семейств; отдельный собственный before/after каждой линии,448 CUDA replay и correct-clock audits после native capture. Успех ещё не подтверждён, продвижение отсутствует. См. testing/combat_weapon_exploration_20261011.md.
+
+11.10: weapon-exploration оба GPU updates закрыты (26930 кадров,по10 full-actor steps). Исправлена только rules eligibility в отдельном confirmation registry после proof modes-only для12 старых рецептов;560 evaluation запущена по matched v2-планам. Train-capture диагностика до PPO:control34/112 побед,temperature2 11/112,requests160→2452; это не held-out качество новых весов. Weapon-head current/request sensitivity ~1e-12–3e-12 практически не подтверждена, общий ablation KL относился главным образом к движению/прицелу. См. testing/combat_weapon_exploration_20261011.md.
+
+11.10: пока идёт frozen confirmation560, добавлен отдельный CUDA research prototype weapon-state residual154→64→32→12 (12396 параметров), без подключения к runtime/сериализации. На13298 реальных train-кадрах zero-init outputs совпадают точно, disposable gradient probe связан с observed gunframe/inventory/equipped/own-request/enemy/type; остальные raw heads неизменны. Обучение/победы этим не доказаны. См. testing/combat_weapon_state_residual_20261011.md.
+
+11.10: exploration native confirmation560 закрыта:control29→34 побед/112,temperature2 10→6,rules58. Recovery32:6→5/2→0/31 соответственно; обычные80:23→29/8→6/27. Более высокая общая weapon-temperature отвергается, выбор оружия остаётся нерешённым; control-after пока не продвигается. CUDA448 ещё идёт. См. testing/combat_weapon_exploration_native_results_20261011.md.
+
+11.10: weapon-state candidate PT staged отдельно от игрового формата. CUDA14049 реальных own-history evaluation-кадров: zero-init output exact, сохранённый PT не обучался. Independently verified old actor/critic/Adam/clocks/RNG/history exact;6 new tensors/zero moments,2 optimizer groups; source control-after untouched. Go/PPO integration и fresh own-policy training ещё нужны. См. testing/combat_weapon_state_residual_20261011.md.
