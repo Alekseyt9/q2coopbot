@@ -18,31 +18,34 @@ const SelectedAimRewardVersion = "combat_reward_v8"
 const NativeWasteRewardVersion = "combat_reward_v9"
 const NavigationRewardVersion = "combat_reward_v10"
 const CoopRewardVersion = "combat_reward_v11"
+const TargetCommitmentRewardVersion = "combat_reward_v12"
 
 // RewardConfig is an explicit experimental objective, not a measured success
 // metric. Server effects never enter the policy observation.
 type RewardConfig struct {
-	Version             string  `json:"version"`
-	MonsterDamage       float64 `json:"monster_damage"`
-	ReceivedDamage      float64 `json:"received_damage"`
-	SelfDamage          float64 `json:"self_damage_extra"`
-	FriendlyDamage      float64 `json:"friendly_damage"`
-	Death               float64 `json:"death"`
-	Tick                float64 `json:"tick"`
-	MonsterKill         float64 `json:"monster_kill,omitempty"`
-	AimPotential        float64 `json:"aim_potential,omitempty"`
-	AimGamma            float64 `json:"aim_gamma,omitempty"`
-	AimKickAngles       bool    `json:"aim_kick_angles,omitempty"`
-	SpacingPotential    float64 `json:"spacing_potential,omitempty"`
-	ParasiteRange       float64 `json:"parasite_range,omitempty"`
-	BlasterMiss         float64 `json:"blaster_miss,omitempty"`
-	MachinegunMiss      float64 `json:"machinegun_miss,omitempty"`
-	OffTargetAttack     float64 `json:"off_target_attack,omitempty"`
-	TurnAway            float64 `json:"turn_away,omitempty"`
-	StalledMovement     float64 `json:"stalled_movement,omitempty"`
-	TargetChurn         float64 `json:"target_churn,omitempty"`
-	NavigationPotential float64 `json:"navigation_potential,omitempty"`
-	PeerDeath           float64 `json:"peer_death,omitempty"`
+	Version                string  `json:"version"`
+	MonsterDamage          float64 `json:"monster_damage"`
+	ReceivedDamage         float64 `json:"received_damage"`
+	SelfDamage             float64 `json:"self_damage_extra"`
+	FriendlyDamage         float64 `json:"friendly_damage"`
+	Death                  float64 `json:"death"`
+	Tick                   float64 `json:"tick"`
+	MonsterKill            float64 `json:"monster_kill,omitempty"`
+	AimPotential           float64 `json:"aim_potential,omitempty"`
+	AimGamma               float64 `json:"aim_gamma,omitempty"`
+	AimKickAngles          bool    `json:"aim_kick_angles,omitempty"`
+	SpacingPotential       float64 `json:"spacing_potential,omitempty"`
+	ParasiteRange          float64 `json:"parasite_range,omitempty"`
+	BlasterMiss            float64 `json:"blaster_miss,omitempty"`
+	MachinegunMiss         float64 `json:"machinegun_miss,omitempty"`
+	OffTargetAttack        float64 `json:"off_target_attack,omitempty"`
+	TurnAway               float64 `json:"turn_away,omitempty"`
+	StalledMovement        float64 `json:"stalled_movement,omitempty"`
+	TargetChurn            float64 `json:"target_churn,omitempty"`
+	TargetCommitmentDamage float64 `json:"target_commitment_damage,omitempty"`
+	TargetCommitmentBudget float64 `json:"target_commitment_budget,omitempty"`
+	NavigationPotential    float64 `json:"navigation_potential,omitempty"`
+	PeerDeath              float64 `json:"peer_death,omitempty"`
 }
 
 func (c RewardConfig) HasKillReward() bool {
@@ -53,7 +56,7 @@ func (c RewardConfig) HasPotentialReward() bool {
 }
 
 func (c RewardConfig) HasActionQualityCosts() bool {
-	return c.Version == ActionQualityRewardVersion || c.Version == TargetSequenceRewardVersion || c.Version == SelectedAimRewardVersion || c.Version == NativeWasteRewardVersion || c.HasNavigationReward()
+	return c.Version == ActionQualityRewardVersion || c.Version == TargetSequenceRewardVersion || c.Version == TargetCommitmentRewardVersion || c.Version == SelectedAimRewardVersion || c.Version == NativeWasteRewardVersion || c.HasNavigationReward()
 }
 
 func (c RewardConfig) HasNavigationReward() bool {
@@ -68,10 +71,17 @@ func (c RewardConfig) Validate() error {
 	if c.Version != RewardVersion && !c.HasKillReward() {
 		return fmt.Errorf("unsupported reward version")
 	}
-	for _, v := range []float64{c.MonsterDamage, c.ReceivedDamage, c.SelfDamage, c.FriendlyDamage, c.Death, c.Tick, c.MonsterKill, c.AimPotential, c.AimGamma, c.SpacingPotential, c.ParasiteRange, c.BlasterMiss, c.MachinegunMiss, c.OffTargetAttack, c.TurnAway, c.StalledMovement, c.TargetChurn, c.NavigationPotential, c.PeerDeath} {
+	for _, v := range []float64{c.MonsterDamage, c.ReceivedDamage, c.SelfDamage, c.FriendlyDamage, c.Death, c.Tick, c.MonsterKill, c.AimPotential, c.AimGamma, c.SpacingPotential, c.ParasiteRange, c.BlasterMiss, c.MachinegunMiss, c.OffTargetAttack, c.TurnAway, c.StalledMovement, c.TargetChurn, c.TargetCommitmentDamage, c.TargetCommitmentBudget, c.NavigationPotential, c.PeerDeath} {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
 			return fmt.Errorf("nonfinite reward coefficient")
 		}
+	}
+	if c.Version == TargetCommitmentRewardVersion {
+		if c.TargetCommitmentDamage < 0 || c.TargetCommitmentDamage > .01 || c.TargetCommitmentBudget < 0 || c.TargetCommitmentBudget > .5 || (c.TargetCommitmentDamage == 0) != (c.TargetCommitmentBudget == 0) {
+			return fmt.Errorf("v12 requires paired bounded commitment rate/budget or both zero")
+		}
+	} else if c.TargetCommitmentDamage != 0 || c.TargetCommitmentBudget != 0 {
+		return fmt.Errorf("commitment bonus requires reward v12")
 	}
 	if c.Version == CoopRewardVersion {
 		if c.PeerDeath >= 0 || c.PeerDeath < -10 {
@@ -120,7 +130,7 @@ func (c RewardConfig) Validate() error {
 			return fmt.Errorf("action quality costs require reward v6")
 		}
 	}
-	if c.Version == TargetSequenceRewardVersion {
+	if c.Version == TargetSequenceRewardVersion || c.Version == TargetCommitmentRewardVersion {
 		if c.TargetChurn >= 0 || c.TargetChurn < -.05 {
 			return fmt.Errorf("v7 requires target churn cost in [-.05,0)")
 		}
@@ -141,21 +151,22 @@ func (c RewardConfig) Validate() error {
 }
 
 type Reward struct {
-	Navigation   *NavigationRewardEvidence `json:"navigation_reference,omitempty"`
-	AimReference *AimReferenceEvidence     `json:"aim_reference,omitempty"`
-	TargetCycle  *TargetCycleEvidence      `json:"target_cycle,omitempty"`
-	Version      string                    `json:"version"`
-	Worker       string                    `json:"worker"`
-	Episode      string                    `json:"episode"`
-	Step         int                       `json:"step"`
-	Available    bool                      `json:"available"`
-	Reason       string                    `json:"reason,omitempty"`
-	Score        *float64                  `json:"score"`
-	Components   map[string]float64        `json:"components"`
+	TargetCommitment *TargetCommitmentEvidence `json:"target_commitment,omitempty"`
+	Navigation       *NavigationRewardEvidence `json:"navigation_reference,omitempty"`
+	AimReference     *AimReferenceEvidence     `json:"aim_reference,omitempty"`
+	TargetCycle      *TargetCycleEvidence      `json:"target_cycle,omitempty"`
+	Version          string                    `json:"version"`
+	Worker           string                    `json:"worker"`
+	Episode          string                    `json:"episode"`
+	Step             int                       `json:"step"`
+	Available        bool                      `json:"available"`
+	Reason           string                    `json:"reason,omitempty"`
+	Score            *float64                  `json:"score"`
+	Components       map[string]float64        `json:"components"`
 }
 
 func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
-	if c.Version == TargetSequenceRewardVersion {
+	if c.Version == TargetSequenceRewardVersion || c.Version == TargetCommitmentRewardVersion {
 		return Reward{Version: c.Version, Worker: s.Worker, Episode: s.Episode, Step: s.Index, Reason: "sequence_context_required"}
 	}
 	return c.evaluate(s, o)
@@ -276,7 +287,7 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 		score += r.Components["peer_death"]
 	}
 	if c.HasPotentialReward() {
-		if c.Version == SelectedAimRewardVersion || c.Version == NativeWasteRewardVersion || c.HasNavigationReward() {
+		if c.Version == SelectedAimRewardVersion || c.Version == TargetCommitmentRewardVersion || c.Version == NativeWasteRewardVersion || c.HasNavigationReward() {
 			shaping, evidence, err := c.selectedAimShaping(s, s.Terminal || completeHandoff)
 			if err != nil {
 				r.Components = nil

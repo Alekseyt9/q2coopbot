@@ -4,7 +4,7 @@ Actor and exploration are preserved; both Adam states are reset and the critic
 output is zeroed. Run identically for control and changed-reward A/B branches.
 Fresh native on-policy collection is required before any update.
 """
-import argparse, copy, pathlib, shutil
+import argparse, copy, gzip, json, pathlib, shutil
 from process_combat_architecture_pool import read, save, sha
 from prepare_combat_target_heads import build, forward
 from train_combat_bc import torch
@@ -18,6 +18,8 @@ def main():
                     help='Explicit warm objective fork; keep critic and both Adam states')
     ap.add_argument('--migration-parent', action='store_true',
                     help='Use verified CUDA navigation migration receipt instead of a training completion seal')
+    ap.add_argument('--probe-data', type=pathlib.Path,
+                    help='Closed own-history dataset for valid observed residual inputs')
     a = ap.parse_args()
     assert torch.cuda.is_available() and not a.out.exists()
     torch.backends.cuda.matmul.allow_tf32 = False
@@ -42,14 +44,17 @@ def main():
     assert state['weights_sha256'] == sha(a.parent/'weights.json')
     config, reward = read(a.config), read(a.reward)
     assert config['objective_reward_sha256'] == sha(a.reward)
-    assert reward['version'] in ('combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v10','combat_reward_v11')
+    assert reward['version'] in ('combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v10','combat_reward_v11','combat_reward_v12')
     assert reward['monster_kill'] > 0 and reward['aim_gamma'] == config['gamma']
     if reward['version'] in ('combat_reward_v5','combat_reward_v9'):
         assert -0.1 <= reward['blaster_miss'] < 0
-    if reward['version'] in ('combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v10','combat_reward_v11'):
+    if reward['version'] in ('combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v10','combat_reward_v11','combat_reward_v12'):
         assert all(-0.05 <= reward[name] < 0 for name in ('off_target_attack','turn_away','stalled_movement'))
-    if reward['version'] == 'combat_reward_v7':
+    if reward['version'] in ('combat_reward_v7','combat_reward_v12'):
         assert -0.05 <= reward['target_churn'] < 0
+    if reward['version'] == 'combat_reward_v12':
+        rate, budget = reward.get('target_commitment_damage',0), reward.get('target_commitment_budget',0)
+        assert 0 <= rate <= .01 and 0 <= budget <= .5 and (rate == 0) == (budget == 0)
     if reward['version'] == 'combat_reward_v9':
         assert -0.1 <= reward['machinegun_miss'] < 0
     if reward['version'] in ('combat_reward_v10','combat_reward_v11'):
@@ -78,12 +83,33 @@ def main():
         if not a.preserve_critic_optimizer:
             state[name]['state'] = {}
         for group in state[name]['param_groups']:
-            group['lr'] = config[lr]
+            if name == 'actor_optimizer' and group.get('name') == 'weapon_state_residual':
+                metadata = state.get('weapon_state_optimizer') or state.get('actor_training',{}).get('weapon_state_residual') or {}
+                assert model.get('weapon_state_residual') and metadata.get('learning_rate') is not None
+                group['lr'] = metadata['learning_rate']
+            else:
+                group['lr'] = config[lr]
     restored_actor, restored_value = build(child,'actor'), build(child,'value')
     assert all(torch.equal(v,restored_actor.state_dict()[k]) for k,v in actor.state_dict().items())
     assert all(torch.equal(v,restored_value.state_dict()[k]) for k,v in value.state_dict().items())
     width = len(model['actor'][0]['weight'][0])
-    x = torch.randn(2,7,width,device='cuda')*.01
+    probe_sha = None
+    if model.get('weapon_state_residual'):
+        assert a.probe_data, 'Weapon residual fork requires real observed probe data'
+        path = a.probe_data/'sequence.jsonl'
+        if not path.exists(): path = pathlib.Path(str(path)+'.gz')
+        probe_sha = sha(path)
+        opener = gzip.open if path.suffix == '.gz' else open
+        features = []
+        with opener(path,'rt',encoding='utf-8-sig') as stream:
+            for line in stream:
+                features.append(json.loads(line)['features'])
+                if len(features) == 7: break
+        assert len(features) == 7 and all(len(row) == width for row in features)
+        x = torch.tensor([features],dtype=torch.float32,device='cuda')
+        assert sha(path) == probe_sha
+    else:
+        x = torch.randn(2,7,width,device='cuda')*.01
     with torch.no_grad():
         assert torch.equal(forward(actor,x),forward(restored_actor,x))
         if a.preserve_critic_optimizer:
@@ -124,6 +150,7 @@ def main():
         parent_receipt_sha256=sha(a.parent/('migration.json' if a.migration_parent else 'complete.json')),
         adam_reset=not a.preserve_critic_optimizer,critic_optimizer_preserved=a.preserve_critic_optimizer,
         checkpoint_readback_exact=True,updates_completed=state['updates_completed'],
+        observed_probe_sha256=probe_sha,
         scope='Explicit objective fork, not training or a PPO update. Actor/std and consumed history/RNG retained. '
               +('Critic and both Adam states retained exactly; value predictions initially describe the parent objective. ' if a.preserve_critic_optimizer else 'Critic head/residual zeroed and both Adam states reset. ')
               +'CUDA read-back checked. No CPU/Go numerical checks. Fresh native rollouts required; same fork mode applies to the A/B control.'))

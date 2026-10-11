@@ -22,7 +22,7 @@ CUDA graph-проба закрыта:13298 реальных кадров,12396 �
 
 Независимый инструмент `workspace/artifacts/verify-weapon-state-candidate-persistence-20261011.py` заново загрузил обе пары сохранённых artifacts и подтвердил точное сохранение всех старых tensor/scalar/list/dict полей, включая critic и его optimizer state;6 новых actor tensors, нулевые новые моменты/steps, старые model fields без изменений. Receipt: `combat-weapon-state-candidate-persistence-v1-20261011.json`. Candidate seal: weights SHA `8dfac2306c1ed34676c5784186f5f65c09107ec516d5d9739496e6096a87bc45`, PT SHA `31292acaaf20b9e26f07b6bd89ba705c47cc1975853266949513f45fa57e7ad9`.
 
-Нативная поддержка, стандартный trainer wrapper/export/restore и новое собственное обучение ещё не реализованы. Это промежуточный проверенный перенос, не готовая игровая модель и не основание для продвижения. Исходники работающей confirmation/CUDA chain не менялись.
+На этапе приватного candidate нативная поддержка и стандартное обучение ещё отсутствовали. Последующая интеграция описана ниже; приватные artifacts сохраняются без изменения как история эксперимента.
 
 После результатов текущей confirmation:
 
@@ -31,3 +31,33 @@ CUDA graph-проба закрыта:13298 реальных кадров,12396 �
 3. Внедрить Python actor wrapper и sealed CUDA checkpoint migration: старые параметры/Adam/RNG/history сохраняются, новые параметры и моменты вводятся явно; zero-init outputs сверяются на реальных полных последовательностях. Конфигурация нового optimizer group/head LR требует явной objective fork.
 4. Собрать свежие собственные train-корпуса, full-actor обновление с отдельным учётом weapon gradient/состояния/retention. Старые temperature2 траектории не выдаются за on-policy данные нового residual.
 5. Выполнить парную confirmation с обычными и recovery-сценами, rules и baseline; затем полные карты/реальный кооператив. Ни граф-проба, ни успешное восстановление PT не заменяют эти проверки.
+
+## Стандартная интеграция и собственное обучение закрыты
+
+Контракт `combat_observed_weapon_state_residual_v1` реализован в Go Act/SampleLikelihood и Python spatial actor. CUDA wrapper/export проверки выполнены для MLP, GRU и TemporalAttention; это проверка графа, а не сравнение качества трёх архитектур. Стандартная миграция сохранена в `combat-weapon-state-native-control-v1-20261011`: на 14049 реальных последовательных кадрах zero-init outputs совпали точно; старые параметры и Adam сохранены, новые параметры получили отдельную группу.
+
+Native smoke: 32/32 боя, ошибок 0, source unchanged, 16 инстансов ×2. Две линии — zero и disposable nonzero diagnostic, по 16 боёв; CUDA processing закрыт на 1798/1799 кадрах. Diagnostic не является обученной моделью. На 16 собственных боях zero выполнены 10 принятых full-actor шагов и 40 critic шагов, только CUDA; learning rates старой/новой групп 0,00003/0,0003.
+
+Первый checkpoint audit ошибочно требовал флаг смены actor scope при неизменном full scope. Исправленный CUDA audit подтвердил сохранение scope, Adam clocks и добавление использованного корпуса. Обучение не повторялось; первый failure log и progress сохранены. Итоговый seal: `combat-weapon-state-native-smoke-analysis-v1-20261011/complete.json`, audits `checkpoint-audit-v2.json` и `input-use-v2.json`.
+
+Weapon-head влияние equipped/own-request после короткого обучения остаётся очень малым (KL около 3,13e-10/4,64e-10). Изменение параметров не доказывает полезного выбора оружия. Ни качество, ни устранение лишнего вращения/стрельбы пока не приняты.
+
+Подготовлена независимая confirmation: 28 семейств ×4 свежих сида ×3 контроллера (before/after/rules), 336 боёв. Modes-only confirmation registry совпадает с предыдущей оценкой; новые offset256 seeds проверены против 1788 исторических сидов. План v1 остановился до боёв из-за train-only registry; рабочие планы v2 используют confirmation registry. Пул: `combat-weapon-state-quality-pool-v1-20261011`, 16 инстансов ×2, порты от40000. Результаты будут записаны после закрытия native и CUDA проверок; promotion отсутствует.
+
+## Native confirmation336 закрыта; CUDA проверки продолжаются
+
+336/336 usable captures, ошибок0, source unchanged, wall912,08с. Матched before/after используют одну архитектуру и одинаковые fixtures; обучение только на предшествующих16 train боях. Это ранняя проверка обновления, не оценка потолка архитектуры.
+
+| Контроллер | Победы /112 | Убийства | Нанесённый урон | Полученный урон | Смерти |
+|---|---:|---:|---:|---:|---:|
+| residual before |31|119|24703|8311|71|
+| residual after |31|104|23678|7652|71|
+| rules |58|183|32728|6530|44|
+
+Обычные бои:27→27/80, rules29/80. Recovery:4→4/32, rules29/32. Trio/SSG:13→15/32, rules9/32; trio/weapons:6→3/32, rules8/32. Общего прироста побед и улучшения recovery нет; меньше полученного урона не компенсирует меньшие kills/dealt. Не продвигать веса.
+
+Источники: `combat-weapon-state-quality-pool-v1-20261011/report.json` (SHA2129762a9c9425e84d9b213871b9ee415f8594b95934df169b675c179b3b0444), `combat-weapon-state-quality-analysis-v1-20261011/quality-strata.json`. До итогового CUDA complete эти цифры называются native outcomes, не закрытием всей цепочки.
+
+Дополнительный контроль исполнения — deterministic224 на тех же сценах после закрытия native336, без повторных rules боёв. Параметры одинаковые, меняется только режим выбора действий. Подробности и диагноз частых смен целей: `combat_action_efficiency_20261011.md`.
+
+CUDA confirmation завершена:224/224,26764 rows, ownership/behavior/weapon/execution/phase audits закрыты; итоговый `combat-weapon-state-quality-analysis-v1-20261011/complete.json` существует. Deterministic224 native outcomes36→38/112, rules58; recovery0/32 с dealt0. Общего превосходства и полезной смены оружия не установлено. Следующий fresh training эксперимент v12 изменяет награду за устойчивость цели отдельно от режима sampling, а не выдаёт отключение sampling за обучение.

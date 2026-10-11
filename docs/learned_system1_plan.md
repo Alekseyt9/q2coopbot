@@ -543,3 +543,36 @@ shared33→25,rules32. На recovery32:parent1→1/shared1→2/rules3;
 11.10: exploration native confirmation560 закрыта:control29→34 побед/112,temperature2 10→6,rules58. Recovery32:6→5/2→0/31 соответственно; обычные80:23→29/8→6/27. Более высокая общая weapon-temperature отвергается, выбор оружия остаётся нерешённым; control-after пока не продвигается. CUDA448 ещё идёт. См. testing/combat_weapon_exploration_native_results_20261011.md.
 
 11.10: weapon-state candidate PT staged отдельно от игрового формата. CUDA14049 реальных own-history evaluation-кадров: zero-init output exact, сохранённый PT не обучался. Independently verified old actor/critic/Adam/clocks/RNG/history exact;6 new tensors/zero moments,2 optimizer groups; source control-after untouched. Go/PPO integration и fresh own-policy training ещё нужны. См. testing/combat_weapon_state_residual_20261011.md.
+
+11.10, weapon-state residual подключён к Go и стандартному CUDA trainer/export.
+32 native/CUDA smoke-боя закрыты; на16 собственных боях приняты10 full-actor
+шагов. Аудит возобновлён без повторного обучения: сохранённый full actor scope
+не требует флага fork; Adam clocks и источник корпуса проверены. Weapon-head
+влияние current weapon/own-request пока очень слабое, практическая польза не
+доказана. Подготовлена confirmation336: before/after/rules,28 семейств,
+свежие offset256 seeds,16×2. Полное прохождение и coop acceptance остаются
+обязательными; веса не продвигаются. См. testing/combat_weapon_state_residual_20261011.md.
+
+11.10, native confirmation336 закрыта:112 matched боя на вариант,
+residual before/after31→31 побед, rules58; recovery4→4/32, rules29.
+Прирост не подтверждён; CUDA224 replay/audits продолжаются. Добавлен
+sealed behavior/native damage summary: частые смены цели и стояние остаются.
+Начат отдельный deterministic224 контроль на тех же fixtures без изменения
+параметров, после закрытия первого native пула; максимум16 инстансов ×2.
+Он отделит качество игрового исполнения от stochastic сбора опыта и не
+подменяет fresh own-policy обучение или полноценный campaign/coop acceptance.
+См. testing/combat_action_efficiency_20261011.md.
+
+11.10, stochastic336 полностью закрыта с224 CUDA cases/26764 rows.
+Deterministic224 native закрыта:36→38/112 побед против58 rules; меньше
+смен целей и больших поворотов, но recovery0/32 и чаще стояние/нет атаки.
+Введён отдельный reward v12: selected-aim v8 + мягкий A-B-A cost и
+опциональный bounded productive-hold bonus по native damage выбранной цели.
+Без idle бонуса, без replenishment при смене цели; скрытые native события
+служат только offline reward. Focused reward/legacy checks, label calibration
+на16 train боях и live CUDA smoke3 cases/270 rows прошли. Три CUDA warm
+objective fork сохраняют один actor/critic/std/Adam/RNG/history; residual LR
+сохранён отдельно. Запущен own-policy train336, control/cost/bonus,28 семейств,
+fresh offset248 seeds,16×2. После сбора — одинаковый GPU full-actor budget
+и независимая оценка; качество v12 и campaign/coop acceptance не доказаны.
+См. testing/combat_target_commitment_plan_20261011.md.

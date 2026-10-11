@@ -9,6 +9,7 @@ import (
 // chooses no target, and must be scoped to one monotonically exported episode.
 type SequenceReward struct {
 	Config          RewardConfig
+	commitment      commitmentState
 	runs            []targetRun
 	next            policy.Identity
 	index           int
@@ -49,7 +50,10 @@ func visibleTargets(o policy.Observation) map[targetKey]bool {
 
 func (q *SequenceReward) Evaluate(s *Step, outcome ServerOutcome) Reward {
 	r := q.Config.evaluate(s, outcome)
-	if q.Config.Version != TargetSequenceRewardVersion {
+	if q.Config.Version == TargetCommitmentRewardVersion {
+		r = q.commitmentReward(s, outcome, r)
+	}
+	if q.Config.Version != TargetSequenceRewardVersion && q.Config.Version != TargetCommitmentRewardVersion {
 		return r
 	}
 	if !r.Available {
