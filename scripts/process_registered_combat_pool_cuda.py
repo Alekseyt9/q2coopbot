@@ -5,7 +5,7 @@ import pathlib
 import subprocess
 import sys
 
-from process_combat_architecture_pool import read, save, sha
+from process_combat_architecture_pool import read, save, sha, compact_closed_exports
 from process_coop_learning_pool_cuda import verify_memory_export
 
 
@@ -87,6 +87,7 @@ def main():
             for i, result in enumerate(original['results']):
                 verify_memory_export(pathlib.Path(result['root'])/'bot.jsonl',
                                      directory/'native'/f'replay-{i}')
+            compact_closed_exports(directory/'native')
             return dict(job=job['job'], seed=job['seed'], split=plans[job['plan_index']]['tasks'][job['task_index']]['split'])
 
         save(out/'progress.json', dict(stage='native', cases=len(cases)))
@@ -103,6 +104,7 @@ def main():
              '--receipt-root', out/'cuda-batch'], out/'cuda.log', repo)
         run([exporter, '--merge', ','.join(str(d/'cuda') for _, _, d in cases),
              '--out', out/'merged'], out/'merge.log', repo)
+        compact_closed_exports(out/'merged')
         merged = read(out/'merged/report.json')
         result = dict(state='complete', device='cuda', pool_sha256=pool_sha,
                       selected_plan_index=args.plan_index,

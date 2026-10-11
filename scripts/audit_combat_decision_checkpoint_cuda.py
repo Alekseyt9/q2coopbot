@@ -17,7 +17,9 @@ def main():
     report=read(args.report)
     assert before['version']==after['version']=='combat_architecture_checkpoint_v1'
     assert before['architecture']==after['architecture'] and before['config']==after['config']
-    assert after['actor_training']==dict(scope='decisions',learning_rate=report['actor_training']['learning_rate'])
+    actor_scope=report['actor_training']['scope']
+    assert actor_scope in ('target','decisions')
+    assert after['actor_training']==dict(scope=actor_scope,learning_rate=report['actor_training']['learning_rate'])
     assert report['device']=='cuda'
     assert report['actor_scope_fork'] or before.get('actor_training')==after['actor_training'], 'Expected explicit scope fork or same-scope continuation'
     assert report['resume_sha256']==sha(args.before) and report['weights_sha256']==after['weights_sha256']
@@ -42,7 +44,9 @@ def main():
                 mask=torch.ones_like(old,dtype=torch.bool)
             else:
                 assert old.ndim in (1,2) and old.shape[0] in (45,81)
-                mask=torch.zeros_like(old,dtype=torch.bool);mask[4]=True;mask[8:29]=True
+                mask=torch.zeros_like(old,dtype=torch.bool);mask[20:29]=True
+                if actor_scope=='decisions':
+                    mask[4]=True;mask[8:20]=True
             assert torch.equal(old[~mask],new[~mask]), name
             changed_count+=int((old[mask]!=new[mask]).sum())
             frozen_count+=int((~mask).sum());masks[name]=mask
@@ -76,11 +80,11 @@ def main():
             assert torch.equal(old[field][~masks[name]],new[field][~masks[name]]), (name,field)
     durable_json(args.out,dict(version='combat_decision_scope_checkpoint_audit_v1',device='cuda',
         before_checkpoint_sha256=sha(args.before),after_checkpoint_sha256=sha(args.after),
-        report_sha256=sha(args.report),actor_steps=report['actor_steps'],
+        report_sha256=sha(args.report),actor_steps=report['actor_steps'],actor_scope=actor_scope,
         selected_parameter_tensors=sorted(selected),changed_selected_scalars=changed_count,
         preserved_actor_scalars=frozen_count,log_std_preserved=True,
         inactive_optimizer_state_preserved=True,consumed_rollout_append_verified=True,
-        scope='Actor movement/vertical/aim/mode/encoder/spatial/std and inactive Adam states exactly preserved. Selected output tensor clocks advance. Critic trains normally; game quality assessed separately.'))
+        scope='All actor rows outside the declared target/decision scope, encoder/spatial/std and inactive Adam states exactly preserved. Target-only also freezes attack and weapon rows. Selected output tensor clocks advance. Critic trains normally; game quality assessed separately.'))
     print(dict(state='complete',changed_selected_scalars=changed_count,preserved_actor_scalars=frozen_count),flush=True)
 
 

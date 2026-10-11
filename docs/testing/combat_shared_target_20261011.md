@@ -92,3 +92,94 @@ KL guards can accept different numbers of proposals; report those counts.
 Captures are not relabeled or reused across model SHA identities, even though
 the zero-residual initialization has matching policy distributions. Final
 held-out comparison must include both trained variants and the frozen parent.
+
+Shared-branch training completed on CUDA,8376 eligible rows,10 accepted actor
+proposals,update10. Weights SHA
+`9976bb8c9f4bdb3eb88c7687bd4e225603abad95fd75d8004ab7ec392ed346e4`;
+checkpoint SHA `09ef34db88c95568b155b99d8152c118f9d3acda456b9695db304ae3e793bc5a`.
+The checkpoint audit confirms110236 inactive actor scalars,std and inactive
+Adam states preserved;10170 selected/shared scalars changed. New branch Adam
+states and accepted-step clocks were checked explicitly. Consumed-rollout
+history appended once. Receipt: `combat-shared-target-checkpoint-audit-v1-20261011.json`.
+
+Full-history head diagnostic confirms movement/vertical/aim/mode KL exactly
+zero; target probabilities change by1.734 percentage points in mean total
+variation. This is a training-history diagnostic, not a held-out game gain.
+Receipt: `combat-shared-target-head-learning-v1-20261011.json`.
+
+The matched control also completed CUDA training:8369 eligible rows from its
+own64 accepted captures,10 accepted proposals,update10. Weights SHA
+`f191b0d2d0428f88ebb6d6529f4de5c6a4c101372db8ce6266eccb5ca886bdf8`;
+checkpoint SHA `615c0d785b712fcb46e230dffe77761c387c56564d2cc7b4501f0f8a2f22c08f`.
+Control checkpoint audit preserves the same110236 inactive scalars/Adam,std;
+1153 selected scalars changed. Capture conditions and training proposal
+budgets match, but native frame/eligible-row counts differ slightly. Do not
+claim bitwise identical trajectories or replay the other's traces as own-policy
+data. The held-out quality comparator intentionally rejects train splits;
+training captures are not used as an architecture acceptance benchmark.
+
+`audit_combat_input_use_cuda.py` now provides a reusable full-history ablation
+with a separately verified behavior actor and an optional updated actor. It
+checks captured likelihood/memory/source/stream bindings on CUDA, then removes
+each band across context while holding current availability masks fixed.
+Native omitted zero-valued weapon/target/aim-mode samples follow their JSON
+contract defaults. An initial missing-default diagnostic failed before output;
+the corrected run passed. Shared update10 on8376 training rows:
+
+| Removed band | Target mean total variation | Changed argmax rows |
+|---|---:|---:|
+| Previous target | 0.000239012 | 6 |
+| Navigation | 0.000050679 | 0 |
+| Remembered threats | 0.000106818 | 2 |
+
+Receipt: `combat-shared-target-input-use-v1-20261011.json`. These effects are
+still small. The same-data parent diagnostic has completed on the same8376
+rows: target total variation0.000001063 for previous target,0.000000193 for
+navigation,0.000001666 for remembered threats; zero changed argmax rows for
+all three. Receipt: `combat-shared-target-parent-input-use-v1-20261011.json`.
+This comparison controls the diagnostic corpus; it does not separate shared
+representation training from ordinary head training without the matched
+trained control, or prove useful decisions. Different earlier corpora must
+not be used to attribute an increase solely to the new branch.
+
+Held-out pool `combat-shared-target-eval-pool-v1-20261011` now runs320 battles,
+16 slots×2,20 recipes×four unseen test offsets8:12×four controllers. Index0
+unchanged update9;1 equally trained control update10;2 shared-target update10;
+3 ordinary rules. The private20-recipe rules-capable registry is frozen across
+all four plans. This covers pair and trio scenes, both inventory families and
+first/second sites on four maps. All controllers use identical recipe fixtures
+and seed lists under the same source/runtime build. Whole-pool acceptance,
+paired environment/binary checks and learned CUDA replay remain required;
+results and architecture promotion are pending.
+
+Held-out pool closed320/320 with unchanged source. Native paired comparisons
+now show frozen33 goals,control30,shared28,rules23 per80 cases. Shared ware2
+goals8 versus frozen16 and control13. The new candidate is not promoted;
+frozen update9 stays the reference. Full results and remaining CUDA/behavior
+verification are recorded in `combat_shared_target_quality_20261011.md`.
+
+`audit_registered_target_choices.py` now accepts an explicit learned plan from
+a fully accepted mixed pool and adds observed/requested movement, stationary
+clear-enemy runs, first-provider-to-first-attack delay, large applied turns and
+attack-without-selected-target frame counts. Native attack commands are not
+bullet counts/hit accuracy, and these observations do not label an action
+useless. Closed64-case training audit passed before running all three held-out
+variant audits. It separates stationary frames with and without movement
+requests, so blocked movement is not mistaken for a deliberate stop.
+
+Registered processing now LZX-compacts native exports after exporter exit and
+memory-contract verification, and compacts merged streams after producer exit.
+The existing helper checks unchanged logical SHA before/after. Current
+evaluation processors were already running the previous main body; a separate
+receipt-controlled pass compresses only their finished native exports after
+all80 native workers exited. Active CUDA output files are excluded.
+
+The previous evaluation's three CUDA finalizers and behavior audits all
+completed:240 cases,26686 eligible rows. Native export compaction also closed
+with a complete receipt. Aggregate behavior shows stationary-provider fractions
+23.95%/22.64%/20.61% for parent/control/shared despite worse candidate goals;
+first attack-command delay averages0.9/1.1/1.25 provider frames, with no
+never-attacked cases. These counts neither explain every loss nor measure
+bullet accuracy. The regression is ordinary-weapon trios11→6 goals/32; pairs
+stay10/16. A matched target-only scope comparison now runs on fresh seeds;
+see `combat_target_scope_20261011.md`.
