@@ -12,6 +12,7 @@ import (
 type combatControl struct {
 	weaponRequests     weaponRequestHistory
 	actionQualityGuard bool
+	checkedWallSlide   bool
 	campaignEvaluation bool
 	engagement         combatEngagement
 	history            policy.History
@@ -132,7 +133,7 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 	if b.actionQualityGuard {
 		limited, changes = c.planner.guardLearnedCombatAim(o, c.planner.World.Snapshot, a, proposed)
 	}
-	guarded, safetyChanges := c.planner.guardDirectCombat(c.planner.World.Snapshot, limited)
+	guarded, safetyChanges := c.planner.guardDirectCombatMotion(c.planner.World.Snapshot, limited, b.checkedWallSlide)
 	changes = append(changes, safetyChanges...)
 	converted := policy.FromCommand(o, proposed, c.planner.World.Snapshot.DeltaAngles, "")
 	if math.Abs(converted.PitchDelta-a.PitchDelta) > .01 {
@@ -190,6 +191,10 @@ func machinegunWeapon(weapon string) bool {
 // The isolated pilot supports stock Blaster and checked hitscan/ground motion.
 // Constraints stop components; they never aim, create a route or add firing.
 func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.UserCmd, []policy.Intervention) {
+	return p.guardDirectCombatMotion(s, cmd, false)
+}
+
+func (p *Planner) guardDirectCombatMotion(s quake.Snapshot, cmd quake.UserCmd, checkedWallSlide bool) (quake.UserCmd, []policy.Intervention) {
 	changes := []policy.Intervention{}
 	stopMove := func(reason string) {
 		cmd.Forward, cmd.Side, cmd.Up = 0, 0, 0
@@ -214,7 +219,9 @@ func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.
 		dx, dy := predicted.Displacement[0], predicted.Displacement[1]
 		step := math.Hypot(dx, dy)
 		if hazard := g.GroundMoveHazardStep(p.Nav, s.Self, dx, dy, step); hazard != "" {
-			if reduced, ok := p.checkedCombatMovementComponent(s, cmd, hazard); ok {
+			if hazard == "static_hull_blocked" && checkedWallSlide && p.checkedCombatWallMotion(s, cmd) {
+				// Preserve the requested command; the engine performs the checked slide.
+			} else if reduced, ok := p.checkedCombatMovementComponent(s, cmd, hazard); ok {
 				cmd = reduced
 				changes = append(changes, policy.Intervention{Component: "movement", Reason: "static_hull_component_clipped"})
 			} else {

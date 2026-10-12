@@ -106,6 +106,9 @@ def main():
                        '--count', spec['count'], '--seed-offset', spec['seed_offset'], '--out', plan,
                        '--root', repo, '--artifacts', root/('captures-'+label)]
             if model: command += ['--model', model]
+            if variant.get('checked_wall_slide',False):
+                assert variant['mode']=='learned' and variant['checked_wall_slide'] is True
+                command += ['--checked-wall-slide']
             run('plan-'+label, command); plans.append(plan)
         frozen = [read(p) for p in plans]; tasks = frozen[0]['tasks']
         assert len(tasks) == len(files)

@@ -15,6 +15,7 @@ param(
     [ValidateSet('standard','remaining-far')][string]$SoloFixture='standard',
     [switch]$HealthKit,
     [switch]$Synchronous,
+    [switch]$CheckedWallSlide,
     [switch]$StopOnGoal,
     [switch]$StopOnFirstDeath,
     [switch]$KeepRuntimeAssets,
@@ -151,6 +152,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
         if($samplePath){$arguments+=@('-GeneratedFixture',$samplePath)}
         if($using:Synchronous){$arguments+='-Synchronous'};if($using:StopOnGoal){$arguments+='-StopOnGoal'};if($using:StopOnFirstDeath){$arguments+='-StopOnFirstDeath'}
         if($using:TeacherVertical){$arguments+='-TeacherVertical'}
+        if($using:CheckedWallSlide){$arguments+='-CheckedWallSlide'}
         if($episodeMixed){$arguments+=@('-ParasiteMixed','-ParasiteMixedClass','monster_gunner')}
         if($using:HealthKit){$arguments+='-ParasiteHealthKit'}
         $timer=[Diagnostics.Stopwatch]::StartNew()
@@ -338,7 +340,7 @@ $manifest=[ordered]@{
     standard_monster_spawn_height=24.125
     game_frame_budget=$(if($Synchronous){'Commands after combat barrier; preparation excluded'}else{'All commands; preparation included'})
     observation_version='combat_observation_v3';action_version='combat_action_v1';reward_version=$(if($RewardConfig){(Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json).version}else{$null});reward_config_sha256=$(if($RewardConfig){$rewardHash}else{$null});reward_config=$(if($RewardConfig){Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json}else{$null});server_outcome_version=$(if($Synchronous){'server_step_effects_v1'}else{'server_damage_window_v1'})
-    timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;skill=$Skill;mixed=[bool]$Mixed;episode_pattern=$EpisodePattern;solo_fixture=$SoloFixture;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous;teacher_vertical=[bool]$TeacherVertical
+    timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;skill=$Skill;mixed=[bool]$Mixed;episode_pattern=$EpisodePattern;solo_fixture=$SoloFixture;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous;teacher_vertical=[bool]$TeacherVertical;checked_wall_slide=[bool]$CheckedWallSlide
     reset=$(if($Synchronous){'Cold native server restart per episode; first usable fixture and fresh inventory verified; single-client barrier confirms independent episode RNG seed. Full-world/AI equivalence remains unconfirmed.'}else{'Cold native server restart per episode, verified first usable observed fixture fields. Inventory/RNG/AI/full-world equivalence remain unconfirmed.'})
     source_fingerprint=$fingerprint;provenance_valid=$valid;sources=$sources
     native_source_fingerprint=$nativeFingerprint;native_sources=$nativeSources

@@ -621,3 +621,8 @@ Conditional2/4 stochastic обеспечили переход на поддер�
 ### 12.10.2026: ground physics проверена по native кадрам
 
 [Diagnostic report](testing/combat_pmove_ground_diagnostics_20261012.md): PM state decoded/logged, stock friction/step/slide плюс observed brush models. Два small-cycle native набора закрыты,32 learned CUDA cases без обучения. Первая большая ошибка воспроизведена и исправлена для observed jail1 door. В версии2 движение1512 frames p95 error0.156, но29 ошибок>1 остались; guard ещё не активирован. Нужна native telemetry оставшихся blockers и проверка полного пути/hazards.
+
+
+### 12.10.2026: native blockers и packet bodies
+
+[Collision diagnostic](testing/combat_native_collision_diagnostics_20261012.md) связал29 больших ошибок с pmove; найдены monster bodies/barrels. 16+2 native и18 CUDA replay без fitting, seeds повторены намеренно. Decoder/logs сохраняют все наблюдаемые collision bodies; полные29 fixtures восстановлены из DM2. 26/29 покрываются ground/no-support альтернативами в0.25,3 overlap случая unsupported. Это не единственная точная траектория и не guard acceptance. Guard не переключён; далее проверка всего пути альтернатив и малая matched оценка.

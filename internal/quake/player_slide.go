@@ -53,9 +53,15 @@ func (m *MapInfo) slidePlayer(from, velocity Vec3, seconds float64, ducked bool,
 			end[axis] += result.Velocity[axis] * remaining
 		}
 		tr := trace(result.Position, end, ducked)
-		// Do not authorize uncertain embedded starts, including native escapes.
-		if !tr.Valid || tr.StartSolid || tr.AllSolid {
+		if !tr.Valid {
 			return result, false
+		}
+		// Match PM_StepSlideMove_: allsolid stops this branch, while
+		// startsolid with a free endpoint may leave the overlap normally.
+		// This predicts physics only; callers must separately certify safety.
+		if tr.AllSolid {
+			result.Velocity[2] = 0
+			return result, true
 		}
 		if tr.Fraction > 0 {
 			result.Segments = append(result.Segments, [2]Vec3{result.Position, tr.End})

@@ -57,6 +57,7 @@ func TestPmoveGroundRecordedVisibleBodies(t *testing.T) {
 			Snapshot     quake.Snapshot
 			Command      quake.UserCmd
 			ObservedNext quake.Vec3 `json:"observed_next"`
+			Frame        int
 		}
 	}
 	b, err := os.ReadFile("testdata/pmove-observed-body-native-regressions.json")
@@ -70,7 +71,7 @@ func TestPmoveGroundRecordedVisibleBodies(t *testing.T) {
 		t.Fatal("regression cases lost")
 	}
 	maps := map[string]quake.MapInfo{}
-	valid, close := 0, 0
+	valid, close, primaryClose := 0, 0, 0
 	maxError := 0.0
 	for _, c := range fixtures.Cases {
 		g, exists := maps[c.Snapshot.Map]
@@ -83,18 +84,36 @@ func TestPmoveGroundRecordedVisibleBodies(t *testing.T) {
 		}
 		p := predictPmoveGround(c.Snapshot, c.Command, &g)
 		if p == nil {
+			if c.Snapshot.Map != "ware2" || (c.Frame != 109 && c.Frame != 261) {
+				t.Fatal("new unsupported regression", c.Snapshot.Map, c.Frame)
+			}
+			t.Logf("unsupported: map=%s frame=%d", c.Snapshot.Map, c.Frame)
 			continue
 		}
 		valid++
 		dx, dy, dz := p.Position[0]-c.ObservedNext[0], p.Position[1]-c.ObservedNext[1], p.Position[2]-c.ObservedNext[2]
 		e := math.Sqrt(dx*dx + dy*dy + dz*dz)
 		if e <= .25 {
+			primaryClose++
+		}
+		if p.SupportAmbiguous && p.Alternative != nil {
+			a := p.Alternative.Position
+			x, y, z := a[0]-c.ObservedNext[0], a[1]-c.ObservedNext[1], a[2]-c.ObservedNext[2]
+			e = math.Min(e, math.Sqrt(x*x+y*y+z*z))
+		}
+		if e > .25 {
+			if c.Snapshot.Map != "city1" || (c.Frame != 107 && c.Frame != 108) {
+				t.Fatal("new native body mismatch", c.Snapshot.Map, c.Frame, e)
+			}
+			t.Logf("remaining error: map=%s frame=%d error=%g", c.Snapshot.Map, c.Frame, e)
+		}
+		if e <= .25 {
 			close++
 		}
 		maxError = math.Max(maxError, e)
 	}
-	t.Logf("visible body regressions: predicted=%d within0.25=%d max_error=%g", valid, close, maxError)
-	if close < 20 {
+	t.Logf("body regressions: predicted=%d primary_within0.25=%d covered_by_supported_trajectories_within0.25=%d max_min_error=%g", valid, primaryClose, close, maxError)
+	if close != 26 || valid != 26 || primaryClose != 24 {
 		t.Fatal("native body collisions remain unmodelled", valid, close, maxError)
 	}
 }

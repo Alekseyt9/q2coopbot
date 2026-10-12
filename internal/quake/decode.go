@@ -804,10 +804,12 @@ type Object struct {
 	HealthAmount int    `json:"health_amount,omitempty"`
 }
 type Mover struct {
-	ID     int  `json:"id"`
-	Model  int  `json:"model"`
-	Origin Vec3 `json:"origin"`
-	Angles Vec3 `json:"angles"`
+	Solid      uint16 `json:"solid,omitempty"`
+	SolidKnown bool   `json:"solid_known,omitempty"`
+	ID         int    `json:"id"`
+	Model      int    `json:"model"`
+	Origin     Vec3   `json:"origin"`
+	Angles     Vec3   `json:"angles"`
 }
 type BeamObservation struct {
 	ID     int  `json:"id"`
@@ -946,7 +948,7 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 		}
 		if strings.HasPrefix(path, "*") {
 			if model, err := strconv.Atoi(strings.TrimPrefix(path, "*")); err == nil {
-				s.Movers = append(s.Movers, Mover{ID: entity.Number, Model: model, Origin: entity.Origin, Angles: entity.Angles})
+				s.Movers = append(s.Movers, Mover{ID: entity.Number, Model: model, Origin: entity.Origin, Angles: entity.Angles, Solid: entity.Solid, SolidKnown: true})
 			}
 		}
 		if strings.Contains(path, "/monsters/") && Distance(entity.Origin, f.Origin) < 1024 {

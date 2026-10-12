@@ -18,6 +18,7 @@ type ConfigFile struct {
 		Mode               string `json:"mode"`
 		ProviderFile       string `json:"provider_file"`
 		ActionQualityGuard bool   `json:"action_quality_guard,omitempty"`
+		CheckedWallSlide   bool   `json:"checked_wall_slide,omitempty"`
 		LiveCompanion      bool   `json:"live_companion,omitempty"`
 	} `json:"combat"`
 	Server struct {
@@ -227,6 +228,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.CombatCapture = file.Output.CombatCapture
 	cfg.CombatMode, cfg.CombatProviderFile = file.Combat.Mode, resolve(file.Combat.ProviderFile)
 	cfg.CombatActionQualityGuard = file.Combat.ActionQualityGuard
+	cfg.CombatCheckedWallSlide = file.Combat.CheckedWallSlide
 	cfg.CombatLiveCompanion = file.Combat.LiveCompanion
 	cfg.TestCampaignCombatEvaluation = file.Test.CampaignCombatEvaluation
 	cfg.Idle, cfg.ExitOnReconnect = file.Test.Idle, file.Test.ExitOnReconnect

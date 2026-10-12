@@ -25,6 +25,8 @@ type MapEntity struct {
 	Health     int     `json:"health,omitempty"`
 	SpawnFlags int     `json:"spawn_flags,omitempty"`
 	Wait       float64 `json:"wait,omitempty"`
+	Lip        float64 `json:"lip,omitempty"`
+	Height     float64 `json:"height,omitempty"`
 	Map        string  `json:"map,omitempty"`
 }
 type MapInfo struct {
@@ -664,6 +666,8 @@ func parseMapEntities(text string) []MapEntity {
 					e.Damage, _ = strconv.Atoi(props["dmg"])
 					e.SpawnFlags, _ = strconv.Atoi(props["spawnflags"])
 					e.Wait, _ = strconv.ParseFloat(props["wait"], 64)
+					e.Lip, _ = strconv.ParseFloat(props["lip"], 64)
+					e.Height, _ = strconv.ParseFloat(props["height"], 64)
 					if strings.HasPrefix(props["model"], "*") {
 						e.Model, _ = strconv.Atoi(strings.TrimPrefix(props["model"], "*"))
 					}

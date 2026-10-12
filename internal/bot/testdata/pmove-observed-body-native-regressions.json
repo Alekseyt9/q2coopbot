@@ -1,5 +1,5 @@
 {
-  "scope": "29 frames; visible enemy/barrel subset reconstructed from recorded client fields; not all protocol packet bodies or NN labels",
+  "scope": "29 native error frames; full observed protocol bodies recovered from original DM2, exact map/frame/self match. Identical repeated frame snapshots collapsed only after complete body-list equality. No neural labels or input reconstruction.",
   "cases": [
     {
       "snapshot": {
@@ -101,40 +101,36 @@
         ],
         "collision_bodies": [
           {
-            "model_path": "models/monsters/parasite/tris.md2",
-            "angles": [
-              0,
-              158.90625,
-              0
-            ],
-            "id": 476,
-            "class": "monster_parasite",
-            "origin": [
-              -2662.875,
-              -159.25,
-              -279.875
-            ],
-            "frame": 74,
-            "solid": 7266,
-            "clear_shot": true
-          },
-          {
             "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
-              180,
+              0,
               0
             ],
             "id": 467,
-            "class": "monster_infantry",
+            "class": "",
             "origin": [
               -2627.125,
               -176.375,
               -279.875
             ],
-            "frame": 98,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
+          },
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 476,
+            "class": "",
+            "origin": [
+              -2662.875,
+              -159.25,
+              -279.875
+            ],
+            "solid": 7266
           }
         ]
       },
@@ -159,7 +155,8 @@
       "frame": 107,
       "collision_candidate_classes": [
         "monster_parasite"
-      ]
+      ],
+      "source_demo_sha256": "f0c42e488921c420801467d7fb37c3604cf8b04db7118040133968f5e02c9c32"
     },
     {
       "snapshot": {
@@ -264,37 +261,33 @@
             "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
-              222.1875,
+              0,
               0
             ],
             "id": 467,
-            "class": "monster_infantry",
+            "class": "",
             "origin": [
               -2702.75,
               -133.25,
               -279.875
             ],
-            "frame": 187,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           },
           {
             "model_path": "models/monsters/parasite/tris.md2",
             "angles": [
               0,
-              171.5625,
+              0,
               0
             ],
             "id": 476,
-            "class": "monster_parasite",
+            "class": "",
             "origin": [
               -2710.5,
               -175.375,
               -279.875
             ],
-            "frame": 42,
-            "solid": 7266,
-            "clear_shot": true
+            "solid": 7266
           }
         ]
       },
@@ -319,7 +312,8 @@
       "frame": 135,
       "collision_candidate_classes": [
         "monster_parasite"
-      ]
+      ],
+      "source_demo_sha256": "f0c42e488921c420801467d7fb37c3604cf8b04db7118040133968f5e02c9c32"
     },
     {
       "snapshot": {
@@ -407,40 +401,36 @@
         ],
         "collision_bodies": [
           {
-            "model_path": "models/monsters/parasite/tris.md2",
-            "angles": [
-              0,
-              158.90625,
-              0
-            ],
-            "id": 528,
-            "class": "monster_parasite",
-            "origin": [
-              1857,
-              26.625,
-              -231.875
-            ],
-            "frame": 41,
-            "solid": 7266,
-            "clear_shot": true
-          },
-          {
             "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
-              139.21875,
+              0,
               0
             ],
             "id": 519,
-            "class": "monster_infantry",
+            "class": "",
             "origin": [
               1903.5,
               32.125,
               -231.875
             ],
-            "frame": 99,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
+          },
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 528,
+            "class": "",
+            "origin": [
+              1857,
+              26.625,
+              -231.875
+            ],
+            "solid": 7266
           }
         ]
       },
@@ -465,7 +455,8 @@
       "frame": 108,
       "collision_candidate_classes": [
         "monster_parasite"
-      ]
+      ],
+      "source_demo_sha256": "65dfc99b9b3b46093ad7e52d05c6d0c334cc0ebfe4b92a6ea4d5d93e8217fc7d"
     },
     {
       "snapshot": {
@@ -556,37 +547,33 @@
             "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
-              119.53125,
+              0,
               0
             ],
             "id": 519,
-            "class": "monster_infantry",
+            "class": "",
             "origin": [
               1903.5,
               32.125,
               -231.875
             ],
-            "frame": 92,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           },
           {
             "model_path": "models/monsters/parasite/tris.md2",
             "angles": [
               0,
-              175.78125,
+              0,
               0
             ],
             "id": 528,
-            "class": "monster_parasite",
+            "class": "",
             "origin": [
               1857,
               26.625,
               -231.875
             ],
-            "frame": 42,
-            "solid": 7266,
-            "clear_shot": true
+            "solid": 7266
           }
         ]
       },
@@ -611,7 +598,8 @@
       "frame": 109,
       "collision_candidate_classes": [
         "monster_parasite"
-      ]
+      ],
+      "source_demo_sha256": "65dfc99b9b3b46093ad7e52d05c6d0c334cc0ebfe4b92a6ea4d5d93e8217fc7d"
     },
     {
       "snapshot": {
@@ -716,37 +704,33 @@
             "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
-              180,
+              0,
               0
             ],
             "id": 467,
-            "class": "monster_infantry",
+            "class": "",
             "origin": [
               -2627.125,
               -176.375,
               -279.875
             ],
-            "frame": 98,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           },
           {
             "model_path": "models/monsters/parasite/tris.md2",
             "angles": [
               0,
-              158.90625,
+              0,
               0
             ],
             "id": 478,
-            "class": "monster_parasite",
+            "class": "",
             "origin": [
               -2662.875,
               -159.25,
               -279.875
             ],
-            "frame": 74,
-            "solid": 7266,
-            "clear_shot": true
+            "solid": 7266
           }
         ]
       },
@@ -771,7 +755,8 @@
       "frame": 107,
       "collision_candidate_classes": [
         "monster_parasite"
-      ]
+      ],
+      "source_demo_sha256": "47c3164813153b919b11557bd450cc6d10229c94fd9e473afe950e2c2a4349d3"
     },
     {
       "snapshot": {
@@ -876,37 +861,33 @@
             "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
-              158.90625,
+              0,
               0
             ],
             "id": 467,
-            "class": "monster_infantry",
+            "class": "",
             "origin": [
               -2627.125,
               -176.375,
               -279.875
             ],
-            "frame": 99,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           },
           {
             "model_path": "models/monsters/parasite/tris.md2",
             "angles": [
               0,
-              164.53125,
+              0,
               0
             ],
             "id": 478,
-            "class": "monster_parasite",
+            "class": "",
             "origin": [
               -2662.875,
               -159.25,
               -279.875
             ],
-            "frame": 39,
-            "solid": 7266,
-            "clear_shot": true
+            "solid": 7266
           }
         ]
       },
@@ -931,7 +912,8 @@
       "frame": 108,
       "collision_candidate_classes": [
         "monster_parasite"
-      ]
+      ],
+      "source_demo_sha256": "47c3164813153b919b11557bd450cc6d10229c94fd9e473afe950e2c2a4349d3"
     },
     {
       "snapshot": {
@@ -1036,37 +1018,33 @@
             "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
-              182.8125,
+              0,
               0
             ],
             "id": 467,
-            "class": "monster_infantry",
+            "class": "",
             "origin": [
               -2648.875,
               -182.625,
               -279.875
             ],
-            "frame": 92,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           },
           {
             "model_path": "models/monsters/parasite/tris.md2",
             "angles": [
               0,
-              206.71875,
+              0,
               0
             ],
             "id": 478,
-            "class": "monster_parasite",
+            "class": "",
             "origin": [
               -2661.25,
               -145.125,
               -279.875
             ],
-            "frame": 68,
-            "solid": 7266,
-            "clear_shot": true
+            "solid": 7266
           }
         ]
       },
@@ -1092,7 +1070,8 @@
       "collision_candidate_classes": [
         "monster_infantry",
         "monster_parasite"
-      ]
+      ],
+      "source_demo_sha256": "47c3164813153b919b11557bd450cc6d10229c94fd9e473afe950e2c2a4349d3"
     },
     {
       "snapshot": {
@@ -1197,56 +1176,49 @@
             "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
-              180,
+              0,
               0
             ],
             "id": 467,
-            "class": "monster_infantry",
+            "class": "",
             "origin": [
               -2789.5,
               -183.875,
               -279.875
             ],
-            "frame": 94,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           },
           {
             "model_path": "models/monsters/gunner/tris.md2",
             "angles": [
               0,
-              189.84375,
+              0,
               0
             ],
             "id": 468,
-            "class": "monster_gunner",
+            "class": "",
             "origin": [
               -2622.25,
               -130.625,
               -279.875
             ],
-            "frame": 94,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           },
           {
             "model_path": "models/monsters/parasite/tris.md2",
             "angles": [
               0,
-              185.625,
+              0,
               0
             ],
-            "skin": 1,
             "id": 477,
-            "class": "monster_parasite",
+            "class": "",
             "origin": [
               -2865.875,
               -183.125,
               -279.875
             ],
-            "frame": 41,
-            "solid": 7266,
-            "clear_shot": true
+            "solid": 7266
           }
         ]
       },
@@ -1271,7 +1243,8 @@
       "frame": 153,
       "collision_candidate_classes": [
         "monster_parasite"
-      ]
+      ],
+      "source_demo_sha256": "945f3da51771b944e7c0b36d52e72ef4ba7bbe2d388e43320a2c79209d5d4e03"
     },
     {
       "snapshot": {
@@ -1373,23 +1346,36 @@
         ],
         "collision_bodies": [
           {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 467,
+            "class": "",
+            "origin": [
+              -2895.25,
+              -190.375,
+              -279.125
+            ],
+            "solid": 8290
+          },
+          {
             "model_path": "models/monsters/gunner/tris.md2",
             "angles": [
               0,
-              234.84375,
+              0,
               0
             ],
-            "skin": 1,
             "id": 468,
-            "class": "monster_gunner",
+            "class": "",
             "origin": [
               -2855.75,
               -192.375,
               -279.875
             ],
-            "frame": 101,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           }
         ]
       },
@@ -1414,7 +1400,8 @@
       "frame": 190,
       "collision_candidate_classes": [
         "monster_infantry"
-      ]
+      ],
+      "source_demo_sha256": "945f3da51771b944e7c0b36d52e72ef4ba7bbe2d388e43320a2c79209d5d4e03"
     },
     {
       "snapshot": {
@@ -1516,23 +1503,36 @@
         ],
         "collision_bodies": [
           {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 467,
+            "class": "",
+            "origin": [
+              -2895.25,
+              -190.375,
+              -279.875
+            ],
+            "solid": 8290
+          },
+          {
             "model_path": "models/monsters/gunner/tris.md2",
             "angles": [
               0,
-              158.90625,
+              0,
               0
             ],
-            "skin": 1,
             "id": 468,
-            "class": "monster_gunner",
+            "class": "",
             "origin": [
               -2855.75,
               -192.375,
               -279.875
             ],
-            "frame": 94,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           }
         ]
       },
@@ -1557,7 +1557,8 @@
       "frame": 191,
       "collision_candidate_classes": [
         "monster_infantry"
-      ]
+      ],
+      "source_demo_sha256": "945f3da51771b944e7c0b36d52e72ef4ba7bbe2d388e43320a2c79209d5d4e03"
     },
     {
       "snapshot": {
@@ -1659,23 +1660,36 @@
         ],
         "collision_bodies": [
           {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 467,
+            "class": "",
+            "origin": [
+              -2895.25,
+              -190.375,
+              -279.875
+            ],
+            "solid": 8290
+          },
+          {
             "model_path": "models/monsters/gunner/tris.md2",
             "angles": [
               0,
-              139.21875,
+              0,
               0
             ],
-            "skin": 1,
             "id": 468,
-            "class": "monster_gunner",
+            "class": "",
             "origin": [
               -2855.75,
               -192.375,
               -279.875
             ],
-            "frame": 95,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           }
         ]
       },
@@ -1700,7 +1714,8 @@
       "frame": 192,
       "collision_candidate_classes": [
         "monster_infantry"
-      ]
+      ],
+      "source_demo_sha256": "945f3da51771b944e7c0b36d52e72ef4ba7bbe2d388e43320a2c79209d5d4e03"
     },
     {
       "snapshot": {
@@ -1802,23 +1817,36 @@
         ],
         "collision_bodies": [
           {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 467,
+            "class": "",
+            "origin": [
+              -2894.25,
+              -190.25,
+              -279.875
+            ],
+            "solid": 8290
+          },
+          {
             "model_path": "models/monsters/gunner/tris.md2",
             "angles": [
               0,
-              139.21875,
+              0,
               0
             ],
-            "skin": 1,
             "id": 468,
-            "class": "monster_gunner",
+            "class": "",
             "origin": [
               -2855.75,
               -192.375,
               -279.875
             ],
-            "frame": 96,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           }
         ]
       },
@@ -1843,7 +1871,8 @@
       "frame": 193,
       "collision_candidate_classes": [
         "monster_infantry"
-      ]
+      ],
+      "source_demo_sha256": "945f3da51771b944e7c0b36d52e72ef4ba7bbe2d388e43320a2c79209d5d4e03"
     },
     {
       "snapshot": {
@@ -1945,23 +1974,36 @@
         ],
         "collision_bodies": [
           {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 467,
+            "class": "",
+            "origin": [
+              -2894.25,
+              -190.25,
+              -279.875
+            ],
+            "solid": 8290
+          },
+          {
             "model_path": "models/monsters/gunner/tris.md2",
             "angles": [
               0,
-              59.0625,
+              0,
               0
             ],
-            "skin": 1,
             "id": 468,
-            "class": "monster_gunner",
+            "class": "",
             "origin": [
               -2829.625,
               -166.375,
               -279.875
             ],
-            "frame": 94,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           }
         ]
       },
@@ -1986,7 +2028,8 @@
       "frame": 199,
       "collision_candidate_classes": [
         "monster_infantry"
-      ]
+      ],
+      "source_demo_sha256": "945f3da51771b944e7c0b36d52e72ef4ba7bbe2d388e43320a2c79209d5d4e03"
     },
     {
       "snapshot": {
@@ -2091,56 +2134,49 @@
             "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
-              180,
+              0,
               0
             ],
             "id": 467,
-            "class": "monster_infantry",
+            "class": "",
             "origin": [
               -2790.5,
               -183.875,
               -279.875
             ],
-            "frame": 94,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           },
           {
             "model_path": "models/monsters/gunner/tris.md2",
             "angles": [
               0,
-              191.25,
+              0,
               0
             ],
             "id": 468,
-            "class": "monster_gunner",
+            "class": "",
             "origin": [
               -2622.125,
               -131.625,
               -279.875
             ],
-            "frame": 94,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           },
           {
             "model_path": "models/monsters/parasite/tris.md2",
             "angles": [
               0,
-              185.625,
+              0,
               0
             ],
-            "skin": 1,
             "id": 479,
-            "class": "monster_parasite",
+            "class": "",
             "origin": [
               -2865.875,
               -183.125,
               -279.875
             ],
-            "frame": 41,
-            "solid": 7266,
-            "clear_shot": true
+            "solid": 7266
           }
         ]
       },
@@ -2165,7 +2201,8 @@
       "frame": 153,
       "collision_candidate_classes": [
         "monster_parasite"
-      ]
+      ],
+      "source_demo_sha256": "c1756a8a74d5b9b3161602ae790f8bbd2a2aa011ea78443d145cca791c5fa57f"
     },
     {
       "snapshot": {
@@ -2267,23 +2304,36 @@
         ],
         "collision_bodies": [
           {
+            "model_path": "models/objects/gibs/head2/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 467,
+            "class": "",
+            "origin": [
+              -2865.625,
+              -175,
+              -287.875
+            ],
+            "solid": 4129
+          },
+          {
             "model_path": "models/monsters/gunner/tris.md2",
             "angles": [
               0,
-              180,
+              0,
               0
             ],
-            "skin": 1,
             "id": 468,
-            "class": "monster_gunner",
+            "class": "",
             "origin": [
               -2594.875,
               -181.375,
               -279.875
             ],
-            "frame": 97,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           }
         ]
       },
@@ -2308,7 +2358,8 @@
       "frame": 214,
       "collision_candidate_classes": [
         "monster_infantry"
-      ]
+      ],
+      "source_demo_sha256": "c1756a8a74d5b9b3161602ae790f8bbd2a2aa011ea78443d145cca791c5fa57f"
     },
     {
       "snapshot": {
@@ -2410,23 +2461,36 @@
         ],
         "collision_bodies": [
           {
+            "model_path": "models/objects/gibs/head2/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 467,
+            "class": "",
+            "origin": [
+              -2865.625,
+              -175,
+              -287.875
+            ],
+            "solid": 4129
+          },
+          {
             "model_path": "models/monsters/gunner/tris.md2",
             "angles": [
               0,
-              180,
+              0,
               0
             ],
-            "skin": 1,
             "id": 468,
-            "class": "monster_gunner",
+            "class": "",
             "origin": [
               -2640.875,
               -181.375,
               -279.875
             ],
-            "frame": 188,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           }
         ]
       },
@@ -2451,7 +2515,8 @@
       "frame": 226,
       "collision_candidate_classes": [
         "monster_infantry"
-      ]
+      ],
+      "source_demo_sha256": "c1756a8a74d5b9b3161602ae790f8bbd2a2aa011ea78443d145cca791c5fa57f"
     },
     {
       "snapshot": {
@@ -2542,37 +2607,33 @@
             "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
-              119.53125,
+              0,
               0
             ],
             "id": 519,
-            "class": "monster_infantry",
+            "class": "",
             "origin": [
               1903.5,
               32.125,
               -231.875
             ],
-            "frame": 92,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           },
           {
             "model_path": "models/monsters/parasite/tris.md2",
             "angles": [
               0,
-              172.96875,
+              0,
               0
             ],
             "id": 530,
-            "class": "monster_parasite",
+            "class": "",
             "origin": [
               1857.125,
               26.875,
               -231.875
             ],
-            "frame": 42,
-            "solid": 7266,
-            "clear_shot": true
+            "solid": 7266
           }
         ]
       },
@@ -2597,7 +2658,8 @@
       "frame": 109,
       "collision_candidate_classes": [
         "monster_parasite"
-      ]
+      ],
+      "source_demo_sha256": "3e82eab24212d927b2e2b1c66b43e25672ebdc00e5d26a9121f82bef8acec4f7"
     },
     {
       "snapshot": {
@@ -2685,40 +2747,36 @@
         ],
         "collision_bodies": [
           {
-            "model_path": "models/monsters/parasite/tris.md2",
-            "angles": [
-              0,
-              135,
-              0
-            ],
-            "id": 530,
-            "class": "monster_parasite",
-            "origin": [
-              1867.375,
-              9.5,
-              -231.875
-            ],
-            "frame": 56,
-            "solid": 7266,
-            "clear_shot": true
-          },
-          {
             "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
-              90,
+              0,
               0
             ],
             "id": 519,
-            "class": "monster_infantry",
+            "class": "",
             "origin": [
               1921.125,
               20.5,
               -231.875
             ],
-            "frame": 97,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
+          },
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 530,
+            "class": "",
+            "origin": [
+              1867.375,
+              9.5,
+              -231.875
+            ],
+            "solid": 7266
           }
         ]
       },
@@ -2744,7 +2802,8 @@
       "collision_candidate_classes": [
         "monster_parasite",
         "worldspawn"
-      ]
+      ],
+      "source_demo_sha256": "3e82eab24212d927b2e2b1c66b43e25672ebdc00e5d26a9121f82bef8acec4f7"
     },
     {
       "snapshot": {
@@ -2975,20 +3034,17 @@
             "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
-              188.4375,
+              0,
               0
             ],
-            "skin": 1,
             "id": 519,
-            "class": "monster_infantry",
+            "class": "",
             "origin": [
               1746.75,
               -273,
               -231.875
             ],
-            "frame": 199,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           }
         ]
       },
@@ -3014,7 +3070,8 @@
       "collision_candidate_classes": [
         "monster_infantry",
         "worldspawn"
-      ]
+      ],
+      "source_demo_sha256": "3e82eab24212d927b2e2b1c66b43e25672ebdc00e5d26a9121f82bef8acec4f7"
     },
     {
       "snapshot": {
@@ -3245,20 +3302,17 @@
             "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
-              188.4375,
+              0,
               0
             ],
-            "skin": 1,
             "id": 519,
-            "class": "monster_infantry",
+            "class": "",
             "origin": [
               1746.75,
               -273,
               -231.875
             ],
-            "frame": 201,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 8290
           }
         ]
       },
@@ -3283,7 +3337,8 @@
       "frame": 261,
       "collision_candidate_classes": [
         "monster_infantry"
-      ]
+      ],
+      "source_demo_sha256": "3e82eab24212d927b2e2b1c66b43e25672ebdc00e5d26a9121f82bef8acec4f7"
     },
     {
       "snapshot": {
@@ -3427,38 +3482,36 @@
         ],
         "collision_bodies": [
           {
-            "model_path": "models/monsters/infantry/tris.md2",
-            "angles": [
-              0,
-              5.625,
-              0
-            ],
-            "skin": 1,
-            "id": 383,
-            "class": "monster_infantry",
-            "origin": [
-              -546,
-              -1045.125,
-              40
-            ],
-            "frame": 92,
-            "solid": 8290,
-            "clear_shot": true
-          },
-          {
+            "model_path": "models/objects/barrels/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
             "id": 320,
-            "class": "misc_explobox",
+            "class": "",
             "origin": [
               -744,
               -880,
               -63.875
             ],
             "solid": 9250
+          },
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 383,
+            "class": "",
+            "origin": [
+              -546,
+              -1045.125,
+              40
+            ],
+            "solid": 8290
           }
         ]
       },
@@ -3483,7 +3536,8 @@
       "frame": 301,
       "collision_candidate_classes": [
         "monster_infantry"
-      ]
+      ],
+      "source_demo_sha256": "64e3fd96de608b781c5e35174a36d82a79fd9034b74bbdff6b94ae77d4aedeef"
     },
     {
       "snapshot": {
@@ -3571,37 +3625,52 @@
         ],
         "collision_bodies": [
           {
-            "model_path": "models/monsters/infantry/tris.md2",
-            "angles": [
-              0,
-              267.1875,
-              0
-            ],
-            "id": 383,
-            "class": "monster_infantry",
-            "origin": [
-              -322,
-              -3203.375,
-              88.125
-            ],
-            "frame": 92,
-            "solid": 8290,
-            "clear_shot": false
-          },
-          {
+            "model_path": "models/objects/barrels/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
             "id": 166,
-            "class": "misc_explobox",
+            "class": "",
             "origin": [
               -312,
               -3496,
               64
             ],
             "solid": 9250
+          },
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 383,
+            "class": "",
+            "origin": [
+              -322,
+              -3203.375,
+              88.125
+            ],
+            "solid": 8290
+          },
+          {
+            "model_path": "models/objects/gibs/head2/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 395,
+            "class": "",
+            "origin": [
+              -395.25,
+              -3416.125,
+              64
+            ],
+            "solid": 4129
           }
         ]
       },
@@ -3626,7 +3695,8 @@
       "frame": 190,
       "collision_candidate_classes": [
         "misc_explobox"
-      ]
+      ],
+      "source_demo_sha256": "307e0ceddea0a2e2495a56babc848b8fd6c000a1917c6da0636a8243eecea91e"
     },
     {
       "snapshot": {
@@ -3714,37 +3784,52 @@
         ],
         "collision_bodies": [
           {
-            "model_path": "models/monsters/infantry/tris.md2",
-            "angles": [
-              0,
-              267.1875,
-              0
-            ],
-            "id": 383,
-            "class": "monster_infantry",
-            "origin": [
-              -322,
-              -3203.375,
-              88.125
-            ],
-            "frame": 93,
-            "solid": 8290,
-            "clear_shot": false
-          },
-          {
+            "model_path": "models/objects/barrels/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
             "id": 166,
-            "class": "misc_explobox",
+            "class": "",
             "origin": [
               -312.625,
               -3496.625,
               64
             ],
             "solid": 9250
+          },
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 383,
+            "class": "",
+            "origin": [
+              -322,
+              -3203.375,
+              88.125
+            ],
+            "solid": 8290
+          },
+          {
+            "model_path": "models/objects/gibs/head2/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 395,
+            "class": "",
+            "origin": [
+              -395.25,
+              -3416.125,
+              64
+            ],
+            "solid": 4129
           }
         ]
       },
@@ -3769,7 +3854,8 @@
       "frame": 191,
       "collision_candidate_classes": [
         "misc_explobox"
-      ]
+      ],
+      "source_demo_sha256": "307e0ceddea0a2e2495a56babc848b8fd6c000a1917c6da0636a8243eecea91e"
     },
     {
       "snapshot": {
@@ -3857,37 +3943,52 @@
         ],
         "collision_bodies": [
           {
-            "model_path": "models/monsters/infantry/tris.md2",
-            "angles": [
-              0,
-              267.1875,
-              0
-            ],
-            "id": 383,
-            "class": "monster_infantry",
-            "origin": [
-              -322,
-              -3203.375,
-              88.125
-            ],
-            "frame": 92,
-            "solid": 8290,
-            "clear_shot": false
-          },
-          {
+            "model_path": "models/objects/barrels/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
             "id": 166,
-            "class": "misc_explobox",
+            "class": "",
             "origin": [
               -313.375,
               -3497.375,
               64
             ],
             "solid": 9250
+          },
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 383,
+            "class": "",
+            "origin": [
+              -322,
+              -3203.375,
+              88.125
+            ],
+            "solid": 8290
+          },
+          {
+            "model_path": "models/objects/gibs/head2/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 395,
+            "class": "",
+            "origin": [
+              -395.25,
+              -3416.125,
+              64
+            ],
+            "solid": 4129
           }
         ]
       },
@@ -3912,7 +4013,8 @@
       "frame": 206,
       "collision_candidate_classes": [
         "misc_explobox"
-      ]
+      ],
+      "source_demo_sha256": "307e0ceddea0a2e2495a56babc848b8fd6c000a1917c6da0636a8243eecea91e"
     },
     {
       "snapshot": {
@@ -3986,32 +4088,30 @@
         ],
         "collision_bodies": [
           {
-            "model_path": "models/monsters/infantry/tris.md2",
+            "model_path": "models/objects/satellite/tris.md2",
             "angles": [
               0,
-              206.71875,
+              0,
               0
             ],
-            "skin": 1,
-            "id": 378,
-            "class": "monster_infantry",
+            "id": 241,
+            "class": "",
             "origin": [
-              1327.25,
-              -541.25,
-              -487.875
+              -640,
+              -16,
+              -236
             ],
-            "frame": 95,
-            "solid": 8290,
-            "clear_shot": false
+            "solid": 20520
           },
           {
+            "model_path": "models/objects/barrels/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
             "id": 361,
-            "class": "misc_explobox",
+            "class": "",
             "origin": [
               1040,
               -840,
@@ -4020,19 +4120,36 @@
             "solid": 9250
           },
           {
+            "model_path": "models/objects/barrels/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
             "id": 362,
-            "class": "misc_explobox",
+            "class": "",
             "origin": [
               1120,
               -896,
               -511.875
             ],
             "solid": 9250
+          },
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 378,
+            "class": "",
+            "origin": [
+              1327.25,
+              -541.25,
+              -487.875
+            ],
+            "solid": 8290
           }
         ]
       },
@@ -4057,7 +4174,8 @@
       "frame": 305,
       "collision_candidate_classes": [
         "misc_explobox"
-      ]
+      ],
+      "source_demo_sha256": "5efced9e701631e7a97273b88c3269c6d941a0dad4b5a5956d59fc1615327632"
     },
     {
       "snapshot": {
@@ -4131,32 +4249,46 @@
         ],
         "collision_bodies": [
           {
-            "model_path": "models/monsters/infantry/tris.md2",
+            "model_path": "models/objects/satellite/tris.md2",
             "angles": [
               0,
-              154.6875,
+              0,
               0
             ],
-            "skin": 1,
-            "id": 378,
-            "class": "monster_infantry",
+            "id": 241,
+            "class": "",
             "origin": [
-              1262.75,
-              -567.25,
-              -487.875
+              -640,
+              -16,
+              -236
             ],
-            "frame": 92,
-            "solid": 8290,
-            "clear_shot": false
+            "solid": 20520
           },
           {
+            "model_path": "models/objects/barrels/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 361,
+            "class": "",
+            "origin": [
+              1040,
+              -840,
+              -511.875
+            ],
+            "solid": 9250
+          },
+          {
+            "model_path": "models/objects/barrels/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
             "id": 362,
-            "class": "misc_explobox",
+            "class": "",
             "origin": [
               1120.875,
               -895.5,
@@ -4165,19 +4297,20 @@
             "solid": 9250
           },
           {
+            "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
-            "id": 361,
-            "class": "misc_explobox",
+            "id": 378,
+            "class": "",
             "origin": [
-              1040,
-              -840,
-              -511.875
+              1262.75,
+              -567.25,
+              -487.875
             ],
-            "solid": 9250
+            "solid": 8290
           }
         ]
       },
@@ -4202,7 +4335,8 @@
       "frame": 310,
       "collision_candidate_classes": [
         "misc_explobox"
-      ]
+      ],
+      "source_demo_sha256": "5efced9e701631e7a97273b88c3269c6d941a0dad4b5a5956d59fc1615327632"
     },
     {
       "snapshot": {
@@ -4276,32 +4410,30 @@
         ],
         "collision_bodies": [
           {
-            "model_path": "models/monsters/infantry/tris.md2",
+            "model_path": "models/objects/satellite/tris.md2",
             "angles": [
               0,
-              180,
+              0,
               0
             ],
-            "skin": 1,
-            "id": 378,
-            "class": "monster_infantry",
+            "id": 241,
+            "class": "",
             "origin": [
-              1206.625,
-              -553.125,
-              -487.875
+              -640,
+              -16,
+              -236
             ],
-            "frame": 96,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 20520
           },
           {
+            "model_path": "models/objects/barrels/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
             "id": 361,
-            "class": "misc_explobox",
+            "class": "",
             "origin": [
               1039.375,
               -839.125,
@@ -4310,19 +4442,36 @@
             "solid": 9250
           },
           {
+            "model_path": "models/objects/barrels/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
             "id": 362,
-            "class": "misc_explobox",
+            "class": "",
             "origin": [
               1120.875,
               -895.5,
               -511.875
             ],
             "solid": 9250
+          },
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 378,
+            "class": "",
+            "origin": [
+              1206.625,
+              -553.125,
+              -487.875
+            ],
+            "solid": 8290
           }
         ]
       },
@@ -4347,7 +4496,8 @@
       "frame": 314,
       "collision_candidate_classes": [
         "misc_explobox"
-      ]
+      ],
+      "source_demo_sha256": "5efced9e701631e7a97273b88c3269c6d941a0dad4b5a5956d59fc1615327632"
     },
     {
       "snapshot": {
@@ -4421,32 +4571,30 @@
         ],
         "collision_bodies": [
           {
-            "model_path": "models/monsters/infantry/tris.md2",
+            "model_path": "models/objects/satellite/tris.md2",
             "angles": [
               0,
-              180,
+              0,
               0
             ],
-            "skin": 1,
-            "id": 378,
-            "class": "monster_infantry",
+            "id": 241,
+            "class": "",
             "origin": [
-              1171.625,
-              -553.125,
-              -487.875
+              -640,
+              -16,
+              -236
             ],
-            "frame": 97,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 20520
           },
           {
+            "model_path": "models/objects/barrels/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
             "id": 361,
-            "class": "misc_explobox",
+            "class": "",
             "origin": [
               1039.375,
               -839.125,
@@ -4455,19 +4603,36 @@
             "solid": 9250
           },
           {
+            "model_path": "models/objects/barrels/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
             "id": 362,
-            "class": "misc_explobox",
+            "class": "",
             "origin": [
               1121.75,
               -895,
               -511.875
             ],
             "solid": 9250
+          },
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 378,
+            "class": "",
+            "origin": [
+              1171.625,
+              -553.125,
+              -487.875
+            ],
+            "solid": 8290
           }
         ]
       },
@@ -4492,7 +4657,8 @@
       "frame": 315,
       "collision_candidate_classes": [
         "misc_explobox"
-      ]
+      ],
+      "source_demo_sha256": "5efced9e701631e7a97273b88c3269c6d941a0dad4b5a5956d59fc1615327632"
     },
     {
       "snapshot": {
@@ -4566,32 +4732,46 @@
         ],
         "collision_bodies": [
           {
-            "model_path": "models/monsters/infantry/tris.md2",
+            "model_path": "models/objects/satellite/tris.md2",
             "angles": [
               0,
-              180,
+              0,
               0
             ],
-            "skin": 1,
-            "id": 378,
-            "class": "monster_infantry",
+            "id": 241,
+            "class": "",
             "origin": [
-              1169.625,
-              -553.125,
-              -487.875
+              -640,
+              -16,
+              -236
             ],
-            "frame": 98,
-            "solid": 8290,
-            "clear_shot": true
+            "solid": 20520
           },
           {
+            "model_path": "models/objects/barrels/tris.md2",
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 361,
+            "class": "",
+            "origin": [
+              1039.375,
+              -839.125,
+              -511.875
+            ],
+            "solid": 9250
+          },
+          {
+            "model_path": "models/objects/barrels/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
             "id": 362,
-            "class": "misc_explobox",
+            "class": "",
             "origin": [
               1122.5,
               -894.375,
@@ -4600,19 +4780,20 @@
             "solid": 9250
           },
           {
+            "model_path": "models/monsters/infantry/tris.md2",
             "angles": [
               0,
               0,
               0
             ],
-            "id": 361,
-            "class": "misc_explobox",
+            "id": 378,
+            "class": "",
             "origin": [
-              1039.375,
-              -839.125,
-              -511.875
+              1169.625,
+              -553.125,
+              -487.875
             ],
-            "solid": 9250
+            "solid": 8290
           }
         ]
       },
@@ -4637,7 +4818,8 @@
       "frame": 316,
       "collision_candidate_classes": [
         "misc_explobox"
-      ]
+      ],
+      "source_demo_sha256": "5efced9e701631e7a97273b88c3269c6d941a0dad4b5a5956d59fc1615327632"
     }
   ]
 }

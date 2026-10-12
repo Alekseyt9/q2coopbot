@@ -34,6 +34,9 @@ func (m *MapInfo) TracePlayerWithMovers(from, to Vec3, ducked bool, movers []Mov
 		maxs[2] = 4
 	}
 	for _, mover := range movers {
+		if mover.SolidKnown && mover.Solid == 0 {
+			continue
+		}
 		local, ok := m.moverCollision(mover)
 		if !ok {
 			return PlayerTrace{}

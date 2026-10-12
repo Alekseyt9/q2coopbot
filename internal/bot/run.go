@@ -26,6 +26,7 @@ type Config struct {
 	ConnectReleaseFile                  string
 	CombatMode, CombatProviderFile      string
 	CombatActionQualityGuard            bool
+	CombatCheckedWallSlide              bool
 	CombatLiveCompanion                 bool
 	CombatCapture                       bool
 	TestCampaignCombatEvaluation        bool
@@ -453,7 +454,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	defer conn.Close()
 	client := &Client{
-		combatControl:      combatControl{mode: cfg.CombatMode, provider: combatProvider, campaignEvaluation: naturalCombat, actionQualityGuard: cfg.CombatActionQualityGuard},
+		combatControl:      combatControl{mode: cfg.CombatMode, provider: combatProvider, campaignEvaluation: naturalCombat, actionQualityGuard: cfg.CombatActionQualityGuard, checkedWallSlide: cfg.CombatCheckedWallSlide},
 		combatCapture:      cfg.CombatCapture,
 		scenarioResultPath: cfg.TestScenarioResult, scenarioTailFrames: cfg.TestScenarioTailFrames,
 		scenario:                scenario,

@@ -24,8 +24,8 @@ func TestPlayerSlideCornerAndUncertainStarts(t *testing.T) {
 	if !ok || slide.Position[0] >= 24 || slide.Position[1] >= 24 || len(slide.Contacts) < 2 {
 		t.Fatal("corner penetration", slide, ok)
 	}
-	if _, ok := m.SlidePlayer(Vec3{45, 0, 0}, Vec3{-300, 0, 0}, .1, false); ok {
-		t.Fatal("embedded start authorized")
+	if escape, ok := m.SlidePlayer(Vec3{45, 0, 0}, Vec3{-300, 0, 0}, .1, false); !ok || escape.Position[0] != 15 {
+		t.Fatal("native escape collision phase lost", escape, ok)
 	}
 	if _, ok := m.SlidePlayer(Vec3{}, Vec3{math.Inf(1), 0, 0}, .1, false); ok {
 		t.Fatal("invalid velocity accepted")

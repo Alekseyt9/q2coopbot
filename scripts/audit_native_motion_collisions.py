@@ -8,11 +8,11 @@ import re
 from audit_registered_execution_actions import read,sha
 from audit_native_ground_prediction import measure
 
-PREFIX=re.compile(r'^sv_test_motion spawncount=(\d+) server_frame=(\d+) g_test_motion version=1 frame=(\d+) actor=(\d+) call=(\d+) kind=(begin|trace|end) (.*)$')
+PREFIX=re.compile(r'^sv_test_motion spawncount=(\d+) server_frame=(\d+) g_test_motion version=[12] frame=(\d+) actor=(\d+) call=(\d+) kind=(begin|trace|end) (.*)$')
 KEYS=dict(begin=set('msec forward side up pitch yaw pm_type pm_time pm_flags snapinitial origin velocity'.split()),
     trace=set('index fraction startsolid allsolid blocker class model start end normal'.split()),
     end=set('traces printed touches waterlevel pm_type pm_time pm_flags origin velocity'.split()))
-VECTORS={'origin','velocity','start','end','normal'}
+VECTORS={'origin','velocity','start','end','normal','blocker_origin','blocker_mins','blocker_maxs'}
 
 
 def native_calls(lines):
@@ -22,7 +22,9 @@ def native_calls(lines):
         match=PREFIX.fullmatch(line.rstrip('\r\n'));assert match,'Malformed/unwrapped motion event'
         spawn,frame,game,actor,number=map(int,match.groups()[:5]);kind=match[6]
         tokens=match[7].split();fields=dict(t.split('=',1) for t in tokens)
-        assert len(tokens)==len(fields) and set(fields)==KEYS[kind]
+        expected=KEYS[kind]
+        if kind=='trace' and 'g_test_motion version=2 ' in line:expected=expected|{'blocker_origin','blocker_mins','blocker_maxs'}
+        assert len(tokens)==len(fields) and set(fields)==expected
         for key,value in list(fields.items()):
             if key in ('class','model'):continue
             if key in VECTORS:

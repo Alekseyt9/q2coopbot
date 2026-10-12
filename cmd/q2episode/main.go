@@ -26,6 +26,7 @@ func run() error {
 	mode := flag.String("mode", "both", "rules, learned or both")
 	model := flag.String("model", "", "frozen PPO weights for learned")
 	count := flag.Int("count", 4, "episodes per descriptor, 1..80 (cohort scheduler requires multiples of four)")
+	checkedWallSlide := flag.Bool("checked-wall-slide", false, "experimental checked wall-slide combat guard")
 	offset := flag.Int("seed-offset", 0, "offset inside the registered split")
 	root := flag.String("root", ".", "repository root")
 	out := flag.String("out", "", "fresh execution plan JSON")
@@ -90,6 +91,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	p.CheckedWallSlide = *checkedWallSlide
 	f, err := os.OpenFile(*out, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
