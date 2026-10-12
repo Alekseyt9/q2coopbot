@@ -20,7 +20,8 @@ foreach($task in $schedule.tasks){
     if($entry.Count -ne 1 -or $entry[0].status -ne 'runnable' -or $catalog.episode_hashes.($task.episode.id) -ne $task.episode_sha256){throw 'Episode changed or is not runnable'}
     $task.episode=$entry[0]
     $range=$task.episode.splits.($task.split)
-    if(!$range -or !$task.seeds.Count -or $task.seeds.Count%4 -or $task.seeds.Count -gt 80){throw 'Invalid episode cohort'}
+    if(!$range -or !$task.seeds.Count -or $task.seeds.Count -gt 80){throw 'Invalid episode cohort'}
+    if(!$DryRun -and $task.seeds.Count%4){throw 'Small cohorts require the episode pool scheduler'}
     for($i=0;$i -lt $task.seeds.Count;$i++){
         $seed=$task.seeds[$i]
         if($seed -lt $range.start -or $seed -ge $range.start+$range.count -or ($i -gt 0 -and $seed -ne $task.seeds[$i-1]+1)){throw 'Seed outside registered split or not contiguous'}

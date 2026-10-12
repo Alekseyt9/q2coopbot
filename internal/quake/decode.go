@@ -83,6 +83,9 @@ type Frame struct {
 	FOV             float64
 	Velocity        Vec3
 	PMFlags         byte
+	PMType          byte
+	PMTime          byte
+	PMStateKnown    bool
 	Gravity         int16
 	Stats           [32]int16
 	Gun             int
@@ -304,7 +307,8 @@ func (d *Decoder) playerstate(r *reader, old Frame) (Frame, error) {
 	}
 	skip := func(n int) error { return r.skip(n) }
 	if flags&1 != 0 {
-		if e = skip(1); e != nil {
+		f.PMType, e = r.byte()
+		if e != nil {
 			return f, e
 		}
 	}
@@ -328,7 +332,8 @@ func (d *Decoder) playerstate(r *reader, old Frame) (Frame, error) {
 		}
 	}
 	if flags&8 != 0 {
-		if e = skip(1); e != nil {
+		f.PMTime, e = r.byte()
+		if e != nil {
 			return f, e
 		}
 	}
@@ -338,6 +343,7 @@ func (d *Decoder) playerstate(r *reader, old Frame) (Frame, error) {
 			return f, e
 		}
 	}
+	f.PMStateKnown = true
 	if flags&32 != 0 {
 		f.Gravity, e = r.short()
 		if e != nil {
@@ -821,6 +827,10 @@ type Snapshot struct {
 	SelfVelocity       Vec3              `json:"self_velocity"`
 	Gravity            int16             `json:"gravity"`
 	OnGround           bool              `json:"on_ground"`
+	PMType             byte              `json:"pm_type"`
+	PMTime             byte              `json:"pm_time"`
+	PMFlags            byte              `json:"pm_flags"`
+	PMStateKnown       bool              `json:"pm_state_known"`
 	Teammate           *Vec3             `json:"teammate,omitempty"`
 	TeammateEntity     int               `json:"teammate_entity,omitempty"`
 	LastTeammate       *Vec3             `json:"last_teammate,omitempty"`
@@ -860,6 +870,7 @@ func (d *Decoder) ResetTeammateHistory() {
 func (d *Decoder) Snapshot(f Frame) Snapshot {
 	s := Snapshot{Map: d.Map, Frame: f.Number, DeltaFrame: f.DeltaFrame, Self: f.Origin, SelfVelocity: f.Velocity, Gravity: f.Gravity, Ducked: f.PMFlags&1 != 0, OnGround: f.PMFlags&4 != 0, Health: f.Stats[1], Armor: f.Stats[5], Ammo: f.Stats[3], DeltaAngles: f.DeltaAngles, RemovedEntities: append([]int(nil), f.RemovedEntities...), Suppressed: f.Suppressed}
 	s.GunFrame, s.ViewAngles = f.GunFrame, f.ViewAngles
+	s.PMType, s.PMTime, s.PMFlags, s.PMStateKnown = f.PMType, f.PMTime, f.PMFlags, f.PMStateKnown
 	s.KickAngles, s.KickAnglesKnown = f.KickAngles, f.KickAnglesKnown
 	s.InventoryKnown, s.InventoryOpen = d.InventoryKnown, f.Stats[13]&2 != 0
 	if d.InventoryKnown {

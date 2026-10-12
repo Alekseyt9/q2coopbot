@@ -9,6 +9,7 @@ from ppo_combat import network, torch
 from ppo_recurrent import prepare_context, sequence, Recurrent
 from combat_attention import CausalAttention, EntityAttention
 from combat_cuda_bootstrap import next_values
+from combat_sequence_storage import preserve_sequence
 
 
 def finalize(model_path, data, out):
@@ -39,7 +40,9 @@ def finalize(model_path, data, out):
                     str((data / 'native-rollout.jsonl').resolve()): meta['native_rollout_sha256'],
                     str(pathlib.Path(__file__).resolve()): sha(__file__),
                     str(pathlib.Path(__file__).with_name('combat_cuda_bootstrap.py').resolve()):
-                        sha(pathlib.Path(__file__).with_name('combat_cuda_bootstrap.py'))})
+                        sha(pathlib.Path(__file__).with_name('combat_cuda_bootstrap.py')),
+                    str(pathlib.Path(__file__).with_name('combat_sequence_storage.py').resolve()):
+                        sha(pathlib.Path(__file__).with_name('combat_sequence_storage.py'))})
     weapon_helpers=[]
     if model.get('weapon_state_residual'):
         weapon_helpers=[pathlib.Path(__file__).with_name(name).resolve() for name in
@@ -130,7 +133,8 @@ def finalize(model_path, data, out):
     # already verified rollouts or require keeping a mutable checkout unchanged.
     frozen = out / 'verifier-sources'
     frozen.mkdir()
-    helper_paths=[pathlib.Path(__file__).resolve(), pathlib.Path(__file__).with_name('combat_cuda_bootstrap.py').resolve()]
+    helper_paths=[pathlib.Path(__file__).resolve(), pathlib.Path(__file__).with_name('combat_cuda_bootstrap.py').resolve(),
+                  pathlib.Path(__file__).with_name('combat_sequence_storage.py').resolve()]
     helper_paths.extend(weapon_helpers)
     if model.get('shared_target'):
         helper_paths.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
@@ -145,7 +149,7 @@ def finalize(model_path, data, out):
             row['next_value'] = nv
             stream.write(json.dumps(row, allow_nan=False) + '\n')
     if prepared is not None:
-        shutil.copy2(data / 'sequence.jsonl', out / 'sequence.jsonl')
+        preserve_sequence(data / 'sequence.jsonl', out / 'sequence.jsonl', meta['sequence_sha256'])
     audit = dict(state='passed', device='cuda', rows=len(rows), context_rows=len(context),
                  log_probability_max_error=log_error, value_max_error=value_error,
                  actor_memory_max_error=actor_memory_error, critic_memory_max_error=critic_memory_error,

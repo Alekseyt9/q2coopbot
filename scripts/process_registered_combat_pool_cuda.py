@@ -37,7 +37,9 @@ def main():
     parser.add_argument('--decision-head-lr', type=float, default=.003)
     parser.add_argument('--fork-head-scope', action='store_true')
     parser.add_argument('--plan-index', type=int, help='Process one frozen plan from a multi-model evaluation pool')
+    parser.add_argument('--cuda-batch-size',type=int,default=8,help='Bound cases per fresh CUDA process')
     args = parser.parse_args()
+    assert 1<=args.cuda_batch_size<=32
     assert args.config or (args.actor_head_scope == 'all' and not args.fork_head_scope), 'Actor scope requires training'
     repo = pathlib.Path(__file__).resolve().parent.parent
     root, out = args.pool.resolve(), args.out.resolve()
@@ -100,8 +102,24 @@ def main():
                                       native_report_sha256=sha(directory/'native/report.json'))
                                  for _, _, directory in cases]))
         save(out/'progress.json', dict(stage='cuda-finalize', cases=len(cases)))
-        run([sys.executable, repo/'scripts/finalize_combat_cuda_batch.py', '--request', request,
-             '--receipt-root', out/'cuda-batch'], out/'cuda.log', repo)
+        tasks=read(request)['tasks'];closed=[];chunk_receipts=[]
+        for offset in range(0,len(tasks),args.cuda_batch_size):
+            group=tasks[offset:offset+args.cuda_batch_size];index=len(chunk_receipts)
+            chunk_request=out/f'cuda-chunk-{index}-request.json';chunk_root=out/f'cuda-chunk-{index}'
+            save(chunk_request,dict(version='combat_cuda_finalize_batch_v1',compact_finalized_streams=True,tasks=group))
+            run([sys.executable,repo/'scripts/finalize_combat_cuda_batch.py','--request',chunk_request,
+                 '--receipt-root',chunk_root],out/f'cuda-chunk-{index}.log',repo)
+            info=read(chunk_root/'report.json')
+            assert info['state']=='complete' and info['device']=='cuda' and info['request_sha256']==sha(chunk_request)
+            assert len(info['tasks'])==len(group)
+            for local,item in enumerate(info['tasks']):closed.append(dict(item,task=offset+local))
+            chunk_receipts.append(dict(request=str(chunk_request),request_sha256=sha(chunk_request),
+                report=str(chunk_root/'report.json'),report_sha256=sha(chunk_root/'report.json')))
+        (out/'cuda-batch').mkdir()
+        save(out/'cuda-batch/report.json',dict(version='combat_cuda_finalize_batch_receipt_v1',state='complete',device='cuda',
+            request_sha256=sha(request),tasks=closed,chunks=chunk_receipts,
+            scope='Independent unchanged per-case CUDA finalize, bounded fresh process lifetime. No fitting or state carried across cases.'))
+        save(out/'cuda-batch/progress.json',dict(stage='complete',report_sha256=sha(out/'cuda-batch/report.json')))
         run([exporter, '--merge', ','.join(str(d/'cuda') for _, _, d in cases),
              '--out', out/'merged'], out/'merge.log', repo)
         compact_closed_exports(out/'merged')

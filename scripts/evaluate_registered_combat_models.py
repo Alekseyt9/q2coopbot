@@ -37,7 +37,7 @@ def main():
     variants = spec['variants']; labels = [v['label'] for v in variants]
     assert variants and len(set(labels)) == len(labels)
     assert all(label and all(c.isalnum() or c in '-_' for c in label) for label in labels)
-    assert spec['max_instances'] == 16 and 4 <= spec['count'] <= 80 and spec['count'] % 4 == 0
+    assert spec['max_instances'] == 16 and type(spec['count']) is int and 1 <= spec['count'] <= 80
     assert len(spec['comparisons']) == len({v['name'] for v in spec['comparisons']})
     assert all(v['name'] and all(c.isalnum() or c in '-_' for c in v['name']) for v in spec['comparisons'])
     assert all(v['before'] in labels and v['after'] in labels and v['before'] != v['after'] for v in spec['comparisons'])
@@ -122,6 +122,14 @@ def main():
             for left, right in zip(tasks, other['tasks']):
                 for key in ('episode', 'instances', 'seeds', 'split'): assert left[key] == right[key], key
         count = len(tasks)*spec['count']; total = count*len(variants)
+        stage = spec.get('hypothesis_stage')
+        if stage:
+            assert stage['version'] == 'combat_hypothesis_stage_v1'
+            assert len(variants) == 3 and sum(v['mode'] == 'rules' for v in variants) == 1
+            assert stage['cases_per_variant'] == count and stage['native_budget'] == total, 'Stage budget changed'
+            recovery = sum(t['episode']['id'].endswith('-recovery') for t in tasks)*spec['count']
+            assert stage['recovery_cases'] == recovery and stage['ordinary_cases'] == count-recovery
+            assert stage['automatic_promotion'] is False and stage['training_performed'] is False
         save(root/'fixture-proof.json', dict(state='matched', families=len(tasks), cases_per_variant=count, native_cases=total,
              split=spec['split'], seed_offset=spec['seed_offset'], historical_seeds_checked=len(historical), models=bindings,
              spec_sha256=spec_sha, registry_sha256=registry_sha, readiness=readiness,

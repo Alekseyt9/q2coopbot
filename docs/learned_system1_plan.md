@@ -595,3 +595,24 @@ recovery0/32. Принятия в live нет. См. testing/combat_target_commi
 12.10, conditional weapon train закрыт полностью:336 native/336 CUDA,40894 eligible transitions,3 GPU updates. Независимая проверка весов/checkpoint seals, Adam clocks/consumed rollouts и CUDA input-use прошла для control1/conditional2/conditional4. Началась frozen confirmation452 оценка1456 native/672 CUDA,13 вариантов,16×2. Отдельный observation-only auditor после полного evaluation seal проверит задержку первой attack command и requests→observed equipment, повторные/superseded requests и HUD ammo/inventory mismatches на1344 learned cases. Семь metadata checks прошли без neural execution. Результаты нового сравнения пока не закрыты; promotion, superiority rules и campaign/coop acceptance не доказаны. См. testing/combat_conditional_weapon_exploration_plan_20261012.md.
 
 12.10, conditional confirmation native collector завершён:1455 valid captures и1 empty server-startup failure до клиента/release. После terminal exit повторён только этот infrastructure failure с прежними seed/model/fixture; derived pool `combat-conditional-weapon-quality-recovered-v1-20261012` принят1456/1456. Оригинальная неудачная попытка и все1455 исходов сохранены; source/model/seed/reset/dispatch pins сверены. Сейчас выполняются paired/behavior audits и672 CUDA verification, затем full/supplementary reports. Нового обучения или live promotion нет. Прототип ускорения supervisor чтения отдельно проверен на6 закрытых train captures, но текущие `.ps1` не менялись. См. testing/combat_conditional_weapon_exploration_plan_20261012.md и testing/combat_supervision_projection_20261012.md.
+
+
+### Закрытая оценка conditional weapon, 2026-10-12
+
+Завершены 1456 native боёв (13 вариантов по 112), 672 CUDA cases и 80353 проверенных перехода. Основной и дополнительные отчёты завершены; SHA256 статистики и всех семи её входов проверены. Полная таблица: `docs/testing/combat_conditional_weapon_battle_stats_20261012.md`. Оценочные бои не использовались для обучения.
+
+После обучения stochastic: control1 33/112, conditional2 38/112, conditional4 38/112; правила 61/112. До обучения соответственно 35, 43 и 45 побед. Deterministic после: 31, 35 и 32; recovery 0/32 во всех трёх. Поэтому эту итерацию нельзя считать общим улучшением или основанием для продвижения весов.
+
+Conditional2/4 stochastic обеспечили переход на поддерживаемое пилотом оружие во всех 32 recovery боях; средняя задержка наблюдаемой смены 9.19/2.78 сетевого кадра, но побед после обучения только 13/32 и 10/32 против 28/32 у правил. Быстрый выбор оружия сам по себе не решает бой. Deterministic не сделал ни одного запроса оружия в recovery.
+
+Стояние stochastic уменьшилось до 15.76/16.78/17.74%, но attack без выбранной цели осталось 16.88/21.63/11.23%. Эти команды не равны физическим промахам. Исполнитель полностью подавлял тысячи команд движения; это нельзя приписывать только добровольному поведению модели. Следующий приоритет: отдельно проверить ограничения движения и переходы оружия, затем дообучать на новых обучающих seeds и подтверждать на свежем held-out наборе. Текущие оценочные seeds не превращать в обучающие.
+
+
+### 12.10.2026: движение, быстрые гипотезы и место
+
+Закрыт покадровый movement-overlap аудит12 learned вариантов/1344 боёв. Подготовлены static swept player hull и collision-фаза скольжения;6 физических тестов Go прошли, guard пока не подключён. [Следующий этап физики](testing/combat_movement_execution_plan_20261012.md). [План быстрого цикла и human BC+PPO](testing/combat_fast_hypothesis_cycle_plan_20261012.md): smoke8, screen24, coverage56, fresh confirmation112; ещё не внедрён. [Очистка](testing/combat_storage_cleanup_20261012.md) освободила100.24GiB завершённых raw-прогонов11 октября с сохранением весов/чекпоинтов/отчётов; актуальные12 октября сохранены. Старые bulk_retired traces больше не считать доступным кешем.
+
+
+### 12.10.2026: короткий цикл проверен live
+
+[Smoke](testing/combat_hypothesis_smoke_20261012.md) закрыл24 native/16 CUDA за177.35с без обучения. Поддержаны1..80 seeds на family и specs8/24/56/112 условий; stage budgets сверяются с frozen планами. Итоги1/8 control,2/8 conditional2,6/8 rules — pipeline acceptance, не качество новой гипотезы. Screening теперь validation, confirmation только финальная стадия; smoke confirmation468 уже просмотрен. Следующие72 задания лишь prepared, не запущены. Cache/auto-stop/human recorder ещё впереди.

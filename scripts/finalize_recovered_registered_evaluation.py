@@ -6,8 +6,10 @@ from process_combat_architecture_pool import read,save,sha
 def main():
     ap=argparse.ArgumentParser()
     for name in ('evaluation','spec'):ap.add_argument('--'+name,type=pathlib.Path,required=True)
+    ap.add_argument('--resume',action='store_true')
     a=ap.parse_args();root=a.evaluation.resolve();repo=pathlib.Path(__file__).resolve().parents[1]
-    assert not (root/'complete.json').exists() and read(root/'progress.json')['stage']=='native-recovered'
+    assert not (root/'complete.json').exists()
+    assert read(root/'progress.json')['stage']==('failed' if a.resume else 'native-recovered')
     recovery_path=root/'recovery-native-complete.json';recovery=read(recovery_path)
     spec=read(a.spec);fixture_path=root/'fixture-proof.json';fixture=read(fixture_path)
     pool=root/'pool';pool_path=pool/'report.json';report=read(pool_path);digest=sha(pool_path)
@@ -41,29 +43,53 @@ def main():
     processed=[]
     try:
         save(root/'progress.json',dict(stage='damage-timing',training_performed=False))
-        run('damage-timing',scripts[0],'--pool',pool,'--out',root/'damage-timing.json')
+        if a.resume:
+            assert read(root/'damage-timing.json')['pool_sha256']==digest
+        else:run('damage-timing',scripts[0],'--pool',pool,'--out',root/'damage-timing.json')
         comparisons=[]
         for c in spec['comparisons']:
             save(root/'progress.json',dict(stage='paired-comparison',label=c['name'],training_performed=False))
             target=root/('quality-'+c['name']+'.json')
-            run('quality-'+c['name'],scripts[1],'--before',pool,'--before-plan-index',labels.index(c['before']),
-                '--after',pool,'--after-plan-index',labels.index(c['after']),'--out',target)
+            if a.resume:
+                original=read(root/'native-complete.json')
+                assert original['state']=='complete' and original['pool_sha256']==digest
+                binding=next(b for b in original['comparisons'] if b['name']==c['name'])
+                assert sha(target)==binding['sha256'] and binding['before']==c['before'] and binding['after']==c['after']
+            else:
+                run('quality-'+c['name'],scripts[1],'--before',pool,'--before-plan-index',labels.index(c['before']),
+                    '--after',pool,'--after-plan-index',labels.index(c['after']),'--out',target)
             comparisons.append(dict(**c,sha256=sha(target)))
-        save(root/'native-complete.json',dict(state='complete',native_cases=len(report['jobs']),pool_sha256=digest,
-            comparisons=comparisons,recovery_sha256=pins[recovery_path],training_performed=False,promotion=False))
+        if not a.resume:
+            save(root/'native-complete.json',dict(state='complete',native_cases=len(report['jobs']),pool_sha256=digest,
+                comparisons=comparisons,recovery_sha256=pins[recovery_path],training_performed=False,promotion=False))
         behavior=[]
         for index,v in enumerate(spec['variants']):
             if v['mode']!='learned':continue
             label=v['label'];save(root/'progress.json',dict(stage='auditing',label=label,processed=processed,training_performed=False))
             for script,prefix in zip(scripts[2:6],['ownership','behavior','weapon','execution']):
-                run(prefix+'-'+label,script,'--pool',pool,'--plan-index',index,'--out',root/(prefix+'-'+label+'.json'))
+                target=root/(prefix+'-'+label+'.json')
+                if a.resume and target.exists():
+                    reused=read(target)
+                    assert reused['pool_sha256']==digest and reused['selected_plan_index']==index
+                    assert reused['script_sha256']==sha(repo/'scripts'/script)
+                    assert reused.get('state','complete')=='complete' and len(reused['cases'])==fixture['cases_per_variant']
+                else:run(prefix+'-'+label,script,'--pool',pool,'--plan-index',index,'--out',target)
             behavior+=['--audit',label+'='+str(root/('behavior-'+label+'.json'))]
             if v['cuda_replay']:
                 directory=root/('processing-'+label)
-                run('processing-'+label,scripts[6],'--pool',pool,'--plan-index',index,'--out',directory)
+                if not directory.exists():run('processing-'+label,scripts[6],'--pool',pool,'--plan-index',index,'--out',directory)
+                else:assert a.resume and (directory/'report.json').exists(),'Partial CUDA batch needs explicit recovery'
                 meta=read(directory/'report.json')
                 assert meta['state']=='complete' and meta['device']=='cuda' and not meta['training_performed']
                 assert meta['pool_sha256']==digest and meta['selected_plan_index']==index
+                for task in read(directory/'cuda-request.json')['tasks']:
+                    output=pathlib.Path(task['out']);data=pathlib.Path(task['data']);info=read(output/'report.json')
+                    assert task['native_report_sha256']==sha(data/'report.json')
+                    assert task['model_sha256']==info['model_sha256']==meta['model_sha256']
+                    assert sha(output/'rollout.jsonl')==info['rollout_sha256']
+                    assert sha(output/'sequence.jsonl')==info['sequence_sha256']
+                    assert sha(output/'cuda-verification.json')==info['cuda_verification_sha256']
+                    assert read(output/'cuda-verification.json')['device']=='cuda'
                 expected=fixture['cases_per_variant'];assert len(meta['cases'])==expected
                 processed.append(dict(label=label,cases=expected,rows=meta['rows'],report_sha256=sha(directory/'report.json')))
         run('action-efficiency',scripts[7],*behavior,'--damage',root/'damage-timing.json','--out',root/'action-efficiency.json')

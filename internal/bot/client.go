@@ -1139,6 +1139,10 @@ func (c *Client) run(ctx context.Context) error {
 					InventoryKnown     bool                    `json:"inventory_known"`
 					InventoryAgeFrames int                     `json:"inventory_age_frames"`
 					OnGround           bool                    `json:"on_ground"`
+					PMType             byte                    `json:"pm_type"`
+					PMTime             byte                    `json:"pm_time"`
+					PMFlags            byte                    `json:"pm_flags"`
+					PMStateKnown       bool                    `json:"pm_state_known"`
 					SelfVelocity       quake.Vec3              `json:"self_velocity"`
 					Gravity            int16                   `json:"gravity"`
 					GunFrame           int                     `json:"gun_frame"`
@@ -1150,6 +1154,7 @@ func (c *Client) run(ctx context.Context) error {
 					KickAngles         quake.Vec3              `json:"kick_angles_degrees"`
 					KickAnglesKnown    bool                    `json:"kick_angles_known"`
 					GroundPrediction   *GroundPrediction       `json:"ground_prediction,omitempty"`
+					PmovePrediction    *PmoveGroundPrediction  `json:"pmove_ground_prediction,omitempty"`
 					GroundSurface      string                  `json:"ground_surface"`
 					GroundDynamicModel int                     `json:"ground_dynamic_model,omitempty"`
 					Ducked             bool                    `json:"ducked"`
@@ -1205,9 +1210,12 @@ func (c *Client) run(ctx context.Context) error {
 					LastTeammate:      c.planner.World.Snapshot.LastTeammate,
 					TeammateAgeFrames: c.planner.World.Snapshot.TeammateAgeFrames,
 					Health:            c.planner.World.Snapshot.Health, OnGround: c.planner.World.Snapshot.OnGround, Ducked: c.planner.World.Snapshot.Ducked,
-					DeltaAngles:        c.planner.World.Snapshot.DeltaAngles,
-					SelfVelocity:       c.planner.World.Snapshot.SelfVelocity,
+					DeltaAngles:  c.planner.World.Snapshot.DeltaAngles,
+					SelfVelocity: c.planner.World.Snapshot.SelfVelocity,
+					PMType:       c.planner.World.Snapshot.PMType, PMTime: c.planner.World.Snapshot.PMTime,
+					PMFlags: c.planner.World.Snapshot.PMFlags, PMStateKnown: c.planner.World.Snapshot.PMStateKnown,
 					GroundPrediction:   diagnoseGroundStep(c.planner.World.Snapshot, cmd, c.planner.World.Geometry),
+					PmovePrediction:    predictPmoveGround(c.planner.World.Snapshot, cmd, c.planner.World.Geometry),
 					GroundSurface:      c.planner.World.Geometry.GroundFrictionStatus(c.planner.World.Snapshot.Self),
 					GroundDynamicModel: nearbyGroundBrushModel(c.planner.World.Snapshot, c.planner.World.Geometry),
 					Ammo:               c.planner.World.Snapshot.Ammo, Armor: c.planner.World.Snapshot.Armor,

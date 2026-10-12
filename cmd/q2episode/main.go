@@ -25,7 +25,7 @@ func run() error {
 	split := flag.String("split", "validation", "train, validation, test or confirmation")
 	mode := flag.String("mode", "both", "rules, learned or both")
 	model := flag.String("model", "", "frozen PPO weights for learned")
-	count := flag.Int("count", 4, "episodes per descriptor, multiple of four")
+	count := flag.Int("count", 4, "episodes per descriptor, 1..80 (cohort scheduler requires multiples of four)")
 	offset := flag.Int("seed-offset", 0, "offset inside the registered split")
 	root := flag.String("root", ".", "repository root")
 	out := flag.String("out", "", "fresh execution plan JSON")

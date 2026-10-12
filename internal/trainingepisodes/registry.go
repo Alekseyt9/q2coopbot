@@ -257,8 +257,8 @@ type Plan struct {
 }
 
 func Build(r *Registry, root string, ids []string, split, mode, model, out string, count, offset int) (*Plan, error) {
-	if count < 4 || count > 80 || count%4 != 0 || offset < 0 {
-		return nil, fmt.Errorf("count must be a multiple of four in 4..80; nonnegative offset")
+	if count < 1 || count > 80 || offset < 0 {
+		return nil, fmt.Errorf("count must be in 1..80; nonnegative offset")
 	}
 	p := &Plan{Version: 1, RegistryPath: r.Path, RegistrySHA256: r.SHA256, Workers: 4}
 	var e error

@@ -93,3 +93,33 @@ func TestRegistryRejectsTraversalAndUnknownParameters(t *testing.T) {
 		t.Fatal("unknown executable field accepted")
 	}
 }
+
+func TestSmallEpisodeCohortsRemainVerifiable(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := Load(filepath.Join(root, "scripts", "scenarios", "combat-training", "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, count := range []int{1, 2, 3, 4} {
+		p, err := Build(r, root, []string{"parasite-blaster-solo"}, "validation", "rules", "", t.TempDir(), count, 8)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(p.Tasks[0].Seeds) != count {
+			t.Fatal("budget changed", p.Tasks[0].Seeds)
+		}
+		path := filepath.Join(t.TempDir(), "plan.json")
+		write(t, path, p)
+		if err := VerifyPlan(path, root); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, count := range []int{0, -1, 81} {
+		if _, err := Build(r, root, []string{"parasite-blaster-solo"}, "validation", "rules", "", t.TempDir(), count, 8); err == nil {
+			t.Fatal("unbounded budget accepted", count)
+		}
+	}
+}
