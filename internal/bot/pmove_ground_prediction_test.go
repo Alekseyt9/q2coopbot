@@ -47,6 +47,58 @@ func TestPmoveGroundObservedDoorMatchesNativeFrame(t *testing.T) {
 	}
 }
 
+func TestPmoveGroundRecordedVisibleBodies(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires BSP assets")
+	}
+	var fixtures struct {
+		Cases []struct {
+			Snapshot     quake.Snapshot
+			Command      quake.UserCmd
+			ObservedNext quake.Vec3 `json:"observed_next"`
+		}
+	}
+	b, err := os.ReadFile("testdata/pmove-observed-body-native-regressions.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(b, &fixtures); err != nil {
+		t.Fatal(err)
+	}
+	if len(fixtures.Cases) != 29 {
+		t.Fatal("regression cases lost")
+	}
+	maps := map[string]quake.MapInfo{}
+	valid, close := 0, 0
+	maxError := 0.0
+	for _, c := range fixtures.Cases {
+		g, exists := maps[c.Snapshot.Map]
+		if !exists {
+			g, err = quake.LoadMap(root, c.Snapshot.Map)
+			if err != nil {
+				t.Fatal(err)
+			}
+			maps[c.Snapshot.Map] = g
+		}
+		p := predictPmoveGround(c.Snapshot, c.Command, &g)
+		if p == nil {
+			continue
+		}
+		valid++
+		dx, dy, dz := p.Position[0]-c.ObservedNext[0], p.Position[1]-c.ObservedNext[1], p.Position[2]-c.ObservedNext[2]
+		e := math.Sqrt(dx*dx + dy*dy + dz*dz)
+		if e <= .25 {
+			close++
+		}
+		maxError = math.Max(maxError, e)
+	}
+	t.Logf("visible body regressions: predicted=%d within0.25=%d max_error=%g", valid, close, maxError)
+	if close < 20 {
+		t.Fatal("native body collisions remain unmodelled", valid, close, maxError)
+	}
+}
+
 func TestPmoveGroundUsesVerticalSpeedBeforeFriction(t *testing.T) {
 	c := policyClient(t, "learned")
 	s := c.planner.World.Snapshot

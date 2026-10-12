@@ -1143,6 +1143,7 @@ func (c *Client) run(ctx context.Context) error {
 					PMTime             byte                    `json:"pm_time"`
 					PMFlags            byte                    `json:"pm_flags"`
 					PMStateKnown       bool                    `json:"pm_state_known"`
+					CollisionBodies    []quake.Object          `json:"collision_bodies,omitempty"`
 					SelfVelocity       quake.Vec3              `json:"self_velocity"`
 					Gravity            int16                   `json:"gravity"`
 					GunFrame           int                     `json:"gun_frame"`
@@ -1214,6 +1215,7 @@ func (c *Client) run(ctx context.Context) error {
 					SelfVelocity: c.planner.World.Snapshot.SelfVelocity,
 					PMType:       c.planner.World.Snapshot.PMType, PMTime: c.planner.World.Snapshot.PMTime,
 					PMFlags: c.planner.World.Snapshot.PMFlags, PMStateKnown: c.planner.World.Snapshot.PMStateKnown,
+					CollisionBodies:    c.planner.World.Snapshot.CollisionBodies,
 					GroundPrediction:   diagnoseGroundStep(c.planner.World.Snapshot, cmd, c.planner.World.Geometry),
 					PmovePrediction:    predictPmoveGround(c.planner.World.Snapshot, cmd, c.planner.World.Geometry),
 					GroundSurface:      c.planner.World.Geometry.GroundFrictionStatus(c.planner.World.Snapshot.Self),

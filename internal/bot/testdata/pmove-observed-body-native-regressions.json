@@ -1,0 +1,4643 @@
+{
+  "scope": "29 frames; visible enemy/barrel subset reconstructed from recorded client fields; not all protocol packet bodies or NN labels",
+  "cases": [
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2695.25,
+          -174.25,
+          -279.75
+        ],
+        "self_velocity": [
+          -0.5,
+          25,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 80,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              158.90625,
+              0
+            ],
+            "id": 476,
+            "class": "monster_parasite",
+            "origin": [
+              -2662.875,
+              -159.25,
+              -279.875
+            ],
+            "frame": 74,
+            "solid": 7266,
+            "clear_shot": true
+          },
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              180,
+              0
+            ],
+            "id": 467,
+            "class": "monster_infantry",
+            "origin": [
+              -2627.125,
+              -176.375,
+              -279.875
+            ],
+            "frame": 98,
+            "solid": 8290,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -1673,
+        "Yaw": -25738,
+        "Roll": 0,
+        "Forward": 176,
+        "Side": -325,
+        "Up": -400,
+        "Buttons": 0,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 82
+      },
+      "observed_next": [
+        -2695.375,
+        -170.75,
+        -279.875
+      ],
+      "source_trace_sha256": "868519fce43af896bcfb71b64dd352a4c5ef6c4c4f7f59777c0d66fcc171780e",
+      "frame": 107,
+      "collision_candidate_classes": [
+        "monster_parasite"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2744,
+          -170.75,
+          -279.875
+        ],
+        "self_velocity": [
+          103.25,
+          89.5,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 45,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              222.1875,
+              0
+            ],
+            "id": 467,
+            "class": "monster_infantry",
+            "origin": [
+              -2702.75,
+              -133.25,
+              -279.875
+            ],
+            "frame": 187,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              171.5625,
+              0
+            ],
+            "id": 476,
+            "class": "monster_parasite",
+            "origin": [
+              -2710.5,
+              -175.375,
+              -279.875
+            ],
+            "frame": 42,
+            "solid": 7266,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -2064,
+        "Yaw": -25196,
+        "Roll": 0,
+        "Forward": -34,
+        "Side": 31,
+        "Up": -400,
+        "Buttons": 0,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 88
+      },
+      "observed_next": [
+        -2742.625,
+        -171.625,
+        -279.875
+      ],
+      "source_trace_sha256": "868519fce43af896bcfb71b64dd352a4c5ef6c4c4f7f59777c0d66fcc171780e",
+      "frame": 135,
+      "collision_candidate_classes": [
+        "monster_parasite"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "ware2",
+        "self": [
+          1824.375,
+          37.75,
+          -231.875
+        ],
+        "self_velocity": [
+          31.875,
+          -96.375,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 95,
+        "ducked": true,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 5,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          0,
+          0
+        ],
+        "movers": [
+          {
+            "id": 38,
+            "model": 4,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 39,
+            "model": 5,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 201,
+            "model": 39,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 206,
+            "model": 43,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              158.90625,
+              0
+            ],
+            "id": 528,
+            "class": "monster_parasite",
+            "origin": [
+              1857,
+              26.625,
+              -231.875
+            ],
+            "frame": 41,
+            "solid": 7266,
+            "clear_shot": true
+          },
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              139.21875,
+              0
+            ],
+            "id": 519,
+            "class": "monster_infantry",
+            "origin": [
+              1903.5,
+              32.125,
+              -231.875
+            ],
+            "frame": 99,
+            "solid": 8290,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -3022,
+        "Yaw": -1760,
+        "Roll": 0,
+        "Forward": 116,
+        "Side": 259,
+        "Up": -400,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 62
+      },
+      "observed_next": [
+        1825,
+        28.125,
+        -231.875
+      ],
+      "source_trace_sha256": "a62198aa15f7b23fb22598eec7ed706bca9ecbc098f0aa9f351d69ae3af2b3bb",
+      "frame": 108,
+      "collision_candidate_classes": [
+        "monster_parasite"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "ware2",
+        "self": [
+          1825,
+          28.125,
+          -231.875
+        ],
+        "self_velocity": [
+          -0.25,
+          -96.125,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 95,
+        "ducked": true,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 5,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          0,
+          0
+        ],
+        "movers": [
+          {
+            "id": 39,
+            "model": 5,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 206,
+            "model": 43,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 38,
+            "model": 4,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 201,
+            "model": 39,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              119.53125,
+              0
+            ],
+            "id": 519,
+            "class": "monster_infantry",
+            "origin": [
+              1903.5,
+              32.125,
+              -231.875
+            ],
+            "frame": 92,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              175.78125,
+              0
+            ],
+            "id": 528,
+            "class": "monster_parasite",
+            "origin": [
+              1857,
+              26.625,
+              -231.875
+            ],
+            "frame": 42,
+            "solid": 7266,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -4311,
+        "Yaw": 416,
+        "Roll": 0,
+        "Forward": 300,
+        "Side": 90,
+        "Up": 0,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 65
+      },
+      "observed_next": [
+        1824.75,
+        17.125,
+        -231.875
+      ],
+      "source_trace_sha256": "a62198aa15f7b23fb22598eec7ed706bca9ecbc098f0aa9f351d69ae3af2b3bb",
+      "frame": 109,
+      "collision_candidate_classes": [
+        "monster_parasite"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2695.125,
+          -173.625,
+          -279.75
+        ],
+        "self_velocity": [
+          -0.5,
+          25.75,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 80,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              180,
+              0
+            ],
+            "id": 467,
+            "class": "monster_infantry",
+            "origin": [
+              -2627.125,
+              -176.375,
+              -279.875
+            ],
+            "frame": 98,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              158.90625,
+              0
+            ],
+            "id": 478,
+            "class": "monster_parasite",
+            "origin": [
+              -2662.875,
+              -159.25,
+              -279.875
+            ],
+            "frame": 74,
+            "solid": 7266,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -859,
+        "Yaw": -26128,
+        "Roll": 0,
+        "Forward": 240,
+        "Side": -101,
+        "Up": 0,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 82
+      },
+      "observed_next": [
+        -2695,
+        -151.125,
+        -279.75
+      ],
+      "source_trace_sha256": "cff3064a0aaf6dd98269af6c6a08fdb02de3738cdb49e501dba0d32a92848ba7",
+      "frame": 107,
+      "collision_candidate_classes": [
+        "monster_parasite"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2695,
+          -151.125,
+          -279.75
+        ],
+        "self_velocity": [
+          -1.25,
+          223.75,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 80,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              158.90625,
+              0
+            ],
+            "id": 467,
+            "class": "monster_infantry",
+            "origin": [
+              -2627.125,
+              -176.375,
+              -279.875
+            ],
+            "frame": 99,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              164.53125,
+              0
+            ],
+            "id": 478,
+            "class": "monster_parasite",
+            "origin": [
+              -2662.875,
+              -159.25,
+              -279.875
+            ],
+            "frame": 39,
+            "solid": 7266,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -2355,
+        "Yaw": 21941,
+        "Roll": 0,
+        "Forward": -119,
+        "Side": 68,
+        "Up": -400,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 82
+      },
+      "observed_next": [
+        -2695.125,
+        -128.75,
+        -279.875
+      ],
+      "source_trace_sha256": "cff3064a0aaf6dd98269af6c6a08fdb02de3738cdb49e501dba0d32a92848ba7",
+      "frame": 108,
+      "collision_candidate_classes": [
+        "monster_parasite"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2681,
+          -183.5,
+          -279.875
+        ],
+        "self_velocity": [
+          0,
+          0,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 41,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              182.8125,
+              0
+            ],
+            "id": 467,
+            "class": "monster_infantry",
+            "origin": [
+              -2648.875,
+              -182.625,
+              -279.875
+            ],
+            "frame": 92,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              206.71875,
+              0
+            ],
+            "id": 478,
+            "class": "monster_parasite",
+            "origin": [
+              -2661.25,
+              -145.125,
+              -279.875
+            ],
+            "frame": 68,
+            "solid": 7266,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": 339,
+        "Yaw": 23763,
+        "Roll": 0,
+        "Forward": -316,
+        "Side": -244,
+        "Up": 0,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 74
+      },
+      "observed_next": [
+        -2681.25,
+        -177.25,
+        -279.875
+      ],
+      "source_trace_sha256": "cff3064a0aaf6dd98269af6c6a08fdb02de3738cdb49e501dba0d32a92848ba7",
+      "frame": 143,
+      "collision_candidate_classes": [
+        "monster_infantry",
+        "monster_parasite"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2903.75,
+          -187.625,
+          -279.875
+        ],
+        "self_velocity": [
+          209.625,
+          -55,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 35,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              180,
+              0
+            ],
+            "id": 467,
+            "class": "monster_infantry",
+            "origin": [
+              -2789.5,
+              -183.875,
+              -279.875
+            ],
+            "frame": 94,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "model_path": "models/monsters/gunner/tris.md2",
+            "angles": [
+              0,
+              189.84375,
+              0
+            ],
+            "id": 468,
+            "class": "monster_gunner",
+            "origin": [
+              -2622.25,
+              -130.625,
+              -279.875
+            ],
+            "frame": 94,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              185.625,
+              0
+            ],
+            "skin": 1,
+            "id": 477,
+            "class": "monster_parasite",
+            "origin": [
+              -2865.875,
+              -183.125,
+              -279.875
+            ],
+            "frame": 41,
+            "solid": 7266,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -4995,
+        "Yaw": -28561,
+        "Roll": 0,
+        "Forward": 161,
+        "Side": 40,
+        "Up": -400,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 62
+      },
+      "observed_next": [
+        -2898,
+        -189.5,
+        -279.875
+      ],
+      "source_trace_sha256": "b7b35ee9a6dd0fcd66e62a6c9b0f610ea0e0c41a0fb7d9f81ef4f9438116a5d9",
+      "frame": 153,
+      "collision_candidate_classes": [
+        "monster_parasite"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2927.875,
+          -197.375,
+          -279.875
+        ],
+        "self_velocity": [
+          0,
+          0,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 30,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/gunner/tris.md2",
+            "angles": [
+              0,
+              234.84375,
+              0
+            ],
+            "skin": 1,
+            "id": 468,
+            "class": "monster_gunner",
+            "origin": [
+              -2855.75,
+              -192.375,
+              -279.875
+            ],
+            "frame": 101,
+            "solid": 8290,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -994,
+        "Yaw": -31301,
+        "Roll": 0,
+        "Forward": 111,
+        "Side": 0,
+        "Up": -400,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 54
+      },
+      "observed_next": [
+        -2927.375,
+        -195.875,
+        -279.875
+      ],
+      "source_trace_sha256": "b7b35ee9a6dd0fcd66e62a6c9b0f610ea0e0c41a0fb7d9f81ef4f9438116a5d9",
+      "frame": 190,
+      "collision_candidate_classes": [
+        "monster_infantry"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2927.375,
+          -195.875,
+          -279.875
+        ],
+        "self_velocity": [
+          -0.875,
+          14,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 30,
+        "ducked": true,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 5,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/gunner/tris.md2",
+            "angles": [
+              0,
+              158.90625,
+              0
+            ],
+            "skin": 1,
+            "id": 468,
+            "class": "monster_gunner",
+            "origin": [
+              -2855.75,
+              -192.375,
+              -279.875
+            ],
+            "frame": 94,
+            "solid": 8290,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -1744,
+        "Yaw": -31237,
+        "Roll": 0,
+        "Forward": 256,
+        "Side": 0,
+        "Up": 0,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 54
+      },
+      "observed_next": [
+        -2927.5,
+        -192.125,
+        -279.875
+      ],
+      "source_trace_sha256": "b7b35ee9a6dd0fcd66e62a6c9b0f610ea0e0c41a0fb7d9f81ef4f9438116a5d9",
+      "frame": 191,
+      "collision_candidate_classes": [
+        "monster_infantry"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2927.5,
+          -192.125,
+          -279.875
+        ],
+        "self_velocity": [
+          -2.5,
+          37.375,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 30,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/gunner/tris.md2",
+            "angles": [
+              0,
+              139.21875,
+              0
+            ],
+            "skin": 1,
+            "id": 468,
+            "class": "monster_gunner",
+            "origin": [
+              -2855.75,
+              -192.375,
+              -279.875
+            ],
+            "frame": 95,
+            "solid": 8290,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -2257,
+        "Yaw": -32234,
+        "Roll": 0,
+        "Forward": 130,
+        "Side": 0,
+        "Up": 0,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 54
+      },
+      "observed_next": [
+        -2927.375,
+        -192,
+        -279.875
+      ],
+      "source_trace_sha256": "b7b35ee9a6dd0fcd66e62a6c9b0f610ea0e0c41a0fb7d9f81ef4f9438116a5d9",
+      "frame": 192,
+      "collision_candidate_classes": [
+        "monster_infantry"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2927.375,
+          -192,
+          -279.875
+        ],
+        "self_velocity": [
+          0,
+          0,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 30,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/gunner/tris.md2",
+            "angles": [
+              0,
+              139.21875,
+              0
+            ],
+            "skin": 1,
+            "id": 468,
+            "class": "monster_gunner",
+            "origin": [
+              -2855.75,
+              -192.375,
+              -279.875
+            ],
+            "frame": 96,
+            "solid": 8290,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -1892,
+        "Yaw": -32119,
+        "Roll": 0,
+        "Forward": 209,
+        "Side": 0,
+        "Up": 0,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 54
+      },
+      "observed_next": [
+        -2926.375,
+        -191.875,
+        -279.875
+      ],
+      "source_trace_sha256": "b7b35ee9a6dd0fcd66e62a6c9b0f610ea0e0c41a0fb7d9f81ef4f9438116a5d9",
+      "frame": 193,
+      "collision_candidate_classes": [
+        "monster_infantry"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2926.375,
+          -191.875,
+          -279.875
+        ],
+        "self_velocity": [
+          0,
+          0,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 30,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/gunner/tris.md2",
+            "angles": [
+              0,
+              59.0625,
+              0
+            ],
+            "skin": 1,
+            "id": 468,
+            "class": "monster_gunner",
+            "origin": [
+              -2829.625,
+              -166.375,
+              -279.875
+            ],
+            "frame": 94,
+            "solid": 8290,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -1034,
+        "Yaw": -29348,
+        "Roll": 0,
+        "Forward": 59,
+        "Side": 0,
+        "Up": -400,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 60
+      },
+      "observed_next": [
+        -2926.375,
+        -189.875,
+        -279.875
+      ],
+      "source_trace_sha256": "b7b35ee9a6dd0fcd66e62a6c9b0f610ea0e0c41a0fb7d9f81ef4f9438116a5d9",
+      "frame": 199,
+      "collision_candidate_classes": [
+        "monster_infantry"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2903.125,
+          -187.125,
+          -279.875
+        ],
+        "self_velocity": [
+          142.25,
+          30.5,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 38,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              180,
+              0
+            ],
+            "id": 467,
+            "class": "monster_infantry",
+            "origin": [
+              -2790.5,
+              -183.875,
+              -279.875
+            ],
+            "frame": 94,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "model_path": "models/monsters/gunner/tris.md2",
+            "angles": [
+              0,
+              191.25,
+              0
+            ],
+            "id": 468,
+            "class": "monster_gunner",
+            "origin": [
+              -2622.125,
+              -131.625,
+              -279.875
+            ],
+            "frame": 94,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              185.625,
+              0
+            ],
+            "skin": 1,
+            "id": 479,
+            "class": "monster_parasite",
+            "origin": [
+              -2865.875,
+              -183.125,
+              -279.875
+            ],
+            "frame": 41,
+            "solid": 7266,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -889,
+        "Yaw": -30973,
+        "Roll": 0,
+        "Forward": 139,
+        "Side": 24,
+        "Up": -400,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 62
+      },
+      "observed_next": [
+        -2898,
+        -185.875,
+        -279.875
+      ],
+      "source_trace_sha256": "0f996836d0b8c4400f6f5f975b861948fb02e4844c3c4e2b62fb26447828acff",
+      "frame": 153,
+      "collision_candidate_classes": [
+        "monster_parasite"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2878.25,
+          -199.875,
+          -279.875
+        ],
+        "self_velocity": [
+          0,
+          0,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 38,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/gunner/tris.md2",
+            "angles": [
+              0,
+              180,
+              0
+            ],
+            "skin": 1,
+            "id": 468,
+            "class": "monster_gunner",
+            "origin": [
+              -2594.875,
+              -181.375,
+              -279.875
+            ],
+            "frame": 97,
+            "solid": 8290,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -619,
+        "Yaw": -32080,
+        "Roll": 0,
+        "Forward": 92,
+        "Side": -90,
+        "Up": 0,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 62
+      },
+      "observed_next": [
+        -2869.625,
+        -190.25,
+        -263.875
+      ],
+      "source_trace_sha256": "0f996836d0b8c4400f6f5f975b861948fb02e4844c3c4e2b62fb26447828acff",
+      "frame": 214,
+      "collision_candidate_classes": [
+        "monster_infantry"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "city1",
+        "self": [
+          -2867.5,
+          -199.25,
+          -279.875
+        ],
+        "self_velocity": [
+          -34,
+          -2.125,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 38,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 242,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 465,
+            "model": 102,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 434,
+            "model": 84,
+            "origin": [
+              0,
+              0,
+              -104
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 445,
+            "model": 89,
+            "origin": [
+              0,
+              0,
+              -370
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 464,
+            "model": 101,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/gunner/tris.md2",
+            "angles": [
+              0,
+              180,
+              0
+            ],
+            "skin": 1,
+            "id": 468,
+            "class": "monster_gunner",
+            "origin": [
+              -2640.875,
+              -181.375,
+              -279.875
+            ],
+            "frame": 188,
+            "solid": 8290,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -462,
+        "Yaw": -31940,
+        "Roll": 0,
+        "Forward": 52,
+        "Side": -181,
+        "Up": 0,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 62
+      },
+      "observed_next": [
+        -2863.75,
+        -180.75,
+        -263.875
+      ],
+      "source_trace_sha256": "0f996836d0b8c4400f6f5f975b861948fb02e4844c3c4e2b62fb26447828acff",
+      "frame": 226,
+      "collision_candidate_classes": [
+        "monster_infantry"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "ware2",
+        "self": [
+          1825.125,
+          30,
+          -231.875
+        ],
+        "self_velocity": [
+          -0.25,
+          -95.875,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 95,
+        "ducked": true,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 5,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          0,
+          0
+        ],
+        "movers": [
+          {
+            "id": 39,
+            "model": 5,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 201,
+            "model": 39,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 206,
+            "model": 43,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 38,
+            "model": 4,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              119.53125,
+              0
+            ],
+            "id": 519,
+            "class": "monster_infantry",
+            "origin": [
+              1903.5,
+              32.125,
+              -231.875
+            ],
+            "frame": 92,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              172.96875,
+              0
+            ],
+            "id": 530,
+            "class": "monster_parasite",
+            "origin": [
+              1857.125,
+              26.875,
+              -231.875
+            ],
+            "frame": 42,
+            "solid": 7266,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -4258,
+        "Yaw": -249,
+        "Roll": 0,
+        "Forward": 243,
+        "Side": -65,
+        "Up": -400,
+        "Buttons": 0,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 65
+      },
+      "observed_next": [
+        1825,
+        28.75,
+        -231.875
+      ],
+      "source_trace_sha256": "8ca051afa1108bf4700157091d8edf0a1b23b21c6a2112cd51e18adc6b8e6ab1",
+      "frame": 109,
+      "collision_candidate_classes": [
+        "monster_parasite"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "ware2",
+        "self": [
+          1829.625,
+          45.375,
+          -231.875
+        ],
+        "self_velocity": [
+          0,
+          0,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 60,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          0,
+          0
+        ],
+        "movers": [
+          {
+            "id": 38,
+            "model": 4,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 201,
+            "model": 39,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 39,
+            "model": 5,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 206,
+            "model": 43,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/parasite/tris.md2",
+            "angles": [
+              0,
+              135,
+              0
+            ],
+            "id": 530,
+            "class": "monster_parasite",
+            "origin": [
+              1867.375,
+              9.5,
+              -231.875
+            ],
+            "frame": 56,
+            "solid": 7266,
+            "clear_shot": true
+          },
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              90,
+              0
+            ],
+            "id": 519,
+            "class": "monster_infantry",
+            "origin": [
+              1921.125,
+              20.5,
+              -231.875
+            ],
+            "frame": 97,
+            "solid": 8290,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -436,
+        "Yaw": 2227,
+        "Roll": 0,
+        "Forward": 287,
+        "Side": 308,
+        "Up": -400,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 62
+      },
+      "observed_next": [
+        1835.375,
+        39.625,
+        -231.875
+      ],
+      "source_trace_sha256": "8ca051afa1108bf4700157091d8edf0a1b23b21c6a2112cd51e18adc6b8e6ab1",
+      "frame": 146,
+      "collision_candidate_classes": [
+        "monster_parasite",
+        "worldspawn"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "ware2",
+        "self": [
+          1701.5,
+          -279.5,
+          -231.875
+        ],
+        "self_velocity": [
+          100.75,
+          8.875,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 37,
+        "ducked": true,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 5,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          0,
+          0
+        ],
+        "movers": [
+          {
+            "id": 39,
+            "model": 5,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 201,
+            "model": 39,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 204,
+            "model": 41,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 205,
+            "model": 42,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 209,
+            "model": 46,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 210,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 212,
+            "model": 49,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 208,
+            "model": 45,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 216,
+            "model": 53,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 38,
+            "model": 4,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 211,
+            "model": 48,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 213,
+            "model": 50,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 214,
+            "model": 51,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 215,
+            "model": 52,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              188.4375,
+              0
+            ],
+            "skin": 1,
+            "id": 519,
+            "class": "monster_infantry",
+            "origin": [
+              1746.75,
+              -273,
+              -231.875
+            ],
+            "frame": 199,
+            "solid": 8290,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -3722,
+        "Yaw": 161,
+        "Roll": 0,
+        "Forward": 223,
+        "Side": -282,
+        "Up": 0,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 34
+      },
+      "observed_next": [
+        1714.75,
+        -258.75,
+        -231.875
+      ],
+      "source_trace_sha256": "8ca051afa1108bf4700157091d8edf0a1b23b21c6a2112cd51e18adc6b8e6ab1",
+      "frame": 259,
+      "collision_candidate_classes": [
+        "monster_infantry",
+        "worldspawn"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "ware2",
+        "self": [
+          1714.75,
+          -285.375,
+          -231.875
+        ],
+        "self_velocity": [
+          0,
+          -266.25,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 37,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          0,
+          0
+        ],
+        "movers": [
+          {
+            "id": 201,
+            "model": 39,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 214,
+            "model": 51,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 216,
+            "model": 53,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 39,
+            "model": 5,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 205,
+            "model": 42,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 211,
+            "model": 48,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 212,
+            "model": 49,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 209,
+            "model": 46,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 38,
+            "model": 4,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 204,
+            "model": 41,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 208,
+            "model": 45,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 210,
+            "model": 47,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 213,
+            "model": 50,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 215,
+            "model": 52,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              188.4375,
+              0
+            ],
+            "skin": 1,
+            "id": 519,
+            "class": "monster_infantry",
+            "origin": [
+              1746.75,
+              -273,
+              -231.875
+            ],
+            "frame": 201,
+            "solid": 8290,
+            "clear_shot": true
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -3903,
+        "Yaw": 2187,
+        "Roll": 0,
+        "Forward": 386,
+        "Side": -400,
+        "Up": -400,
+        "Buttons": 0,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 32
+      },
+      "observed_next": [
+        1714.625,
+        -287.5,
+        -231.875
+      ],
+      "source_trace_sha256": "8ca051afa1108bf4700157091d8edf0a1b23b21c6a2112cd51e18adc6b8e6ab1",
+      "frame": 261,
+      "collision_candidate_classes": [
+        "monster_infantry"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "jail1",
+        "self": [
+          -510,
+          -1040.125,
+          40.125
+        ],
+        "self_velocity": [
+          0,
+          0,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 10,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 255,
+            "model": 34,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 335,
+            "model": 59,
+            "origin": [
+              0,
+              0,
+              -118
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 356,
+            "model": 71,
+            "origin": [
+              0,
+              0,
+              -20
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 68,
+            "model": 9,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 333,
+            "model": 57,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 357,
+            "model": 72,
+            "origin": [
+              0,
+              0,
+              -20
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 284,
+            "model": 41,
+            "origin": [
+              -3,
+              5,
+              -15
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 185,
+            "model": 23,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              5.625,
+              0
+            ],
+            "skin": 1,
+            "id": 383,
+            "class": "monster_infantry",
+            "origin": [
+              -546,
+              -1045.125,
+              40
+            ],
+            "frame": 92,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 320,
+            "class": "misc_explobox",
+            "origin": [
+              -744,
+              -880,
+              -63.875
+            ],
+            "solid": 9250
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -1367,
+        "Yaw": 1772,
+        "Roll": 0,
+        "Forward": 66,
+        "Side": 0,
+        "Up": -400,
+        "Buttons": 0,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 44
+      },
+      "observed_next": [
+        -513.875,
+        -1041.125,
+        40.125
+      ],
+      "source_trace_sha256": "d4dad0fe4ed65be8d4ea03a42f43a1b8061682c9907cf01e4f53c02959a3fad8",
+      "frame": 301,
+      "collision_candidate_classes": [
+        "monster_infantry"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "jail1",
+        "self": [
+          -288.25,
+          -3458.75,
+          88.125
+        ],
+        "self_velocity": [
+          58.875,
+          -89.375,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 55,
+        "ducked": true,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 5,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 297,
+            "model": 49,
+            "origin": [
+              -61,
+              1,
+              -3
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 269,
+            "model": 36,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 300,
+            "model": 50,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 303,
+            "model": 51,
+            "origin": [
+              -189,
+              1,
+              -3
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              267.1875,
+              0
+            ],
+            "id": 383,
+            "class": "monster_infantry",
+            "origin": [
+              -322,
+              -3203.375,
+              88.125
+            ],
+            "frame": 92,
+            "solid": 8290,
+            "clear_shot": false
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 166,
+            "class": "misc_explobox",
+            "origin": [
+              -312,
+              -3496,
+              64
+            ],
+            "solid": 9250
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -4928,
+        "Yaw": -18502,
+        "Roll": 0,
+        "Forward": -246,
+        "Side": 241,
+        "Up": -400,
+        "Buttons": 0,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 30
+      },
+      "observed_next": [
+        -282.75,
+        -3463.875,
+        88.125
+      ],
+      "source_trace_sha256": "0dc7edd857c4b5ac79bd10bf95f562f4eee1c742dff63bf486392a8a2d04efa5",
+      "frame": 190,
+      "collision_candidate_classes": [
+        "misc_explobox"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "jail1",
+        "self": [
+          -282.75,
+          -3463.875,
+          88.125
+        ],
+        "self_velocity": [
+          54.75,
+          0.75,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 55,
+        "ducked": true,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 5,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 300,
+            "model": 50,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 297,
+            "model": 49,
+            "origin": [
+              -71,
+              1,
+              -3
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 269,
+            "model": 36,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 303,
+            "model": 51,
+            "origin": [
+              -199,
+              1,
+              -3
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              267.1875,
+              0
+            ],
+            "id": 383,
+            "class": "monster_infantry",
+            "origin": [
+              -322,
+              -3203.375,
+              88.125
+            ],
+            "frame": 93,
+            "solid": 8290,
+            "clear_shot": false
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 166,
+            "class": "misc_explobox",
+            "origin": [
+              -312.625,
+              -3496.625,
+              64
+            ],
+            "solid": 9250
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -4791,
+        "Yaw": -13594,
+        "Roll": 0,
+        "Forward": -271,
+        "Side": 255,
+        "Up": -400,
+        "Buttons": 0,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 30
+      },
+      "observed_next": [
+        -274.125,
+        -3464.625,
+        88.125
+      ],
+      "source_trace_sha256": "0dc7edd857c4b5ac79bd10bf95f562f4eee1c742dff63bf486392a8a2d04efa5",
+      "frame": 191,
+      "collision_candidate_classes": [
+        "misc_explobox"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "jail1",
+        "self": [
+          -270.375,
+          -3461.375,
+          88.125
+        ],
+        "self_velocity": [
+          -39.125,
+          -93.625,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 55,
+        "ducked": true,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 5,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 297,
+            "model": 49,
+            "origin": [
+              -221,
+              1,
+              -3
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 300,
+            "model": 50,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 303,
+            "model": 51,
+            "origin": [
+              395,
+              1,
+              -3
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 269,
+            "model": 36,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              267.1875,
+              0
+            ],
+            "id": 383,
+            "class": "monster_infantry",
+            "origin": [
+              -322,
+              -3203.375,
+              88.125
+            ],
+            "frame": 92,
+            "solid": 8290,
+            "clear_shot": false
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 166,
+            "class": "misc_explobox",
+            "origin": [
+              -313.375,
+              -3497.375,
+              64
+            ],
+            "solid": 9250
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -5523,
+        "Yaw": -23115,
+        "Roll": 0,
+        "Forward": -216,
+        "Side": -18,
+        "Up": 0,
+        "Buttons": 0,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 31
+      },
+      "observed_next": [
+        -281.375,
+        -3478.125,
+        88.125
+      ],
+      "source_trace_sha256": "0dc7edd857c4b5ac79bd10bf95f562f4eee1c742dff63bf486392a8a2d04efa5",
+      "frame": 206,
+      "collision_candidate_classes": [
+        "misc_explobox"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "base3",
+        "self": [
+          1068.125,
+          -926.375,
+          -487.875
+        ],
+        "self_velocity": [
+          94.875,
+          33.25,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 16,
+        "ducked": true,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 5,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 364,
+            "model": 39,
+            "origin": [
+              716,
+              -1062,
+              -652
+            ],
+            "angles": [
+              0,
+              90,
+              0
+            ]
+          },
+          {
+            "id": 235,
+            "model": 22,
+            "origin": [
+              0,
+              0,
+              -202
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 363,
+            "model": 38,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              206.71875,
+              0
+            ],
+            "skin": 1,
+            "id": 378,
+            "class": "monster_infantry",
+            "origin": [
+              1327.25,
+              -541.25,
+              -487.875
+            ],
+            "frame": 95,
+            "solid": 8290,
+            "clear_shot": false
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 361,
+            "class": "misc_explobox",
+            "origin": [
+              1040,
+              -840,
+              -511.875
+            ],
+            "solid": 9250
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 362,
+            "class": "misc_explobox",
+            "origin": [
+              1120,
+              -896,
+              -511.875
+            ],
+            "solid": 9250
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -2650,
+        "Yaw": 1263,
+        "Roll": 0,
+        "Forward": -306,
+        "Side": 109,
+        "Up": 0,
+        "Buttons": 0,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 67
+      },
+      "observed_next": [
+        1087.875,
+        -913.375,
+        -487.875
+      ],
+      "source_trace_sha256": "def50e7dcc16600d0d0098e326962cde16b5a4342628b65f8b76dea6c29eb220",
+      "frame": 305,
+      "collision_candidate_classes": [
+        "misc_explobox"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "base3",
+        "self": [
+          1072.375,
+          -876.25,
+          -487.875
+        ],
+        "self_velocity": [
+          -64.125,
+          78.625,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 16,
+        "ducked": true,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 5,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 235,
+            "model": 22,
+            "origin": [
+              0,
+              0,
+              -202
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 364,
+            "model": 39,
+            "origin": [
+              716,
+              -1062,
+              -652
+            ],
+            "angles": [
+              0,
+              90,
+              0
+            ]
+          },
+          {
+            "id": 363,
+            "model": 38,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              154.6875,
+              0
+            ],
+            "skin": 1,
+            "id": 378,
+            "class": "monster_infantry",
+            "origin": [
+              1262.75,
+              -567.25,
+              -487.875
+            ],
+            "frame": 92,
+            "solid": 8290,
+            "clear_shot": false
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 362,
+            "class": "misc_explobox",
+            "origin": [
+              1120.875,
+              -895.5,
+              -511.875
+            ],
+            "solid": 9250
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 361,
+            "class": "misc_explobox",
+            "origin": [
+              1040,
+              -840,
+              -511.875
+            ],
+            "solid": 9250
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -5727,
+        "Yaw": 31482,
+        "Roll": 0,
+        "Forward": -233,
+        "Side": -198,
+        "Up": -400,
+        "Buttons": 0,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 68
+      },
+      "observed_next": [
+        1065.75,
+        -872.125,
+        -487.875
+      ],
+      "source_trace_sha256": "def50e7dcc16600d0d0098e326962cde16b5a4342628b65f8b76dea6c29eb220",
+      "frame": 310,
+      "collision_candidate_classes": [
+        "misc_explobox"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "base3",
+        "self": [
+          1067.125,
+          -901.625,
+          -487.875
+        ],
+        "self_velocity": [
+          -4.375,
+          -99.875,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 16,
+        "ducked": true,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 5,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 235,
+            "model": 22,
+            "origin": [
+              0,
+              0,
+              -202
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 363,
+            "model": 38,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 364,
+            "model": 39,
+            "origin": [
+              716,
+              -1062,
+              -652
+            ],
+            "angles": [
+              0,
+              90,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              180,
+              0
+            ],
+            "skin": 1,
+            "id": 378,
+            "class": "monster_infantry",
+            "origin": [
+              1206.625,
+              -553.125,
+              -487.875
+            ],
+            "frame": 96,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 361,
+            "class": "misc_explobox",
+            "origin": [
+              1039.375,
+              -839.125,
+              -511.875
+            ],
+            "solid": 9250
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 362,
+            "class": "misc_explobox",
+            "origin": [
+              1120.875,
+              -895.5,
+              -511.875
+            ],
+            "solid": 9250
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -3828,
+        "Yaw": -19646,
+        "Roll": 0,
+        "Forward": 11,
+        "Side": 349,
+        "Up": 0,
+        "Buttons": 0,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 71
+      },
+      "observed_next": [
+        1088.75,
+        -913.625,
+        -487.875
+      ],
+      "source_trace_sha256": "def50e7dcc16600d0d0098e326962cde16b5a4342628b65f8b76dea6c29eb220",
+      "frame": 314,
+      "collision_candidate_classes": [
+        "misc_explobox"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "base3",
+        "self": [
+          1088.75,
+          -913.625,
+          -487.875
+        ],
+        "self_velocity": [
+          -2.75,
+          -120.625,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 16,
+        "ducked": false,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 4,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 363,
+            "model": 38,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 235,
+            "model": 22,
+            "origin": [
+              0,
+              0,
+              -202
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 364,
+            "model": 39,
+            "origin": [
+              716,
+              -1062,
+              -652
+            ],
+            "angles": [
+              0,
+              90,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              180,
+              0
+            ],
+            "skin": 1,
+            "id": 378,
+            "class": "monster_infantry",
+            "origin": [
+              1171.625,
+              -553.125,
+              -487.875
+            ],
+            "frame": 97,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 361,
+            "class": "misc_explobox",
+            "origin": [
+              1039.375,
+              -839.125,
+              -511.875
+            ],
+            "solid": 9250
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 362,
+            "class": "misc_explobox",
+            "origin": [
+              1121.75,
+              -895,
+              -511.875
+            ],
+            "solid": 9250
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -1745,
+        "Yaw": -17695,
+        "Roll": 0,
+        "Forward": 2,
+        "Side": 292,
+        "Up": -400,
+        "Buttons": 0,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 53
+      },
+      "observed_next": [
+        1089.625,
+        -919.5,
+        -487.875
+      ],
+      "source_trace_sha256": "def50e7dcc16600d0d0098e326962cde16b5a4342628b65f8b76dea6c29eb220",
+      "frame": 315,
+      "collision_candidate_classes": [
+        "misc_explobox"
+      ]
+    },
+    {
+      "snapshot": {
+        "map": "base3",
+        "self": [
+          1089.625,
+          -919.5,
+          -487.875
+        ],
+        "self_velocity": [
+          -0.875,
+          -59.5,
+          0
+        ],
+        "gravity": 800,
+        "on_ground": true,
+        "health": 16,
+        "ducked": true,
+        "pm_type": 0,
+        "pm_time": 0,
+        "pm_flags": 5,
+        "pm_state_known": true,
+        "delta_angles": [
+          0,
+          -32768,
+          0
+        ],
+        "movers": [
+          {
+            "id": 235,
+            "model": 22,
+            "origin": [
+              0,
+              0,
+              -202
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "id": 364,
+            "model": 39,
+            "origin": [
+              716,
+              -1062,
+              -652
+            ],
+            "angles": [
+              0,
+              90,
+              0
+            ]
+          },
+          {
+            "id": 363,
+            "model": 38,
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "angles": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collision_bodies": [
+          {
+            "model_path": "models/monsters/infantry/tris.md2",
+            "angles": [
+              0,
+              180,
+              0
+            ],
+            "skin": 1,
+            "id": 378,
+            "class": "monster_infantry",
+            "origin": [
+              1169.625,
+              -553.125,
+              -487.875
+            ],
+            "frame": 98,
+            "solid": 8290,
+            "clear_shot": true
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 362,
+            "class": "misc_explobox",
+            "origin": [
+              1122.5,
+              -894.375,
+              -511.875
+            ],
+            "solid": 9250
+          },
+          {
+            "angles": [
+              0,
+              0,
+              0
+            ],
+            "id": 361,
+            "class": "misc_explobox",
+            "origin": [
+              1039.375,
+              -839.125,
+              -511.875
+            ],
+            "solid": 9250
+          }
+        ]
+      },
+      "command": {
+        "Pitch": -1040,
+        "Yaw": -18357,
+        "Roll": 0,
+        "Forward": -170,
+        "Side": 183,
+        "Up": 0,
+        "Buttons": 0,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 53
+      },
+      "observed_next": [
+        1090.375,
+        -939.625,
+        -487.875
+      ],
+      "source_trace_sha256": "def50e7dcc16600d0d0098e326962cde16b5a4342628b65f8b76dea6c29eb220",
+      "frame": 316,
+      "collision_candidate_classes": [
+        "misc_explobox"
+      ]
+    }
+  ]
+}

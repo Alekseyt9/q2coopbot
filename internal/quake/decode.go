@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -831,6 +832,7 @@ type Snapshot struct {
 	PMTime             byte              `json:"pm_time"`
 	PMFlags            byte              `json:"pm_flags"`
 	PMStateKnown       bool              `json:"pm_state_known"`
+	CollisionBodies    []Object          `json:"collision_bodies,omitempty"`
 	Teammate           *Vec3             `json:"teammate,omitempty"`
 	TeammateEntity     int               `json:"teammate_entity,omitempty"`
 	LastTeammate       *Vec3             `json:"last_teammate,omitempty"`
@@ -924,6 +926,9 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 	}
 	for _, entity := range f.Entities {
 		path := strings.ToLower(d.Config[32+entity.Model])
+		if entity.Number != d.PlayerNumber && entity.Solid != 0 && entity.Solid != 31 {
+			s.CollisionBodies = append(s.CollisionBodies, Object{ID: entity.Number, ModelPath: path, Origin: entity.Origin, Solid: entity.Solid})
+		}
 		if path == "models/objects/barrels/tris.md2" && entity.Solid != 0 {
 			s.Barrels = append(s.Barrels, Object{ID: entity.Number, Class: "misc_explobox", Origin: entity.Origin, Solid: entity.Solid})
 		}
@@ -966,6 +971,7 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 			s.Pickups = append(s.Pickups, Object{ID: entity.Number, Class: "item_" + kind, Origin: entity.Origin, Frame: entity.Frame, HealthAmount: healthModelAmount(path)})
 		}
 	}
+	sort.Slice(s.CollisionBodies, func(i, j int) bool { return s.CollisionBodies[i].ID < s.CollisionBodies[j].ID })
 	return s
 }
 func YawTo(from, to Vec3, delta int16) int16 {
