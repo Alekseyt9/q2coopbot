@@ -57,17 +57,25 @@ def main():
     ap.add_argument('--evaluation',type=pathlib.Path,required=True)
     ap.add_argument('--spec',type=pathlib.Path,required=True)
     ap.add_argument('--out',type=pathlib.Path,required=True)
+    ap.add_argument('--labels',help='Comma-separated learned variant labels; default preserves historical after-only selection')
     args=ap.parse_args(); assert not args.out.exists()
     root=args.evaluation.resolve(); seal=read(root/'complete.json'); spec=read(args.spec)
     assert seal['state']=='complete' and not seal['training_performed']
     assert sha(args.spec)==seal['spec_sha256']
+    selected=set(args.labels.split(',')) if args.labels else None
+    if selected is not None:
+        assert len(selected)==len(args.labels.split(',')) and '' not in selected
+        assert selected <= {v['label'] for v in spec['variants'] if v['mode']=='learned'}
     pool=read(root/'pool/report.json'); assert sha(root/'pool/report.json')==seal['pool_sha256']
     assert pool['state']=='complete' and pool['source_unchanged']
     pins={root/'complete.json':sha(root/'complete.json'),args.spec:sha(args.spec),root/'pool/report.json':seal['pool_sha256']}
     variants={}
     for index,variant in enumerate(spec['variants']):
         label=variant['label']
-        if variant['mode']!='learned' or '-after-' not in label: continue
+        if variant['mode']!='learned': continue
+        if selected is not None:
+            if label not in selected: continue
+        elif '-after-' not in label: continue
         plan_path=root/(label+'-plan.json'); plan=read(plan_path); pins[plan_path]=sha(plan_path)
         assert pins[plan_path]==pool['plans'][index]['sha256']
         execution_path=root/('execution-'+label+'.json'); execution=read(execution_path); pins[execution_path]=sha(execution_path)
@@ -99,7 +107,11 @@ def main():
             value.update(job=job['job'],episode=episode,seed=job['seed'],goal=bool(result['goal_stop']),
                          trace_sha256=binding['trace_sha256'],capture_sha256=binding['capture_sha256'])
             cases.append(value)
-        assert len(cases)==32
+        expected=sum(len(t['seeds']) for t in plan['tasks'] if t['episode']['id'].endswith('-recovery'))
+        expected_jobs={j['job'] for j in pool['jobs'] if j['plan_index']==index and
+            plan['tasks'][j['task_index']]['episode']['id'].endswith('-recovery')}
+        assert expected>0 and len(cases)==len(expected_jobs)==expected
+        assert {c['job'] for c in cases}==expected_jobs
         counts=dict(sum((collections.Counter(c['counts']) for c in cases),collections.Counter()))
         variants[label]=dict(cases=cases,counts=counts,wins=sum(c['goal'] for c in cases),
             cases_with_observed_supported=sum(c['observed_supported'] for c in cases),
@@ -111,7 +123,8 @@ def main():
          pool_sha256=seal['pool_sha256'],evaluation_sha256=pins[root/'complete.json'],script_sha256=sha(__file__),
          availability_oracle_sha256=sha(pathlib.Path(__file__).with_name('combat_weapon_features.py')),
          variants=variants,training_performed=False,promotion=False,
-         scope='Latest after variants, held-out recovery episodes only. Visible inventory age/mask and observed equipment; correct network release clock. Requests are commands, not completed dispatch or physical shots. No inference, fitting or causal attribution.'))
+         selected_labels=sorted(variants),
+         scope='Selected learned variants, held-out recovery episodes only. Visible inventory age/mask and observed equipment; correct network release clock. Requests are commands, not completed dispatch or physical shots. No inference, fitting or causal attribution.'))
 
 
 if __name__=='__main__': main()

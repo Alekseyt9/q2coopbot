@@ -626,3 +626,14 @@ Conditional2/4 stochastic обеспечили переход на поддер�
 ### 12.10.2026: native blockers и packet bodies
 
 [Collision diagnostic](testing/combat_native_collision_diagnostics_20261012.md) связал29 больших ошибок с pmove; найдены monster bodies/barrels. 16+2 native и18 CUDA replay без fitting, seeds повторены намеренно. Decoder/logs сохраняют все наблюдаемые collision bodies; полные29 fixtures восстановлены из DM2. 26/29 покрываются ground/no-support альтернативами в0.25,3 overlap случая unsupported. Это не единственная точная траектория и не guard acceptance. Guard не переключён; далее проверка всего пути альтернатив и малая matched оценка.
+
+
+### 12.10.2026: wall guard включён экспериментально и проверен live
+
+[Checked wall-slide smoke](testing/combat_checked_wall_slide_smoke_20261012.md): opt-in сохраняет command при проверенном static contact; hazards/alternatives проверяются отдельно. Первая blanket mover ошибка обнаружена smoke и исправлена travel envelopes. Второй24 native/16 CUDA закрылся за175.74с; suppress movement36.88→26.04%, победы2/8→2/8, rules6/8; standing немного ниже, yaw хуже. Превосходства нет, default остаётся legacy. Следующий72-case screen и затем обучение на новом исполнителе нужны для качества.
+
+Screen завершён:72 native/48 CUDA, legacy8/24, checked5/24, rules10/24. Подавление движения30.24→16.60%, но полученный урон1788→1971 и большие повороты8.32→9.83%. Парно0 новых/3 потерянных победы. Checked остаётся экспериментом, confirmation этих старых весов не назначен. Далее — matched CUDA дообучение legacy/checked с одинаковым бюджетом и свежая малая оценка; исправление исполнителя само по себе качество не доказало. Полные отчёты и ограничения добавлены в linked smoke документ.
+
+[Matched continuation](testing/combat_checked_wall_training_20261012.md) завершён:112 own-policy native/112 CUDA,56 боёв на ветку,6341/6039 переходов, одинаковый parent и10 actor steps; checkpoint/input-use audits CUDA. Качество новых весов ещё не доказано. Первый smoke упёрся в лимит cohort до боя; исправленная immutable registry copy расширяет validation ranges и прошла planner leakage checks. Smoke24 с новыми весами запущен, основной default и weights не заменены.
+
+Оценка обученных веток закрыта:smoke24/16 CUDA и screen72/48 CUDA. На screen legacy8/24,checked8/24,rules9/24; ordinary4/16,5/16,1/16; recovery4/8,3/8,8/8. Подавление движения28.13→18.57%, но полученный урон1732→1863 и yaw11.87→13.82%; преимущества нет. Recovery metadata подтверждает смену оружия во всех8 случаях каждой ветки; следующий разбор должен проверить эффективность после смены, боезапас и прицеливание, а не предполагать зависание. Air control и полная физика прыжков остаются незавершёнными. Старые основные веса/default сохранены; отчёт обновлён по linked continuation документу.

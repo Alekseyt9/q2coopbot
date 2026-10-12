@@ -50,9 +50,19 @@ def make_spec(template, episodes, stage, control, candidate, offset, salt, port)
     rules = [v for v in template['variants'] if v['mode'] == 'rules']
     assert len(rules) == 1
     selected, count = select_families(episodes, stage, salt)
+    split = 'confirmation' if stage == 'confirmation' else 'validation'
+    selected_set = set(selected)
+    for episode in episodes:
+        if episode['id'] not in selected_set:
+            continue
+        cohort = episode.get('splits', {}).get(split)
+        assert cohort is not None, f"Missing {split} cohort: {episode['id']}"
+        assert type(cohort['count']) is int and offset + count <= cohort['count'], (
+            f"Selection exceeds {split} cohort of {episode['id']}: "
+            f"offset {offset} + count {count} > {cohort['count']}")
     spec = copy.deepcopy(template)
     spec.update(episodes=selected, count=count, seed_offset=offset, port=port,
-        split='confirmation' if stage == 'confirmation' else 'validation',
+        split=split,
         variants=[copy.deepcopy(by_label[control]), copy.deepcopy(by_label[candidate]), copy.deepcopy(rules[0])],
         comparisons=[dict(name='candidate-vs-control', before=control, after=candidate),
                      dict(name='candidate-vs-rules', before=rules[0]['label'], after=candidate)])

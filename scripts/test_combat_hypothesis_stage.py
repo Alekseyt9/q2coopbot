@@ -4,9 +4,10 @@ from prepare_combat_hypothesis_stage import STAGES, make_spec, select_families
 
 
 def episodes():
-    return [dict(id=f'{m}-ordinary-{i}',map=m,status='runnable',timescale=2)
+    splits = dict(validation=dict(start=1000,count=512),confirmation=dict(start=2000,count=512))
+    return [dict(id=f'{m}-ordinary-{i}',map=m,status='runnable',timescale=2,splits=splits)
             for m in ('base3','ware2','jail1','city1') for i in range(5)] + [
-        dict(id=f'{m}-{i}-recovery',map=m,status='runnable',timescale=2)
+        dict(id=f'{m}-{i}-recovery',map=m,status='runnable',timescale=2,splits=splits)
         for m in ('base3','ware2','jail1','city1') for i in range(2)]
 
 
@@ -37,6 +38,20 @@ class Tests(unittest.TestCase):
         self.assertNotIn('episodes',t)
         t['variants'][1]['deterministic']=True
         with self.assertRaises(AssertionError):make_spec(t,episodes(),'smoke','control','candidate',468,17,41700)
+
+    def test_seed_selection_rejected_before_spec_is_written(self):
+        t=dict(version='registered_combat_model_comparison_v1',variants=[
+            dict(label='control',mode='learned',deterministic=False),
+            dict(label='candidate',mode='learned',deterministic=False),dict(label='rules',mode='rules')])
+        self.assertEqual(make_spec(t,episodes(),'smoke','control','candidate',511,17,41700)['count'],1)
+        with self.assertRaisesRegex(AssertionError,'Selection exceeds validation cohort'):
+            make_spec(t,episodes(),'screen','control','candidate',511,17,41700)
+        with self.assertRaisesRegex(AssertionError,'Selection exceeds validation cohort'):
+            make_spec(t,episodes(),'smoke','control','candidate',520,17,41700)
+        rows=episodes()
+        for row in rows:row['splits']={'validation':dict(start=1000,count=512)}
+        with self.assertRaisesRegex(AssertionError,'Missing confirmation cohort'):
+            make_spec(t,rows,'confirmation','control','candidate',0,17,41700)
 
 
 if __name__=='__main__':unittest.main()
