@@ -61,10 +61,10 @@ func predictPmoveGround(s quake.Snapshot, cmd quake.UserCmd, g *quake.MapInfo) *
 			v[1] += y * accel
 		}
 	}
-	slide, ok := g.StepSlidePlayer(s.Self, v, dt, ducked)
+	slide, ok := g.StepSlidePlayerWithMovers(s.Self, v, dt, ducked, s.Movers)
 	if !ok {
 		return nil
 	}
 	return &PmoveGroundPrediction{Position: slide.Position, Velocity: slide.Velocity,
-		Segments: slide.Segments, Contacts: slide.Contacts, Model: "baseq2_dry_ground_step_slide_diagnostic_v1"}
+		Segments: slide.Segments, Contacts: slide.Contacts, Model: "baseq2_dry_ground_step_slide_observed_movers_diagnostic_v2"}
 }

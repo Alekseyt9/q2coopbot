@@ -1,10 +1,51 @@
 package bot
 
 import (
+	"encoding/json"
 	"math"
+	"os"
 	"q2coopbot/internal/quake"
 	"testing"
 )
+
+func TestPmoveGroundObservedDoorMatchesNativeFrame(t *testing.T) {
+	root := os.Getenv("Q2_SEARCH_SCAN_ROOT")
+	if root == "" {
+		t.Skip("requires BSP assets")
+	}
+	var recorded struct {
+		Snapshot     quake.Snapshot
+		Command      quake.UserCmd
+		ObservedNext quake.Vec3 `json:"observed_next"`
+	}
+	b, err := os.ReadFile("testdata/pmove-jail1-door-frame194.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(b, &recorded); err != nil {
+		t.Fatal(err)
+	}
+	g, err := quake.LoadMap(root, recorded.Snapshot.Map)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := predictPmoveGround(recorded.Snapshot, recorded.Command, &g)
+	if p == nil {
+		t.Fatal("door prediction missing")
+	}
+	distance := func(a, b quake.Vec3) float64 {
+		return math.Sqrt((a[0]-b[0])*(a[0]-b[0]) + (a[1]-b[1])*(a[1]-b[1]) + (a[2]-b[2])*(a[2]-b[2]))
+	}
+	if e := distance(p.Position, recorded.ObservedNext); e > .25 {
+		t.Fatal("observed door mismatch", e, p.Position, recorded.ObservedNext)
+	}
+	withoutDoor := recorded.Snapshot
+	withoutDoor.Movers = nil
+	old := predictPmoveGround(withoutDoor, recorded.Command, &g)
+	if old == nil || distance(old.Position, recorded.ObservedNext) < 20 {
+		t.Fatal("fixture no longer distinguishes ignored door", old)
+	}
+}
 
 func TestPmoveGroundUsesVerticalSpeedBeforeFriction(t *testing.T) {
 	c := policyClient(t, "learned")

@@ -22,6 +22,54 @@ func (m *MapInfo) TracePlayer(from, to Vec3, ducked bool) PlayerTrace {
 	return m.collision.tracePlayerHull(from, to, Vec3{-16, -16, -24}, maxs)
 }
 
+// TracePlayerWithMovers includes observed brush models at their current pose.
+// It does not extrapolate mover motion, include actors, or clear unseen doors.
+func (m *MapInfo) TracePlayerWithMovers(from, to Vec3, ducked bool, movers []Mover) PlayerTrace {
+	result := m.TracePlayer(from, to, ducked)
+	if !result.Valid {
+		return result
+	}
+	maxs := Vec3{16, 16, 32}
+	if ducked {
+		maxs[2] = 4
+	}
+	for _, mover := range movers {
+		local, ok := m.moverCollision(mover)
+		if !ok {
+			return PlayerTrace{}
+		}
+		a, b := from, to
+		for axis, value := range mover.Origin {
+			if math.IsNaN(value) || math.IsInf(value, 0) {
+				return PlayerTrace{}
+			}
+			a[axis] -= value
+			b[axis] -= value
+		}
+		// Native CM_TransformedBoxTrace rotates the segment but retains hull extents.
+		if mover.Angles != (Vec3{}) {
+			local = *m.collision
+			local.worldBrushes = local.modelBrushes[mover.Model]
+			a = inverseBrushVector(a, mover.Angles)
+			b = inverseBrushVector(b, mover.Angles)
+		}
+		tr := local.tracePlayerHull(a, b, Vec3{-16, -16, -24}, maxs)
+		if !tr.Valid {
+			return tr
+		}
+		result.StartSolid = result.StartSolid || tr.StartSolid
+		result.AllSolid = result.AllSolid || tr.AllSolid
+		if tr.Fraction < result.Fraction {
+			result.Fraction = tr.Fraction
+			result.Normal = rotateBrushVector(tr.Normal, mover.Angles)
+		}
+	}
+	for axis := range from {
+		result.End[axis] = from[axis] + (to[axis]-from[axis])*result.Fraction
+	}
+	return result
+}
+
 // CM_ClipBoxToBrush plane expansion and DIST_EPSILON, including native
 // startsolid semantics: exiting a brush does not set allsolid or stop the trace.
 // The older boxClear helper is deliberately conservative and remains unchanged.

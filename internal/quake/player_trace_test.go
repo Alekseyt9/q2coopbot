@@ -80,3 +80,24 @@ func TestPlayerTraceTouchingFloorAndInvalidInput(t *testing.T) {
 		t.Fatal("unknown map accepted", tr)
 	}
 }
+
+func TestPlayerTraceObservedMoverPoseAndUnknownModel(t *testing.T) {
+	m := playerTraceBoxes([2]Vec3{{-200, -200, -20}, {200, 200, 0}}, [2]Vec3{{40, -100, 0}, {50, 100, 100}})
+	m.collision.worldBrushes = []int{0}
+	m.collision.modelBrushes = [][]int{nil, {1}}
+	from, to := Vec3{0, 0, 24.125}, Vec3{100, 0, 24.125}
+	if tr := m.TracePlayer(from, to, false); tr.Fraction != 1 {
+		t.Fatal("mover incorrectly part of static world", tr)
+	}
+	tr := m.TracePlayerWithMovers(from, to, false, []Mover{{Model: 1, Origin: Vec3{20, 0, 0}}})
+	if !tr.Valid || math.Abs(tr.End[0]-43.96875) > 1e-9 || tr.Normal != (Vec3{-1, 0, 0}) {
+		t.Fatal("translated mover trace", tr)
+	}
+	tr = m.TracePlayerWithMovers(from, Vec3{0, 100, 24.125}, false, []Mover{{Model: 1, Angles: Vec3{0, 90, 0}}})
+	if !tr.Valid || math.Abs(tr.End[1]-23.96875) > 1e-9 || math.Abs(tr.Normal[1]+1) > 1e-9 {
+		t.Fatal("native transformed mover trace", tr)
+	}
+	if tr = m.TracePlayerWithMovers(from, to, false, []Mover{{Model: 2}}); tr.Valid {
+		t.Fatal("unknown mover cleared", tr)
+	}
+}

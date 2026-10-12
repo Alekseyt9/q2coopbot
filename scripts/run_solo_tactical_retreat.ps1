@@ -129,7 +129,7 @@ try{
     if($Synchronous){
         @("set sv_harness_instance learning-$Seed",'set sv_test_trace_client SoloRetreatBot','set sv_test_lockstep_client SoloRetreatBot','set g_test_combat_barrier 1','set g_test_combat_clients 1','set g_test_monster_no_infighting 1','set aimfix 0',"set g_test_combat_monster_health $TrainingMonsterHealth","set g_test_combat_release_frame $ReleaseGameFrame")|Set-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Encoding ascii
         $args=$args.Replace("+map $fixtureMap","+exec learning-test.cfg +map $fixtureMap")
-        if($ReleaseGameFrame){Add-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Value 'set sv_test_signon_hold_frame 40' -Encoding ascii}
+        if($ReleaseGameFrame){Add-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Value @('set sv_test_signon_hold_frame 40','set g_test_motion 1') -Encoding ascii}
     }
     if($Recovery -or $CornerEscape -or $ParasiteWeapon){$args=$args.Replace("+map $fixtureMap","+set skill $RecoverySkill +map $fixtureMap");$report.skill=$RecoverySkill;$report.initial_health=$(if($CornerEscape){65}elseif($ParasiteWeapon){$ParasiteHealth}else{$RecoveryHealth})}
     $config=Join-Path $OutputRoot 'bot-config.json'

@@ -1,0 +1,133 @@
+{
+  "snapshot": {
+    "map": "jail1",
+    "self": [
+      -1171,
+      -1040.125,
+      40.125
+    ],
+    "self_velocity": [
+      139,
+      -0.25,
+      0
+    ],
+    "gravity": 800,
+    "on_ground": true,
+    "health": 50,
+    "ducked": false,
+    "pm_type": 0,
+    "pm_time": 0,
+    "pm_flags": 4,
+    "pm_state_known": true,
+    "delta_angles": [
+      0,
+      -32768,
+      0
+    ],
+    "movers": [
+      {
+        "id": 68,
+        "model": 9,
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "angles": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": 70,
+        "model": 14,
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "angles": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": 255,
+        "model": 34,
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "angles": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": 333,
+        "model": 57,
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "angles": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": 295,
+        "model": 48,
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "angles": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": 335,
+        "model": 59,
+        "origin": [
+          0,
+          0,
+          -118
+        ],
+        "angles": [
+          0,
+          0,
+          0
+        ]
+      }
+    ]
+  },
+  "command": {
+    "Pitch": -833,
+    "Yaw": 28173,
+    "Roll": 0,
+    "Forward": -170,
+    "Side": -296,
+    "Up": 0,
+    "Buttons": 0,
+    "Impulse": 0,
+    "Msec": 100,
+    "Light": 99
+  },
+  "observed_next": [
+    -1167.75,
+    -1040.25,
+    40.125
+  ],
+  "source_trace_sha256": "ea1733b9afb42a86f173d3505c106387912c80d77645a3afe3b82d858f72496b",
+  "source_network_frame": 194
+}

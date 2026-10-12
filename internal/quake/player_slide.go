@@ -13,6 +13,16 @@ type PlayerSlide struct {
 }
 
 func (m *MapInfo) SlidePlayer(from, velocity Vec3, seconds float64, ducked bool) (PlayerSlide, bool) {
+	return m.slidePlayer(from, velocity, seconds, ducked, m.TracePlayer)
+}
+
+func (m *MapInfo) SlidePlayerWithMovers(from, velocity Vec3, seconds float64, ducked bool, movers []Mover) (PlayerSlide, bool) {
+	return m.slidePlayer(from, velocity, seconds, ducked, func(a, b Vec3, duck bool) PlayerTrace {
+		return m.TracePlayerWithMovers(a, b, duck, movers)
+	})
+}
+
+func (m *MapInfo) slidePlayer(from, velocity Vec3, seconds float64, ducked bool, trace func(Vec3, Vec3, bool) PlayerTrace) (PlayerSlide, bool) {
 	result := PlayerSlide{Position: from, Velocity: velocity}
 	if !m.HasCollision() || math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds <= 0 || seconds > .1 {
 		return result, false
@@ -42,7 +52,7 @@ func (m *MapInfo) SlidePlayer(from, velocity Vec3, seconds float64, ducked bool)
 		for axis := range end {
 			end[axis] += result.Velocity[axis] * remaining
 		}
-		tr := m.TracePlayer(result.Position, end, ducked)
+		tr := trace(result.Position, end, ducked)
 		// Do not authorize uncertain embedded starts, including native escapes.
 		if !tr.Valid || tr.StartSolid || tr.AllSolid {
 			return result, false

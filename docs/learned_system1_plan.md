@@ -616,3 +616,8 @@ Conditional2/4 stochastic обеспечили переход на поддер�
 ### 12.10.2026: короткий цикл проверен live
 
 [Smoke](testing/combat_hypothesis_smoke_20261012.md) закрыл24 native/16 CUDA за177.35с без обучения. Поддержаны1..80 seeds на family и specs8/24/56/112 условий; stage budgets сверяются с frozen планами. Итоги1/8 control,2/8 conditional2,6/8 rules — pipeline acceptance, не качество новой гипотезы. Screening теперь validation, confirmation только финальная стадия; smoke confirmation468 уже просмотрен. Следующие72 задания лишь prepared, не запущены. Cache/auto-stop/human recorder ещё впереди.
+
+
+### 12.10.2026: ground physics проверена по native кадрам
+
+[Diagnostic report](testing/combat_pmove_ground_diagnostics_20261012.md): PM state decoded/logged, stock friction/step/slide плюс observed brush models. Два small-cycle native набора закрыты,32 learned CUDA cases без обучения. Первая большая ошибка воспроизведена и исправлена для observed jail1 door. В версии2 движение1512 frames p95 error0.156, но29 ошибок>1 остались; guard ещё не активирован. Нужна native telemetry оставшихся blockers и проверка полного пути/hazards.
