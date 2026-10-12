@@ -45,7 +45,10 @@ def finalize(model_path, data, out):
         weapon_helpers=[pathlib.Path(__file__).with_name(name).resolve() for name in
             ('combat_weapon_state_residual.py','combat_spatial_aim.py','ppo_recurrent.py','ppo_combat.py',
              'combat_target_head.py','combat_precision_head.py','combat_weapon_head.py','combat_attention.py')]
-        sources.update({str(path):sha(path) for path in weapon_helpers})
+    if model.get('weapon_exploration'):
+        weapon_helpers.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
+                              ('combat_weapon_exploration.py','combat_weapon_head.py','combat_spatial_aim.py'))
+    sources.update({str(path):sha(path) for path in weapon_helpers})
     for path, digest in sources.items():
         assert sha(path) == digest, 'Native source changed: ' + path
     rows = [json.loads(line) for line in (data / 'native-rollout.jsonl').read_text().splitlines()]
