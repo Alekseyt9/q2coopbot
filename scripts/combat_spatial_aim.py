@@ -65,6 +65,9 @@ class SpatialActor(nn.Module):
         self.target_branch=build(model) if model is not None else None
         from combat_weapon_state_residual import build as build_weapon
         self.weapon_state_branch=build_weapon(model) if model is not None else None
+        from combat_weapon_exploration import validate as validate_exploration
+        if model is not None:validate_exploration(model)
+        self.weapon_exploration=model.get('weapon_exploration') if model is not None else None
     def forward(self,x,*args,**kwargs):
         output=self.base(x,*args,**kwargs)
         raw=output[0] if isinstance(output,tuple) else output
@@ -75,6 +78,9 @@ class SpatialActor(nn.Module):
         if self.weapon_state_branch is not None:
             from combat_weapon_state_residual import apply as apply_weapon
             result=apply_weapon(self.weapon_state_branch,x,result)
+        if self.weapon_exploration is not None:
+            from combat_weapon_exploration import apply as apply_exploration
+            result=apply_exploration(self.weapon_exploration,x,result)
         return (result,*output[1:]) if isinstance(output,tuple) else result
     def single(self,x):
         output=self(x[:,None,:]);raw=output[0] if isinstance(output,tuple) else output
@@ -85,6 +91,8 @@ class SpatialActor(nn.Module):
 def wrap(base,model):
     from combat_weapon_state_residual import validate as validate_weapon
     validate_weapon(model)
+    from combat_weapon_exploration import validate as validate_exploration
+    validate_exploration(model)
     if not model.get('spatial_aim'):return base
     validate(model);return SpatialActor(base,model['spatial_aim'],model)
 

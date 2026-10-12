@@ -1,0 +1,17 @@
+# Условное исследование выбора оружия
+
+## Основание
+
+Полный cumulative confirmation1456/672 CUDA закрыт. Последние deterministic control/cost/bonus во всех96 recovery случаях не запрашивают другое оружие, хотя наблюдаемый инвентарь свежий и Blaster/Shotgun/Machinegun доступны; побед0/96. Stochastic bonus7/32 против29/32 rules. CUDA real-history probe14027 rows: initial supported request вероятность1,11%, с conditional temperature2 —14,69%, с4 —37,16%. Все остальные outputs и ungated rows точно сохранены. Temperature сама по себе сохраняет argmax и не исправляет deterministic исполнение.
+
+## Реализация следующего эксперимента
+
+1. Добавить явно версионированный optional `weapon_exploration` контракт: temperature действует только при observed equipped Grenades и хотя бы одном доступном Blaster/Shotgun/SSG/MG. Источник — v10 observation features, без hidden native state, условий по названию эпизода и изменения availability mask. Все12 weapon logits делятся на temperature после базового и observed weapon residual; движение, aim, attack, target, value и temporal state не меняются.
+2. Реализовать одинаковый transform в Go runtime и CUDA actor wrapper, включая CUDA likelihood/entropy/градиенты для PPO. Temperature1 либо отсутствие поля сохраняют старое поведение. Неподдерживаемые версии/неfinite или значения вне[1;4] отклонять. Проверки численной согласованности — только CUDA и живой harness; Go использовать для schema/build/export, без neural parity tests.
+3. Создать три sealed ветки от одного latest bonus checkpoint: control1, conditional2, conditional4. Сохранить actor/critic/std/Adam group IDs/clocks/RNG/history; изменение модели явно зарегистрировать migration receipt и обновить checkpoint weights SHA. Не обучать на прошлых confirmation данных. Старые objective receipts сохранять, новый сбор опыта принадлежит новой версии политики.
+4. Native smoke подтвердит выпуск weapon requests, достаточную вероятность переключения и CUDA replay на новой политике; он не является оценкой качества. После него собрать matched fresh train fixtures по всем28 семействам (ordinary80/recovery32 per branch), пул16×2 с отдельными seeds каждого боя. Seed offsets выбрать по текущему реестру и проверить против всех уже использованных plans;264 только предварительный кандидат, не готовое разрешение повторить seeds. PPO и neural checks только GPU, одинаковый бюджет full-actor10/value40 и learning rates; reward сохранить productive hold v12, без одновременного изменения наград.
+5. Свежая matched held-out оценка before/after всех веток ×stochastic/deterministic +rules. Проверить ordinary/recovery, requests→observed equipment, время первой атаки/урона, победы/deaths/received, бессмысленные повторные requests, yaw/standing/targetless command contexts. Promotion допускается по совокупности результата, не по одной вероятности request или новизне весов. Полные карты и реальный coop остаются самостоятельной приёмкой.
+
+Глобальное увеличение temperature уже ухудшало ordinary бои, поэтому gate сохраняет normal weapon trajectories. Gate не назначает конкретное оружие: masked learned probabilities по-прежнему выбирают из инвентаря. Контракт/новые ветки/новые train данные пока не реализованы; сейчас завершены observation audit и CUDA диагностический probe.
+
+Источники: [полные результаты и SHA receipts](combat_target_commitment_results_20261011.md), `workspace/artifacts/combat-target-commitment-recovery-audit-20261012.json`, `workspace/artifacts/combat-conditional-weapon-exploration-probe-20261012.json`.

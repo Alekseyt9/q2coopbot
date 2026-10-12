@@ -15,22 +15,23 @@ import (
 const PPOKind = "combat_ppo_v1"
 
 type PPOFile struct {
-	Kind                string               `json:"kind"`
-	Features            string               `json:"feature_version"`
-	Actor               []DenseLayer         `json:"actor"`
-	Value               []DenseLayer         `json:"value"`
-	LogStd              [4]float64           `json:"log_std"`
-	SamplingSeed        int64                `json:"sampling_seed"`
-	Deterministic       bool                 `json:"deterministic"`
-	Memory              *GRUFile             `json:"memory,omitempty"`
-	Attention           *AttentionFile       `json:"attention,omitempty"`
-	EntityAttention     *EntityAttentionFile `json:"entity_attention,omitempty"`
-	WeaponHead          string               `json:"weapon_head,omitempty"`
-	TargetHead          string               `json:"target_head,omitempty"`
-	AimModeHead         string               `json:"aim_mode_head,omitempty"`
-	SpatialAim          *SpatialAimFile      `json:"spatial_aim,omitempty"`
-	SharedTarget        *SpatialAimFile      `json:"shared_target,omitempty"`
-	WeaponStateResidual *SpatialAimFile      `json:"weapon_state_residual,omitempty"`
+	Kind                string                 `json:"kind"`
+	Features            string                 `json:"feature_version"`
+	Actor               []DenseLayer           `json:"actor"`
+	Value               []DenseLayer           `json:"value"`
+	LogStd              [4]float64             `json:"log_std"`
+	SamplingSeed        int64                  `json:"sampling_seed"`
+	Deterministic       bool                   `json:"deterministic"`
+	Memory              *GRUFile               `json:"memory,omitempty"`
+	Attention           *AttentionFile         `json:"attention,omitempty"`
+	EntityAttention     *EntityAttentionFile   `json:"entity_attention,omitempty"`
+	WeaponHead          string                 `json:"weapon_head,omitempty"`
+	TargetHead          string                 `json:"target_head,omitempty"`
+	AimModeHead         string                 `json:"aim_mode_head,omitempty"`
+	SpatialAim          *SpatialAimFile        `json:"spatial_aim,omitempty"`
+	SharedTarget        *SpatialAimFile        `json:"shared_target,omitempty"`
+	WeaponStateResidual *SpatialAimFile        `json:"weapon_state_residual,omitempty"`
+	WeaponExploration   *WeaponExplorationFile `json:"weapon_exploration,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
@@ -114,6 +115,9 @@ func LoadPPO(path string) (*PPO, error) {
 	if e = validateWeaponStateResidual(f); e != nil {
 		return nil, e
 	}
+	if e = validateWeaponExploration(f); e != nil {
+		return nil, e
+	}
 	if e = validateFeatureLayers(f.Value, 1, f.Features); e != nil {
 		return nil, e
 	}
@@ -195,6 +199,10 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 		return Action{}, 0, 0, e
 	}
 	x, e = p.weaponStateRaw(o, x)
+	if e != nil {
+		return Action{}, 0, 0, e
+	}
+	x, e = p.weaponExplorationRaw(o, x)
 	if e != nil {
 		return Action{}, 0, 0, e
 	}
@@ -285,6 +293,10 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		return Action{}, e
 	}
 	x, e = p.weaponStateRaw(o, x)
+	if e != nil {
+		return Action{}, e
+	}
+	x, e = p.weaponExplorationRaw(o, x)
 	if e != nil {
 		return Action{}, e
 	}
