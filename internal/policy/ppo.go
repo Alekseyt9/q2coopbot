@@ -32,6 +32,7 @@ type PPOFile struct {
 	SharedTarget        *SpatialAimFile        `json:"shared_target,omitempty"`
 	WeaponStateResidual *SpatialAimFile        `json:"weapon_state_residual,omitempty"`
 	WeaponExploration   *WeaponExplorationFile `json:"weapon_exploration,omitempty"`
+	SampledMotionAim    *SpatialAimFile        `json:"sampled_motion_aim,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
@@ -116,6 +117,9 @@ func LoadPPO(path string) (*PPO, error) {
 		return nil, e
 	}
 	if e = validateWeaponExploration(f); e != nil {
+		return nil, e
+	}
+	if e = validateSampledMotionAim(f); e != nil {
 		return nil, e
 	}
 	if e = validateFeatureLayers(f.Value, 1, f.Features); e != nil {
@@ -233,10 +237,16 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 		}
 		lp += probs[s.AimMode]
 	}
-	for i, z := range s.Latent {
+	for _, z := range s.Latent {
 		if math.IsNaN(z) || math.IsInf(z, 0) {
 			return Action{}, 0, 0, fmt.Errorf("nonfinite latent")
 		}
+	}
+	means, e = p.sampledMotionAimMeans(o, x, means, [2]float64{s.Latent[0], s.Latent[1]}, s.Target, s.AimMode)
+	if e != nil {
+		return Action{}, 0, 0, e
+	}
+	for i, z := range s.Latent {
 		delta := (z - means[i]) / math.Exp(p.file.LogStd[i])
 		lp += -.5*delta*delta - p.file.LogStd[i] - .5*math.Log(2*math.Pi)
 	}
@@ -349,6 +359,12 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		}
 	}
 	for i := range s.Latent {
+		if i == 2 {
+			means, e = p.sampledMotionAimMeans(o, x, means, [2]float64{s.Latent[0], s.Latent[1]}, s.Target, s.AimMode)
+			if e != nil {
+				return Action{}, e
+			}
+		}
 		s.Latent[i] = means[i]
 		if !p.file.Deterministic {
 			s.Latent[i] += math.Exp(p.file.LogStd[i]) * p.rng.NormFloat64()

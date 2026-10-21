@@ -8,6 +8,10 @@ if($ep.recipe.runner -ne 'combat-baseline' -or $Mode -notin $task.modes){throw '
 $argsMap=@{OutputRoot=$OutputRoot;Workers=1;EpisodesPerWorker=1;Timescale=2;GameFrames=$ep.game_frames;Seed=$seed;Port=$Port;Skill=$ep.skill;CombatMode=$Mode;Loadout=$ep.recipe.loadout;Synchronous=$true;StopOnGoal=$true;StopOnFirstDeath=$true;ReleaseGameFrame=100;RewardConfig=(Join-Path $repo $ep.recipe.reward_config)}
 if($BinaryBundle){$argsMap.BinaryBundle=$BinaryBundle}
 if($schedule.checked_wall_slide){$argsMap.CheckedWallSlide=$true}
+if($schedule.diagnostic_nominal_aim){
+    if($Mode -ne 'learned' -or $task.split -eq 'train'){throw 'Diagnostic aim is learned evaluation only'}
+    $argsMap.DiagnosticNominalAim=$true
+}
 if($null -ne $schedule.policy_sampling_seed_offset){$argsMap.PolicySamplingSeedOffset=[long]$schedule.policy_sampling_seed_offset}
 if($Mode -eq 'learned'){
     if((Get-FileHash $schedule.model_path).Hash.ToLowerInvariant() -ne $schedule.model_sha256){throw 'Frozen model changed'}

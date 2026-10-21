@@ -15,11 +15,12 @@ import (
 // separate section so ordinary companion settings stay easy to read.
 type ConfigFile struct {
 	Combat struct {
-		Mode               string `json:"mode"`
-		ProviderFile       string `json:"provider_file"`
-		ActionQualityGuard bool   `json:"action_quality_guard,omitempty"`
-		CheckedWallSlide   bool   `json:"checked_wall_slide,omitempty"`
-		LiveCompanion      bool   `json:"live_companion,omitempty"`
+		Mode                 string `json:"mode"`
+		ProviderFile         string `json:"provider_file"`
+		ActionQualityGuard   bool   `json:"action_quality_guard,omitempty"`
+		CheckedWallSlide     bool   `json:"checked_wall_slide,omitempty"`
+		DiagnosticNominalAim bool   `json:"diagnostic_nominal_aim,omitempty"`
+		LiveCompanion        bool   `json:"live_companion,omitempty"`
 	} `json:"combat"`
 	Server struct {
 		Host string `json:"host"`
@@ -229,6 +230,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.CombatMode, cfg.CombatProviderFile = file.Combat.Mode, resolve(file.Combat.ProviderFile)
 	cfg.CombatActionQualityGuard = file.Combat.ActionQualityGuard
 	cfg.CombatCheckedWallSlide = file.Combat.CheckedWallSlide
+	cfg.CombatDiagnosticNominalAim = file.Combat.DiagnosticNominalAim
 	cfg.CombatLiveCompanion = file.Combat.LiveCompanion
 	cfg.TestCampaignCombatEvaluation = file.Test.CampaignCombatEvaluation
 	cfg.Idle, cfg.ExitOnReconnect = file.Test.Idle, file.Test.ExitOnReconnect

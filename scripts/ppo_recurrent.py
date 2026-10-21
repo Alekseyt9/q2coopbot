@@ -189,7 +189,7 @@ def main():
     def likelihood(raw,std,z,attack,vertical,weapon,mask):
         if mode is not None:
             from combat_precision_head import probabilities as precision_probabilities
-            return precision_probabilities(raw,std,z,attack,vertical,weapon,x,target,mode)
+            return precision_probabilities(raw,std,z,attack,vertical,weapon,x,target,mode,getattr(actor,'sampled_motion_aim_branch',None))
         if target_head:
             from combat_target_head import probabilities as target_probabilities
             return target_probabilities(raw,std,z,attack,vertical,weapon,x,target)
@@ -216,8 +216,14 @@ def main():
         seq_teacher, seq_std = raw.detach().clone(), std.detach().clone()
         sequence_retention = dict(version=seq_spec['version'],spec_sha256=sha(args.sequence_retention_spec),
             weight=args.sequence_retention_weight,rows=len(positions),behavior_sha256=sha(args.model))
+        motion_branch=getattr(actor,'sampled_motion_aim_branch',None)
+        teacher_motion=copy.deepcopy(motion_branch) if motion_branch is not None else None
+        if teacher_motion is not None:
+            for parameter in teacher_motion.parameters():parameter.requires_grad_(False)
+            sequence_retention['conditional_motion_expectation']='fixed_behavior_move_per_history_v1'
         def sequence_loss(current):
-            terms = policy_kl(current[seq_positions],std,seq_teacher[seq_positions],seq_std,x[seq_positions])
+            terms = policy_kl(current[seq_positions],std,seq_teacher[seq_positions],seq_std,x[seq_positions],
+                              motion_branch,teacher_motion,z[seq_positions,:2].detach())
             return (terms * seq_weights).sum()
     bank_tensors={}
     if args.retention_weight or args.bank_weight:
@@ -324,6 +330,11 @@ def main():
     if sequence_retention:
         report['scope']+=' Sequence retention uses pinned train-only rows and frozen initial actor on actual full histories; target/weapon masks and all aim branches included. No zero-memory anchor or validation bank.'
     report['scope']=report['scope'].replace('No learned weapon choice or live promotion.','Masked weapon likelihood enabled only with the explicit V6 weapon head; weapon learning acceptance and live promotion are not established.')
+    if model.get('sampled_motion_aim'):
+        report['sampled_motion_aim']=dict(version=model['sampled_motion_aim']['version'],
+            joint_likelihood='target_mode_move_conditional_aim_v1',
+            conditional_retention_expectation='fixed_behavior_move_per_history_v1' if sequence_retention else None)
+        report['scope']='Fresh on-policy full-actor/critic CUDA PPO with sampled-motion conditional aim likelihood. Native eligible train rows, actual temporal histories, availability masks and guards as environment execution. Conditional retention uses fixed behavior movement draws. No automatic model promotion or campaign/coop acceptance.'
     durable_json(args.out/'report.json',report)
     durable_json(args.out/'complete.json',{'version':'combat_update_complete_v1','weights_sha256':sha(args.out/'weights.json'),'checkpoint_sha256':sha(args.out/'checkpoint.pt'),'report_sha256':sha(args.out/'report.json')})
     print(json.dumps(report,indent=2))

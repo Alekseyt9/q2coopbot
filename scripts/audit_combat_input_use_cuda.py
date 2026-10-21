@@ -54,11 +54,13 @@ def main():
                                           ('weapon','target','aim_mode') else r['sample'][name]
                                           for r in rows],device='cuda',dtype=dtype)
     with torch.no_grad():
-        old,state_error=sequence(build(behavior),prepared,check_states=True)
+        behavior_actor=build(behavior)
+        old,state_error=sequence(behavior_actor,prepared,check_states=True)
         old_std=torch.tensor(behavior['log_std'],device='cuda')
         lp,_=probabilities(old,old_std,sample('latent',torch.float32),sample('attack',torch.float32),
                            sample('vertical',torch.long),sample('weapon',torch.long),features,
-                           sample('target',torch.long),sample('aim_mode',torch.long))
+                           sample('target',torch.long),sample('aim_mode',torch.long),
+                           getattr(behavior_actor,'sampled_motion_aim_branch',None))
         log_error=float((lp-sample('log_probability',torch.float32)).abs().max())
         assert state_error<2e-5 and log_error<.003,(state_error,log_error)
         actor=build(model);std=torch.tensor(model['log_std'],device='cuda')

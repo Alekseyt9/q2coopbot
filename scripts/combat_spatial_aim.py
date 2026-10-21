@@ -68,6 +68,8 @@ class SpatialActor(nn.Module):
         from combat_weapon_exploration import validate as validate_exploration
         if model is not None:validate_exploration(model)
         self.weapon_exploration=model.get('weapon_exploration') if model is not None else None
+        from combat_sampled_motion_aim import build as build_motion
+        self.sampled_motion_aim_branch=build_motion(model) if model is not None else None
     def forward(self,x,*args,**kwargs):
         output=self.base(x,*args,**kwargs)
         raw=output[0] if isinstance(output,tuple) else output
@@ -103,3 +105,5 @@ def export(model,actor):
         export_target(model,actor.target_branch)
         from combat_weapon_state_residual import export as export_weapon
         export_weapon(model,actor.weapon_state_branch)
+        from combat_sampled_motion_aim import export as export_motion
+        export_motion(model,actor.sampled_motion_aim_branch)

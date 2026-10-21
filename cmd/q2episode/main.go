@@ -27,6 +27,7 @@ func run() error {
 	model := flag.String("model", "", "frozen PPO weights for learned")
 	count := flag.Int("count", 4, "episodes per descriptor, 1..80 (cohort scheduler requires multiples of four)")
 	checkedWallSlide := flag.Bool("checked-wall-slide", false, "experimental checked wall-slide combat guard")
+	diagnosticNominalAim := flag.Bool("diagnostic-nominal-aim", false, "evaluation-only observed-target aiming intervention, not a learned controller")
 	offset := flag.Int("seed-offset", 0, "offset inside the registered split")
 	root := flag.String("root", ".", "repository root")
 	out := flag.String("out", "", "fresh execution plan JSON")
@@ -92,6 +93,10 @@ func run() error {
 		return err
 	}
 	p.CheckedWallSlide = *checkedWallSlide
+	p.DiagnosticNominalAim = *diagnosticNominalAim
+	if p.DiagnosticNominalAim && (*split == "train" || *mode != "learned") {
+		return fmt.Errorf("diagnostic nominal aim requires learned evaluation split")
+	}
 	f, err := os.OpenFile(*out, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
 		return err

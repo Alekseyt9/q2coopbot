@@ -109,6 +109,9 @@ def main():
             if variant.get('checked_wall_slide',False):
                 assert variant['mode']=='learned' and variant['checked_wall_slide'] is True
                 command += ['--checked-wall-slide']
+            if variant.get('diagnostic_nominal_aim', False):
+                assert variant['mode'] == 'learned' and variant['diagnostic_nominal_aim'] is True
+                command += ['--diagnostic-nominal-aim']
             run('plan-'+label, command); plans.append(plan)
         frozen = [read(p) for p in plans]; tasks = frozen[0]['tasks']
         assert len(tasks) == len(files)

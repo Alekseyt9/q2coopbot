@@ -255,6 +255,7 @@ type Plan struct {
 	OutputRoot               string `json:"output_root"`
 	PolicySamplingSeedOffset int64  `json:"policy_sampling_seed_offset,omitempty"`
 	CheckedWallSlide         bool   `json:"checked_wall_slide,omitempty"`
+	DiagnosticNominalAim     bool   `json:"diagnostic_nominal_aim,omitempty"`
 }
 
 func Build(r *Registry, root string, ids []string, split, mode, model, out string, count, offset int) (*Plan, error) {

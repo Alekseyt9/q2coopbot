@@ -57,6 +57,7 @@ def main():
     torch.backends.cudnn.allow_tf32 = False
     torch.backends.cuda.matmul.allow_tf32 = False
     before, after, meta = read(args.before), read(args.after), read(args.data / 'report.json')
+    assert not before.get('sampled_motion_aim') and not after.get('sampled_motion_aim'), 'This legacy head-KL audit assumes independent Gaussian aim'
     assert sha(args.before) == meta['model_sha256']
     assert before['feature_version'] == after['feature_version'] == meta['feature_version']
     assert before.get('target_head') == after.get('target_head') and before.get('target_head')

@@ -10,20 +10,21 @@ import (
 )
 
 type combatControl struct {
-	weaponRequests     weaponRequestHistory
-	actionQualityGuard bool
-	checkedWallSlide   bool
-	campaignEvaluation bool
-	engagement         combatEngagement
-	history            policy.History
-	threatMemory       policy.ThreatMemory
-	mode               string
-	provider           policy.Provider
-	last               policy.Identity
-	lastHealth         int16
-	life               int
-	previousTarget     *policy.TargetIntent
-	observation        *policy.Observation
+	weaponRequests       weaponRequestHistory
+	actionQualityGuard   bool
+	checkedWallSlide     bool
+	diagnosticNominalAim bool
+	campaignEvaluation   bool
+	engagement           combatEngagement
+	history              policy.History
+	threatMemory         policy.ThreatMemory
+	mode                 string
+	provider             policy.Provider
+	last                 policy.Identity
+	lastHealth           int16
+	life                 int
+	previousTarget       *policy.TargetIntent
+	observation          *policy.Observation
 }
 
 func (c *Client) combatObservation(now time.Time) policy.Observation {
@@ -132,6 +133,11 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 	var changes []policy.Intervention
 	if b.actionQualityGuard {
 		limited, changes = c.planner.guardLearnedCombatAim(o, c.planner.World.Snapshot, a, proposed)
+	}
+	if b.diagnosticNominalAim {
+		var diagnosticChanges []policy.Intervention
+		limited, diagnosticChanges = diagnosticNominalCombatAim(o, a, limited, c.planner.World.Snapshot.DeltaAngles)
+		changes = append(changes, diagnosticChanges...)
 	}
 	guarded, safetyChanges := c.planner.guardDirectCombatMotion(c.planner.World.Snapshot, limited, b.checkedWallSlide)
 	changes = append(changes, safetyChanges...)

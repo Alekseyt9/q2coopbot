@@ -52,6 +52,9 @@ def finalize(model_path, data, out):
         weapon_helpers.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
                               ('combat_weapon_exploration.py','combat_weapon_head.py','combat_spatial_aim.py'))
     sources.update({str(path):sha(path) for path in weapon_helpers})
+    if model.get('sampled_motion_aim'):
+        helper=pathlib.Path(__file__).with_name('combat_sampled_motion_aim.py').resolve()
+        sources[str(helper)]=sha(helper)
     for path, digest in sources.items():
         assert sha(path) == digest, 'Native source changed: ' + path
     rows = [json.loads(line) for line in (data / 'native-rollout.jsonl').read_text().splitlines()]
@@ -109,7 +112,8 @@ def finalize(model_path, data, out):
         predicted, critic_memory_error = evaluate(value, 'value')
         if model.get('aim_mode_head'):
             from combat_precision_head import probabilities
-            lp, _ = probabilities(raw, std, z, attack, vertical, weapon, x, target, mode)
+            lp, _ = probabilities(raw, std, z, attack, vertical, weapon, x, target, mode,
+                                  getattr(actor, 'sampled_motion_aim_branch', None))
         elif model.get('target_head'):
             from combat_target_head import probabilities
             lp, _ = probabilities(raw, std, z, attack, vertical, weapon, x, target)

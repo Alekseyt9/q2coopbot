@@ -27,7 +27,7 @@ def normal_kl(teacher, student, teacher_std, std):
             (2 * std.mul(2).exp()) - .5).sum(-1)
 
 
-def policy_kl(raw, std, teacher, teacher_std, features):
+def policy_kl(raw, std, teacher, teacher_std, features, motion_branch=None, teacher_motion_branch=None, movement=None):
     """KL(teacher || current), including all available targets and aim modes.
 
     Inputs are outputs from the same actual sequence histories. Target/mode
@@ -56,9 +56,32 @@ def policy_kl(raw, std, teacher, teacher_std, features):
     if raw.shape[1] == 81:
         mode_before, mode_after = previous[:,63:81].reshape(-1,9,2), current[:,63:81].reshape(-1,9,2)
         modes = mode_before.softmax(-1)
-        fine = normal_kl(previous[:,45:63].reshape(-1,9,2), current[:,45:63].reshape(-1,9,2),
-                         teacher_std[2:], std[2:])
-        per_target = categorical_kl(mode_before, mode_after) + modes[:,:,0] * coarse + modes[:,:,1] * fine
+        fine_before, fine_after = previous[:,45:63].reshape(-1,9,2), current[:,45:63].reshape(-1,9,2)
+        if motion_branch is not None or teacher_motion_branch is not None:
+            from combat_sampled_motion_aim import correction
+            assert movement is not None and movement.shape == (len(raw),2) and movement.is_cuda
+            assert bool(torch.isfinite(movement).all()) and not movement.requires_grad
+            # Fixed native behavior movement supplies one MC draw/history for
+            # E_teacher(move)[KL(teacher aim|move || current aim|move)]. Sum all
+            # targets/modes analytically. Never redraw during guarded retries.
+            targets=torch.arange(9,device=raw.device).repeat_interleave(2).repeat(len(raw))
+            stages=torch.tensor([0,1],device=raw.device).repeat(len(raw)*9)
+            expanded_x=features.repeat_interleave(18,dim=0)
+            expanded_move=movement.repeat_interleave(18,dim=0)
+            before_aim=torch.stack((coarse_before,fine_before),2)
+            after_aim=torch.stack((coarse_after,fine_after),2)
+            if teacher_motion_branch is not None:
+                with torch.no_grad():
+                    delta=correction(teacher_motion_branch,expanded_x,teacher.detach().repeat_interleave(18,dim=0),expanded_move,targets,stages)
+                before_aim=before_aim+delta.reshape(-1,9,2,2).double()
+            if motion_branch is not None:
+                delta=correction(motion_branch,expanded_x,raw.repeat_interleave(18,dim=0),expanded_move,targets,stages)
+                after_aim=after_aim+delta.reshape(-1,9,2,2).double()
+            conditional=normal_kl(before_aim,after_aim,teacher_std[2:],std[2:])
+            per_target=categorical_kl(mode_before,mode_after)+(modes*conditional).sum(-1)
+        else:
+            fine = normal_kl(fine_before,fine_after,teacher_std[2:],std[2:])
+            per_target = categorical_kl(mode_before, mode_after) + modes[:,:,0] * coarse + modes[:,:,1] * fine
     else:
         per_target = coarse
     terms = terms + (target_probs * per_target).sum(-1)

@@ -27,6 +27,7 @@ type Config struct {
 	CombatMode, CombatProviderFile      string
 	CombatActionQualityGuard            bool
 	CombatCheckedWallSlide              bool
+	CombatDiagnosticNominalAim          bool
 	CombatLiveCompanion                 bool
 	CombatCapture                       bool
 	TestCampaignCombatEvaluation        bool
@@ -146,6 +147,9 @@ func parseTestCampaignGoals(value string) ([]quake.Vec3, error) {
 }
 
 func Run(ctx context.Context, cfg Config) (runErr error) {
+	if cfg.CombatDiagnosticNominalAim && (!cfg.TestSynchronous || cfg.CombatMode != "learned" || !cfg.CombatCapture) {
+		return fmt.Errorf("diagnostic nominal aim requires captured synchronous learned fixture")
+	}
 	if cfg.CampaignLeader && !cfg.Campaign {
 		return fmt.Errorf("campaign leader requires campaign mode")
 	}
@@ -454,7 +458,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	defer conn.Close()
 	client := &Client{
-		combatControl:      combatControl{mode: cfg.CombatMode, provider: combatProvider, campaignEvaluation: naturalCombat, actionQualityGuard: cfg.CombatActionQualityGuard, checkedWallSlide: cfg.CombatCheckedWallSlide},
+		combatControl:      combatControl{mode: cfg.CombatMode, provider: combatProvider, campaignEvaluation: naturalCombat, actionQualityGuard: cfg.CombatActionQualityGuard, checkedWallSlide: cfg.CombatCheckedWallSlide, diagnosticNominalAim: cfg.CombatDiagnosticNominalAim},
 		combatCapture:      cfg.CombatCapture,
 		scenarioResultPath: cfg.TestScenarioResult, scenarioTailFrames: cfg.TestScenarioTailFrames,
 		scenario:                scenario,

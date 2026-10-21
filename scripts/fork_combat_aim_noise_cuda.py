@@ -1,6 +1,7 @@
 """Reduce only yaw/pitch Gaussian noise in a sealed CUDA checkpoint."""
 import argparse
 import copy
+import json
 import math
 import pathlib
 
@@ -52,8 +53,18 @@ def main():
     old_json, new_json = copy.deepcopy(model), copy.deepcopy(new)
     old_json.pop('log_std'); new_json.pop('log_std')
     assert old_json == new_json
-    rows, prepared = prepare_context(args.data)
+    meta = read(args.data/'report.json')
+    assert meta['model_sha256'] == seal['weights_sha256']
     pins[args.data/'report.json'] = sha(args.data/'report.json')
+    for name in ('rollout', 'sequence'):
+        p = args.data/(name+'.jsonl')
+        assert sha(p) == meta[name+'_sha256']
+        pins[p] = sha(p)
+    with (args.data/'rollout.jsonl').open(encoding='utf-8-sig') as stream:
+        rows = [json.loads(line) for line in stream]
+    with (args.data/'sequence.jsonl').open(encoding='utf-8-sig') as stream:
+        context = [json.loads(line) for line in stream]
+    prepared = prepare_context(context, rows, 'cuda')
     with torch.no_grad():
         a, ea = sequence(before, prepared, check_states=True)
         b, eb = sequence(after, prepared, check_states=True)
