@@ -242,7 +242,7 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 			return Action{}, 0, 0, fmt.Errorf("nonfinite latent")
 		}
 	}
-	means, e = p.sampledMotionAimMeans(o, x, means, [2]float64{s.Latent[0], s.Latent[1]}, s.Target, s.AimMode)
+	means, e = p.sampledMotionAimMeans(o, x, means, [2]float64{s.Latent[0], s.Latent[1]}, s.Target, s.AimMode, s.Vertical)
 	if e != nil {
 		return Action{}, 0, 0, e
 	}
@@ -358,16 +358,19 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 			return Action{}, err
 		}
 	}
+	verticalAim := p.file.SampledMotionAim != nil && p.file.SampledMotionAim.Version != SampledMotionAimVersion
+	var noise [4]float64
 	for i := range s.Latent {
-		if i == 2 {
-			means, e = p.sampledMotionAimMeans(o, x, means, [2]float64{s.Latent[0], s.Latent[1]}, s.Target, s.AimMode)
+		if i == 2 && !verticalAim {
+			means, e = p.sampledMotionAimMeans(o, x, means, [2]float64{s.Latent[0], s.Latent[1]}, s.Target, s.AimMode, 0)
 			if e != nil {
 				return Action{}, e
 			}
 		}
 		s.Latent[i] = means[i]
 		if !p.file.Deterministic {
-			s.Latent[i] += math.Exp(p.file.LogStd[i]) * p.rng.NormFloat64()
+			noise[i] = math.Exp(p.file.LogStd[i]) * p.rng.NormFloat64()
+			s.Latent[i] += noise[i]
 		}
 	}
 	s.Attack = x[4] >= 0
@@ -417,6 +420,15 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 				}
 			}
 		}
+	}
+	if verticalAim {
+		// Draw noises in legacy order, then finalize aim with selected vertical.
+		// Add the stored noise to the final mean once, avoiding subtract/add drift.
+		means, e = p.sampledMotionAimMeans(o, x, means, [2]float64{s.Latent[0], s.Latent[1]}, s.Target, s.AimMode, s.Vertical)
+		if e != nil {
+			return Action{}, e
+		}
+		s.Latent[2], s.Latent[3] = means[2]+noise[2], means[3]+noise[3]
 	}
 	a, lp, value, e := p.Review(o, s)
 	if e != nil {

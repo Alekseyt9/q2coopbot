@@ -8,7 +8,7 @@ import pathlib
 from ppo_recurrent import torch, nn, prepare_context, sequence, durable_json, durable_write
 from migrate_combat_navigation_cuda import branch
 from combat_precision_head import selected_means
-from combat_sampled_motion_aim import correction, export, VERSION
+from combat_sampled_motion_aim import correction, export, VERTICAL_CONTROL_VERSION, uses_vertical
 from combat_sequence_retention import policy_kl
 from combat_weapon_state_residual import optimizer
 from fork_conditional_weapon_exploration_cuda import equal_tree
@@ -47,7 +47,21 @@ def main():
     meta=read(pin(args.labels/'report.json'));assert meta['state']=='complete' and not meta['training_performed']
     for binding in meta['inputs']:pin(binding['path'],binding['sha256'])
     corpus=pathlib.Path(meta['corpus'])
-    assert read(corpus/'protocol.json')['source']==str(args.source.resolve())
+    history_source=pathlib.Path(read(pin(corpus/'protocol.json'))['source'])
+    history_seal=read(pin(history_source/'complete.json'))
+    history_sha=history_seal['weights_sha256']
+    if history_source.resolve()!=args.source.resolve():
+        migration=read(args.source/'report.json')
+        assert uses_vertical(module) and migration['zero_column_migration'] and not migration['training_performed']
+        assert pathlib.Path(migration['history_source']).resolve()==history_source.resolve()
+        assert migration['history_source_weights_sha256']==history_sha
+        for binding in migration['inputs']:pin(binding['path'],binding['sha256'])
+        original=read(pin(history_source/'weights.json',history_sha));expected=copy.deepcopy(original)
+        expected['sampled_motion_aim']['version']=model['sampled_motion_aim']['version']
+        for row in expected['sampled_motion_aim']['layers'][0]['weight']:row.extend([0.,0.,0.])
+        assert expected==model, 'Only an exact zero-column migration may reuse source histories'
+    else:
+        assert history_sha==seal['weights_sha256']
     std=torch.tensor(model['log_std'],dtype=torch.float32,device='cuda')
     datasets={};seen=set()
     with torch.no_grad():
@@ -55,7 +69,7 @@ def main():
             info=meta['splits'][split]
             with gzip.open(pin(info['output'],info['sha256']),'rt',encoding='utf-8') as stream:labels=list(map(json.loads,stream))
             root=corpus/('processing-'+split)/'merged';report=read(pin(root/'report.json'))
-            assert report['model_sha256']==seal['weights_sha256']
+            assert report['model_sha256']==history_sha
             content={}
             for name in ('rollout','sequence'):
                 path=pin(root/(name+'.jsonl'),report[name+'_sha256'])
@@ -65,6 +79,7 @@ def main():
             raw,error=sequence(actor,prepared,check_states=True);assert error<2e-5
             x=torch.tensor([r['features'] for r in rows],dtype=torch.float32,device='cuda')
             movement=torch.tensor([r['sample']['latent'][:2] for r in rows],dtype=torch.float32,device='cuda')
+            vertical=torch.tensor([r['sample']['vertical'] for r in rows],dtype=torch.long,device='cuda')
             positions={(r['seed'],r['index']):i for i,r in enumerate(rows)}
             selected=[];excluded=0
             for label in labels:
@@ -85,14 +100,14 @@ def main():
             # Pin a deterministic subset of TRAIN histories for retention. Dev
             # histories are evaluated only and never enter loss or selection.
             stride=max(1,(len(rows)+511)//512);reg=torch.arange(0,len(rows),stride,device='cuda')
-            datasets[split]=dict(x=x[ix],raw=raw[ix],movement=movement[ix],target=target,mode=mode,
+            datasets[split]=dict(x=x[ix],raw=raw[ix],movement=movement[ix],vertical=vertical[ix],target=target,mode=mode,
                 baseline=baseline,desired=desired,desired_latent=torch.atanh(desired/scale),scale=scale,
                 regularizer_x=x[reg],regularizer_raw=raw[reg],regularizer_movement=movement[reg],
                 regularizer_keys=[(rows[i]['seed'],rows[i]['index']) for i in range(0,len(rows),stride)],
                 samples=len(selected),excluded=excluded,rows=len(rows))
 
     def prediction(d):
-        residual=correction(module,d['x'],d['raw'],d['movement'],d['target'],d['mode'])
+        residual=correction(module,d['x'],d['raw'],d['movement'],d['target'],d['mode'],d['vertical'])
         return d['baseline']+residual
     def retention(d):
         raw=d['regularizer_raw']
@@ -112,6 +127,8 @@ def main():
         if step in (10,30,args.steps):
             with torch.no_grad():trajectory.append(dict(step=step,**{s:metrics(d) for s,d in datasets.items()}))
     updated=copy.deepcopy(model);export(updated,module)
+    if model['sampled_motion_aim']['version']==VERTICAL_CONTROL_VERSION:
+        assert not bool(module[0].weight[:,125:].any()), 'Ablated columns must remain frozen at zero'
     a,b=copy.deepcopy(model),copy.deepcopy(updated);a.pop('sampled_motion_aim');b.pop('sampled_motion_aim');assert a==b
     for name,tensor in cp['actor'].items():
         if not name.startswith('sampled_motion_aim_branch.'):assert torch.equal(tensor,actor.state_dict()[name])
@@ -121,7 +138,9 @@ def main():
     ppo_opt.load_state_dict(copy.deepcopy(cp['actor_optimizer']))
     for p in module.parameters():ppo_opt.state.pop(p,None)
     args.out.mkdir(parents=True);durable_json(args.out/'weights.json',updated)
-    receipt=dict(state='complete',device='cuda',version=VERSION,training_performed=True,promotion=False,
+    receipt=dict(state='complete',device='cuda',version=model['sampled_motion_aim']['version'],training_performed=True,promotion=False,
+        history_source=str(history_source.resolve()),history_source_weights_sha256=history_sha,
+        vertical_columns_norm=float(module[0].weight[:,125:].norm()) if uses_vertical(module) else None,
         source_weights_sha256=seal['weights_sha256'],source_checkpoint_sha256=seal['checkpoint_sha256'],
         steps=args.steps,learning_rate=args.learning_rate,retention_weight=args.retention_weight,
         trainable_parameters=sum(p.numel() for p in module.parameters()),gpu=torch.cuda.get_device_name(0),

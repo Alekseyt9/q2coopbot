@@ -331,9 +331,11 @@ def main():
         report['scope']+=' Sequence retention uses pinned train-only rows and frozen initial actor on actual full histories; target/weapon masks and all aim branches included. No zero-memory anchor or validation bank.'
     report['scope']=report['scope'].replace('No learned weapon choice or live promotion.','Masked weapon likelihood enabled only with the explicit V6 weapon head; weapon learning acceptance and live promotion are not established.')
     if model.get('sampled_motion_aim'):
+        from combat_sampled_motion_aim import VERSION as motion_v1
+        vertical_conditioned=model['sampled_motion_aim']['version']!=motion_v1
         report['sampled_motion_aim']=dict(version=model['sampled_motion_aim']['version'],
-            joint_likelihood='target_mode_move_conditional_aim_v1',
-            conditional_retention_expectation='fixed_behavior_move_per_history_v1' if sequence_retention else None)
+            joint_likelihood='target_mode_move_vertical_conditional_aim_v2' if vertical_conditioned else 'target_mode_move_conditional_aim_v1',
+            conditional_retention_expectation=('fixed_behavior_move_exact_target_mode_vertical_v2' if vertical_conditioned else 'fixed_behavior_move_per_history_v1') if sequence_retention else None)
         report['scope']='Fresh on-policy full-actor/critic CUDA PPO with sampled-motion conditional aim likelihood. Native eligible train rows, actual temporal histories, availability masks and guards as environment execution. Conditional retention uses fixed behavior movement draws. No automatic model promotion or campaign/coop acceptance.'
     durable_json(args.out/'report.json',report)
     durable_json(args.out/'complete.json',{'version':'combat_update_complete_v1','weights_sha256':sha(args.out/'weights.json'),'checkpoint_sha256':sha(args.out/'checkpoint.pt'),'report_sha256':sha(args.out/'report.json')})

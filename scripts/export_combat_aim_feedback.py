@@ -12,6 +12,7 @@ from process_combat_architecture_pool import read, save, sha
 from report_combat_machinegun_hits import FIRE, fields, scan, vector
 from report_combat_machinegun_aim import angular, measure
 from report_combat_selected_target_aim import wrap
+from native_combat_release import release_boundary
 
 POSE = re.compile(r'^sv_test_aim_pose spawncount=(-?\d+) server_frame=(\d+) g_test_aim_pose version=1 (.*)$')
 
@@ -135,6 +136,9 @@ def main():
         pins[str(path)] = digest
         return path
 
+    for name in ('native_combat_release.py','native_projectile_window.py','report_combat_machinegun_hits.py','report_combat_machinegun_aim.py'):
+        pin(pathlib.Path(__file__).with_name(name))
+
     seal = read(pin(root/'complete.json'))
     assert seal['state'] == 'complete' and not seal['training_performed']
     protocol = read(pin(root/'protocol.json', seal['protocol_sha256']))
@@ -170,19 +174,23 @@ def main():
                     capture = read(pin(pathlib.Path(job['root'])/'report.json'))
                     assert capture['capture_complete'] and capture['provenance_valid'] and len(capture['results']) == 1
                     log = pin(pathlib.Path(capture['results'][0]['root'])/'server.log')
+                    manifest = read(pin(pathlib.Path(job['root'])/'manifest.json'))
+                    with log.open(encoding='utf-8-sig') as stream:
+                        generation, release, _ = release_boundary(stream, manifest, seed)
                     raw = pin(directory/'native/replay-0/steps.jsonl')
                     replay = pin(directory/'cuda/rollout.jsonl')
                     by_index = {r['index']: r for r in map(json.loads, replay.read_text(encoding='utf-8-sig').splitlines())}
                     windows = {}
                     for step in map(json.loads, raw.read_text(encoding='utf-8-sig').splitlines()):
                         n = step.get('native_step'); o = step['observation']; execution = step.get('server_execution', {})
-                        if not (step['owner'] == 'provider' and n and o['identity']['life'] == 1 and o['identity']['frame'] > 100 and o['health'] > 0
+                        if not (step['owner'] == 'provider' and n and o['identity']['life'] == 1 and o['identity']['frame'] >= release and o['health'] > 0
                                 and execution.get('matched') and execution.get('window_exclusive') and not execution.get('recovery_commands')):
                             continue
                         row = by_index[step['index']]
                         assert row['seed'] == seed and row['frame'] == o['identity']['frame'] and row['sample'] == step['sample']
                         assert len(row['features']) == 1147 and all(math.isfinite(x) for x in row['features'])
                         assert n['spawncount'] == o['identity']['spawncount'] and n['actor'] == o['identity']['actor']
+                        assert n['spawncount'] == generation
                         key = (n['spawncount'], n['begin_frame'], n['actor'], n['sequence'])
                         assert key not in windows; windows[key] = (step, row)
                     with log.open(encoding='utf-8-sig') as stream:
@@ -203,7 +211,7 @@ def main():
                             counters['selected_target_without_living_native_pose'] += 1; continue
                         item = label(shot, pose, step); labels.append(item)
                         counters['labelled_shots'] += 1
-                        output.write(json.dumps(dict(version='combat_aim_feedback_labels_v1', split=split,
+                        output.write(json.dumps(dict(version='combat_aim_feedback_labels_v2', split=split,
                             seed=seed, index=row['index'], frame=row['frame'], native_window=shot['window'],
                             native_shot=int(shot['fields']['shot']), features=row['features'], sample=row['sample'],
                             offline_label=item), separators=(',', ':'), allow_nan=False)+'\n')
@@ -212,9 +220,9 @@ def main():
                 coverage=summarize(labels), output=str(destination), sha256=sha(destination))
         for path, digest in pins.items():
             assert sha(path) == digest, 'Input changed during export'
-        save(out/'report.json', dict(state='complete', version='combat_aim_feedback_labels_v1',
+        save(out/'report.json', dict(state='complete', version='combat_aim_feedback_labels_v2',
             corpus=str(root), inputs=[dict(path=p, sha256=h) for p, h in pins.items()], splits=summaries,
-            script_sha256=sha(__file__), training_performed=False, promotion=False,
+            script_sha256=sha(__file__), release_boundary='native_start_network_frame_v1', training_performed=False, promotion=False,
             scope='Exact native MG shot-time living target pose, joined only to explicitly selected observed entity/track and exclusive command. Original 1147 client features only; native labels separate. Nominal body-point geometry is not a visibility guarantee or an optimal-action teacher. No spread cancellation. Development is not final evaluation.'))
         print(json.dumps({k: dict(cases=v['cases'], counts=v['counts'], coverage=v['coverage']) for k, v in summaries.items()}))
     except BaseException as error:

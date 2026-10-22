@@ -106,7 +106,8 @@ def main():
         variants=variants, inputs=[dict(path=str(p), sha256=d) for p, d in pins.items()],
         script_sha256=sha(__file__), helper_sha256=sha(pathlib.Path(__file__).with_name('report_combat_machinegun_aim.py')),
         training_performed=False, promotion=False,
-        scope='Native MG shot rays joined by exclusive command windows to the explicitly selected client-observed bbox. No nearest-enemy substitution, new neural execution, hidden-state inputs, counterfactual or fitting. Geometry errors are descriptive relative to an observed target pose, not full ballistic accuracy. Unavailable/undeclared targets remain separate statuses.'))
+        direction_semantics='native_input_aim_before_integer_degree_vectoangles_and_spread',
+        scope='Native MG input aim joined by exclusive command windows to the explicitly selected client-observed bbox. fire_lead subsequently truncates angles to integer degrees and applies spread; these angular errors are not final ballistic-ray accuracy. No nearest-enemy substitution, new neural execution, hidden-state inputs, counterfactual or fitting. Unavailable/undeclared targets remain separate statuses.'))
     print('Registered MG aim:', len(variants), 'variants')
 
 

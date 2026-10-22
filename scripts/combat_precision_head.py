@@ -46,22 +46,22 @@ def mode_distribution(raw,target):
     logits=raw[:,MODE_OFFSET:].reshape(-1,9,2).gather(1,target[:,None,None].expand(-1,1,2))[:,0,:]
     return torch.distributions.Categorical(logits=logits)
 
-def selected_means(raw,target,mode,features=None,movement=None,motion_branch=None):
+def selected_means(raw,target,mode,features=None,movement=None,motion_branch=None,vertical=None):
     coarse=coarse_means(raw[:,:45],target)
     if mode.shape!=(len(raw),) or mode.dtype!=torch.long or not bool(((mode==0)|(mode==1)).all()):raise ValueError('Invalid aim mode')
     fine=raw[:,FINE_OFFSET:MODE_OFFSET].reshape(-1,9,2).gather(1,target[:,None,None].expand(-1,1,2))[:,0,:]
     aim=torch.where(mode[:,None]==1,fine,coarse[:,2:4])
     if motion_branch is not None:
         from combat_sampled_motion_aim import correction
-        aim=aim+correction(motion_branch,features,raw,movement,target,mode)
+        aim=aim+correction(motion_branch,features,raw,movement,target,mode,vertical)
     return torch.cat((coarse[:,:2],aim),1)
 
 def probabilities(raw,std,z,attack,vertical,weapon,features,target,mode,motion_branch=None):
     choice=targets(raw[:,:45],features);stage=mode_distribution(raw,target)
     if not bool(torch.isfinite(choice.log_prob(target)).all()):raise ValueError('Unavailable selected target')
-    # Joint likelihood: P(target,mode) P(move) P(aim|move,target,mode).
+    # Joint likelihood includes P(vertical) and P(aim|move,target,mode,vertical).
     # The recorded pre-tanh movement is fixed when evaluating a PPO sample.
-    means=selected_means(raw,target,mode,features,z[:,:2],motion_branch);common=torch.cat((means,raw[:,4:20]),1)
+    means=selected_means(raw,target,mode,features,z[:,:2],motion_branch,vertical);common=torch.cat((means,raw[:,4:20]),1)
     lp,entropy=common_probabilities(common,std,z,attack,vertical,weapon,feature_mask(features[:,:845]))
     return lp+choice.log_prob(target)+stage.log_prob(mode),entropy+choice.entropy()+stage.entropy()
 

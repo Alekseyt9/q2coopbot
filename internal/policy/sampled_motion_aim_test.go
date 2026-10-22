@@ -23,6 +23,23 @@ func TestSampledMotionAimContract(t *testing.T) {
 	if err := validateSampledMotionAim(makeFile()); err != nil {
 		t.Fatal(err)
 	}
+	for _, version := range []string{SampledVerticalAimVersion, SampledVerticalControlVersion} {
+		f := makeFile()
+		f.SampledMotionAim.Version = version
+		if validateSampledMotionAim(f) == nil {
+			t.Fatal("accepted vertical model without its three input channels")
+		}
+		for r := range f.SampledMotionAim.Layers[0].Weight {
+			f.SampledMotionAim.Layers[0].Weight[r] = append(f.SampledMotionAim.Layers[0].Weight[r], 0, 0, 0)
+		}
+		if err := validateSampledMotionAim(f); err != nil {
+			t.Fatal(version, err)
+		}
+		f.SampledMotionAim.Version = SampledMotionAimVersion
+		if validateSampledMotionAim(f) == nil {
+			t.Fatal("accepted v1 with vertical width")
+		}
+	}
 	for _, mutate := range []func(*PPOFile){
 		func(f *PPOFile) { f.Features = TargetFeatureVersion },
 		func(f *PPOFile) { f.SpatialAim = nil },

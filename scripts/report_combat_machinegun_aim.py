@@ -1,4 +1,4 @@
-"""Compare real shot rays to the explicitly chosen client-observed target."""
+"""Compare native MG input aim to chosen observed target, before fire_lead quantization/spread."""
 import argparse,collections,json,math,pathlib
 from process_combat_architecture_pool import read,save,sha
 from report_combat_machinegun_hits import scan,vector
