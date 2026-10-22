@@ -113,7 +113,7 @@ def main():
     ap.add_argument('--sequence-retention-weight',type=float,default=0.)
     ap.add_argument('--fork-sequence-retention',action='store_true',
                     help='Explicit objective fork preserving actor/critic/Adam for sequence retention')
-    ap.add_argument('--actor-head-scope',choices=('all','target','decisions','conditional-aim','movement','motor-residual'),default='all')
+    ap.add_argument('--actor-head-scope',choices=('all','target','decisions','conditional-aim','movement','motor-residual','base-only'),default='all')
     ap.add_argument('--target-head-lr',type=float,default=.003)
     ap.add_argument('--decision-head-lr',type=float,default=.003)
     ap.add_argument('--movement-head-lr',type=float,default=.00003)
@@ -174,12 +174,12 @@ def main():
         (args.out/'weights.json').write_text(json.dumps(updated,allow_nan=False))
         return
     config=read(args.config);meta=read(args.data/'report.json');validate_objective(config,meta)
-    assert args.actor_head_scope in ('all','conditional-aim','movement','motor-residual') or (target_head and not args.sequence_retention_spec)
-    assert args.actor_head_scope!='motor-residual' or model.get('motor_residual')
+    assert args.actor_head_scope in ('all','conditional-aim','movement','motor-residual','base-only') or (target_head and not args.sequence_retention_spec)
+    assert args.actor_head_scope not in ('motor-residual','base-only') or model.get('motor_residual')
     assert args.actor_head_scope!='movement' or target_head
     assert args.actor_head_scope != 'conditional-aim' or model.get('sampled_motion_aim'), 'Conditional aim scope requires the sampled-motion branch'
     assert args.actor_head_scope != 'decisions' or weapon_head, 'Decision scope requires the masked weapon head'
-    actor_training=dict(scope=args.actor_head_scope,learning_rate={'target':args.target_head_lr,'decisions':args.decision_head_lr,'all':config['actor_lr'],'conditional-aim':config['actor_lr'],'movement':args.movement_head_lr,'motor-residual':config['actor_lr']}[args.actor_head_scope])
+    actor_training=dict(scope=args.actor_head_scope,learning_rate={'target':args.target_head_lr,'decisions':args.decision_head_lr,'all':config['actor_lr'],'conditional-aim':config['actor_lr'],'movement':args.movement_head_lr,'motor-residual':config['actor_lr'],'base-only':config['actor_lr']}[args.actor_head_scope])
     if model.get('motor_residual'):
         from combat_motor_residual import validate as validate_motor,VERSION as MOTOR_VERSION
         validate_motor(model);assert math.isfinite(args.motor_lr) and 0<args.motor_lr<=.01
@@ -187,7 +187,7 @@ def main():
     if model.get('weapon_state_residual'):
         from combat_weapon_state_residual import validate as validate_weapon_state,CONTRACT_VERSION
         validate_weapon_state(model)
-        assert args.actor_head_scope in ('all','conditional-aim','movement','motor-residual'), 'Observed weapon residual requires an explicit supported actor scope'
+        assert args.actor_head_scope in ('all','conditional-aim','movement','motor-residual','base-only'), 'Observed weapon residual requires an explicit supported actor scope'
         assert math.isfinite(args.weapon_state_lr) and 0<args.weapon_state_lr<=.01
         actor_training['weapon_state_residual']=dict(version=CONTRACT_VERSION,learning_rate=args.weapon_state_lr)
     assert meta['feature_version']==model['feature_version'], 'Rollout feature contract differs'
@@ -362,9 +362,9 @@ def main():
     elif args.actor_head_scope == 'conditional-aim':
         from combat_conditional_aim_scope import freeze_conditional_aim
         project,trainable_actor_parameters=freeze_conditional_aim(actor,std,actor_opt)
-    elif args.actor_head_scope=='motor-residual':
+    elif args.actor_head_scope in ('motor-residual','base-only'):
         from combat_motor_residual import freeze_scope
-        project,trainable_actor_parameters=freeze_scope(actor,std,actor_opt)
+        project,trainable_actor_parameters=freeze_scope(actor,std,actor_opt,args.actor_head_scope=='motor-residual')
     credit_stats=None
     if args.critic_credit=='mc-before':
         from combat_critic_credit import fit,reestimate
@@ -468,6 +468,7 @@ def main():
         report['motor_residual']=actor_training['motor_residual']
         report['scope']+=' Observed motor residual uses a separate Adam group and stable base reference for conditional aim.'
         if args.actor_head_scope=='motor-residual':report['scope']+=' Only motor branch parameters train; existing actor/std parameters and Adam states are projected unchanged.'
+        if args.actor_head_scope=='base-only':report['scope']+=' Only the original actor/std train; the new motor branch and its Adam states are projected unchanged.'
     durable_json(args.out/'report.json',report)
     durable_json(args.out/'complete.json',{'version':'combat_update_complete_v1','weights_sha256':sha(args.out/'weights.json'),'checkpoint_sha256':sha(args.out/'checkpoint.pt'),'report_sha256':sha(args.out/'report.json')})
     print(json.dumps(report,indent=2))

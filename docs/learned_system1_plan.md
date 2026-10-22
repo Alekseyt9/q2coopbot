@@ -758,3 +758,11 @@ Joint mobile probe закрыт32native/24CUDA:heads6/8,source5/8,encoder4/8,mob
 
 
 22.10 [motor residual core](testing/combat_motor_residual_20261022.md) реализован вGo/CUDA:756→64→32→2,50594params,observed raw geometry/type/navigation/memory; stable base reference сохраняет actual-move aim conditioning. CUDA zero/nonzero migration2496histories прошла,старыеactor/value/Adam/RNG/IDs сохранены,новаяgroup пустая. Native source/zero8cases +8CUDA:655providerframes canonicalinputs/commands/samples exact (modelversion отличается;fresh packet agejitter≤2ms втомжеvalidclass). PureGo layout test и6CUDA scope/reference tests passed. Запущен свежий corpus32TRAIN/16dev,flat+elevation,16 ×2,sourcezero;новаяветкаещёнеобучена,promotion=false.
+
+
+22.10 [motor-residual training](testing/combat_motor_training_20261022.md): корпус48native/48CUDA закрыт,4903TRAIN/2586dev,6deepdepartures сwarning. Matched full/motor-only CUDA fit по10actor/40critic,одинаковыеinitial/data/critic;frozen actor/std/numerical Adam exact (empty/uninitialized slots normalized),newgroup clocks+10. Motor-only mechanical gate passed:mean move shift0.005101 vsfull0.003262,nonmovement KL<1e-6,остальныеraw outputs exact. Запущен fresh32native/24CUDA source/full/motor/rules smoke,offset728,16 ×2;quality unknown,promotion=false.
+
+
+22.10 motor smoke закрыт32native/24CUDA:source4/8,full5/8,motor-only4/8,rules5/8;motor-only не продвигается. [Architecture control](testing/combat_motor_architecture_ablation_20261022.md): base-only fit на том жеTRAIN,новаяветка frozen;40native/32CUDA fresh probe source3/8,base3/8,full5/8,motor4/8,rules5/8. Full2gained/0lost кbase,смерти0vs3,положительныймалыйсигналсовместногообучения. Запущен fixed96native/72CUDA screen source/base/full/rules,24cases/variant,offset736–738,16 ×2,promotion=false. [Cold merged caches](testing/combat_cold_cache_retention_20261022.md):52точновосстановимыхдубликатаубраны,≈1.96GiBосвобождено,первичныеcasefiles/моделисохранены,restore roundtrip проверен.
+
+22.10: независимый motor screen96native/72CUDA закрыт,full9/24=source9/24,base7/24,rules15/24. Превосходство над rules не достигнуто,default не заменён. Следующий ограниченный опыт: [два раунда fresh own-policy motor PPO](testing/combat_motor_feedback_20261022.md),128TRAIN+40evaluation,CUDA-only,16 x2;запущен сбор,результатов ещё нет.

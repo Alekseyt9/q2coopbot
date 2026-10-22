@@ -7,6 +7,27 @@ from combat_sampled_motion_aim import correction
 
 
 class MotorTests(unittest.TestCase):
+    def test_base_scope_preserves_initialized_motor_state(self):
+        training_devices()
+        class Actor(nn.Module):
+            def __init__(self):
+                super().__init__();self.base=nn.Linear(2,2,device='cuda');self.motor_branch=nn.Linear(2,2,device='cuda')
+            def forward(self,x):return self.base(x)+self.motor_branch(x)
+        actor=Actor();std=nn.Parameter(torch.zeros(4,device='cuda'))
+        opt=torch.optim.Adam([*actor.parameters(),std],lr=.001);x=torch.ones(3,2,device='cuda')
+        (actor(x).sum()+std.sum()).backward();opt.step()
+        for state in opt.state.values():state['exp_avg'].fill_(100)
+        before={p:p.detach().clone() for p in actor.motor_branch.parameters()}
+        states={p:copy.deepcopy(opt.state[p]) for p in before}
+        project,count=freeze_scope(actor,std,opt,False);self.assertEqual(count,10)
+        def objective():return -actor(x).sum()-std.sum(),torch.zeros((),device='cuda')
+        loss,_=objective();opt.zero_grad();loss.backward()
+        result=guarded_actor_step([*actor.parameters(),std],opt,objective,loss.detach(),.001,.005,project)
+        self.assertTrue(result['accepted']);self.assertTrue(result['direction_fallback'])
+        for p,value in before.items():
+            self.assertTrue(torch.equal(p,value))
+            for key,state in states[p].items():self.assertTrue(torch.equal(state,opt.state[p][key]))
+
     def test_fallback_preserves_frozen_momentum(self):
         training_devices()
         class Actor(nn.Module):

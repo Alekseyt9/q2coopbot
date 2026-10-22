@@ -1,6 +1,6 @@
 # План: отдельный обучаемый motor residual
 
-Статус22.10.2026: [core Go/CUDA, migration и native compatibility реализованы](combat_motor_residual_20261022.md), запущен сбор нового корпуса. Новая ветка ещё не обучена; улучшение боя не измерено. Ниже сохранён исходный протокол после закрытых [motor-scope probes](combat_movement_scope_20261022.md). Цель остаётся полностью обучаемым боем, а не исполнением движения правилами.
+Статус22.10.2026: [core Go/CUDA, migration и native compatibility реализованы](combat_motor_residual_20261022.md), новый корпус48native/48CUDA закрыт. [Первый matched fit](combat_motor_training_20261022.md) завершён, mechanical gate пройден; native comparison запущено, улучшение боя ещё не доказано. Ниже сохранён исходный протокол после закрытых [motor-scope probes](combat_movement_scope_20261022.md). Цель остаётся полностью обучаемым боем, а не исполнением движения правилами.
 
 ## Проверяемые изменения
 

@@ -1,6 +1,6 @@
 # Motor residual: реализация и совместимость, 22.10.2026
 
-Реализована отдельная обучаемая ветка forward/side с прямыми входами наблюдаемой геометрии. Go/CUDA migration и native zero-compatibility прошли. Обучения новой ветки и доказанного улучшения боя пока нет.
+Реализована отдельная обучаемая ветка forward/side с прямыми входами наблюдаемой геометрии. Go/CUDA migration и native zero-compatibility прошли. [Первый matched CUDA fit](combat_motor_training_20261022.md) закрыт и прошёл механический gate; сравнение в игре запущено, доказанного улучшения боя пока нет.
 
 ## Контракт
 
@@ -34,8 +34,8 @@ Canonical features и memory histories совпали точно; предлож
 
 Существует training scope `motor-residual`: только новые параметры, прочие actor/std и их Adam states проецируются неизменными, в том числе после fallback, очищающего momentum. Actor optimizer имеет отдельную motor group/LR; explicit fork/migration history сохранены. Conditional retention использует отдельные копии teacher motion **и motor reference**.
 
-Запущен `combat-motor-corpus-v1-20261022`:32 TRAIN +16development, base3/ware2, site01 иsite02, ordinary trio иgrenade recovery. Новые seed ranges проверяются по истории. PPO-ready reward совпадает с parent; flat иelevation включены вместе. Сбор/последующий CUDA replay выполняются через существующий16-slot ×2 pool, резерв диска24GiB закреплён явно. Пока корпус не закрыт, fit не выполняется.
+`combat-motor-corpus-v1-20261022` закрыт:32 TRAIN +16development,48native/48CUDA,4903/2586rows,base3/ware2,site01/site02,ordinary trio иgrenade recovery. Все6 наблюдаемых глубоких спусков вTRAIN имеют ground warning. Новые seed ranges проверены по истории, PPO-ready reward совпадает с parent. Резерв диска24GiB закреплён явно. Fit запускался только после закрытия корпуса.
 
-После закрытия — coverage audit, затем matched reference control/motor-only CUDA update на одном TRAIN. Сначала проверить изменение движения и conditional KL, затем новый native smoke. Default и опубликованные веса не заменялись.
+Matched full-PPO/motor-only CUDA fit10actor/40critic иaudit закрыты: frozen actor/std/Adam иобщий critic подтверждены, motor mean shift0.005101 против full0.003262, conditional nonmovement KL ниже1e-6. Запущен новый32native/24CUDA smoke. Default и опубликованные веса не заменялись; детали в отчёте первого fit.
 
 Старые исследовательские утилиты, не передающие reference для нового model block, должны завершаться ошибкой; такой fail-closed check добавлен. Приёмка текущего изменения покрывает Go runtime, CUDA canonical finalization, PPO/sequence retention и migration, а не автоматически все исторические SAC/BC tools.

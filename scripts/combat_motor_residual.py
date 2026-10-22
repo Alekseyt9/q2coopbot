@@ -64,10 +64,12 @@ def initialize(model):
     return result
 
 
-def freeze_scope(actor,std,optimizer):
+def freeze_scope(actor,std,optimizer,train_motor=True):
     assert actor.motor_branch is not None
-    selected=set(actor.motor_branch.parameters());optimizer.zero_grad(set_to_none=True)
     parameters=list(actor.parameters())+[std]
+    motor=set(actor.motor_branch.parameters())
+    selected=motor if train_motor else set(parameters)-motor
+    optimizer.zero_grad(set_to_none=True)
     frozen={p:p.detach().clone() for p in parameters if p not in selected}
     states={p:copy.deepcopy(optimizer.state.get(p,{})) for p in frozen}
     for p in parameters:p.requires_grad_(p in selected)
