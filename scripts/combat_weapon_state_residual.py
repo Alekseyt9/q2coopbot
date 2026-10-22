@@ -51,14 +51,19 @@ def export(model,branch):
     validate(model)
 
 
-def optimizer(actor,std,actor_lr,weapon_lr):
+def optimizer(actor,std,actor_lr,weapon_lr,motor_lr=.0003):
     """Keep old parameter IDs and log_std; append the new branch in group2."""
     branch=getattr(actor,'weapon_state_branch',None)
-    if branch is None:return torch.optim.Adam(list(actor.parameters())+[std],lr=actor_lr)
+    motor=getattr(actor,'motor_branch',None)
+    if branch is None and motor is None:return torch.optim.Adam(list(actor.parameters())+[std],lr=actor_lr)
     if not math.isfinite(weapon_lr) or not 0<weapon_lr<=.01:raise ValueError('Invalid weapon residual learning rate')
-    old=[value for name,value in actor.named_parameters() if not name.startswith('weapon_state_branch.')]+[std]
-    return torch.optim.Adam([dict(params=old,lr=actor_lr),
-        dict(params=list(branch.parameters()),lr=weapon_lr,name='weapon_state_residual')],lr=actor_lr)
+    old=[value for name,value in actor.named_parameters() if not name.startswith(('weapon_state_branch.','motor_branch.'))]+[std]
+    groups=[dict(params=old,lr=actor_lr)]
+    if branch is not None:groups.append(dict(params=list(branch.parameters()),lr=weapon_lr,name='weapon_state_residual'))
+    if motor is not None:
+        assert math.isfinite(motor_lr) and 0<motor_lr<=.01
+        groups.append(dict(params=list(motor.parameters()),lr=motor_lr,name='motor_residual'))
+    return torch.optim.Adam(groups,lr=actor_lr)
 
 
 def inputs(features,raw):

@@ -1,6 +1,7 @@
 """Sealed registry comparison of named model updates; CUDA replay, no training."""
 import argparse
 import hashlib
+import math
 import json
 import pathlib
 import shutil
@@ -67,7 +68,9 @@ def main():
             assert read(path)['state'] == 'complete'
             readiness.append(dict(path=str(path), sha256=sha(path)))
         assert sha(spec_path) == spec_sha
-        assert shutil.disk_usage(root.anchor).free >= 32*1024**3, 'Storage guard'
+        minimum_free_gib=spec.get('minimum_free_gib',32)
+        assert isinstance(minimum_free_gib,(int,float)) and math.isfinite(minimum_free_gib) and minimum_free_gib>=16,'Invalid storage reserve'
+        assert shutil.disk_usage(root.anchor).free >= minimum_free_gib*1024**3, 'Storage guard'
         registry = pathlib.Path(spec['registry']); registry_sha = sha(registry)
         files = read(registry)['files']; assert files
         if spec.get('episodes'):

@@ -27,7 +27,7 @@ def normal_kl(teacher, student, teacher_std, std):
             (2 * std.mul(2).exp()) - .5).sum(-1)
 
 
-def policy_kl(raw, std, teacher, teacher_std, features, motion_branch=None, teacher_motion_branch=None, movement=None):
+def policy_kl(raw, std, teacher, teacher_std, features, motion_branch=None, teacher_motion_branch=None, movement=None, reference_branch=None, teacher_reference_branch=None):
     """KL(teacher || current), including all available targets and aim modes.
 
     Inputs are outputs from the same actual sequence histories. Target/mode
@@ -76,10 +76,10 @@ def policy_kl(raw, std, teacher, teacher_std, features, motion_branch=None, teac
                 after_aim=torch.stack((coarse_after,fine_after),2)
                 if teacher_motion_branch is not None:
                     with torch.no_grad():
-                        delta=correction(teacher_motion_branch,expanded_x,teacher.detach().repeat_interleave(18,dim=0),expanded_move,targets,stages,vertical)
+                        delta=correction(teacher_motion_branch,expanded_x,teacher.detach().repeat_interleave(18,dim=0),expanded_move,targets,stages,vertical,teacher_reference_branch)
                     before_aim=before_aim+delta.reshape(-1,9,2,2).double()
                 if motion_branch is not None:
-                    delta=correction(motion_branch,expanded_x,raw.repeat_interleave(18,dim=0),expanded_move,targets,stages,vertical)
+                    delta=correction(motion_branch,expanded_x,raw.repeat_interleave(18,dim=0),expanded_move,targets,stages,vertical,reference_branch)
                     after_aim=after_aim+delta.reshape(-1,9,2,2).double()
                 conditional.append(normal_kl(before_aim,after_aim,teacher_std[2:],std[2:]))
             if vertical_conditioned:

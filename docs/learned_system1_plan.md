@@ -734,3 +734,27 @@ Joint mobile probe закрыт32native/24CUDA:heads6/8,source5/8,encoder4/8,mob
 
 
 22.10 [PPO future auxiliary](testing/combat_future_auxiliary_ppo_20261022.md) закрыт: два fresh32native/24CUDA пилота, weak coefficient source/control/aux/rules4/2/1/5 побед из8; TRAIN-gradient-calibrated coefficient69.6977:4/3/3/4. Legacy==zero-control, source/Adam/RNG и critic parity подтверждены CUDA. Candidate не продвигается. TRAIN reward audit32cases/3363rows: native reward exact, kill bonus уже +5; все behavior value=0, actor обучается до critic. Следующая гипотеза — изолированный critic warmup/GAE test, ещё не реализован; награда/default сохранены.
+
+
+22.10 [critic timing / credit assignment](testing/combat_critic_credit_20261022.md) реализован:legacy/mc-after/mc-before по10actor/40critic CUDA updates наодномTRAIN. Default weights exact кпрежнемуcontrol;mc-after actor/std/Adam exact кlegacy;итоговыеMCcritic/Adam exact междуbefore/after,MSE32.725→6.265. Causal next-context/terminal/sample-purity CUDA checks прошли. Запущен fresh32native/24CUDA smoke source/after/before/rules,offset692,пул16 ×2;качество пока неизвестно,promotion=false.
+
+
+22.10 critic-credit smoke закрыт32native/24CUDA:source2/8,MC-after2/8,MC-before4/8,rules4/8;candidate парно2gained/0lost кобоимlearned references. Kills6→10,deaths5→4,received540→509 кMC-after;rules received325/deaths2. Поддержан только независимыйscreen техжеweights:72native/48CUDA,24cases/variant(12ordinary+12recovery),offset696–698,16 ×2;запущен,результат пока неизвестен,promotion=false. См.testing/combat_critic_credit_20261022.md.
+
+
+22.10 [critic-credit screen](testing/combat_critic_credit_20261022.md) закрыт72native/48CUDA:source12/24,warm11/24,rules13/24;paired0gained/1lost кsource,ветка не продвигается. Actual MG live damage218/459→271/429,ноreceived1500→1613/deaths9→11. Base3 уобоихlearned0/6,rules4/6;observed-elevation audit нашёлспуски192units ипродолжительнуюпотерюконтакта. Ground probes/threat memory ужеесть;следующаяпроверка—применимостьdry-ground PMove/предупреждающихпробнаTRAIN,безblanketfallpenaltyилиподменыдвижения. GPU held-out critic MSE21.512→19.840,explained variance лишь6.96%;это небоевойвыигрыш.
+
+
+22.10 [TRAIN geometry/departure audit](testing/combat_ledge_curriculum_20261022.md) закрылпробелпокрытия:32старыхTRAINcasesвсеsite01,52departures,0deepdrops;maxdropпослестарта8units. Валидационныйпровалbase3site02непредставленвэтомбатче. Реализованыnative/trace-bounddepartureaudit+3puregeometrytests. Запущенотдельныйcorpus16TRAIN/8dev наbase3/ware2site02сновымиseeds,темжеsource/reward,16 ×2;GPUreplayпослесбора. Новыйactorещёнеобучался;нуженcoveragegateбезcounterfactualjumpmislabels.
+
+
+22.10 [elevation curriculum](testing/combat_ledge_curriculum_20261022.md): новый корпус закрыт, 24 native/24 CUDA, 2496 TRAIN/1345 dev rows. TRAIN audit нашёл4 глубоких спуска (3 release/1 crouch), все с precommand ground warning, ни одного с применимым PMove prediction. Выполнен полный CUDA PPO fit10actor/40critic с прежней наградой; boundary/JSON/checkpoint/Adam audit прошёл. Запущен fresh24native/16CUDA smoke source/new-PPO/rules, offset712,16 ×2; качество пока неизвестно, promotion=false.
+
+
+22.10 [elevation PPO smoke](testing/combat_ledge_curriculum_20261022.md) закрыт24native/16CUDA:source5/8,update4/8,rules6/8,0gained/1lost;ветка не продвигается. Outcome audit не выявил reward inversion:из4спусков raw GAE положительна3,но normalized PPO coefficient только1. Награда сохранена. Реализован [AWR-style actor update](testing/combat_advantage_regression_20261022.md): observed-action weighting против unweighted BC;4CUDA fits по10actor/40critic, legacy exact иuniform AWR==BC exact, общийMCcritic/Adam exact. Запущен fresh40native/32CUDA five-way source/PPO/BC/AWR/rules,offset716,16 ×2;качество неизвестно,promotion=false.
+
+
+22.10 [AWR smoke](testing/combat_advantage_regression_20261022.md) закрыт40native/32CUDA:source5/8,PPO6/8,BC4/8,AWR5/8,rules5/8;AWR не продвигается. TRAIN group-KL diagnostic:conditional aim79–89%,move shift0.003–0.005. [Motor-only projection](testing/combat_movement_scope_20261022.md) реализована/проверена4CUDA tests идвумя10actor/40critic pairs:приLR3e-5 shift0.002733,при3e-4 0.004052,оба хужеfull0.005348;заранее заданныйmechanical gate failed,новыеnativeбои0. Frozen actor/moments иобщийcritic exact. Следующий [прототип](testing/combat_motor_residual_plan_20261022.md) — raw-geometry motor residual со stable reference для прицела и сохранённымactual-move conditioning;пока план,безruntime implementation/promotion.
+
+
+22.10 [motor residual core](testing/combat_motor_residual_20261022.md) реализован вGo/CUDA:756→64→32→2,50594params,observed raw geometry/type/navigation/memory; stable base reference сохраняет actual-move aim conditioning. CUDA zero/nonzero migration2496histories прошла,старыеactor/value/Adam/RNG/IDs сохранены,новаяgroup пустая. Native source/zero8cases +8CUDA:655providerframes canonicalinputs/commands/samples exact (modelversion отличается;fresh packet agejitter≤2ms втомжеvalidclass). PureGo layout test и6CUDA scope/reference tests passed. Запущен свежий corpus32TRAIN/16dev,flat+elevation,16 ×2,sourcezero;новаяветкаещёнеобучена,promotion=false.

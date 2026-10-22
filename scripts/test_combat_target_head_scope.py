@@ -6,6 +6,29 @@ from combat_target_head_scope import freeze_target_scope, freeze_decision_scope
 
 
 class TargetScopeTests(unittest.TestCase):
+    def test_movement_scope_preserves_nonmovement_parameters_and_momentum(self):
+        training_devices()
+        for width in (45,81):
+            actor=nn.Sequential(nn.Linear(2,3,device='cuda'),nn.Tanh(),nn.Linear(3,width,device='cuda'))
+            std=nn.Parameter(torch.zeros(4,device='cuda'));opt=torch.optim.Adam(list(actor.parameters())+[std],lr=.001)
+            x=torch.ones(4,2,device='cuda');(actor(x).sum()+std.sum()).backward();opt.step()
+            before=actor(x).detach().clone();before_std=std.detach().clone();states=copy.deepcopy(opt.state_dict())
+            project,count=freeze_decision_scope(actor,std,opt,'movement')
+            self.assertEqual(count,5*4+2)
+            selected=torch.zeros(width,dtype=torch.bool,device='cuda');selected[:2]=True;selected[5:8]=True
+            opt.zero_grad();(-actor(x)[:,selected].sum()-std[:2].sum()).backward();opt.step();project()
+            self.assertTrue(torch.equal(before[:,~selected],actor(x).detach()[:,~selected]))
+            self.assertFalse(torch.equal(before[:,selected],actor(x).detach()[:,selected]))
+            self.assertTrue(torch.equal(before_std[2:],std.detach()[2:]));self.assertFalse(torch.equal(before_std[:2],std.detach()[:2]))
+            after=opt.state_dict()
+            for key,old in states['state'].items():
+                for name,value in old.items():
+                    if key in (2,3) and name in ('exp_avg','exp_avg_sq'):
+                        self.assertTrue(torch.equal(value[~selected],after['state'][key][name][~selected]))
+                    elif key==4 and name in ('exp_avg','exp_avg_sq'):
+                        self.assertTrue(torch.equal(value[2:],after['state'][key][name][2:]))
+                    elif key not in (2,3,4):self.assertTrue(torch.equal(value,after['state'][key][name]))
+
     def test_decision_scope_preserves_aim_and_old_momentum(self):
         training_devices()
         for width in (45,81):

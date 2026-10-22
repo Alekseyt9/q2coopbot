@@ -77,7 +77,7 @@ def log_prob(actor,std,x,z,attack,vertical,weapon=None,target=None,mode=None):
     raw=actor(x)
     if raw.shape[1]==81:
         from combat_precision_head import probabilities
-        return probabilities(raw,std,z,attack,vertical,weapon,x,target,mode,getattr(actor,'sampled_motion_aim_branch',None))
+        return probabilities(raw,std,z,attack,vertical,weapon,x,target,mode,getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None))
     if raw.shape[1]==45:
         from combat_target_head import probabilities
         return probabilities(raw,std,z,attack,vertical,weapon,x,target)

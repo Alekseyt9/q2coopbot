@@ -113,9 +113,11 @@ def main():
     ap.add_argument('--sequence-retention-weight',type=float,default=0.)
     ap.add_argument('--fork-sequence-retention',action='store_true',
                     help='Explicit objective fork preserving actor/critic/Adam for sequence retention')
-    ap.add_argument('--actor-head-scope',choices=('all','target','decisions','conditional-aim'),default='all')
+    ap.add_argument('--actor-head-scope',choices=('all','target','decisions','conditional-aim','movement','motor-residual'),default='all')
     ap.add_argument('--target-head-lr',type=float,default=.003)
     ap.add_argument('--decision-head-lr',type=float,default=.003)
+    ap.add_argument('--movement-head-lr',type=float,default=.00003)
+    ap.add_argument('--motor-lr',type=float,default=.0003)
     ap.add_argument('--fork-head-scope',action='store_true',help='Explicit optimizer-scope fork from a resumed checkpoint')
     ap.add_argument('--weapon-state-lr',type=float,default=.0003)
     ap.add_argument('--future-aux-data',type=pathlib.Path)
@@ -123,6 +125,13 @@ def main():
     ap.add_argument('--future-aux-weight',type=float,default=0.)
     ap.add_argument('--fork-future-aux',action='store_true',help='Explicitly initialize/change/disable a training-only future auxiliary objective')
     ap.add_argument('--initial-boundary',type=pathlib.Path,help='Optional fresh sealed pre-update actor/critic/optimizer/RNG snapshot')
+    ap.add_argument('--critic-credit',choices=('legacy','mc-after','mc-before'),default='legacy')
+    ap.add_argument('--fork-critic-credit',action='store_true',help='Explicit critic target/timing experiment fork')
+    ap.add_argument('--policy-update',choices=('ppo','bc','awr'),default='ppo')
+    ap.add_argument('--fork-policy-update',action='store_true')
+    ap.add_argument('--awr-temperature',type=float,default=3.)
+    ap.add_argument('--awr-weight-cap',type=float,default=20.)
+    ap.add_argument('--awr-strength',type=float,choices=(0.,1.),default=1.)
     args=ap.parse_args();training_devices();torch.set_num_threads(2);torch.manual_seed(20261006);torch.use_deterministic_algorithms(True)
     assert all(math.isfinite(w) and w >= 0 for w in (args.retention_weight,args.bank_weight))
     assert math.isfinite(args.sequence_retention_weight) and args.sequence_retention_weight >= 0
@@ -134,8 +143,14 @@ def main():
     assert args.future_aux_data is not None or args.future_aux_weight==0
     assert not args.fork_future_aux or args.resume
     assert not args.future_aux_data or (args.resume and args.actor_head_scope=='all')
+    assert not args.fork_critic_credit or args.resume
+    assert not args.fork_policy_update or args.resume
+    assert math.isfinite(args.awr_temperature) and args.awr_temperature>0
+    assert math.isfinite(args.awr_weight_cap) and args.awr_weight_cap>=1
+    assert args.policy_update=='ppo' or (args.critic_credit=='mc-before' and args.actor_head_scope=='all' and not args.future_aux_data)
     assert math.isfinite(args.target_head_lr) and 0 < args.target_head_lr <= .01
     assert math.isfinite(args.decision_head_lr) and 0 < args.decision_head_lr <= .01
+    assert math.isfinite(args.movement_head_lr) and 0 < args.movement_head_lr <= .01
     # cuDNN GRU TF32 drifts from Go FP64 by ~2e-3 on real traces.
     # Keep FP32 CUDA training and the existing state parity tolerance.
     torch.backends.cudnn.allow_tf32=False;torch.backends.cuda.matmul.allow_tf32=False
@@ -159,19 +174,26 @@ def main():
         (args.out/'weights.json').write_text(json.dumps(updated,allow_nan=False))
         return
     config=read(args.config);meta=read(args.data/'report.json');validate_objective(config,meta)
-    assert args.actor_head_scope in ('all','conditional-aim') or (target_head and not args.sequence_retention_spec)
+    assert args.actor_head_scope in ('all','conditional-aim','movement','motor-residual') or (target_head and not args.sequence_retention_spec)
+    assert args.actor_head_scope!='motor-residual' or model.get('motor_residual')
+    assert args.actor_head_scope!='movement' or target_head
     assert args.actor_head_scope != 'conditional-aim' or model.get('sampled_motion_aim'), 'Conditional aim scope requires the sampled-motion branch'
     assert args.actor_head_scope != 'decisions' or weapon_head, 'Decision scope requires the masked weapon head'
-    actor_training=dict(scope=args.actor_head_scope,learning_rate={'target':args.target_head_lr,'decisions':args.decision_head_lr,'all':config['actor_lr'],'conditional-aim':config['actor_lr']}[args.actor_head_scope])
+    actor_training=dict(scope=args.actor_head_scope,learning_rate={'target':args.target_head_lr,'decisions':args.decision_head_lr,'all':config['actor_lr'],'conditional-aim':config['actor_lr'],'movement':args.movement_head_lr,'motor-residual':config['actor_lr']}[args.actor_head_scope])
+    if model.get('motor_residual'):
+        from combat_motor_residual import validate as validate_motor,VERSION as MOTOR_VERSION
+        validate_motor(model);assert math.isfinite(args.motor_lr) and 0<args.motor_lr<=.01
+        actor_training['motor_residual']=dict(version=MOTOR_VERSION,learning_rate=args.motor_lr)
     if model.get('weapon_state_residual'):
         from combat_weapon_state_residual import validate as validate_weapon_state,CONTRACT_VERSION
         validate_weapon_state(model)
-        assert args.actor_head_scope in ('all','conditional-aim'), 'Observed weapon residual requires full actor or frozen conditional aim scope'
+        assert args.actor_head_scope in ('all','conditional-aim','movement','motor-residual'), 'Observed weapon residual requires an explicit supported actor scope'
         assert math.isfinite(args.weapon_state_lr) and 0<args.weapon_state_lr<=.01
         actor_training['weapon_state_residual']=dict(version=CONTRACT_VERSION,learning_rate=args.weapon_state_lr)
     assert meta['feature_version']==model['feature_version'], 'Rollout feature contract differs'
     key=next(k for k in ('memory','attention','entity_attention') if model.get(k));spec=model[key];entity=key=='entity_attention'
     expected_version={'memory':VERSION,'attention':TEMPORAL,'entity_attention':ENTITY}[key];assert spec['version']==expected_version
+    assert args.critic_credit=='legacy' or (key=='attention' and args.resume and args.actor_head_scope=='all' and not args.future_aux_data)
     if not entity:assert meta['recurrent_version']==expected_version
     assert sha(args.model)==meta['model_sha256'] and sha(args.data/'rollout.jsonl')==meta['rollout_sha256']
     if not entity:assert sha(args.data/'sequence.jsonl')==meta['sequence_sha256']
@@ -200,7 +222,7 @@ def main():
     def likelihood(raw,std,z,attack,vertical,weapon,mask):
         if mode is not None:
             from combat_precision_head import probabilities as precision_probabilities
-            return precision_probabilities(raw,std,z,attack,vertical,weapon,x,target,mode,getattr(actor,'sampled_motion_aim_branch',None))
+            return precision_probabilities(raw,std,z,attack,vertical,weapon,x,target,mode,getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None))
         if target_head:
             from combat_target_head import probabilities as target_probabilities
             return target_probabilities(raw,std,z,attack,vertical,weapon,x,target)
@@ -229,12 +251,16 @@ def main():
             weight=args.sequence_retention_weight,rows=len(positions),behavior_sha256=sha(args.model))
         motion_branch=getattr(actor,'sampled_motion_aim_branch',None)
         teacher_motion=copy.deepcopy(motion_branch) if motion_branch is not None else None
+        motor_branch=getattr(actor,'motor_branch',None)
+        teacher_motor=copy.deepcopy(motor_branch) if motor_branch is not None else None
+        if teacher_motor is not None:
+            for parameter in teacher_motor.parameters():parameter.requires_grad_(False)
         if teacher_motion is not None:
             for parameter in teacher_motion.parameters():parameter.requires_grad_(False)
             sequence_retention['conditional_motion_expectation']='fixed_behavior_move_per_history_v1'
         def sequence_loss(current):
             terms = policy_kl(current[seq_positions],std,seq_teacher[seq_positions],seq_std,x[seq_positions],
-                              motion_branch,teacher_motion,z[seq_positions,:2].detach())
+                              motion_branch,teacher_motion,z[seq_positions,:2].detach(),motor_branch,teacher_motor)
             return (terms * seq_weights).sum()
     bank_tensors={}
     if args.retention_weight or args.bank_weight:
@@ -250,18 +276,26 @@ def main():
         del anchor_net
     def bank_loss(split='train'):
         bx,bw,bt=bank_tensors[split];return anchor_kl(actor.single(bx),std,bt,teacher_std,bw,feature_mask(bx) if weapon_head else None)
-    future_aux=None
+    future_aux=None;regression_weights=None;regression_stats=None
     def objective():
         raw,_=compute(actor);lp,entropy=likelihood(raw,std,z,attack,vertical,weapon,mask);ratio=(lp-old).exp()
-        loss=-torch.minimum(ratio*ad,ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*entropy.mean()
+        if args.policy_update=='ppo':
+            loss=-torch.minimum(ratio*ad,ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*entropy.mean()
+        else:
+            loss=-(regression_weights*lp).mean()-config['entropy']*entropy.mean()
         if args.retention_weight:loss=loss+args.retention_weight*anchor_kl(raw,std,teacher,teacher_std,weapon_mask=mask)
         if args.bank_weight:loss=loss+args.bank_weight*bank_loss()
         if args.sequence_retention_weight:loss=loss+args.sequence_retention_weight*sequence_loss(raw)
         if future_aux is not None:loss=loss+future_aux.actor_loss(actor)
         return loss,((ratio-1)-(lp-old)).mean()
     from combat_weapon_state_residual import optimizer as actor_optimizer
-    actor_opt=actor_optimizer(actor,std,config['actor_lr'],args.weapon_state_lr);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
+    actor_opt=actor_optimizer(actor,std,config['actor_lr'],args.weapon_state_lr,args.motor_lr);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
     consumed=[];updates=0;total=0;migrations=[];config_forks=[];future_forks=[];previous_future=None
+    critic_credit=dict(version='combat_critic_credit_v1',mode=args.critic_credit)
+    critic_forks=[]
+    policy_update=dict(version='combat_policy_update_v1',method=args.policy_update)
+    if args.policy_update=='awr':policy_update.update(temperature=args.awr_temperature,weight_cap=args.awr_weight_cap,strength=args.awr_strength)
+    policy_update_forks=[]
     if args.resume:
         cp=torch.load(args.resume,map_location='cpu',weights_only=True)
         migrations=cp.get('model_migrations',[])
@@ -283,6 +317,16 @@ def main():
         torch.set_rng_state(cp['rng']);torch.cuda.set_rng_state_all(cp['cuda_rng'])
         previous_future=cp.get('future_auxiliary')
         future_forks=cp.get('future_objective_forks',[])
+        previous_credit=cp.get('critic_credit',dict(version='combat_critic_credit_v1',mode='legacy'))
+        assert previous_credit==critic_credit or args.fork_critic_credit,'Explicit critic-credit fork required'
+        critic_forks=cp.get('critic_credit_forks',[])
+        previous_policy=cp.get('policy_update',dict(version='combat_policy_update_v1',method='ppo'))
+        assert previous_policy==policy_update or args.fork_policy_update,'Explicit policy-update fork required'
+        policy_update_forks=cp.get('policy_update_forks',[])
+        if args.fork_policy_update:
+            policy_update_forks=policy_update_forks+[dict(source_checkpoint_sha256=sha(args.resume),previous=previous_policy,current=policy_update)]
+        if args.fork_critic_credit:
+            critic_forks=critic_forks+[dict(source_checkpoint_sha256=sha(args.resume),previous=previous_credit,current=critic_credit)]
     if args.future_aux_data:
         assert key=='attention' and not entity and model['feature_version']=='combat_features_v10'
         assert previous_future is not None or args.fork_future_aux,'Explicit future objective fork required'
@@ -303,30 +347,55 @@ def main():
             source_model_sha256=sha(args.model),source_checkpoint_sha256=sha(args.resume) if args.resume else None,rollout_sha256=meta['rollout_sha256'])
         durable_write(args.initial_boundary,lambda output:torch.save(boundary,output))
         initial_boundary_sha=sha(args.initial_boundary)
-    ad=(ad-ad.mean())/(ad.std(unbiased=False)+1e-8)
+    if args.critic_credit!='legacy':
+        _,mc_returns=advantages(rows,config['gamma'],1.)
+        ret=torch.tensor(mc_returns,device=device)
     with torch.no_grad():initial_bank={s:float(bank_loss(s)) for s in bank_tensors}
     with torch.no_grad():sequence_kl_before=float(sequence_loss(raw)) if sequence_retention else None
     future_before=None if future_aux is None else future_aux.stats(actor)
     trials=[];start=time.perf_counter();parameters=list(actor.parameters())+[std]
     project=lambda:std.clamp_(-8,1)
     trainable_actor_parameters=sum(p.numel() for p in parameters)
-    if args.actor_head_scope in ('target','decisions'):
+    if args.actor_head_scope in ('target','decisions','movement'):
         from combat_target_head_scope import freeze_decision_scope
         project,trainable_actor_parameters=freeze_decision_scope(actor,std,actor_opt,args.actor_head_scope)
     elif args.actor_head_scope == 'conditional-aim':
         from combat_conditional_aim_scope import freeze_conditional_aim
         project,trainable_actor_parameters=freeze_conditional_aim(actor,std,actor_opt)
+    elif args.actor_head_scope=='motor-residual':
+        from combat_motor_residual import freeze_scope
+        project,trainable_actor_parameters=freeze_scope(actor,std,actor_opt)
+    credit_stats=None
+    if args.critic_credit=='mc-before':
+        from combat_critic_credit import fit,reestimate
+        actor_before={k:v.detach().clone() for k,v in actor.state_dict().items()}
+        std_before=std.detach().clone()
+        credit_stats=fit(value,value_opt,compute,ret,config['value_steps'],config['max_grad_norm'],torch,nn)
+        assert all(torch.equal(v,actor_before[k]) for k,v in actor.state_dict().items()) and torch.equal(std,std_before)
+        adv,baselines,next_baselines=reestimate(rows,prepared,value,config['gamma'],config['lambda'],advantages,torch)
+        ad=torch.tensor(adv,device=device)
+        credit_stats.update(actor_unchanged=True,baseline_mean=sum(baselines)/len(baselines),
+                            next_baseline_mean=sum(next_baselines)/len(next_baselines))
+    ad=(ad-ad.mean())/(ad.std(unbiased=False)+1e-8)
+    if args.policy_update!='ppo':
+        from combat_advantage_regression import weights as advantage_weights
+        regression_weights,regression_stats=advantage_weights(ret,torch.tensor(baselines,device=device),
+            args.awr_temperature,args.awr_weight_cap,0. if args.policy_update=='bc' else args.awr_strength,torch)
     for _ in range(config['actor_steps']):
         loss,kl=objective()
         if float(kl.detach())>config['target_kl']:break
         actor_opt.zero_grad();loss.backward();nn.utils.clip_grad_norm_(parameters,config['max_grad_norm'])
-        group_lrs=[actor_training['learning_rate'],args.weapon_state_lr] if model.get('weapon_state_residual') else None
+        group_lrs=[actor_training['learning_rate']]+[args.weapon_state_lr if group.get('name')=='weapon_state_residual' else args.motor_lr for group in actor_opt.param_groups[1:]] if len(actor_opt.param_groups)>1 else None
         trial=guarded_actor_step(parameters,actor_opt,objective,loss.detach(),actor_training['learning_rate'],config['target_kl'],project,group_lrs=group_lrs);trials.append(trial)
         if not trial['accepted']:break
         if future_aux is not None:future_aux.head_step(actor)
-    for _ in range(config['value_steps']):
-        prediction,_=compute(value);loss=(prediction[:,0]-ret).square().mean();assert torch.isfinite(loss)
-        value_opt.zero_grad();loss.backward();nn.utils.clip_grad_norm_(value.parameters(),config['max_grad_norm']);value_opt.step()
+    if args.critic_credit=='mc-after':
+        from combat_critic_credit import fit
+        credit_stats=fit(value,value_opt,compute,ret,config['value_steps'],config['max_grad_norm'],torch,nn)
+    elif args.critic_credit=='legacy':
+        for _ in range(config['value_steps']):
+            prediction,_=compute(value);loss=(prediction[:,0]-ret).square().mean();assert torch.isfinite(loss)
+            value_opt.zero_grad();loss.backward();nn.utils.clip_grad_norm_(value.parameters(),config['max_grad_norm']);value_opt.step()
     torch.cuda.synchronize();seconds=time.perf_counter()-start
     with torch.no_grad():loss,kl=objective();final_bank={s:float(bank_loss(s)) for s in bank_tensors}
     with torch.no_grad():sequence_kl_after=float(sequence_loss(compute(actor)[0])) if sequence_retention else None
@@ -350,6 +419,10 @@ def main():
     if migrations:cp['model_migrations']=migrations
     if future_aux is not None:cp['future_auxiliary']=future_aux.checkpoint()
     if future_forks:cp['future_objective_forks']=future_forks
+    cp['critic_credit']=critic_credit
+    if critic_forks:cp['critic_credit_forks']=critic_forks
+    cp['policy_update']=policy_update
+    if policy_update_forks:cp['policy_update_forks']=policy_update_forks
     durable_write(args.out/'checkpoint.pt',lambda output:torch.save(cp,output))
     durable_write(args.out/'trainer.py',lambda output:output.write(pathlib.Path(__file__).read_bytes()))
     report={'architecture':expected_version,'device':'cuda','torch':torch.__version__,'rows':len(rows),'sequence_rows':len(context),'sequences':len(prepared[3]) if prepared else 0,'bptt_steps':bptt if key=='memory' else None,'actor_steps':done,'total_actor_steps':total+done,'updates_completed':updates+1,'actor_trials':trials,'final_approx_kl':float(kl),'old_log_probability_max_error':log_error,'old_value_max_error':value_error,'old_actor_memory_max_error':actor_state_error,'old_value_memory_max_error':value_state_error,'bank_kl_before':initial_bank,'bank_kl_after':final_bank,'seconds':seconds,'weights_sha256':sha(args.out/'weights.json'),'behavior_sha256':sha(args.model),'rollout_sha256':meta['rollout_sha256'],'sequence_sha256':meta.get('sequence_sha256'),'trainer_sha256':sha(pathlib.Path(__file__)),'config_sha256':sha(args.config),'resume_sha256':sha(args.resume) if args.resume else None,'anchor_sha256':sha(args.anchor_model),'bank_sha256':sha(args.retention_bank),'actor_parameters':sum(p.numel() for p in actor.parameters())+std.numel(),'critic_parameters':sum(p.numel() for p in value.parameters()),'scope':'Fresh on-policy architecture PPO. GRU replays all provider context with current-model prefixes, detached every32 frames. Temporal attention is causal/window32; entity attention uses only current v4 values. Loss only on native eligible rows. Bank has no histories: retention measured at zero memory. No learned weapon choice or live promotion.'}
@@ -367,6 +440,10 @@ def main():
     report['future_auxiliary']=None if future_aux is None else dict(spec=future_aux.spec,before=future_before,after=future_after)
     report['future_objective_fork']=args.fork_future_aux
     report['initial_boundary_sha256']=initial_boundary_sha
+    report['critic_credit']=dict(**critic_credit,stats=credit_stats)
+    report['critic_credit_forks']=critic_forks
+    report['policy_update']=dict(spec=policy_update,weights=regression_stats)
+    report['policy_update_forks']=policy_update_forks
     if model.get('weapon_state_residual'):
         report['scope']+=' Observed weapon-state residual keeps its separate Adam group; old log_std and parameter IDs stay in group1. Both groups backtrack by the same factor. Trainability follows the explicit actor scope.'
         report['weapon_state_residual']=actor_training['weapon_state_residual']
@@ -374,6 +451,7 @@ def main():
     if args.actor_head_scope=='target':report['scope']+=' Projected target rows20:29 only; other actor outputs/encoder/spatial/std and their Adam moments preserved. Output tensor Adam clocks advance for target updates; switching scope requires explicit checkpoint fork.'
     if args.actor_head_scope=='decisions':report['scope']+=' Projected attack row4, weapon rows8:20 and target rows20:29 only; movement/vertical/aim/mode/encoder/spatial/std and their Adam moments preserved. Shared output tensor Adam clocks advance; changing scope or its learning rate requires explicit checkpoint fork. Joint on-policy PPO likelihood and masks unchanged.'
     if args.actor_head_scope=='conditional-aim':report['scope']+=' Only sampled-motion conditional aim branch and log_std[2:4] train. All raw actor logits/encoder/spatial/weapon branches and movement variance/moments stay frozen; shared std Adam clock advances. This is an isolated aiming experiment, not full-policy algorithm replacement.'
+    if args.actor_head_scope=='movement':report['scope']+=' Only raw horizontal rows0:2, vertical rows5:8 and log_std[:2] train. Encoder/attention, aim/target/fire/weapon parameters and their Adam moments stay frozen; shared tensor Adam clocks advance. Spatial and sampled-motion controllers consume movement means, so frozen aim parameters do not imply frozen conditional aim outputs. Runtime actions remain entirely learned.'
     if model.get('shared_target'):
         report['scope']+=' Explicit shared per-enemy target residual is trained in target/decision scopes; its new Adam states start empty after a sealed checkpoint migration. Availability masks and none output unchanged.'
     if sequence_retention:
@@ -386,6 +464,10 @@ def main():
             joint_likelihood='target_mode_move_vertical_conditional_aim_v2' if vertical_conditioned else 'target_mode_move_conditional_aim_v1',
             conditional_retention_expectation=('fixed_behavior_move_exact_target_mode_vertical_v2' if vertical_conditioned else 'fixed_behavior_move_per_history_v1') if sequence_retention else None)
         report['scope']='Fresh on-policy full-actor/critic CUDA PPO with sampled-motion conditional aim likelihood. Native eligible train rows, actual temporal histories, availability masks and guards as environment execution. Conditional retention uses fixed behavior movement draws. No automatic model promotion or campaign/coop acceptance.'
+    if model.get('motor_residual'):
+        report['motor_residual']=actor_training['motor_residual']
+        report['scope']+=' Observed motor residual uses a separate Adam group and stable base reference for conditional aim.'
+        if args.actor_head_scope=='motor-residual':report['scope']+=' Only motor branch parameters train; existing actor/std parameters and Adam states are projected unchanged.'
     durable_json(args.out/'report.json',report)
     durable_json(args.out/'complete.json',{'version':'combat_update_complete_v1','weights_sha256':sha(args.out/'weights.json'),'checkpoint_sha256':sha(args.out/'checkpoint.pt'),'report_sha256':sha(args.out/'report.json')})
     print(json.dumps(report,indent=2))

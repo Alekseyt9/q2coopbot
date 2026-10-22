@@ -33,6 +33,7 @@ type PPOFile struct {
 	WeaponStateResidual *SpatialAimFile        `json:"weapon_state_residual,omitempty"`
 	WeaponExploration   *WeaponExplorationFile `json:"weapon_exploration,omitempty"`
 	SampledMotionAim    *SpatialAimFile        `json:"sampled_motion_aim,omitempty"`
+	MotorResidual       *SpatialAimFile        `json:"motor_residual,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
@@ -122,6 +123,9 @@ func LoadPPO(path string) (*PPO, error) {
 	if e = validateSampledMotionAim(f); e != nil {
 		return nil, e
 	}
+	if e = validateMotorResidual(f); e != nil {
+		return nil, e
+	}
 	if e = validateFeatureLayers(f.Value, 1, f.Features); e != nil {
 		return nil, e
 	}
@@ -207,6 +211,10 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 		return Action{}, 0, 0, e
 	}
 	x, e = p.weaponExplorationRaw(o, x)
+	if e != nil {
+		return Action{}, 0, 0, e
+	}
+	x, e = p.motorRaw(o, x)
 	if e != nil {
 		return Action{}, 0, 0, e
 	}
@@ -307,6 +315,10 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		return Action{}, e
 	}
 	x, e = p.weaponExplorationRaw(o, x)
+	if e != nil {
+		return Action{}, e
+	}
+	x, e = p.motorRaw(o, x)
 	if e != nil {
 		return Action{}, e
 	}

@@ -8,7 +8,7 @@ def freeze_target_scope(actor, std, optimizer):
 
 
 def freeze_decision_scope(actor, std, optimizer, scope):
-    assert scope in ('target', 'decisions')
+    assert scope in ('target', 'decisions', 'movement')
     assert next(actor.parameters()).is_cuda and std.is_cuda
     optimizer.zero_grad(set_to_none=True)
     core = getattr(actor, 'base', actor)
@@ -18,16 +18,23 @@ def freeze_decision_scope(actor, std, optimizer, scope):
         assert isinstance(module, nn.Linear) and module.out_features in (45, 81)
         for parameter in (module.weight, module.bias):
             mask = torch.zeros_like(parameter, dtype=torch.bool)
-            mask[20:29] = True
+            if scope=='movement':
+                mask[:2]=True       # horizontal Gaussian means
+                mask[5:8]=True      # release/jump/crouch categorical
+            else:
+                mask[20:29] = True
             if scope == 'decisions':
                 mask[4] = True       # attack Bernoulli
                 mask[8:20] = True    # available weapon categorical
             selected[parameter] = mask
     # A shared target representation owns no movement/aim/attack/weapon rows.
     # Train it alongside the projected decision rows; preserve spatial weights.
-    if getattr(actor, 'target_branch', None) is not None:
+    if scope!='movement' and getattr(actor, 'target_branch', None) is not None:
         for parameter in actor.target_branch.parameters():
             selected[parameter] = torch.ones_like(parameter, dtype=torch.bool)
+    if scope=='movement':
+        mask=torch.zeros_like(std,dtype=torch.bool);mask[:2]=True
+        selected[std]=mask
     for parameter in list(actor.parameters()) + [std]:
         parameter.requires_grad_(parameter in selected)
         if parameter in selected:
@@ -49,6 +56,7 @@ def freeze_decision_scope(actor, std, optimizer, scope):
                         optimizer.state.pop(p, None)
                     continue
                 mask = selected[p]
+                if p is std:p[mask]=p[mask].clamp(-8,1)
                 p[~mask] = frozen[p][~mask]
                 for name, value in optimizer.state.get(p, {}).items():
                     if torch.is_tensor(value) and value.shape == p.shape:

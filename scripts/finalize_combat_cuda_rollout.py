@@ -113,7 +113,7 @@ def finalize(model_path, data, out):
         if model.get('aim_mode_head'):
             from combat_precision_head import probabilities
             lp, _ = probabilities(raw, std, z, attack, vertical, weapon, x, target, mode,
-                                  getattr(actor, 'sampled_motion_aim_branch', None))
+                                  getattr(actor, 'sampled_motion_aim_branch', None),getattr(actor,'motor_branch',None))
         elif model.get('target_head'):
             from combat_target_head import probabilities
             lp, _ = probabilities(raw, std, z, attack, vertical, weapon, x, target)

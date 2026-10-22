@@ -55,6 +55,15 @@ func (p *PPO) sampledMotionAimMeans(o Observation, raw []float64, means [4]float
 	if err != nil {
 		return means, err
 	}
+	if p.file.MotorResidual != nil {
+		delta, e := p.motorOffsets(o)
+		if e != nil {
+			return means, e
+		}
+		raw = append([]float64(nil), raw...)
+		raw[0] -= delta[0]
+		raw[1] -= delta[1]
+	}
 	x := spatialAimInputs(features, raw, target-1)
 	fwd, side := math.Tanh(movement[0]), math.Tanh(movement[1])
 	x = append(x, fwd, side, fwd-math.Tanh(raw[0]), side-math.Tanh(raw[1]), float64(1-mode), float64(mode))

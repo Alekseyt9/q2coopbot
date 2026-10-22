@@ -1,5 +1,6 @@
 """Fresh own-policy corpus; optional checkpoint-aligned PPO training objective."""
 import argparse
+import math
 import os
 import pathlib
 import shutil
@@ -21,10 +22,13 @@ def main():
     ap.add_argument('--ppo-ready', action='store_true', help='Require reward SHA matching source checkpoint; allow all registered loadouts')
     ap.add_argument('--record-combat-advice', action='store_true', help='Log hypothetical reactive expert on learner states; never applied')
     ap.add_argument('--train-only', action='store_true', help='Collect training data only; evaluate quality with a separate held-out run')
+    ap.add_argument('--minimum-free-gib',type=float,default=32.,help='Explicit storage reserve, at least16 GiB; default32')
     args = ap.parse_args()
     repo = pathlib.Path(__file__).resolve().parents[1]
     source, registry, out = [p.resolve() for p in (args.source, args.registry, args.out)]
-    assert not out.exists() and shutil.disk_usage('F:/').free >= 32 * 1024**3
+    assert math.isfinite(args.minimum_free_gib) and args.minimum_free_gib>=16
+    free_start=shutil.disk_usage('F:/').free
+    assert not out.exists() and free_start >= args.minimum_free_gib * 1024**3
     seal = read(source / 'complete.json')
     for name, key in [('weights.json', 'weights_sha256'), ('checkpoint.pt', 'checkpoint_sha256'),
                       ('report.json', 'report_sha256')]:
@@ -75,6 +79,7 @@ def main():
     base = repo / 'workspace/artifacts'
     paths = set(base.glob('*plan*.json')) | set(base.glob('*/*plan*.json'))
     paths |= set(base.glob('*/round-*/*plan*.json')) | set(base.glob('*/preflight/*plan*.json'))
+    paths |= set(base.glob('*/evaluation/*plan*.json')) | set(base.glob('*/screen/*plan*.json'))
     for path in sorted(paths):
         value = read(path)
         if not isinstance(value, dict) or not isinstance(value.get('tasks'), list):
@@ -118,6 +123,7 @@ def main():
         save(out / 'protocol.json', dict(version='combat_aim_feedback_corpus_v1', state='prepared',
             source=str(source), inputs=[dict(path=str(p), sha256=h) for p, h in pins.items()],
             assignments=chosen, history=history, max_instances=16, timescale=2,
+            minimum_free_gib=args.minimum_free_gib,free_start_bytes=free_start,
             diagnostic_intervention=False, record_combat_advice=args.record_combat_advice, allow_groups=args.allow_groups, train_only=args.train_only, ppo_training_objective=objective, training_performed=False,
             scope='Registered own-policy trajectories. PPO-ready requires checkpoint-aligned reward. Native poses are offline labels only; no validation data enters fitting. Development is not final quality evidence.'))
         shell = shutil.which('pwsh'); assert shell
@@ -125,6 +131,7 @@ def main():
         command = '& ' + literal(repo / 'scripts/run_registered_combat_pool.ps1')
         command += ' -Plans @(' + ','.join(map(literal, plans)) + ') -MaxInstances 16 -Port '
         command += str(args.port) + ' -OutputRoot ' + literal(out / 'pool')
+        assert shutil.disk_usage('F:/').free>=args.minimum_free_gib*1024**3,'Storage reserve changed before native collection'
         save(out / 'progress.json', dict(stage='native-collection', cases=sum(len(c['seeds']) for c in chosen)))
         run('native-pool', [shell, '-NoProfile', '-Command', command])
         pool = read(out / 'pool/report.json')

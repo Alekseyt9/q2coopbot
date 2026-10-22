@@ -70,6 +70,10 @@ class SpatialActor(nn.Module):
         self.weapon_exploration=model.get('weapon_exploration') if model is not None else None
         from combat_sampled_motion_aim import build as build_motion
         self.sampled_motion_aim_branch=build_motion(model) if model is not None else None
+        from combat_motor_residual import build as build_motor
+        self.motor_branch=build_motor(model) if model is not None else None
+        if self.sampled_motion_aim_branch is not None:
+            self.sampled_motion_aim_branch.requires_motor_reference=self.motor_branch is not None
     def forward(self,x,*args,**kwargs):
         output=self.base(x,*args,**kwargs)
         raw=output[0] if isinstance(output,tuple) else output
@@ -83,6 +87,9 @@ class SpatialActor(nn.Module):
         if self.weapon_exploration is not None:
             from combat_weapon_exploration import apply as apply_exploration
             result=apply_exploration(self.weapon_exploration,x,result)
+        if self.motor_branch is not None:
+            from combat_motor_residual import apply as apply_motor
+            result=apply_motor(self.motor_branch,x,result)
         return (result,*output[1:]) if isinstance(output,tuple) else result
     def single(self,x):
         output=self(x[:,None,:]);raw=output[0] if isinstance(output,tuple) else output
@@ -107,3 +114,5 @@ def export(model,actor):
         export_weapon(model,actor.weapon_state_branch)
         from combat_sampled_motion_aim import export as export_motion
         export_motion(model,actor.sampled_motion_aim_branch)
+        from combat_motor_residual import export as export_motor
+        export_motor(model,actor.motor_branch)

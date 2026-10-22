@@ -70,7 +70,12 @@ def uses_vertical(module):
     return module is not None and module[0].in_features == INPUT_WIDTH + 3
 
 
-def correction(module, features, raw, movement, target, mode, vertical=None):
+def correction(module, features, raw, movement, target, mode, vertical=None, reference_branch=None):
+    if getattr(module,'requires_motor_reference',False):
+        assert reference_branch is not None,'Motor policy requires an explicit reference branch'
+    if reference_branch is not None:
+        from combat_motor_residual import reference
+        raw=reference(reference_branch,features,raw)
     x = inputs(features, raw, movement, target, mode)
     if uses_vertical(module):
         assert vertical is not None and vertical.is_cuda and vertical.dtype == torch.long
