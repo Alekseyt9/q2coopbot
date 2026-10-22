@@ -44,19 +44,21 @@ def main():
     assert state['weights_sha256'] == sha(a.parent/'weights.json')
     config, reward = read(a.config), read(a.reward)
     assert config['objective_reward_sha256'] == sha(a.reward)
-    assert reward['version'] in ('combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v10','combat_reward_v11','combat_reward_v12')
+    assert reward['version'] in ('combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v10','combat_reward_v11','combat_reward_v12','combat_reward_v13')
     assert reward['monster_kill'] > 0 and reward['aim_gamma'] == config['gamma']
     if reward['version'] in ('combat_reward_v5','combat_reward_v9'):
         assert -0.1 <= reward['blaster_miss'] < 0
-    if reward['version'] in ('combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v10','combat_reward_v11','combat_reward_v12'):
+    if reward['version'] in ('combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v10','combat_reward_v11','combat_reward_v12','combat_reward_v13'):
         assert all(-0.05 <= reward[name] < 0 for name in ('off_target_attack','turn_away','stalled_movement'))
-    if reward['version'] in ('combat_reward_v7','combat_reward_v12'):
+    if reward['version'] in ('combat_reward_v7','combat_reward_v12','combat_reward_v13'):
         assert -0.05 <= reward['target_churn'] < 0
-    if reward['version'] == 'combat_reward_v12':
+    if reward['version'] in ('combat_reward_v12','combat_reward_v13'):
         rate, budget = reward.get('target_commitment_damage',0), reward.get('target_commitment_budget',0)
         assert 0 <= rate <= .01 and 0 <= budget <= .5 and (rate == 0) == (budget == 0)
     if reward['version'] == 'combat_reward_v9':
         assert -0.1 <= reward['machinegun_miss'] < 0
+    if reward['version'] == 'combat_reward_v13':
+        assert -0.1 <= reward['machinegun_miss'] <= 0 and reward.get('blaster_miss',0) == 0
     if reward['version'] in ('combat_reward_v10','combat_reward_v11'):
         assert 0 < reward['navigation_potential'] <= 0.1
     if reward['version'] == 'combat_reward_v11':

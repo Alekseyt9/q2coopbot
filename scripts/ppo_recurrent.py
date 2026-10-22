@@ -113,7 +113,7 @@ def main():
     ap.add_argument('--sequence-retention-weight',type=float,default=0.)
     ap.add_argument('--fork-sequence-retention',action='store_true',
                     help='Explicit objective fork preserving actor/critic/Adam for sequence retention')
-    ap.add_argument('--actor-head-scope',choices=('all','target','decisions'),default='all')
+    ap.add_argument('--actor-head-scope',choices=('all','target','decisions','conditional-aim'),default='all')
     ap.add_argument('--target-head-lr',type=float,default=.003)
     ap.add_argument('--decision-head-lr',type=float,default=.003)
     ap.add_argument('--fork-head-scope',action='store_true',help='Explicit optimizer-scope fork from a resumed checkpoint')
@@ -149,13 +149,14 @@ def main():
         (args.out/'weights.json').write_text(json.dumps(updated,allow_nan=False))
         return
     config=read(args.config);meta=read(args.data/'report.json');validate_objective(config,meta)
-    assert args.actor_head_scope == 'all' or (target_head and not args.sequence_retention_spec)
+    assert args.actor_head_scope in ('all','conditional-aim') or (target_head and not args.sequence_retention_spec)
+    assert args.actor_head_scope != 'conditional-aim' or model.get('sampled_motion_aim'), 'Conditional aim scope requires the sampled-motion branch'
     assert args.actor_head_scope != 'decisions' or weapon_head, 'Decision scope requires the masked weapon head'
-    actor_training=dict(scope=args.actor_head_scope,learning_rate={'target':args.target_head_lr,'decisions':args.decision_head_lr,'all':config['actor_lr']}[args.actor_head_scope])
+    actor_training=dict(scope=args.actor_head_scope,learning_rate={'target':args.target_head_lr,'decisions':args.decision_head_lr,'all':config['actor_lr'],'conditional-aim':config['actor_lr']}[args.actor_head_scope])
     if model.get('weapon_state_residual'):
         from combat_weapon_state_residual import validate as validate_weapon_state,CONTRACT_VERSION
         validate_weapon_state(model)
-        assert args.actor_head_scope=='all', 'Observed weapon residual requires full-actor PPO'
+        assert args.actor_head_scope in ('all','conditional-aim'), 'Observed weapon residual requires full actor or frozen conditional aim scope'
         assert math.isfinite(args.weapon_state_lr) and 0<args.weapon_state_lr<=.01
         actor_training['weapon_state_residual']=dict(version=CONTRACT_VERSION,learning_rate=args.weapon_state_lr)
     assert meta['feature_version']==model['feature_version'], 'Rollout feature contract differs'
@@ -257,6 +258,7 @@ def main():
         assert cp['anchor_sha256']==sha(args.anchor_model) and cp['bank_sha256']==sha(args.retention_bank)
         assert cp.get('retention_weights',[1.,1.])==[args.retention_weight,args.bank_weight]
         previous_training=cp.get('actor_training',dict(scope='all',learning_rate=config['actor_lr']))
+        assert not cp.get('sac_training') or args.fork_head_scope, 'SAC to PPO requires an explicit optimizer/algorithm scope fork'
         assert previous_training == actor_training or args.fork_head_scope, 'Explicit actor scope fork required'
         if not args.fork_sequence_retention:
             assert cp.get('sequence_retention') == sequence_retention, 'Explicit sequence objective fork required'
@@ -276,6 +278,9 @@ def main():
     if args.actor_head_scope in ('target','decisions'):
         from combat_target_head_scope import freeze_decision_scope
         project,trainable_actor_parameters=freeze_decision_scope(actor,std,actor_opt,args.actor_head_scope)
+    elif args.actor_head_scope == 'conditional-aim':
+        from combat_conditional_aim_scope import freeze_conditional_aim
+        project,trainable_actor_parameters=freeze_conditional_aim(actor,std,actor_opt)
     for _ in range(config['actor_steps']):
         loss,kl=objective()
         if float(kl.detach())>config['target_kl']:break
@@ -320,11 +325,12 @@ def main():
     report['training_config_forks']=config_forks
     report['trainable_actor_parameters']=trainable_actor_parameters
     if model.get('weapon_state_residual'):
-        report['scope']+=' Observed weapon-state residual uses a separate Adam group with explicit LR; old log_std and parameter IDs stay in group1. Both groups backtrack by the same factor. Full actor remains trainable.'
+        report['scope']+=' Observed weapon-state residual keeps its separate Adam group; old log_std and parameter IDs stay in group1. Both groups backtrack by the same factor. Trainability follows the explicit actor scope.'
         report['weapon_state_residual']=actor_training['weapon_state_residual']
         report['actor_optimizer_group_lrs']=[group['lr'] for group in actor_opt.param_groups]
     if args.actor_head_scope=='target':report['scope']+=' Projected target rows20:29 only; other actor outputs/encoder/spatial/std and their Adam moments preserved. Output tensor Adam clocks advance for target updates; switching scope requires explicit checkpoint fork.'
     if args.actor_head_scope=='decisions':report['scope']+=' Projected attack row4, weapon rows8:20 and target rows20:29 only; movement/vertical/aim/mode/encoder/spatial/std and their Adam moments preserved. Shared output tensor Adam clocks advance; changing scope or its learning rate requires explicit checkpoint fork. Joint on-policy PPO likelihood and masks unchanged.'
+    if args.actor_head_scope=='conditional-aim':report['scope']+=' Only sampled-motion conditional aim branch and log_std[2:4] train. All raw actor logits/encoder/spatial/weapon branches and movement variance/moments stay frozen; shared std Adam clock advances. This is an isolated aiming experiment, not full-policy algorithm replacement.'
     if model.get('shared_target'):
         report['scope']+=' Explicit shared per-enemy target residual is trained in target/decision scopes; its new Adam states start empty after a sealed checkpoint migration. Availability masks and none output unchanged.'
     if sequence_retention:

@@ -21,7 +21,8 @@ def validated_stage(spec, seal):
         stage = spec['component_ablation']
         assert stage['version'] == 'combat_component_ablation_stage_v1'
         assert stage['stage'] == 'component-ablation'
-        assert len(spec['variants']) == 5
+        assert len(spec['variants']) in (4, 5)
+        assert len(stage['component_labels']) == len(set(stage['component_labels'])) == len(spec['variants']) - 1
         assert sum(v['mode'] == 'rules' for v in spec['variants']) == 1
         assert set(stage['component_labels']) == {v['label'] for v in spec['variants'] if v['mode'] == 'learned'}
         assert all(v['cuda_replay'] and not v['deterministic'] for v in spec['variants'] if v['mode'] == 'learned')

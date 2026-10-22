@@ -19,6 +19,7 @@ const NativeWasteRewardVersion = "combat_reward_v9"
 const NavigationRewardVersion = "combat_reward_v10"
 const CoopRewardVersion = "combat_reward_v11"
 const TargetCommitmentRewardVersion = "combat_reward_v12"
+const SequenceHitscanRewardVersion = "combat_reward_v13"
 
 // RewardConfig is an explicit experimental objective, not a measured success
 // metric. Server effects never enter the policy observation.
@@ -56,7 +57,21 @@ func (c RewardConfig) HasPotentialReward() bool {
 }
 
 func (c RewardConfig) HasActionQualityCosts() bool {
-	return c.Version == ActionQualityRewardVersion || c.Version == TargetSequenceRewardVersion || c.Version == TargetCommitmentRewardVersion || c.Version == SelectedAimRewardVersion || c.Version == NativeWasteRewardVersion || c.HasNavigationReward()
+	return c.Version == ActionQualityRewardVersion || c.HasTargetSequenceReward() || c.Version == SelectedAimRewardVersion || c.Version == NativeWasteRewardVersion || c.HasNavigationReward()
+}
+
+func (c RewardConfig) HasTargetCommitmentReward() bool {
+	return c.Version == TargetCommitmentRewardVersion || c.Version == SequenceHitscanRewardVersion
+}
+
+func (c RewardConfig) HasTargetSequenceReward() bool {
+	return c.Version == TargetSequenceRewardVersion || c.HasTargetCommitmentReward()
+}
+
+// v13 keeps v12's sequence objective and joins actual MG outcomes. A zero
+// coefficient supports a paired control with exactly the same evidence mask.
+func (c RewardConfig) HasHitscanMissCost() bool {
+	return c.Version == NativeWasteRewardVersion || c.Version == SequenceHitscanRewardVersion
 }
 
 func (c RewardConfig) HasNavigationReward() bool {
@@ -76,12 +91,12 @@ func (c RewardConfig) Validate() error {
 			return fmt.Errorf("nonfinite reward coefficient")
 		}
 	}
-	if c.Version == TargetCommitmentRewardVersion {
+	if c.HasTargetCommitmentReward() {
 		if c.TargetCommitmentDamage < 0 || c.TargetCommitmentDamage > .01 || c.TargetCommitmentBudget < 0 || c.TargetCommitmentBudget > .5 || (c.TargetCommitmentDamage == 0) != (c.TargetCommitmentBudget == 0) {
 			return fmt.Errorf("v12 requires paired bounded commitment rate/budget or both zero")
 		}
 	} else if c.TargetCommitmentDamage != 0 || c.TargetCommitmentBudget != 0 {
-		return fmt.Errorf("commitment bonus requires reward v12")
+		return fmt.Errorf("commitment bonus requires reward v12 or v13")
 	}
 	if c.Version == CoopRewardVersion {
 		if c.PeerDeath >= 0 || c.PeerDeath < -10 {
@@ -118,8 +133,12 @@ func (c RewardConfig) Validate() error {
 		if c.MachinegunMiss >= 0 || c.MachinegunMiss < -.1 {
 			return fmt.Errorf("v9 requires bounded negative MG miss cost")
 		}
+	} else if c.Version == SequenceHitscanRewardVersion {
+		if c.MachinegunMiss > 0 || c.MachinegunMiss < -.1 {
+			return fmt.Errorf("v13 requires MG miss cost in [-.1,0]")
+		}
 	} else if c.MachinegunMiss != 0 {
-		return fmt.Errorf("MG miss cost requires reward v9")
+		return fmt.Errorf("MG miss cost requires reward v9 or v13")
 	}
 	for _, cost := range []float64{c.OffTargetAttack, c.TurnAway, c.StalledMovement} {
 		if c.HasActionQualityCosts() {
@@ -130,7 +149,7 @@ func (c RewardConfig) Validate() error {
 			return fmt.Errorf("action quality costs require reward v6")
 		}
 	}
-	if c.Version == TargetSequenceRewardVersion || c.Version == TargetCommitmentRewardVersion {
+	if c.HasTargetSequenceReward() {
 		if c.TargetChurn >= 0 || c.TargetChurn < -.05 {
 			return fmt.Errorf("v7 requires target churn cost in [-.05,0)")
 		}
@@ -166,7 +185,7 @@ type Reward struct {
 }
 
 func (c RewardConfig) Evaluate(s *Step, o ServerOutcome) Reward {
-	if c.Version == TargetSequenceRewardVersion || c.Version == TargetCommitmentRewardVersion {
+	if c.HasTargetSequenceReward() {
 		return Reward{Version: c.Version, Worker: s.Worker, Episode: s.Episode, Step: s.Index, Reason: "sequence_context_required"}
 	}
 	return c.evaluate(s, o)
@@ -211,7 +230,7 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 			seen[m.Shot] = true
 		}
 	}
-	if c.Version == NativeWasteRewardVersion {
+	if c.HasHitscanMissCost() {
 		if o.HitscanMisses == nil || o.HitscanMisses.Version != "native_hitscan_miss_v1" {
 			return deny("unavailable_hitscan_miss_evidence")
 		}
@@ -287,7 +306,7 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 		score += r.Components["peer_death"]
 	}
 	if c.HasPotentialReward() {
-		if c.Version == SelectedAimRewardVersion || c.Version == TargetCommitmentRewardVersion || c.Version == NativeWasteRewardVersion || c.HasNavigationReward() {
+		if c.Version == SelectedAimRewardVersion || c.HasTargetCommitmentReward() || c.Version == NativeWasteRewardVersion || c.HasNavigationReward() {
 			shaping, evidence, err := c.selectedAimShaping(s, s.Terminal || completeHandoff)
 			if err != nil {
 				r.Components = nil
@@ -335,7 +354,7 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 		r.Components["blaster_miss"] = float64(len(o.ProjectileMisses.Misses)) * c.BlasterMiss
 		score += r.Components["blaster_miss"]
 	}
-	if c.Version == NativeWasteRewardVersion {
+	if c.HasHitscanMissCost() {
 		r.Components["machinegun_miss"] = float64(len(o.HitscanMisses.Misses)) * c.MachinegunMiss
 		score += r.Components["machinegun_miss"]
 	}

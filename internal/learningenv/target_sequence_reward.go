@@ -50,10 +50,10 @@ func visibleTargets(o policy.Observation) map[targetKey]bool {
 
 func (q *SequenceReward) Evaluate(s *Step, outcome ServerOutcome) Reward {
 	r := q.Config.evaluate(s, outcome)
-	if q.Config.Version == TargetCommitmentRewardVersion {
+	if q.Config.HasTargetCommitmentReward() {
 		r = q.commitmentReward(s, outcome, r)
 	}
-	if q.Config.Version != TargetSequenceRewardVersion && q.Config.Version != TargetCommitmentRewardVersion {
+	if !q.Config.HasTargetSequenceReward() {
 		return r
 	}
 	if !r.Available {

@@ -36,6 +36,10 @@ def main():
     assert processed['state']=='complete' and processed['device']=='cuda' and not processed['training_performed']
     assert all(c['split']=='train' for c in processed['cases'])
     merged=read(pin(processing/'merged/report.json'));assert merged['reward_config_sha256']==protocol['ppo_training_objective']['reward_sha256']
+    reward_paths={i['path'] for i in protocol['inputs'] if i['sha256']==merged['reward_config_sha256']}
+    assert len(reward_paths)==1
+    reward_config=read(pin(next(iter(reward_paths)),merged['reward_config_sha256']))
+    native_cost_verified=0;native_cost_total=0.
     with pin(processing/'merged/rollout.jsonl',merged['rollout_sha256']).open(encoding='utf-8-sig') as stream:
         rows={(r['seed'],r['index']):r for r in map(json.loads,stream)}
     assert len(rows)==merged['rows'];jobs={j['job']:j for j in pool['jobs']};buckets=collections.defaultdict(list);cases=[]
@@ -59,7 +63,7 @@ def main():
                 key=(n['spawncount'],n['begin_frame'],n['actor'],n['sequence']);assert key not in windows
                 windows[key]=(step,reward)
         with log.open(encoding='utf-8-sig') as stream:shots=[s for s in scan(stream,set(windows)) if s['eligible']]
-        local=collections.Counter()
+        local=collections.Counter();misses=collections.Counter()
         for shot in shots:
             step,reward=windows[shot['window']];o=step['observation'];components=reward['components']
             assert reward['version']==merged['reward_version']
@@ -68,8 +72,15 @@ def main():
                 direct_observed_weapon=o['weapon'] in ('Blaster','Machinegun','models/weapons/v_machn/tris.md2'),
                 target_entity=step['action'].get('target_entity',0),off_target_attack=components['off_target_attack'])
             buckets['all'].append(data);local[data['outcome']]+=1
+            if data['outcome'] in ('sky','no_contact','solid_contact','corpse_contact'):misses[shot['window']]+=1
             buckets['known_bbox' if data['known_bbox'] else 'no_known_bbox'].append(data)
             if not data['known_bbox'] and data['direct_observed_weapon']:buckets['no_known_bbox_direct_weapon'].append(data)
+        if merged['reward_version'] in ('combat_reward_v9','combat_reward_v13'):
+            for window,(_,reward) in windows.items():
+                expected=misses[window]*reward_config['machinegun_miss']
+                actual=reward['components']['machinegun_miss']
+                assert math.isclose(actual,expected,rel_tol=1e-10,abs_tol=1e-10), 'Stored native miss cost differs from actual rays'
+                native_cost_verified+=1;native_cost_total+=actual
         cases.append(dict(job=job['job'],seed=job['seed'],shots=len(shots),outcomes=dict(local)))
     result={}
     for name,items in buckets.items():
@@ -80,7 +91,8 @@ def main():
     for name in ('native_combat_release.py','report_combat_machinegun_hits.py','report_registered_machinegun_outcomes.py'):
         pin(pathlib.Path(__file__).with_name(name))
     for p,h in pins.items():assert sha(p)==h
-    save(args.out,dict(state='complete',version='registered_train_fire_reward_audit_v1',cases=cases,summary=result,
+    save(args.out,dict(state='complete',version='registered_train_fire_reward_audit_v2',cases=cases,summary=result,
+        native_miss_cost_verified_windows=native_cost_verified,native_miss_cost_total=native_cost_total,
         reward_config_sha256=merged['reward_config_sha256'],reward_version=merged['reward_version'],
         inputs=[dict(path=p,sha256=h) for p,h in pins.items()],script_sha256=sha(__file__),
         training_performed=False,neural_execution=False,promotion=False,

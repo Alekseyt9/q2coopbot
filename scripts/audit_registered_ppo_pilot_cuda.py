@@ -9,6 +9,16 @@ from process_combat_architecture_pool import read,save,sha
 
 def optimizer_steps(before,after,expected):
     assert before['param_groups']==after['param_groups']
+    if not before['state']:
+        identifiers={p for group in after['param_groups'] for p in group['params']}
+        assert set(after['state'])<=identifiers
+        assert bool(after['state']) or expected==0
+        for state in after['state'].values():
+            assert float(state['step'])==expected
+            assert state['exp_avg'].shape==state['exp_avg_sq'].shape
+            for value in state.values():
+                if torch.is_tensor(value):assert value.is_cuda and bool(torch.isfinite(value).all())
+        return dict(states=len(after['state']),step_delta=expected,initialized_from_empty=True)
     assert set(before['state'])==set(after['state']), 'Unexpected optimizer state census'
     deltas=[]
     for key,old in before['state'].items():

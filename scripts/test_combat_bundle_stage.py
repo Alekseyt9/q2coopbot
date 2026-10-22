@@ -23,6 +23,16 @@ class BundleStageTests(unittest.TestCase):
         bad=copy.deepcopy(seal);bad['cuda_cases']=24;bad['processed']=bad['processed'][:3]
         with self.assertRaises(AssertionError):validated_stage(spec,bad)
 
+    def test_four_variant_calibration_probe(self):
+        spec,seal=self.fixture(True)
+        spec['variants'].pop(3)
+        spec['component_ablation']['component_labels'].pop()
+        spec['component_ablation']['native_budget']=32
+        seal.update(native_cases=32,cuda_cases=24,processed=[dict(cases=8) for _ in range(3)])
+        self.assertEqual(validated_stage(spec,seal)['native_budget'],32)
+        spec['component_ablation']['component_labels'].append('control')
+        with self.assertRaises(AssertionError):validated_stage(spec,seal)
+
     def test_budget_and_component_identity_cannot_drift(self):
         spec,seal=self.fixture(True);spec['component_ablation']['component_labels'][-1]='other'
         with self.assertRaises(AssertionError):validated_stage(spec,seal)

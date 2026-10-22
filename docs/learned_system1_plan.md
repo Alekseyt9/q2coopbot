@@ -689,3 +689,21 @@ Target/fire-only BC smoke закрыт:3/8 против source2/8,rules6/8;па�
 
 
 Target/fire screen закрыт:13/24 против source10/24,прежние static-fixture rules12/24;парно к source4/1. Выше MG damage fraction46.21→69.65%,ниже yaw9.67→4.34%,ноstanding16.27→19.34%;promotion=false,coverage отложен. Найдена и после закрытия pipeline исправлена ошибка isolated combat goal:отключение level-exit routes мешало short rules retreat. BSP regression test воспроизвёл ошибку до fix и прошёл после. Новые48 native teacher боёв закрыты:6642 frames,2708 motion requests,2476 native-matched displacement>2 transitions. Canonical features и ground motion/aim labels1881 train/1255 development готовы;GPU fit нового motion controller ещё не выполнен. См. testing/combat_mobile_teacher_20261022.md.
+
+
+Mobile motion BC200 steps наCUDA закрыт:development movementRMSE.464→.371,fine aim3.49→2.57°,ноown-mode aim4.30° против source3.99°. Native smoke4/8 против source5/8,rules6/8,full rejected. Matched component matrix40native/32CUDA закрыта:source4/8,movement4/8,aim5/8,full3/8,rules4/8. Aim имеет слабый сигнал,ноyaw/targetless attack хуже. World-input GPU audit не подтвердил,что проблема только в body-axis loss;выявлена mode calibration гипотеза (редкийcoarseпереоценён послеbalanced CE). Следующий малыйtrain-only intercept probe до большогоscreen;default/promotion сохранены. Подробности testing/combat_mobile_motion_bc_20261022.md.
+
+
+Mode calibration выполнена наCUDA только поtrain:одинintercept−2.8421,меняютсяbias65/66. Development coarse probability8.98→2.00% приtruth1.83%,naturalCE.1063→.0293,own-mode aim4.324→3.464° (source3.987°). Independent checkpoint/1026native-history audit прошёл,остальные outputs/weights/value/std/Adam/config сохранены. Запущен fresh32native/24CUDA four-way probe:source/aim/calibrated/rules,offset624,порт45600,16 ×2. Игровой выигрыш пока не заявляется;см.testing/combat_aim_mode_calibration_20261022.md.
+
+
+Mode-calibration probe закрыт32native/24CUDA:source/uncalibrated/calibrated по3/8,rules5/8. Калибровка уменьшаетyaw/standing кuncalibrated,нонепревосходитsource;largescreen=false. Новый jointmobile corpus добавил647train/414dev explicit no-target fire releases безprop/grenade mislabels. Дваравных200-step CUDA fits(heads/encoder) завершены;development movementRMSE.430/.296,fire BCE.469/.370. Pair audit подтвердил одинаковыеinitial/data/budget/draws иcurrent-encoder causal replay;weapon/vertical parameter rows frozen,outputs can drift. Freshfour-way32native/24CUDA probe source/heads/encoder/rules запущен,offset628,16 ×2;см.testing/combat_joint_mobile_encoder_20261022.md.
+
+
+Joint mobile probe закрыт32native/24CUDA:heads6/8,source5/8,encoder4/8,mobile rules5/8. Heads парно1gained/0lost,received521→421,death3→1,yaw6.12→3.36%,standing22.31→17.82%,ноMG damage73.96→63.92% иtargetless attack4.85→18.15%. Encoder не продвигается вопреки лучшемуoffline fit. Запущен frozenfresh72native/48CUDA screen толькоheads/source/rules,offset632–633,16 ×2. Promotion=false;см.testing/combat_joint_mobile_encoder_20261022.md.
+
+
+22.10 joint-mobile screen закрыт72native/48CUDA:heads11/24,source11/24,mobile rules14/24;парно2gained/2lost. Heads меньше гибнет(12→7),больше убивает(27→35),ночаще не завершает бой(1→6). Coverage/promotion не назначены. Следующий отдельный опыт [native MG miss + sequence reward](testing/combat_sequence_hitscan_reward_20261022.md):v13 сохраняет actual pinned bonus-v12 objective и добавляет только MG miss cost. Подготовлена CUDA равная пара control0/candidate−.02,по32 свежих own-policy боя;затем frozen32native/24CUDA four-way smoke. Обучение ещё не завершено,качество не заявляется.
+
+
+22.10 native MG miss + sequence reward опыт завершён:64 свежих train боя наCUDA,control3450/cost3179 rows,по10 actor/40 value steps. Native audit подтвердил343 промаха и−6.86 reward,включая47 solid shots без known bbox. Fresh32native/24CUDA smoke:parent5/8,control4/8,cost4/8,rules6/8. MG live-monster damage57.47→61.67%,yaw4.92→1.77%,standing20.70→16.37%,ноreceived420→494 иwin gain0. Решение miss_cost_not_advanced,screen/promotion=false,default сохранён. Подробности [закрытого опыта](testing/combat_sequence_hitscan_reward_20261022.md);автоматического увеличения штрафа/бюджета не назначено.

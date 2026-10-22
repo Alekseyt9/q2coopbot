@@ -189,7 +189,7 @@ func run() error {
 				return err
 			}
 		}
-		if rewardConfig != nil && rewardConfig.Version == learningenv.NativeWasteRewardVersion {
+		if rewardConfig != nil && rewardConfig.HasHitscanMissCost() {
 			f, err := os.Open(*serverLog)
 			if err != nil {
 				return err

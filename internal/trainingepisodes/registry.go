@@ -213,7 +213,8 @@ func (e Episode) validate() error {
 		case "scripts/scenarios/combat-reward-recoil-v5.json", "scripts/scenarios/combat-reward-blaster-miss-v1.json",
 			"scripts/scenarios/combat-reward-action-quality-v6.json", "scripts/scenarios/combat-reward-target-sequence-v7.json",
 			"scripts/scenarios/combat-reward-selected-aim-v8.json", "scripts/scenarios/combat-reward-native-waste-v9.json",
-			"scripts/scenarios/combat-reward-target-commitment-cost-v12.json", "scripts/scenarios/combat-reward-target-commitment-bonus-v12.json":
+			"scripts/scenarios/combat-reward-target-commitment-cost-v12.json", "scripts/scenarios/combat-reward-target-commitment-bonus-v12.json",
+			"scripts/scenarios/combat-reward-sequence-hitscan-control-v13.json", "scripts/scenarios/combat-reward-sequence-hitscan-cost-v13.json":
 		default:
 			return fmt.Errorf("unsupported reward recipe")
 		}
