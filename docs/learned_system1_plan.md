@@ -663,3 +663,20 @@ Vertical screen завершён:9/24 против контроля11/24 иrules
 Bodypoint200 fits/audit закрыты на CUDA. Изменение точки действительно меняет средний прицел: pitch+1.776°, ошибка к center4.234→3.781° на одинаковой development выборке. Это offline результат. Запущен fresh smoke24 native/16 CUDA,seed offset584,16 ×2; общий контроль того же бюджета, default сохранён, promotion=false.
 
 Bodypoint smoke завершён: center4/8,upper2/8,rules6/8;2 дополнительные победы, урон610→495, selected MG contacts82/188→119/208 на разных траекториях. Стояние/attack без цели выше, поэтому решения проблемы лишних действий нет. Запущен frozen screen72 native/48 CUDA,offset588–589,16 ×2; обе модели и default сохранены.
+
+Bodypoint screen закрыт:8/24 против upper7/24 иrules14/24; общего MG hit-rate выигрыша нет, actual living-monster damage54.67%→53.83%. Center development-only. [Broad PPO160](testing/combat_broad_ppo_continuation_20261022.md) продолжает прежнего PPO parent на всех28 групповых семействах,пять own-policy раундов32,16 ×2,толькоCUDA. Прерванный round1 восстанавливается:20 closed captures проверены,12 incomplete архивированы и повторяются; полный update/качество ещё не подтверждены.
+
+22.10 round1 восстановлен:20 сохранённых/12 заново выполненных,32 native/32 CUDA,3511 train rows. Пилот продолжен с закрытой фазы и перешёл к GPU fit1. Итоговая оценка source PPO/update5/rules заранее закреплена на fresh validation592 и запускается после пяти rounds; default и objective сохранены.
+
+Fit1 завершён с10/10 actor updates,checkpoint проверен наCUDA:30 actor/12 value tensors изменены,config/objective/groups сохранены. Round2 начат этим update; полный160-case цикл и итоговое качество остаются в работе.
+
+Broad PPO160 закрыт:19979 rows,50 actor steps,полный CUDA checkpoint/Adam continuity audit. Smoke2/8 против parent2/8 иrules6/8,без выигрыша;candidate не продвигается. Primary ownership clock исправлен поnative network release,ранние кадры проверены без visible rules fallback. [Center+vertical calibrated](testing/combat_center_vertical_calibrated_20261022.md) обучен200 steps сretention.002 наGPU,control/data/budget одинаковы;smoke24/16 CUDA запущен наfresh596,16 ×2. Default сохранён.
+
+
+Center+vertical calibrated smoke закрыт:3/8 против control2/8 и rules6/8;урон465→398,но yaw/стояние/смены цели выше. Решение только fresh screen72 native/48 CUDA,offset600–601;native72 завершены,аудиты/CUDA replay идут,promotion=false. Следующий отдельный этап — [совместная имитация правил](testing/combat_joint_teacher_20261022.md):48 новых демонстраций (32 train/16 development) через пул16 ×2,поставлены последовательно после screen. Подготовлен past-only target/history readiness audit;полного joint feature export и обучения ученика пока нет.
+
+
+Center+vertical screen закрыт:8/24 против control7/24 и rules13/24,ordinary6/16 и recovery2/8 (rules5/16 и8/8). MG live-monster damage264/440→246/440,урон1718→1732;все72 native/48 CUDA и5 отчётов проверены. Candidate_not_advanced,promotion=false,coverage не назначен. Начат последовательный сбор48 fresh rules demonstrations для нового joint BC;готовность данных/ученика проверяется отдельно.
+
+
+Rules teacher48 закрыт:32 train/16 development,4157 released alive frames;readiness hashes/release/target-history audit прошёл. Обнаружено недостаточное покрытие движения:8 movement commands,0 jump/crouch;raw previous target везде отсутствует. Есть3945 explicit visible targets и86 weapon requests. Решение:не обучать движение/vertical на стоящем teacher;сначала canonical feature/history/native proof и masked target/fire/weapon BC,контролируя shared encoder. Полный joint BC/новый ученик ещё не готовы;детали в testing/combat_joint_teacher_20261022.md.
