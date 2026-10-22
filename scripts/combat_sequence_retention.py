@@ -8,6 +8,7 @@ from combat_weapon_head import feature_mask
 from train_combat_bc import torch
 
 VERSION = 'combat_sequence_retention_v1'
+CONDITIONAL_FIRE_EXPECTATION = 'fixed_behavior_complete_action_conditional_fire_v1'
 
 
 def categorical_kl(teacher, student, valid=None):
@@ -27,13 +28,16 @@ def normal_kl(teacher, student, teacher_std, std):
             (2 * std.mul(2).exp()) - .5).sum(-1)
 
 
-def policy_kl(raw, std, teacher, teacher_std, features, motion_branch=None, teacher_motion_branch=None, movement=None, reference_branch=None, teacher_reference_branch=None):
+def policy_kl(raw, std, teacher, teacher_std, features, motion_branch=None, teacher_motion_branch=None, movement=None, reference_branch=None, teacher_reference_branch=None, fire_branch=None, teacher_fire_branch=None, fire_context=None):
     """KL(teacher || current), including all available targets and aim modes.
 
     Inputs are outputs from the same actual sequence histories. Target/mode
     branches are weighted by teacher probabilities, never just sampled choices.
     Common tanh/aim-scale transforms are identical conditional on each mode.
     """
+    conditional_fire=fire_branch is not None or teacher_fire_branch is not None
+    assert not getattr(motion_branch,'requires_conditional_fire',False) or fire_branch is not None, 'Conditional fire requires its explicit conditional retention contract'
+    assert not getattr(teacher_motion_branch,'requires_conditional_fire',False) or teacher_fire_branch is not None, 'Conditional fire requires its explicit conditional retention contract'
     assert raw.is_cuda and teacher.is_cuda and std.is_cuda and teacher_std.is_cuda
     assert features.is_cuda and raw.shape == teacher.shape and raw.shape[1] in (45, 81)
     assert std.shape == teacher_std.shape == (4,)
@@ -45,8 +49,21 @@ def policy_kl(raw, std, teacher, teacher_std, features, motion_branch=None, teac
     target_probs = torch.softmax(previous[:,20:29].masked_fill(~valid, float('-inf')), -1)
     terms = normal_kl(previous[:,:2], current[:,:2], teacher_std[:2], std[:2])
     distributions = torch.distributions
+    before_fire,after_fire=previous[:,4],current[:,4]
+    if conditional_fire:
+        from combat_conditional_fire import logits as fire_logits
+        assert raw.shape[1]==81 and fire_context is not None and len(fire_context)==5
+        assert all(value.is_cuda and not value.requires_grad for value in fire_context)
+        # One fixed behavior action per history estimates the teacher expectation
+        # over target/mode/movement/aim/pose/weapon. Never redraw on backtracking.
+        target,mode,latent,vertical,weapon=fire_context
+        with torch.no_grad():
+            before_fire=fire_logits(teacher_fire_branch,features,previous,target,mode,latent,vertical,weapon)
+        after_fire=fire_logits(fire_branch,features,current,target,mode,latent,vertical,weapon)
+    else:
+        assert fire_context is None, 'Fire context supplied without conditional branches'
     terms = terms + distributions.kl_divergence(
-        distributions.Bernoulli(logits=previous[:,4]), distributions.Bernoulli(logits=current[:,4]))
+        distributions.Bernoulli(logits=before_fire), distributions.Bernoulli(logits=after_fire))
     terms = terms + categorical_kl(previous[:,5:8], current[:,5:8])
     terms = terms + categorical_kl(previous[:,8:20], current[:,8:20], feature_mask(features[:,:845]))
     terms = terms + categorical_kl(previous[:,20:29], current[:,20:29], valid)

@@ -44,10 +44,12 @@ def finalize(model_path, data, out):
                     str(pathlib.Path(__file__).with_name('combat_sequence_storage.py').resolve()):
                         sha(pathlib.Path(__file__).with_name('combat_sequence_storage.py'))})
     weapon_helpers=[]
+    if model.get('conditional_fire'):
+        weapon_helpers.append(pathlib.Path(__file__).with_name('combat_conditional_fire.py').resolve())
     if model.get('weapon_state_residual'):
-        weapon_helpers=[pathlib.Path(__file__).with_name(name).resolve() for name in
+        weapon_helpers.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
             ('combat_weapon_state_residual.py','combat_spatial_aim.py','ppo_recurrent.py','ppo_combat.py',
-             'combat_target_head.py','combat_precision_head.py','combat_weapon_head.py','combat_attention.py')]
+             'combat_target_head.py','combat_precision_head.py','combat_weapon_head.py','combat_attention.py'))
     if model.get('weapon_exploration'):
         weapon_helpers.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
                               ('combat_weapon_exploration.py','combat_weapon_head.py','combat_spatial_aim.py'))
@@ -113,7 +115,7 @@ def finalize(model_path, data, out):
         if model.get('aim_mode_head'):
             from combat_precision_head import probabilities
             lp, _ = probabilities(raw, std, z, attack, vertical, weapon, x, target, mode,
-                                  getattr(actor, 'sampled_motion_aim_branch', None),getattr(actor,'motor_branch',None))
+                                  getattr(actor, 'sampled_motion_aim_branch', None),getattr(actor,'motor_branch',None),getattr(actor,'conditional_fire_branch',None))
         elif model.get('target_head'):
             from combat_target_head import probabilities
             lp, _ = probabilities(raw, std, z, attack, vertical, weapon, x, target)

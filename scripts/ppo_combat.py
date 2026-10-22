@@ -77,7 +77,7 @@ def log_prob(actor,std,x,z,attack,vertical,weapon=None,target=None,mode=None):
     raw=actor(x)
     if raw.shape[1]==81:
         from combat_precision_head import probabilities
-        return probabilities(raw,std,z,attack,vertical,weapon,x,target,mode,getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None))
+        return probabilities(raw,std,z,attack,vertical,weapon,x,target,mode,getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None),getattr(actor,'conditional_fire_branch',None))
     if raw.shape[1]==45:
         from combat_target_head import probabilities
         return probabilities(raw,std,z,attack,vertical,weapon,x,target)
@@ -176,6 +176,7 @@ def main():
         (out/'report.json').write_text(json.dumps({'scope':'BC initialized stochastic actor, zero value; no PPO update yet','bc_sha256':sha(pathlib.Path(a.init_bc)),'config_sha256':sha(pathlib.Path(a.config))},indent=2));return
     assert a.model and a.data
     model_path=pathlib.Path(a.model);root=pathlib.Path(a.data);model=json.loads(model_path.read_text());meta=json.loads((root/'report.json').read_text())
+    assert not model.get('conditional_fire'), 'Conditional fire optimizer/checkpoint integration is not verified yet'
     assert not any(model.get(k) for k in ('memory','attention','entity_attention')), 'Architecture models require ppo_recurrent.py'
     validate_objective(config,meta)
     assert model['kind']=='combat_ppo_v1' and not model['deterministic'] and meta['version']=='combat_ppo_rollout_v1' and sha(model_path)==meta['model_sha256']

@@ -24,4 +24,17 @@ $death=[pscustomobject]@{spawncount=42;map='base1';frame=150;target=1;target_cla
 if(Get-CombatGoalReceipt $row @($events+$death) $context $classes){throw 'Death followed by respawn accepted'}
 $row.combat_policy.observation.identity.life=2
 if(Get-CombatGoalReceipt $row $events $context $classes){throw 'Second life accepted'}
+$row.combat_policy.observation.identity.life=1
+$late=$row.PSObject.Copy();$late.observation_frame=172
+$middle=$row.PSObject.Copy();$middle.observation_frame=171
+$rows=[Collections.Generic.List[object]]::new();$rows.Add($row);$rows.Add($middle);$rows.Add($late)
+if(Get-CombatEarliestGoalReceipt $rows @($events | Where-Object target_class -ne 'monster_gunner') $context $classes){throw 'Incomplete delayed events accepted'}
+$receipt=Get-CombatEarliestGoalReceipt $rows $events $context $classes
+if(!$receipt -or $receipt.observed_frame -ne 170 -or $receipt.kill_frame -ne 169){throw 'Polling delay shifted terminal boundary'}
+$single=Get-CombatEarliestGoalReceipt @($row) $events $context $classes
+if(($single|ConvertTo-Json -Depth 6 -Compress) -ne ($receipt|ConvertTo-Json -Depth 6 -Compress)){throw 'Trace batch size changed goal receipt'}
+$futureDeath=[pscustomobject]@{spawncount=42;map='base1';frame=171;target=1;target_class='player';killed=$true}
+if((Get-CombatEarliestGoalReceipt $rows @($events+$futureDeath) $context $classes).observed_frame -ne 170){throw 'Future post-goal event changed earlier terminal'}
+if(Get-CombatEarliestGoalReceipt $rows @($events+$death) $context $classes){throw 'Pre-goal death accepted by earliest selector'}
+if(Get-CombatEarliestGoalReceipt @($early) $events $context $classes){throw 'Earliest selector lacks post-kill observation'}
 'Goal stop regression checks passed'

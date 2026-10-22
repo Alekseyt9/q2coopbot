@@ -45,7 +45,9 @@ def main():
         assert sha(source / file) == seal[key]; pins[str(source / file)] = seal[key]
     cp = torch.load(source / 'checkpoint.pt', map_location='cuda', weights_only=True)
     assert not cp['actor_optimizer']['state'], 'Explicit equal optimizer-reset source required'
-    model = read(source / 'weights.json'); actor = build(model, 'actor')
+    model = read(source / 'weights.json')
+    assert not model.get('conditional_fire'), 'SAC sampler does not support conditional fire'
+    actor = build(model, 'actor')
     def pin(path,expected=None):
         path=pathlib.Path(path);digest=sha(path);assert expected is None or digest==expected,str(path)
         pins[str(path.resolve())]=digest;return path

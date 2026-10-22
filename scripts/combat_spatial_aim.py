@@ -72,8 +72,11 @@ class SpatialActor(nn.Module):
         self.sampled_motion_aim_branch=build_motion(model) if model is not None else None
         from combat_motor_residual import build as build_motor
         self.motor_branch=build_motor(model) if model is not None else None
+        from combat_conditional_fire import build as build_fire
+        self.conditional_fire_branch=build_fire(model) if model is not None else None
         if self.sampled_motion_aim_branch is not None:
             self.sampled_motion_aim_branch.requires_motor_reference=self.motor_branch is not None
+            self.sampled_motion_aim_branch.requires_conditional_fire=self.conditional_fire_branch is not None
     def forward(self,x,*args,**kwargs):
         output=self.base(x,*args,**kwargs)
         raw=output[0] if isinstance(output,tuple) else output
@@ -98,6 +101,8 @@ class SpatialActor(nn.Module):
     def __iter__(self):return iter(self.base)
 
 def wrap(base,model):
+    from combat_conditional_fire import validate as validate_fire
+    validate_fire(model)
     from combat_weapon_state_residual import validate as validate_weapon
     validate_weapon(model)
     from combat_weapon_exploration import validate as validate_exploration
@@ -116,3 +121,5 @@ def export(model,actor):
         export_motion(model,actor.sampled_motion_aim_branch)
         from combat_motor_residual import export as export_motor
         export_motor(model,actor.motor_branch)
+        from combat_conditional_fire import export as export_fire
+        export_fire(model,actor.conditional_fire_branch)

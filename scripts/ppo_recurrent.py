@@ -113,11 +113,12 @@ def main():
     ap.add_argument('--sequence-retention-weight',type=float,default=0.)
     ap.add_argument('--fork-sequence-retention',action='store_true',
                     help='Explicit objective fork preserving actor/critic/Adam for sequence retention')
-    ap.add_argument('--actor-head-scope',choices=('all','target','decisions','conditional-aim','movement','motor-residual','base-only'),default='all')
+    ap.add_argument('--actor-head-scope',choices=('all','target','decisions','conditional-aim','movement','motor-residual','base-only','conditional-fire'),default='all')
     ap.add_argument('--target-head-lr',type=float,default=.003)
     ap.add_argument('--decision-head-lr',type=float,default=.003)
     ap.add_argument('--movement-head-lr',type=float,default=.00003)
     ap.add_argument('--motor-lr',type=float,default=.0003)
+    ap.add_argument('--conditional-fire-lr',type=float,default=.0003)
     ap.add_argument('--fork-head-scope',action='store_true',help='Explicit optimizer-scope fork from a resumed checkpoint')
     ap.add_argument('--weapon-state-lr',type=float,default=.0003)
     ap.add_argument('--future-aux-data',type=pathlib.Path)
@@ -156,6 +157,12 @@ def main():
     torch.backends.cudnn.allow_tf32=False;torch.backends.cuda.matmul.allow_tf32=False
     torch.backends.cuda.enable_flash_sdp(False);torch.backends.cuda.enable_mem_efficient_sdp(False);torch.backends.cuda.enable_math_sdp(True)
     model=read(args.model);assert model['kind']=='combat_ppo_v1' and not model['deterministic']
+    if model.get('conditional_fire'):
+        from combat_conditional_fire import validate as validate_fire,VERSION as FIRE_VERSION
+        validate_fire(model)
+        assert args.resume and args.sequence_retention_spec and args.sequence_retention_weight>0
+        assert args.actor_head_scope in ('all','conditional-fire') and not args.future_aux_data
+        assert math.isfinite(args.conditional_fire_lr) and 0<args.conditional_fire_lr<=.01
     weapon_head=model.get('weapon_head')
     target_head=model.get('target_head')
     if target_head:
@@ -174,12 +181,15 @@ def main():
         (args.out/'weights.json').write_text(json.dumps(updated,allow_nan=False))
         return
     config=read(args.config);meta=read(args.data/'report.json');validate_objective(config,meta)
-    assert args.actor_head_scope in ('all','conditional-aim','movement','motor-residual','base-only') or (target_head and not args.sequence_retention_spec)
+    assert args.actor_head_scope in ('all','conditional-aim','movement','motor-residual','base-only','conditional-fire') or (target_head and not args.sequence_retention_spec)
+    assert args.actor_head_scope!='conditional-fire' or model.get('conditional_fire')
     assert args.actor_head_scope not in ('motor-residual','base-only') or model.get('motor_residual')
     assert args.actor_head_scope!='movement' or target_head
     assert args.actor_head_scope != 'conditional-aim' or model.get('sampled_motion_aim'), 'Conditional aim scope requires the sampled-motion branch'
     assert args.actor_head_scope != 'decisions' or weapon_head, 'Decision scope requires the masked weapon head'
-    actor_training=dict(scope=args.actor_head_scope,learning_rate={'target':args.target_head_lr,'decisions':args.decision_head_lr,'all':config['actor_lr'],'conditional-aim':config['actor_lr'],'movement':args.movement_head_lr,'motor-residual':config['actor_lr'],'base-only':config['actor_lr']}[args.actor_head_scope])
+    actor_training=dict(scope=args.actor_head_scope,learning_rate={'target':args.target_head_lr,'decisions':args.decision_head_lr,'all':config['actor_lr'],'conditional-aim':config['actor_lr'],'movement':args.movement_head_lr,'motor-residual':config['actor_lr'],'base-only':config['actor_lr'],'conditional-fire':args.conditional_fire_lr}[args.actor_head_scope])
+    if model.get('conditional_fire'):
+        actor_training['conditional_fire']=dict(version=FIRE_VERSION,learning_rate=args.conditional_fire_lr)
     if model.get('motor_residual'):
         from combat_motor_residual import validate as validate_motor,VERSION as MOTOR_VERSION
         validate_motor(model);assert math.isfinite(args.motor_lr) and 0<args.motor_lr<=.01
@@ -187,7 +197,7 @@ def main():
     if model.get('weapon_state_residual'):
         from combat_weapon_state_residual import validate as validate_weapon_state,CONTRACT_VERSION
         validate_weapon_state(model)
-        assert args.actor_head_scope in ('all','conditional-aim','movement','motor-residual','base-only'), 'Observed weapon residual requires an explicit supported actor scope'
+        assert args.actor_head_scope in ('all','conditional-aim','movement','motor-residual','base-only','conditional-fire'), 'Observed weapon residual requires an explicit supported actor scope'
         assert math.isfinite(args.weapon_state_lr) and 0<args.weapon_state_lr<=.01
         actor_training['weapon_state_residual']=dict(version=CONTRACT_VERSION,learning_rate=args.weapon_state_lr)
     assert meta['feature_version']==model['feature_version'], 'Rollout feature contract differs'
@@ -222,7 +232,7 @@ def main():
     def likelihood(raw,std,z,attack,vertical,weapon,mask):
         if mode is not None:
             from combat_precision_head import probabilities as precision_probabilities
-            return precision_probabilities(raw,std,z,attack,vertical,weapon,x,target,mode,getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None))
+            return precision_probabilities(raw,std,z,attack,vertical,weapon,x,target,mode,getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None),getattr(actor,'conditional_fire_branch',None))
         if target_head:
             from combat_target_head import probabilities as target_probabilities
             return target_probabilities(raw,std,z,attack,vertical,weapon,x,target)
@@ -253,6 +263,14 @@ def main():
         teacher_motion=copy.deepcopy(motion_branch) if motion_branch is not None else None
         motor_branch=getattr(actor,'motor_branch',None)
         teacher_motor=copy.deepcopy(motor_branch) if motor_branch is not None else None
+        fire_branch=getattr(actor,'conditional_fire_branch',None)
+        teacher_fire=copy.deepcopy(fire_branch) if fire_branch is not None else None
+        fire_context=None
+        if teacher_fire is not None:
+            from combat_sequence_retention import CONDITIONAL_FIRE_EXPECTATION
+            for parameter in teacher_fire.parameters():parameter.requires_grad_(False)
+            sequence_retention['conditional_fire_expectation']=CONDITIONAL_FIRE_EXPECTATION
+            fire_context=tuple(v[seq_positions].detach() for v in (target,mode,z,vertical,weapon))
         if teacher_motor is not None:
             for parameter in teacher_motor.parameters():parameter.requires_grad_(False)
         if teacher_motion is not None:
@@ -260,7 +278,8 @@ def main():
             sequence_retention['conditional_motion_expectation']='fixed_behavior_move_per_history_v1'
         def sequence_loss(current):
             terms = policy_kl(current[seq_positions],std,seq_teacher[seq_positions],seq_std,x[seq_positions],
-                              motion_branch,teacher_motion,z[seq_positions,:2].detach(),motor_branch,teacher_motor)
+                              motion_branch,teacher_motion,z[seq_positions,:2].detach(),motor_branch,teacher_motor,
+                              fire_branch,teacher_fire,fire_context)
             return (terms * seq_weights).sum()
     bank_tensors={}
     if args.retention_weight or args.bank_weight:
@@ -289,7 +308,7 @@ def main():
         if future_aux is not None:loss=loss+future_aux.actor_loss(actor)
         return loss,((ratio-1)-(lp-old)).mean()
     from combat_weapon_state_residual import optimizer as actor_optimizer
-    actor_opt=actor_optimizer(actor,std,config['actor_lr'],args.weapon_state_lr,args.motor_lr);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
+    actor_opt=actor_optimizer(actor,std,config['actor_lr'],args.weapon_state_lr,args.motor_lr,args.conditional_fire_lr);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
     consumed=[];updates=0;total=0;migrations=[];config_forks=[];future_forks=[];previous_future=None
     critic_credit=dict(version='combat_critic_credit_v1',mode=args.critic_credit)
     critic_forks=[]
@@ -365,6 +384,9 @@ def main():
     elif args.actor_head_scope in ('motor-residual','base-only'):
         from combat_motor_residual import freeze_scope
         project,trainable_actor_parameters=freeze_scope(actor,std,actor_opt,args.actor_head_scope=='motor-residual')
+    elif args.actor_head_scope=='conditional-fire':
+        from combat_conditional_fire import freeze_scope
+        project,trainable_actor_parameters=freeze_scope(actor,std,actor_opt)
     credit_stats=None
     if args.critic_credit=='mc-before':
         from combat_critic_credit import fit,reestimate
@@ -385,7 +407,7 @@ def main():
         loss,kl=objective()
         if float(kl.detach())>config['target_kl']:break
         actor_opt.zero_grad();loss.backward();nn.utils.clip_grad_norm_(parameters,config['max_grad_norm'])
-        group_lrs=[actor_training['learning_rate']]+[args.weapon_state_lr if group.get('name')=='weapon_state_residual' else args.motor_lr for group in actor_opt.param_groups[1:]] if len(actor_opt.param_groups)>1 else None
+        group_lrs=[actor_training['learning_rate']]+[{'weapon_state_residual':args.weapon_state_lr,'motor_residual':args.motor_lr,'conditional_fire':args.conditional_fire_lr}[group['name']] for group in actor_opt.param_groups[1:]] if len(actor_opt.param_groups)>1 else None
         trial=guarded_actor_step(parameters,actor_opt,objective,loss.detach(),actor_training['learning_rate'],config['target_kl'],project,group_lrs=group_lrs);trials.append(trial)
         if not trial['accepted']:break
         if future_aux is not None:future_aux.head_step(actor)
@@ -469,6 +491,12 @@ def main():
         report['scope']+=' Observed motor residual uses a separate Adam group and stable base reference for conditional aim.'
         if args.actor_head_scope=='motor-residual':report['scope']+=' Only motor branch parameters train; existing actor/std parameters and Adam states are projected unchanged.'
         if args.actor_head_scope=='base-only':report['scope']+=' Only the original actor/std train; the new motor branch and its Adam states are projected unchanged.'
+    if model.get('conditional_fire'):
+        report['conditional_fire']={**actor_training['conditional_fire'],
+            'joint_likelihood':'fire_after_complete_sampled_action_v1',
+            'retention_expectation':sequence_retention['conditional_fire_expectation']}
+        report['scope']+=' Fire uses the actual recorded full action; conditional Bernoulli retention uses a fixed behavior action per history, not an exact categorical expectation. No fire mask is imposed.'
+        if args.actor_head_scope=='conditional-fire':report['scope']+=' Only the new fire branch trains; old actor/std and Adam states are projected unchanged.'
     durable_json(args.out/'report.json',report)
     durable_json(args.out/'complete.json',{'version':'combat_update_complete_v1','weights_sha256':sha(args.out/'weights.json'),'checkpoint_sha256':sha(args.out/'checkpoint.pt'),'report_sha256':sha(args.out/'report.json')})
     print(json.dumps(report,indent=2))

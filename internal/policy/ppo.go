@@ -34,6 +34,7 @@ type PPOFile struct {
 	WeaponExploration   *WeaponExplorationFile `json:"weapon_exploration,omitempty"`
 	SampledMotionAim    *SpatialAimFile        `json:"sampled_motion_aim,omitempty"`
 	MotorResidual       *SpatialAimFile        `json:"motor_residual,omitempty"`
+	ConditionalFire     *SpatialAimFile        `json:"conditional_fire,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
@@ -124,6 +125,9 @@ func LoadPPO(path string) (*PPO, error) {
 		return nil, e
 	}
 	if e = validateMotorResidual(f); e != nil {
+		return nil, e
+	}
+	if e = validateConditionalFire(f); e != nil {
 		return nil, e
 	}
 	if e = validateFeatureLayers(f.Value, 1, f.Features); e != nil {
@@ -258,10 +262,14 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 		delta := (z - means[i]) / math.Exp(p.file.LogStd[i])
 		lp += -.5*delta*delta - p.file.LogStd[i] - .5*math.Log(2*math.Pi)
 	}
+	fireLogit, e := p.conditionalFireLogit(o, x[4], s)
+	if e != nil {
+		return Action{}, 0, 0, e
+	}
 	if s.Attack {
-		lp -= softplus(-x[4])
+		lp -= softplus(-fireLogit)
 	} else {
-		lp -= softplus(x[4])
+		lp -= softplus(fireLogit)
 	}
 	max := math.Max(x[5], math.Max(x[6], x[7]))
 	sum := 0.0
@@ -386,6 +394,9 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		}
 	}
 	s.Attack = x[4] >= 0
+	// Preserve the legacy draw position even though conditional fire is decided
+	// after vertical, weapon and the final sampled-motion aim are known.
+	fireUniform := 0.0
 	s.Vertical = 0
 	for i := 1; i < 3; i++ {
 		if x[5+i] > x[5+s.Vertical] {
@@ -393,7 +404,8 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		}
 	}
 	if !p.file.Deterministic {
-		s.Attack = p.rng.Float64() < math.Exp(-softplus(-x[4]))
+		fireUniform = p.rng.Float64()
+		s.Attack = fireUniform < math.Exp(-softplus(-x[4]))
 		max := math.Max(x[5], math.Max(x[6], x[7]))
 		sum := 0.0
 		for _, v := range x[5:8] {
@@ -441,6 +453,16 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 			return Action{}, e
 		}
 		s.Latent[2], s.Latent[3] = means[2]+noise[2], means[3]+noise[3]
+	}
+	if p.file.ConditionalFire != nil {
+		fireLogit, err := p.conditionalFireLogit(o, x[4], s)
+		if err != nil {
+			return Action{}, err
+		}
+		s.Attack = fireLogit >= 0
+		if !p.file.Deterministic {
+			s.Attack = fireUniform < math.Exp(-softplus(-fireLogit))
+		}
 	}
 	a, lp, value, e := p.Review(o, s)
 	if e != nil {

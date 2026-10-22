@@ -56,12 +56,20 @@ def selected_means(raw,target,mode,features=None,movement=None,motion_branch=Non
         aim=aim+correction(motion_branch,features,raw,movement,target,mode,vertical,reference_branch)
     return torch.cat((coarse[:,:2],aim),1)
 
-def probabilities(raw,std,z,attack,vertical,weapon,features,target,mode,motion_branch=None,reference_branch=None):
+def probabilities(raw,std,z,attack,vertical,weapon,features,target,mode,motion_branch=None,reference_branch=None,fire_branch=None):
+    if getattr(motion_branch,'requires_conditional_fire',False) and fire_branch is None:
+        raise ValueError('Conditional fire branch is required for joint likelihood')
     choice=targets(raw[:,:45],features);stage=mode_distribution(raw,target)
     if not bool(torch.isfinite(choice.log_prob(target)).all()):raise ValueError('Unavailable selected target')
     # Joint likelihood includes P(vertical) and P(aim|move,target,mode,vertical).
     # The recorded pre-tanh movement is fixed when evaluating a PPO sample.
-    means=selected_means(raw,target,mode,features,z[:,:2],motion_branch,vertical,reference_branch);common=torch.cat((means,raw[:,4:20]),1)
+    means=selected_means(raw,target,mode,features,z[:,:2],motion_branch,vertical,reference_branch)
+    if fire_branch is None:
+        common=torch.cat((means,raw[:,4:20]),1)
+    else:
+        from combat_conditional_fire import logits as fire_logits
+        fire=fire_logits(fire_branch,features,raw,target,mode,z,vertical,weapon)
+        common=torch.cat((means,fire[:,None],raw[:,5:20]),1)
     lp,entropy=common_probabilities(common,std,z,attack,vertical,weapon,feature_mask(features[:,:845]))
     return lp+choice.log_prob(target)+stage.log_prob(mode),entropy+choice.entropy()+stage.entropy()
 
