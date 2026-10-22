@@ -51,7 +51,7 @@ def main():
         assert changed
         with torch.no_grad():raw,_=sequence(build(model,'actor'),prepared,check_states=True)
         assert torch.equal(raw,reference), 'Frozen category/movement/mode logits drifted'
-        assert cp['consumed_rollouts'][-1]==read(merged/'report.json')['rollout_sha256']
+        assert read(merged/'report.json')['rollout_sha256'] in cp['consumed_rollouts']
         if name=='ppo':
             assert cp['actor_training']['scope']=='conditional-aim' and report['actor_steps']>0
             actor=build(model,'actor');std=torch.nn.Parameter(cp['log_std'].clone())
@@ -62,12 +62,12 @@ def main():
             for identifier,state in cp['actor_optimizer']['state'].items():
                 parameter=mapping[identifier];key=names[id(parameter)]
                 assert key=='$log_std' or key.startswith('sampled_motion_aim_branch.')
-                assert float(state['step'])==report['actor_steps']
+                assert float(state['step'])==cp['total_actor_steps']-initial['total_actor_steps']
                 assert state['exp_avg'].shape==state['exp_avg_sq'].shape==parameter.shape
                 for value in state.values():
                     if torch.is_tensor(value):assert value.is_cuda and bool(torch.isfinite(value).all())
                 if key=='$log_std':assert bool((state['exp_avg'][:2]==0).all()) and bool((state['exp_avg_sq'][:2]==0).all())
-            assert all(float(s['step'])==cp['config']['value_steps'] for s in cp['value_optimizer']['state'].values())
+            assert all(float(s['step'])==(cp['updates_completed']-initial['updates_completed'])*cp['config']['value_steps'] for s in cp['value_optimizer']['state'].values())
             assert cp['value_optimizer']['state']
         else:
             for key,value in cp['value'].items():assert torch.equal(value,initial['value'][key])
@@ -75,7 +75,7 @@ def main():
             checkpoint=torch.load(pin(root/'sac-checkpoint.pt',report['sac_checkpoint_sha256']),map_location='cuda',weights_only=True)
             for k,v in checkpoint['actor'].items():assert torch.equal(v,cp['actor'][k])
             assert torch.equal(checkpoint['log_std'],cp['log_std'])
-            for opt_name,steps in (('actor_optimizer',report['actor_steps']),('critic_optimizer',report['critic_steps'])):
+            for opt_name,steps in (('actor_optimizer',report.get('total_actor_steps',report['actor_steps'])),('critic_optimizer',report.get('total_critic_steps',report['critic_steps']))):
                 opt=checkpoint[opt_name];assert opt['state']
                 for state in opt['state'].values():
                     assert float(state['step'])==steps

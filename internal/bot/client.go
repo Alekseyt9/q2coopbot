@@ -41,6 +41,8 @@ type Client struct {
 	testCombatBarrier, testCombatGo         bool
 	testSynchronous                         bool
 	testHitscanGuardProbe                   bool
+	testCombatAdvice                        bool
+	combatAdviceHistory                     combatAdviceHistory
 	testTeacherVertical                     bool
 	testLight                               *int
 	testCombatGoFrame                       int
@@ -779,6 +781,11 @@ func (c *Client) run(ctx context.Context) error {
 				c.planner.setTestButtonGoal()
 			}
 			combatObservation := c.combatObservation(now)
+			var combatAdvice *CombatAdvice
+			if c.testCombatAdvice && c.testCombatGo && !safetyStop && !c.idle {
+				a := c.planner.reactiveCombatAdvice(combatObservation, c.previous, now, c.combatAdviceHistory)
+				combatAdvice = &a
+			}
 			cmd, proposedCombatCommand, combatSelection, directCombat := c.combatCommand(combatObservation, now)
 			chatMessage := ""
 			holdPosition := c.testHoldPosition || c.testHoldPositionMap != "" && c.planner.World.Snapshot.Map == c.testHoldPositionMap
@@ -1108,6 +1115,7 @@ func (c *Client) run(ctx context.Context) error {
 					}
 				}
 				entry := struct {
+					CombatAdvice       *CombatAdvice           `json:"combat_advice,omitempty"`
 					Combat             *policy.Capture         `json:"combat_policy,omitempty"`
 					LightSource        string                  `json:"light_source"`
 					Connection         int                     `json:"connection"`
@@ -1199,6 +1207,7 @@ func (c *Client) run(ctx context.Context) error {
 				}{
 					Connection:   c.connection,
 					Combat:       combat,
+					CombatAdvice: combatAdvice,
 					ObserverKill: observerKill, ObserverRespawn: observerRespawn,
 					SessionStartFrame: c.sessionStartFrame,
 					Session:           c.sessionStatus(),
@@ -1272,6 +1281,9 @@ func (c *Client) run(ctx context.Context) error {
 				if _, err = c.traceFile.Write(append(data, '\n')); err != nil {
 					return err
 				}
+			}
+			if c.testCombatAdvice {
+				c.combatAdviceHistory.observe(combatObservation, cmd)
 			}
 			c.previous = cmd
 			c.moves++

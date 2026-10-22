@@ -290,6 +290,9 @@ func VerifyPlan(path, root string) error {
 	}
 	seen := map[string]bool{}
 	for _, t := range p.Tasks {
+		if p.RecordCombatAdvice && (len(t.Modes) != 1 || t.Modes[0] != "learned") {
+			return fmt.Errorf("combat advice requires learned-only plans")
+		}
 		if p.DiagnosticNominalAim && (t.Split == "train" || len(t.Modes) != 1 || t.Modes[0] != "learned") {
 			return fmt.Errorf("diagnostic nominal aim is evaluation-only for learned plans")
 		}

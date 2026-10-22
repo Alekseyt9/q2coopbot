@@ -68,6 +68,7 @@ type ConfigFile struct {
 		CombatOnly                   bool   `json:"combat_only"`
 		Synchronous                  bool   `json:"synchronous"`
 		HitscanGuardProbe            bool   `json:"hitscan_guard_probe"`
+		CombatAdvice                 bool   `json:"combat_advice"`
 		TeacherVertical              bool   `json:"teacher_vertical"`
 		Light                        *int   `json:"light"`
 		WeaponSwitchFixture          string `json:"weapon_switch_fixture"`
@@ -256,6 +257,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestSynchronous = file.Test.Synchronous
 	cfg.TestCombatOnly = file.Test.CombatOnly
 	cfg.TestTeacherVertical = file.Test.TeacherVertical
+	cfg.TestCombatAdvice = file.Test.CombatAdvice
 	cfg.TestLight = file.Test.Light
 	cfg.TestInvulnerable = file.Test.Invulnerable
 	cfg.TestChangeEntry = file.Test.ChangeEntry

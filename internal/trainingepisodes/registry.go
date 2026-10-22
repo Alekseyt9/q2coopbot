@@ -256,6 +256,7 @@ type Plan struct {
 	OutputRoot               string `json:"output_root"`
 	PolicySamplingSeedOffset int64  `json:"policy_sampling_seed_offset,omitempty"`
 	CheckedWallSlide         bool   `json:"checked_wall_slide,omitempty"`
+	RecordCombatAdvice       bool   `json:"record_combat_advice,omitempty"`
 	DiagnosticNominalAim     bool   `json:"diagnostic_nominal_aim,omitempty"`
 }
 

@@ -26,6 +26,7 @@ func run() error {
 	mode := flag.String("mode", "both", "rules, learned or both")
 	model := flag.String("model", "", "frozen PPO weights for learned")
 	count := flag.Int("count", 4, "episodes per descriptor, 1..80 (cohort scheduler requires multiples of four)")
+	recordCombatAdvice := flag.Bool("record-combat-advice", false, "record hypothetical reactive expert recommendations on learner states; never applied")
 	checkedWallSlide := flag.Bool("checked-wall-slide", false, "experimental checked wall-slide combat guard")
 	diagnosticNominalAim := flag.Bool("diagnostic-nominal-aim", false, "evaluation-only observed-target aiming intervention, not a learned controller")
 	offset := flag.Int("seed-offset", 0, "offset inside the registered split")
@@ -91,6 +92,10 @@ func run() error {
 	p, err := trainingepisodes.Build(r, abs, strings.Split(*ids, ","), *split, *mode, *model, *artifacts, *count, *offset)
 	if err != nil {
 		return err
+	}
+	p.RecordCombatAdvice = *recordCombatAdvice
+	if p.RecordCombatAdvice && *mode != "learned" {
+		return fmt.Errorf("combat advice requires learned plans")
 	}
 	p.CheckedWallSlide = *checkedWallSlide
 	p.DiagnosticNominalAim = *diagnosticNominalAim

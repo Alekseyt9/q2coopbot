@@ -7,6 +7,10 @@ $task=$schedule.tasks[$TaskIndex];$ep=$task.episode;$seed=[int]$task.seeds[$Seed
 if($ep.recipe.runner -ne 'combat-baseline' -or $Mode -notin $task.modes){throw 'Unsupported single episode job'}
 $argsMap=@{OutputRoot=$OutputRoot;Workers=1;EpisodesPerWorker=1;Timescale=2;GameFrames=$ep.game_frames;Seed=$seed;Port=$Port;Skill=$ep.skill;CombatMode=$Mode;Loadout=$ep.recipe.loadout;Synchronous=$true;StopOnGoal=$true;StopOnFirstDeath=$true;ReleaseGameFrame=100;RewardConfig=(Join-Path $repo $ep.recipe.reward_config)}
 if($BinaryBundle){$argsMap.BinaryBundle=$BinaryBundle}
+if($schedule.record_combat_advice){
+    if($Mode -ne 'learned'){throw 'Combat advice requires learned control'}
+    $argsMap.CombatAdvice=$true
+}
 if($schedule.checked_wall_slide){$argsMap.CheckedWallSlide=$true}
 if($schedule.diagnostic_nominal_aim){
     if($Mode -ne 'learned' -or $task.split -eq 'train'){throw 'Diagnostic aim is learned evaluation only'}

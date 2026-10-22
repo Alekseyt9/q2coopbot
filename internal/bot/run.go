@@ -48,6 +48,7 @@ type Config struct {
 	TestSynchronous                     bool
 	TestHitscanGuardProbe               bool
 	TestCombatOnly                      bool
+	TestCombatAdvice                    bool
 	TestTeacherVertical                 bool
 	TestLight                           *int
 	TestInvulnerable                    bool
@@ -158,6 +159,9 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	if cfg.CombatMode != "rules" && cfg.CombatMode != "learned-shadow" && cfg.CombatMode != "learned" {
 		return fmt.Errorf("unknown combat mode")
+	}
+	if cfg.TestCombatAdvice && (!cfg.TestCombatOnly || !cfg.TestSynchronous || !cfg.CombatCapture || cfg.CombatMode != "learned") {
+		return fmt.Errorf("combat advice requires synchronous isolated learned capture")
 	}
 	var combatProvider policy.Provider
 	if cfg.TestHitscanGuardProbe {
@@ -499,6 +503,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		testSynchronous:          cfg.TestSynchronous,
 		testHitscanGuardProbe:    cfg.TestHitscanGuardProbe,
 		testTeacherVertical:      cfg.TestTeacherVertical,
+		testCombatAdvice:         cfg.TestCombatAdvice,
 		testLight:                cfg.TestLight,
 		testGroundEdgeProbe:      cfg.TestGroundEdgeProbe,
 		testDoorProbe:            cfg.TestDoorProbe,

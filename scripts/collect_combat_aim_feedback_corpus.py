@@ -19,6 +19,7 @@ def main():
     ap.add_argument('--port', type=int, default=42400)
     ap.add_argument('--allow-groups', action='store_true')
     ap.add_argument('--ppo-ready', action='store_true', help='Require reward SHA matching source checkpoint; allow all registered loadouts')
+    ap.add_argument('--record-combat-advice', action='store_true', help='Log hypothetical reactive expert on learner states; never applied')
     ap.add_argument('--train-only', action='store_true', help='Collect training data only; evaluate quality with a separate held-out run')
     args = ap.parse_args()
     repo = pathlib.Path(__file__).resolve().parents[1]
@@ -102,7 +103,8 @@ def main():
             run('plan-' + label, [planner, '--registry', registry, '--root', repo,
                 '--episodes', args.episodes, '--split', split, '--mode', 'learned',
                 '--model', source / 'weights.json', '--count', count, '--seed-offset', offset,
-                '--checked-wall-slide', '--out', plan, '--artifacts', out / ('captures-' + label)])
+                '--checked-wall-slide', '--out', plan, '--artifacts', out / ('captures-' + label)] +
+                (['--record-combat-advice'] if args.record_combat_advice else []))
             frozen = read(plan)
             seeds = [s for t in frozen['tasks'] for s in t['seeds']]
             assert len(seeds) == len(set(seeds)) == len(names) * count
@@ -116,7 +118,7 @@ def main():
         save(out / 'protocol.json', dict(version='combat_aim_feedback_corpus_v1', state='prepared',
             source=str(source), inputs=[dict(path=str(p), sha256=h) for p, h in pins.items()],
             assignments=chosen, history=history, max_instances=16, timescale=2,
-            diagnostic_intervention=False, allow_groups=args.allow_groups, train_only=args.train_only, ppo_training_objective=objective, training_performed=False,
+            diagnostic_intervention=False, record_combat_advice=args.record_combat_advice, allow_groups=args.allow_groups, train_only=args.train_only, ppo_training_objective=objective, training_performed=False,
             scope='Registered own-policy trajectories. PPO-ready requires checkpoint-aligned reward. Native poses are offline labels only; no validation data enters fitting. Development is not final quality evidence.'))
         shell = shutil.which('pwsh'); assert shell
         literal = lambda p: "'" + str(p).replace("'", "''") + "'"

@@ -36,6 +36,17 @@ def aim_distribution(raw, features, condition, movement, branch, std):
     return torch.distributions.Normal(means, std[2:].exp())
 
 
+def behavior_aim_kl(raw,features,condition,movement,branch,std,teacher_branch,teacher_std):
+    """KL(current || behavior) at the same frozen policy condition.
+
+    Common tanh and mode scale are invertible per condition and cancel in KL.
+    Only the current conditional aim parameters/variance receive gradients.
+    """
+    with torch.no_grad():reference=aim_distribution(raw,features,condition,movement,teacher_branch,teacher_std)
+    current=aim_distribution(raw,features,condition,movement,branch,std)
+    return torch.distributions.kl_divergence(current,reference).sum(-1)
+
+
 def sample_aim(raw, features, condition, movement, branch, std):
     normal = aim_distribution(raw, features, condition, movement, branch, std)
     z = normal.rsample()
