@@ -118,12 +118,22 @@ def main():
     ap.add_argument('--decision-head-lr',type=float,default=.003)
     ap.add_argument('--fork-head-scope',action='store_true',help='Explicit optimizer-scope fork from a resumed checkpoint')
     ap.add_argument('--weapon-state-lr',type=float,default=.0003)
+    ap.add_argument('--future-aux-data',type=pathlib.Path)
+    ap.add_argument('--future-aux-decoder',type=pathlib.Path)
+    ap.add_argument('--future-aux-weight',type=float,default=0.)
+    ap.add_argument('--fork-future-aux',action='store_true',help='Explicitly initialize/change/disable a training-only future auxiliary objective')
+    ap.add_argument('--initial-boundary',type=pathlib.Path,help='Optional fresh sealed pre-update actor/critic/optimizer/RNG snapshot')
     args=ap.parse_args();training_devices();torch.set_num_threads(2);torch.manual_seed(20261006);torch.use_deterministic_algorithms(True)
     assert all(math.isfinite(w) and w >= 0 for w in (args.retention_weight,args.bank_weight))
     assert math.isfinite(args.sequence_retention_weight) and args.sequence_retention_weight >= 0
     assert args.sequence_retention_spec is not None or args.sequence_retention_weight == 0
     assert not args.fork_sequence_retention or (args.resume and args.sequence_retention_spec)
     assert not args.fork_head_scope or args.resume
+    assert math.isfinite(args.future_aux_weight) and args.future_aux_weight>=0
+    assert bool(args.future_aux_data)==bool(args.future_aux_decoder)
+    assert args.future_aux_data is not None or args.future_aux_weight==0
+    assert not args.fork_future_aux or args.resume
+    assert not args.future_aux_data or (args.resume and args.actor_head_scope=='all')
     assert math.isfinite(args.target_head_lr) and 0 < args.target_head_lr <= .01
     assert math.isfinite(args.decision_head_lr) and 0 < args.decision_head_lr <= .01
     # cuDNN GRU TF32 drifts from Go FP64 by ~2e-3 on real traces.
@@ -240,16 +250,18 @@ def main():
         del anchor_net
     def bank_loss(split='train'):
         bx,bw,bt=bank_tensors[split];return anchor_kl(actor.single(bx),std,bt,teacher_std,bw,feature_mask(bx) if weapon_head else None)
+    future_aux=None
     def objective():
         raw,_=compute(actor);lp,entropy=likelihood(raw,std,z,attack,vertical,weapon,mask);ratio=(lp-old).exp()
         loss=-torch.minimum(ratio*ad,ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()-config['entropy']*entropy.mean()
         if args.retention_weight:loss=loss+args.retention_weight*anchor_kl(raw,std,teacher,teacher_std,weapon_mask=mask)
         if args.bank_weight:loss=loss+args.bank_weight*bank_loss()
         if args.sequence_retention_weight:loss=loss+args.sequence_retention_weight*sequence_loss(raw)
+        if future_aux is not None:loss=loss+future_aux.actor_loss(actor)
         return loss,((ratio-1)-(lp-old)).mean()
     from combat_weapon_state_residual import optimizer as actor_optimizer
     actor_opt=actor_optimizer(actor,std,config['actor_lr'],args.weapon_state_lr);value_opt=torch.optim.Adam(value.parameters(),lr=config['value_lr'])
-    consumed=[];updates=0;total=0;migrations=[];config_forks=[]
+    consumed=[];updates=0;total=0;migrations=[];config_forks=[];future_forks=[];previous_future=None
     if args.resume:
         cp=torch.load(args.resume,map_location='cpu',weights_only=True)
         migrations=cp.get('model_migrations',[])
@@ -269,9 +281,32 @@ def main():
         updates=cp['updates_completed'];total=cp['total_actor_steps']
         actor_opt.load_state_dict(cp['actor_optimizer']);value_opt.load_state_dict(cp['value_optimizer'])
         torch.set_rng_state(cp['rng']);torch.cuda.set_rng_state_all(cp['cuda_rng'])
+        previous_future=cp.get('future_auxiliary')
+        future_forks=cp.get('future_objective_forks',[])
+    if args.future_aux_data:
+        assert key=='attention' and not entity and model['feature_version']=='combat_features_v10'
+        assert previous_future is not None or args.fork_future_aux,'Explicit future objective fork required'
+        from combat_future_auxiliary import FutureAuxiliary
+        future_aux=FutureAuxiliary(actor,prepared,args.future_aux_data,args.future_aux_decoder,args.future_aux_weight,
+            sha(args.model),None if args.fork_future_aux else previous_future)
+    elif previous_future is not None:
+        assert args.fork_future_aux,'Explicit fork required to disable future auxiliary objective'
+    if args.fork_future_aux:
+        future_forks=future_forks+[dict(source_checkpoint_sha256=sha(args.resume),
+            previous=None if previous_future is None else previous_future['spec'],current=None if future_aux is None else future_aux.spec)]
+    initial_boundary_sha=None
+    if args.initial_boundary:
+        assert not args.initial_boundary.exists()
+        boundary=dict(actor=actor.state_dict(),value=value.state_dict(),log_std=std.detach(),
+            actor_optimizer=actor_opt.state_dict(),value_optimizer=value_opt.state_dict(),rng=torch.get_rng_state(),cuda_rng=torch.cuda.get_rng_state_all(),
+            future_auxiliary=None if future_aux is None else future_aux.checkpoint(),
+            source_model_sha256=sha(args.model),source_checkpoint_sha256=sha(args.resume) if args.resume else None,rollout_sha256=meta['rollout_sha256'])
+        durable_write(args.initial_boundary,lambda output:torch.save(boundary,output))
+        initial_boundary_sha=sha(args.initial_boundary)
     ad=(ad-ad.mean())/(ad.std(unbiased=False)+1e-8)
     with torch.no_grad():initial_bank={s:float(bank_loss(s)) for s in bank_tensors}
     with torch.no_grad():sequence_kl_before=float(sequence_loss(raw)) if sequence_retention else None
+    future_before=None if future_aux is None else future_aux.stats(actor)
     trials=[];start=time.perf_counter();parameters=list(actor.parameters())+[std]
     project=lambda:std.clamp_(-8,1)
     trainable_actor_parameters=sum(p.numel() for p in parameters)
@@ -288,12 +323,15 @@ def main():
         group_lrs=[actor_training['learning_rate'],args.weapon_state_lr] if model.get('weapon_state_residual') else None
         trial=guarded_actor_step(parameters,actor_opt,objective,loss.detach(),actor_training['learning_rate'],config['target_kl'],project,group_lrs=group_lrs);trials.append(trial)
         if not trial['accepted']:break
+        if future_aux is not None:future_aux.head_step(actor)
     for _ in range(config['value_steps']):
         prediction,_=compute(value);loss=(prediction[:,0]-ret).square().mean();assert torch.isfinite(loss)
         value_opt.zero_grad();loss.backward();nn.utils.clip_grad_norm_(value.parameters(),config['max_grad_norm']);value_opt.step()
     torch.cuda.synchronize();seconds=time.perf_counter()-start
     with torch.no_grad():loss,kl=objective();final_bank={s:float(bank_loss(s)) for s in bank_tensors}
     with torch.no_grad():sequence_kl_after=float(sequence_loss(compute(actor)[0])) if sequence_retention else None
+    future_after=None if future_aux is None else future_aux.stats(actor)
+    if future_aux is not None:future_aux.verify()
     assert torch.isfinite(kl) and float(kl)<=config['target_kl']+1e-6
     base_a,cell_a=actor.export();base_v,cell_v=value.export()
     updated={**model,'actor':base_a,'value':base_v,'log_std':std.detach().cpu().tolist(),key:{**spec,'actor':cell_a,'value':cell_v}}
@@ -310,6 +348,8 @@ def main():
     if config_forks:cp['training_config_forks']=config_forks
     if sequence_retention:cp['sequence_retention']=sequence_retention
     if migrations:cp['model_migrations']=migrations
+    if future_aux is not None:cp['future_auxiliary']=future_aux.checkpoint()
+    if future_forks:cp['future_objective_forks']=future_forks
     durable_write(args.out/'checkpoint.pt',lambda output:torch.save(cp,output))
     durable_write(args.out/'trainer.py',lambda output:output.write(pathlib.Path(__file__).read_bytes()))
     report={'architecture':expected_version,'device':'cuda','torch':torch.__version__,'rows':len(rows),'sequence_rows':len(context),'sequences':len(prepared[3]) if prepared else 0,'bptt_steps':bptt if key=='memory' else None,'actor_steps':done,'total_actor_steps':total+done,'updates_completed':updates+1,'actor_trials':trials,'final_approx_kl':float(kl),'old_log_probability_max_error':log_error,'old_value_max_error':value_error,'old_actor_memory_max_error':actor_state_error,'old_value_memory_max_error':value_state_error,'bank_kl_before':initial_bank,'bank_kl_after':final_bank,'seconds':seconds,'weights_sha256':sha(args.out/'weights.json'),'behavior_sha256':sha(args.model),'rollout_sha256':meta['rollout_sha256'],'sequence_sha256':meta.get('sequence_sha256'),'trainer_sha256':sha(pathlib.Path(__file__)),'config_sha256':sha(args.config),'resume_sha256':sha(args.resume) if args.resume else None,'anchor_sha256':sha(args.anchor_model),'bank_sha256':sha(args.retention_bank),'actor_parameters':sum(p.numel() for p in actor.parameters())+std.numel(),'critic_parameters':sum(p.numel() for p in value.parameters()),'scope':'Fresh on-policy architecture PPO. GRU replays all provider context with current-model prefixes, detached every32 frames. Temporal attention is causal/window32; entity attention uses only current v4 values. Loss only on native eligible rows. Bank has no histories: retention measured at zero memory. No learned weapon choice or live promotion.'}
@@ -324,6 +364,9 @@ def main():
     report['actor_scope_fork']=args.fork_head_scope
     report['training_config_forks']=config_forks
     report['trainable_actor_parameters']=trainable_actor_parameters
+    report['future_auxiliary']=None if future_aux is None else dict(spec=future_aux.spec,before=future_before,after=future_after)
+    report['future_objective_fork']=args.fork_future_aux
+    report['initial_boundary_sha256']=initial_boundary_sha
     if model.get('weapon_state_residual'):
         report['scope']+=' Observed weapon-state residual keeps its separate Adam group; old log_std and parameter IDs stay in group1. Both groups backtrack by the same factor. Trainability follows the explicit actor scope.'
         report['weapon_state_residual']=actor_training['weapon_state_residual']
