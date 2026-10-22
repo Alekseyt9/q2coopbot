@@ -680,3 +680,12 @@ Center+vertical screen закрыт:8/24 против control7/24 и rules13/24,
 
 
 Rules teacher48 закрыт:32 train/16 development,4157 released alive frames;readiness hashes/release/target-history audit прошёл. Обнаружено недостаточное покрытие движения:8 movement commands,0 jump/crouch;raw previous target везде отсутствует. Есть3945 explicit visible targets и86 weapon requests. Решение:не обучать движение/vertical на стоящем teacher;сначала canonical feature/history/native proof и masked target/fire/weapon BC,контролируя shared encoder. Полный joint BC/новый ученик ещё не готовы;детали в testing/combat_joint_teacher_20261022.md.
+
+
+Joint decision BC pilot200 steps завершён наCUDA,замороженные heads/encoder/value/std подтверждены independent audit на1099 source native rows. Но fresh smoke0/8 против source4/8,rules5/8:707 weapon requests против11;candidate rejected. Снижение target churn35.33→9.12/100 и yaw11.05→3.61% не спасло бой. Тот же fixed fit разделён:exact target/fire rows с source weapon,без нового обучения;fresh smoke24 native/16CUDA наoffset608 идёт. Подробности testing/combat_joint_teacher_20261022.md.
+
+
+Target/fire-only BC smoke закрыт:3/8 против source2/8,rules6/8;парно1 новая/0 потерянных к source. MG damage40/97→58/97,yaw17.31→5.88%,target churn36.20→11.27/100,но стояние8.18→17.34%. Independent CUDA ablation audit прошёл;решение только screen. Запущен frozen72 native/48CUDA,offset612–613,порт45000,16 ×2. Weapon audit v2 исправлен поactual network release;новый пересчёт первого BC723 requests/295 already equipped подтверждает регрессию (старые seals сохранены). Общего превосходства/promotion ещё нет.
+
+
+Target/fire screen закрыт:13/24 против source10/24,прежние static-fixture rules12/24;парно к source4/1. Выше MG damage fraction46.21→69.65%,ниже yaw9.67→4.34%,ноstanding16.27→19.34%;promotion=false,coverage отложен. Найдена и после закрытия pipeline исправлена ошибка isolated combat goal:отключение level-exit routes мешало short rules retreat. BSP regression test воспроизвёл ошибку до fix и прошёл после. Новые48 native teacher боёв закрыты:6642 frames,2708 motion requests,2476 native-matched displacement>2 transitions. Canonical features и ground motion/aim labels1881 train/1255 development готовы;GPU fit нового motion controller ещё не выполнен. См. testing/combat_mobile_teacher_20261022.md.

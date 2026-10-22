@@ -874,7 +874,10 @@ func (p *Planner) commandAt(prev quake.UserCmd, now time.Time) (result quake.Use
 	if tactic == "circle" {
 		return p.combatCircle(cmd)
 	}
-	spacingGoal := s.Teammate != nil && (p.World.Goal == "cover_teammate" || p.World.Goal == "follow_teammate") && quake.Distance(s.Self, *s.Teammate) <= combatLeash(profile) || p.campaignActive(s) && p.World.Goal == "reach_level_exit"
+	// An isolated fixture suppresses level-exit route searches, not short
+	// observed combat spacing. Otherwise its rules teacher silently stands
+	// through close threats despite the ordinary retreat controller being ready.
+	spacingGoal := s.Teammate != nil && (p.World.Goal == "cover_teammate" || p.World.Goal == "follow_teammate") && quake.Distance(s.Self, *s.Teammate) <= combatLeash(profile) || p.campaignActive(s) && p.World.Goal == "reach_level_exit" || p.testCombatOnly && p.World.Goal == "combat_fixture"
 	if spacingGoal && profile != nil && profile.Distance < profile.Minimum+32 && (tactic == "" || tactic == "attack" || tactic == "retreat") {
 		if profile.NeedSpace {
 			return p.combatRetreat(cmd, profile)

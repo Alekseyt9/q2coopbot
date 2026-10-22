@@ -10,6 +10,7 @@ import pathlib
 from combat_equipped_weapon_features import CATEGORIES, equipped_weapon_index
 from process_combat_architecture_pool import read, save, sha
 from process_registered_combat_pool_cuda import select_learned_jobs
+from native_combat_release import release_boundary
 
 
 def audit_frames(frames):
@@ -76,6 +77,9 @@ def main():
         result=capture['results'][0];assert result['capture_valid'] and result['dispatch_valid']
         manifest_path=capture_path.parent/'manifest.json';manifest=read(manifest_path)
         assert manifest['synchronous'] and manifest['fixed_world_hold'] and manifest['release_game_frame']>0
+        server_log=pathlib.Path(result['root'])/'server.log';server_hash=sha(server_log)
+        with server_log.open(encoding='utf-8-sig') as stream:
+            generation,release,native_release=release_boundary(stream,manifest,job['seed'])
         trace=pathlib.Path(result['root'])/'bot.jsonl';trace_hash=sha(trace)
         frames=[];seen=set()
         for line in trace.open(encoding='utf-8-sig'):
@@ -84,27 +88,30 @@ def main():
             if not owner:continue
             observation=control.get('observation');assert observation, 'Missing owned observation'
             identity=observation['identity']
-            if identity['life']!=1 or observation['health']<=0 or identity['frame']<manifest['release_game_frame']:continue
+            if identity['spawncount']!=generation or identity['life']!=1 or observation['health']<=0 or identity['frame']<release:continue
             key=tuple(identity.get(k) for k in ('map','spawncount','connection','actor','life','frame'))
             assert key not in seen;seen.add(key)
             frames.append((observation,control.get('applied'),owner))
         case=audit_frames(frames)
-        assert sha(trace)==trace_hash
+        assert sha(trace)==trace_hash and sha(server_log)==server_hash
         case.update(job=job['job'],seed=job['seed'],goal=bool(result['goal_stop']),
-                    trace_sha256=trace_hash,capture_sha256=sha(capture_path),manifest_sha256=sha(manifest_path))
+                    trace_sha256=trace_hash,capture_sha256=sha(capture_path),manifest_sha256=sha(manifest_path),
+                    network_release_frame=release,native_release_game_frame=native_release,
+                    release_generation=generation,server_log_sha256=server_hash)
         cases.append(case)
     assert sha(pool_path)==digest
     totals=dict(sum((collections.Counter(c['counts']) for c in cases),collections.Counter()))
     statuses=collections.Counter(e['status'] for c in cases for e in c['request_events'])
     delays=[e['observed_delay_frames'] for c in cases for e in c['request_events'] if e['status']=='observed_equipped']
-    save(args.out,dict(version='registered_weapon_choice_audit_v1',state='complete',
+    save(args.out,dict(version='registered_weapon_choice_audit_v2',state='complete',
         pool_sha256=digest,selected_plan_index=args.plan_index,script_sha256=sha(__file__),
         feature_oracle_sha256=sha(pathlib.Path(__file__).with_name('combat_equipped_weapon_features.py')),
+        release_helper_sha256=sha(pathlib.Path(__file__).with_name('native_combat_release.py')),
         cases=cases,totals=totals,request_statuses=dict(statuses),
         observed_delay_frames_mean=sum(delays)/len(delays) if delays else None,
         observed_delay_frames_max=max(delays) if delays else None,
         max_outside_pilot_keep_clear_streak=max(c['max_outside_pilot_keep_clear_streak'] for c in cases),
-        scope='Post-release first-life provider intents to observed equipment, not network dispatch/cooldown or shot attribution. Gaps, ownership changes, superseded and unfinished requests censored. Pilot fire set is Blaster/Shotgun/Super Shotgun/Machinegun; inventory-available choices are not restricted.'))
+        scope='Actual native network-release first-life provider intents to observed equipment, not game-frame cutoff or network dispatch/cooldown/shot attribution. Gaps, ownership changes, superseded and unfinished requests censored. Pilot fire set is Blaster/Shotgun/Super Shotgun/Machinegun; inventory-available choices are not restricted.'))
 
 
 if __name__=='__main__':main()

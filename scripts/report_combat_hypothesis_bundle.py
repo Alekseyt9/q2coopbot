@@ -12,6 +12,27 @@ import sys
 from evaluate_registered_combat_models import read, save, sha
 
 
+def validated_stage(spec, seal):
+    stage = spec.get('hypothesis_stage')
+    if stage is not None:
+        assert stage['version'] == 'combat_hypothesis_stage_v1'
+        assert len(spec['variants']) == 3
+    else:
+        stage = spec['component_ablation']
+        assert stage['version'] == 'combat_component_ablation_stage_v1'
+        assert stage['stage'] == 'component-ablation'
+        assert len(spec['variants']) == 5
+        assert sum(v['mode'] == 'rules' for v in spec['variants']) == 1
+        assert set(stage['component_labels']) == {v['label'] for v in spec['variants'] if v['mode'] == 'learned'}
+        assert all(v['cuda_replay'] and not v['deterministic'] for v in spec['variants'] if v['mode'] == 'learned')
+    assert not stage['automatic_promotion'] and not stage['training_performed']
+    assert stage['native_budget'] == seal['native_cases'] == stage['cases_per_variant'] * len(spec['variants'])
+    assert stage['ordinary_cases'] + stage['recovery_cases'] == stage['cases_per_variant']
+    assert seal['cuda_cases'] == sum(p['cases'] for p in seal['processed'])
+    assert seal['cuda_cases'] == stage['cases_per_variant'] * sum(bool(v['cuda_replay']) for v in spec['variants'])
+    return stage
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in ('evaluation', 'spec', 'out'):
@@ -24,13 +45,7 @@ def main():
     seal, spec = read(seal_path), read(spec_path)
     assert seal['state'] == 'complete' and not seal['training_performed']
     assert not seal['promotion'] and seal['spec_sha256'] == sha(spec_path)
-    stage = spec['hypothesis_stage']
-    assert stage['version'] == 'combat_hypothesis_stage_v1'
-    assert not stage['automatic_promotion'] and not stage['training_performed']
-    assert stage['native_budget'] == seal['native_cases']
-    assert seal['cuda_cases'] == sum(p['cases'] for p in seal['processed'])
-    assert seal['cuda_cases'] == stage['cases_per_variant'] * sum(
-        bool(v['cuda_replay']) for v in spec['variants'])
+    stage = validated_stage(spec, seal)
     pins = {seal_path: sha(seal_path), spec_path: sha(spec_path)}
     pool_path = root / 'pool/report.json'
     assert sha(pool_path) == seal['pool_sha256']
