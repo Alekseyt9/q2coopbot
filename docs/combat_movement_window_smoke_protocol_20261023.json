@@ -1,0 +1,25 @@
+{
+  "version":"combat_movement_window_smoke_v1",
+  "source_weights_sha256":"559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "purpose":"Technical admission of a fixed five-provider-frame movement mean shift before a larger action-chunk study. No fitting or superiority claim.",
+  "selection":"Reuse the lowest TRAIN base3 seed from the closed four-context study, regardless of outcomes. Preserve its original observable intervention frame.",
+  "context_id":"movement-1164065144-119",
+  "variants":[
+    {"label":"control","mean_shift":[0,0],"duration":5},
+    {"label":"left_one","mean_shift":[0,-1.25],"duration":1},
+    {"label":"left_five","mean_shift":[0,-1.25],"duration":5},
+    {"label":"right_five","mean_shift":[0,1.25],"duration":5},
+    {"label":"backward_five","mean_shift":[-1.25,0],"duration":5}
+  ],
+  "native_cases":6,
+  "cuda_cases":6,
+  "fresh_ordinary_reference":true,
+  "contract":"Apply additive movement-mean shift on [F,F+D), never change base raw actor, std or draw order. Recompute aim/fire normally from actual movement each frame. Emit actual-frame noise/fire receipts. No interventions outside window. Full zero-shift control must match ordinary reference; alternatives require exact pre-F state/prefix and common draws at F. After F state and categorical outcomes may diverge normally.",
+  "controls":"CUDA source tensors and fixed-history density equality; native full zero-control replay; all observed intervention receipts; conditional Gaussian and fire reconstruction on CUDA. Five receipts required if alive provider control reaches F+4; no fabricated rows after termination.",
+  "future_policy_rng":"Original stream, no continuation fork in this technical smoke. No expected-Q labels.",
+  "max_instances":16,
+  "timescale":2,
+  "training_performed":false,
+  "ordinary_training_eligible":false,
+  "promotion":false
+}

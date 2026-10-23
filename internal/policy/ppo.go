@@ -501,8 +501,8 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 			s.Attack = fireUniform < math.Exp(-softplus(-fireLogit))
 		}
 	}
-	if probe := p.file.DiagnosticMovementProbe; probe != nil && probe.Frame == o.Identity.Frame {
-		s.MovementProbe = &DiagnosticMovementSample{Version: DiagnosticMovementProbeVersion, Frame: probe.Frame,
+	if probe := p.file.DiagnosticMovementProbe; probe.active(o.Identity.Frame) {
+		s.MovementProbe = &DiagnosticMovementSample{Version: probe.Version, Frame: o.Identity.Frame,
 			MeanShift: append([]float64(nil), probe.MeanShift...), GaussianNoise: append([]float64(nil), noise[:]...), FireUniform: fireUniform}
 	}
 	if probe := p.file.DiagnosticContinuation; probe != nil && o.Identity.Frame >= probe.Frame {

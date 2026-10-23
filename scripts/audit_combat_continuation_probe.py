@@ -48,6 +48,7 @@ def main():
         return dict(meta=meta,proof=proof,steps=controlled,all_steps=steps,rows={r['frame']:r for r in rows},result=report['results'][0],effects={q['step']:q for q in effects})
 
     loaded={}
+    window_evidence={}
     for i,v in enumerate(spec['variants']):
         if multi:i=v['plan_index']
         model=read(pin(v['model'],v['model_sha256']))
@@ -57,6 +58,16 @@ def main():
         else:assert header is None and movement is None
         if movement is not None:assert movement['frame']==frame and movement['mean_shift']==v['mean_shift']
         d=load(root/f'case-{i:02d}',Path(jobs[i]['root'])/'report.json');loaded[v['label']]=d
+        if movement and movement.get('duration_frames'):
+            duration=movement['duration_frames']
+            observed=[s for s in d['steps'] if frame<=s['observation']['identity']['frame']<frame+duration]
+            observed_frames=[s['observation']['identity']['frame'] for s in observed]
+            last=max(s['observation']['identity']['frame'] for s in d['steps'])
+            assert observed_frames==list(range(frame,min(frame+duration,last+1))), 'Skipped movement-window frame'
+            for s in observed:
+                receipt=s['sample'].get('movement_probe')
+                assert receipt and receipt['frame']==s['observation']['identity']['frame'] and receipt['version']==movement['version'] and receipt['mean_shift']==movement['mean_shift']
+            window_evidence[v['label']]=dict(duration_frames=duration,observed_receipts=len(observed))
         assert d['result']['generated_fixture']==context['instance']
         if v['fork']:
             assert d['meta']['version']=='combat_diagnostic_continuation_rollout_v1' and d['meta']['diagnostic_only'] and not d['meta']['ppo_training_ready']
@@ -155,6 +166,7 @@ def main():
         results.append(dict(label=label,admitted=admitted,prefix_exact=prefix,intervention_state_exact=state,
             intervention_draws_exact=intervention_draws,categories_exact=categories,shared_future_draws_exact=shared_draws,
             shared_future_frames=len(shared),rules_before_task_end=rules,goal=bool(r['goal_stop']),death=bool(r['death_stop']),
+            movement_window=window_evidence.get(label),
             kills=sum(v['monster_kills'] for v in damage['by_mod']),received=damage['received_health_damage']))
     for path,h in pins.items():assert sha(path)==h,path
     a.out.mkdir(parents=True)

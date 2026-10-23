@@ -15,10 +15,14 @@ def historical_plans(base):
         paths.update(base.glob(pattern))
     # Older comparison specs already pin deeper per-variant plans. Retain their
     # history without walking millions of runtime asset names.
+    reference_names = set()
     for p in sorted(set(base.glob('*spec*.json')) | set(base.glob('*/*spec*.json'))):
         value = read(p)
         if isinstance(value, dict) and isinstance(value.get('historical_plans'), list):
-            paths.update(Path(name).resolve() for name in value['historical_plans'] if isinstance(name, str))
+            reference_names.update(name for name in value['historical_plans'] if isinstance(name, str))
+    # Specs repeat the same history many times. Resolve each distinct spelling
+    # once; canonical Path deduplication and missing-reference reporting stay.
+    paths.update(Path(name).resolve() for name in reference_names)
     result = []
     historical_plans.missing_references = []
     for p in sorted(paths):

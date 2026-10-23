@@ -46,6 +46,10 @@ def verify_draw_receipts(model,rows,raw,source,final,features,target,mode,vertic
     from combat_conditional_fire import logits as fire_logits
     idx=torch.tensor(ids,device='cuda',dtype=torch.long)
     means=selected_means(raw,target,mode,features,source[:,:2],actor.sampled_motion_aim_branch,vertical,actor.motor_branch)
+    if model.get('diagnostic_movement_probe'):
+        from combat_movement_probe import shifts
+        frames=torch.tensor([r['frame'] for r in rows],device='cuda',dtype=torch.long)
+        means=torch.cat((means[:,:2]+shifts(model,frames,means.dtype),means[:,2:]),-1)
     noise=torch.tensor([r['gaussian_noise'] for r in receipts],device='cuda',dtype=means.dtype)
     error=float((means[idx]+noise-source[idx]).abs().max());assert error<.001,error
     logits=fire_logits(actor.conditional_fire_branch,features,raw,target,mode,final,vertical,weapon)

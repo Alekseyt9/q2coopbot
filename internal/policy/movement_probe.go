@@ -6,13 +6,26 @@ import (
 )
 
 const DiagnosticMovementProbeVersion = "combat_one_frame_movement_mean_shift_v1"
+const DiagnosticMovementWindowVersion = "combat_window_movement_mean_shift_v1"
 
 // Diagnostic acquisition only. Shift the two Gaussian movement means on one
-// frame; retain std, draw order and the ordinary motion-conditioned aim.
+// frame or a bounded window; retain std, draw order and motion-conditioned aim.
 type DiagnosticMovementProbeFile struct {
 	Version   string    `json:"version"`
 	Frame     int       `json:"frame"`
+	Duration  int       `json:"duration_frames,omitempty"`
 	MeanShift []float64 `json:"mean_shift"`
+}
+
+func (p *DiagnosticMovementProbeFile) active(frame int) bool {
+	if p == nil {
+		return false
+	}
+	duration := 1
+	if p.Version == DiagnosticMovementWindowVersion {
+		duration = p.Duration
+	}
+	return frame >= p.Frame && frame-p.Frame < duration
 }
 
 type DiagnosticMovementSample struct {
@@ -25,13 +38,13 @@ type DiagnosticMovementSample struct {
 
 func (p *PPO) validateMovementSample(frame int, sample Sample) error {
 	probe, receipt := p.file.DiagnosticMovementProbe, sample.MovementProbe
-	if probe == nil || frame != probe.Frame {
+	if !probe.active(frame) {
 		if receipt != nil {
 			return fmt.Errorf("unexpected movement probe receipt")
 		}
 		return nil
 	}
-	if receipt == nil || receipt.Version != DiagnosticMovementProbeVersion || receipt.Frame != frame ||
+	if receipt == nil || receipt.Version != probe.Version || receipt.Frame != frame ||
 		len(receipt.MeanShift) != 2 || len(receipt.GaussianNoise) != 4 ||
 		math.IsNaN(receipt.FireUniform) || receipt.FireUniform < 0 || receipt.FireUniform >= 1 {
 		return fmt.Errorf("invalid movement probe draw receipt")
@@ -54,7 +67,9 @@ func validateDiagnosticMovementProbe(f PPOFile) error {
 	if p == nil {
 		return nil
 	}
-	if p.Version != DiagnosticMovementProbeVersion || p.Frame <= 0 || p.Frame > math.MaxInt32 || len(p.MeanShift) != 2 ||
+	validVersion := p.Version == DiagnosticMovementProbeVersion && p.Duration == 0 ||
+		p.Version == DiagnosticMovementWindowVersion && p.Duration >= 2 && p.Duration <= 10 && p.Frame <= math.MaxInt32-p.Duration+1
+	if !validVersion || p.Frame <= 0 || p.Frame > math.MaxInt32 || len(p.MeanShift) != 2 ||
 		f.Deterministic || f.Features != EquippedWeaponFeatureVersion || f.ActionDistribution != JointAimCandidateVersion ||
 		f.AimCandidateHead == nil || f.DiagnosticAimProbe != nil || f.ExecutionMode != "" || f.GeometryAimRanker != nil || f.GeometryAimExplore != nil {
 		return fmt.Errorf("invalid diagnostic movement probe contract")
@@ -69,7 +84,7 @@ func validateDiagnosticMovementProbe(f PPOFile) error {
 
 func (p *PPO) movementProbeMeans(frame int, means [4]float64) [4]float64 {
 	probe := p.file.DiagnosticMovementProbe
-	if probe == nil || probe.Frame != frame {
+	if !probe.active(frame) {
 		return means
 	}
 	for i, shift := range probe.MeanShift {

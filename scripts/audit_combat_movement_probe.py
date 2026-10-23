@@ -30,6 +30,7 @@ def main():
     batch=read(pin(root/'cuda-batch/report.json',seal['cuda_receipt_sha256']));assert batch['state']=='complete' and batch['device']=='cuda'
     source_path=pin(Path(prepared['source'])/'weights.json',prepared['source_weights_sha256'])
     source=read(source_path);source_canonical=json.dumps(source,sort_keys=True,separators=(',',':'))
+    window_smoke=prepared.get('window_smoke',False)
 
     def load(directory,capture_path):
         meta=read(pin(directory/'cuda/report.json'));proof=read(pin(directory/'cuda/cuda-verification.json',meta['cuda_verification_sha256']))
@@ -96,6 +97,21 @@ def main():
             and d['rows'][frame]['features']==control['rows'][frame]['features']
             and current['sample']['aim_candidate']['timing']==control_at['sample']['aim_candidate']['timing'])
         receipt=current['sample']['movement_probe'];same_noise=receipt['gaussian_noise']==draw['gaussian_noise'] and receipt['fire_uniform']==draw['fire_uniform']
+        window_draws_exact=True;window_receipts=0
+        if window_smoke:
+            duration=probe.get('duration_frames',1)
+            assert duration==v['duration']
+            frames={s['observation']['identity']['frame']:s for s in d['steps']}
+            controls={s['observation']['identity']['frame']:s for s in control['steps']}
+            observed=sorted(f for f in frames if frame<=f<frame+duration)
+            window_receipts=len(observed)
+            assert observed==list(range(frame,min(frame+duration,max(frames)+1))), 'Skipped intervention frame'
+            for f in observed:
+                r=frames[f]['sample'].get('movement_probe')
+                assert r and r['version']==probe['version'] and r['frame']==f and r['mean_shift']==probe['mean_shift']
+                if f in controls:
+                    c=controls[f]['sample']['movement_probe']
+                    window_draws_exact &= r['gaussian_noise']==c['gaussian_noise'] and r['fire_uniform']==c['fire_uniform']
         same_categories=all(current['sample'].get(k,0)==control_at['sample'].get(k,0) for k in ('target','aim_mode','vertical','weapon','memory'))
         source_move=lambda s:s['sample']['aim_candidate']['source_latent'][:2]
         a_move,b_move=source_move(current),source_move(control_at)
@@ -104,7 +120,7 @@ def main():
         r=d['result'];life=r['first_life'];damage=life['damage']
         task_end=r['goal_stop']['kill_frame'] if r['goal_stop'] else life['end_frame']
         rules_before_end=sum(s['owner']=='rules' and frame<=s['observation']['identity']['frame']<task_end and s['observation']['health']>0 for s in d['all_steps'])
-        admitted=bool(full_control and prefix_exact and state_exact and same_noise and same_categories and rules_before_end==0)
+        admitted=bool(full_control and prefix_exact and state_exact and same_noise and same_categories and window_draws_exact and rules_before_end==0)
         suffix=[row for f,row in d['rows'].items() if f>=frame]
         components=[(row,d['rewards'][row['index']]['components']) for row in suffix]
         observed=sum(gamma**(row['frame']-frame)*row['reward'] for row in suffix)
@@ -112,6 +128,7 @@ def main():
         results.append(dict(label=v['label'],admitted=admitted,baseline_full_exact=full_control,prefix_exact=prefix_exact,
             intervention_state_exact=state_exact,gaussian_and_fire_draws_exact=same_noise,unmodified_categories_exact=same_categories,
             movement_latent_shift_error=shift_error,goal=bool(r['goal_stop']),death=bool(r['death_stop']),
+            window_receipts=window_receipts,window_common_draws_exact=window_draws_exact,
             kills=sum(q['monster_kills'] for q in damage['by_mod']),dealt=sum(q['monster_health_damage'] for q in damage['by_mod']),
             received=damage['received_health_damage'],observed_provider_return_no_bootstrap=observed,
             observed_provider_sparse_return_no_bootstrap=sparse,provider_suffix_rows=len(suffix),

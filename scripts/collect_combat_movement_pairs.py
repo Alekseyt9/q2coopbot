@@ -78,7 +78,7 @@ def main():
         if not continuation:
             assert len([c for c in chosen if c['split'] == 'train']) >= protocol['dataset_admission']['minimum_train_contexts'], 'Insufficient observable TRAIN coverage before games'
             assert len([c for c in chosen if c['split'] == 'development']) >= protocol['dataset_admission']['minimum_development_contexts'], 'Insufficient observable development coverage before games'
-        else:assert len(chosen)==12 and all(c['split']=='train' for c in chosen)
+        else:assert len(chosen)==4*protocol['continuation_replicates'] and all(c['split']=='train' for c in chosen)
         contexts, variants = [], []
         for ci, context in enumerate(chosen):
             stage('cuda-preparing', context=ci, contexts=len(chosen))
@@ -104,7 +104,8 @@ def main():
                 variants.append(v)
             contexts.append(dict(prepared=str(target), prepared_report_sha256=seal['report_sha256'],
                 context=context, variants=local,unit_id=index['units'][ci]['unit_id'] if continuation else context['context_id']))
-        assert len(variants) <= (96 if continuation else protocol['maximum_probe_cases'])
+        assert len(variants) <= (protocol.get('native_cases',96) if continuation else protocol['maximum_probe_cases'])
+        if continuation and protocol.get('native_cases'):assert len(variants)==protocol['native_cases']
         registry = pin(p['registry'])
         planner = out/'q2episode.exe'
         run('build-planner', ['go', 'build', '-o', planner, './cmd/q2episode'])
@@ -180,9 +181,12 @@ def main():
         stage('native-proof', contexts=len(contexts))
         for ci, item in enumerate(contexts):
             script='audit_combat_continuation_probe.py' if continuation else 'audit_combat_movement_probe.py'
-            run(f'proof-{ci:02d}', [sys.executable, repo/'scripts'/script,
-                '--probe', out, '--context-index', ci, '--out', out/'proofs'/item['unit_id']])
-        builder='report_combat_continuation_stability.py' if continuation else 'build_combat_movement_pair_dataset.py'
+            audit_args=[sys.executable, repo/'scripts'/script,'--probe',out,'--context-index',ci,'--out',out/'proofs'/item['unit_id']]
+            if continuation and protocol.get('goal_tail_protocol'):audit_args+=['--goal-tail-protocol',repo/protocol['goal_tail_protocol']]
+            run(f'proof-{ci:02d}',audit_args)
+        continuation_reporters={'combat_movement_mc_budget8_v1':'report_combat_continuation_budget8.py',
+            'combat_movement_window_comparison_v1':'report_combat_movement_window_comparison.py'}
+        builder=continuation_reporters.get(protocol.get('study'),'report_combat_continuation_stability.py') if continuation else 'build_combat_movement_pair_dataset.py'
         run('dataset', [sys.executable, repo/'scripts'/builder, '--collection', out, '--out', out/'dataset'])
         dataset = read(out/'dataset/report.json')
         stage('complete', native_cases=len(variants), cuda_cases=len(variants), contexts=len(contexts),

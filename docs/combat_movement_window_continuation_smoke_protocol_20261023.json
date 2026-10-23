@@ -1,0 +1,16 @@
+{
+  "version":"combat_movement_continuation_stability_v1",
+  "study":"combat_movement_window_continuation_smoke_v1",
+  "source_weights_sha256":"559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "window_acceptance":"workspace/artifacts/combat-movement-window-proof-v1-20261023",
+  "continuation_seeds":[2026102301],
+  "purpose":"Technical admission of overlapping multi-frame movement and subsequent-policy RNG fork, before a duration study. Reuse first predeclared TRAIN context and seed, independent of its outcome.",
+  "native_cases":4,
+  "cuda_cases":4,
+  "controls":"Forked five-frame zero shift vs fork-only reference; ordinary no-fork vs historical ordinary baseline. Exact common prefix/root state/draws and shared future draws, all in-window Gaussian/fire reconstructions on CUDA. Original actor/critic/std unchanged. Full control equality required; no task-tail relaxation in this smoke.",
+  "max_instances":16,
+  "timescale":2,
+  "training_performed":false,
+  "ordinary_training_eligible":false,
+  "promotion":false
+}

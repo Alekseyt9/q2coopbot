@@ -1,15 +1,29 @@
-"""Explicit one-frame Gaussian mean intervention; metadata and CUDA helpers."""
+"""Explicit one-frame/window Gaussian mean interventions; CUDA helpers."""
 import math
 from train_combat_bc import torch
 
 VERSION='combat_one_frame_movement_mean_shift_v1'
+WINDOW_VERSION='combat_window_movement_mean_shift_v1'
+
+
+def duration(probe):
+    return probe['duration_frames'] if probe['version']==WINDOW_VERSION else 1
+
+
+def active(probe,frame):
+    return probe['frame']<=frame<probe['frame']+duration(probe)
 
 
 def validate(model):
     probe=model.get('diagnostic_movement_probe')
     if probe is None:return
-    assert set(probe)=={'version','frame','mean_shift'} and probe['version']==VERSION
+    if probe['version']==VERSION:
+        assert set(probe)=={'version','frame','mean_shift'}
+    else:
+        assert probe['version']==WINDOW_VERSION and set(probe)=={'version','frame','mean_shift','duration_frames'}
+        assert type(probe['duration_frames']) is int and 2<=probe['duration_frames']<=10
     assert type(probe['frame']) is int and 0<probe['frame']<=2**31-1
+    assert probe['frame']+duration(probe)-1<=2**31-1
     assert len(probe['mean_shift'])==2 and all(type(v) in (int,float) and math.isfinite(v) and abs(v)<=2 for v in probe['mean_shift'])
     assert model['feature_version']=='combat_features_v10' and model['action_distribution']=='combat_joint_aim_candidates_v1'
     assert model.get('aim_candidate_head') and not model.get('deterministic')
@@ -23,7 +37,8 @@ def shifts(model,frames,dtype=torch.float32):
     probe=model.get('diagnostic_movement_probe')
     if probe is not None:
         delta=torch.tensor(probe['mean_shift'],device='cuda',dtype=dtype)
-        result=torch.where((frames==probe['frame'])[:,None],delta[None,:],result)
+        mask=(frames>=probe['frame']) & (frames<probe['frame']+duration(probe))
+        result=torch.where(mask[:,None],delta[None,:],result)
     return result
 
 
@@ -33,15 +48,18 @@ def verify_draw_receipts(model,rows,raw,std,source,final,features,target,mode,ve
     records=[]; indexes=[]
     for i,row in enumerate(rows):
         receipt=row['sample'].get('movement_probe')
-        if row['frame']!=probe['frame']:
+        if not active(probe,row['frame']):
             assert receipt is None,'Movement receipt outside declared frame'
             continue
         assert receipt is not None and set(receipt)=={'version','frame','mean_shift','gaussian_noise','fire_uniform'}
-        assert receipt['version']==VERSION and receipt['frame']==probe['frame'] and receipt['mean_shift']==probe['mean_shift']
+        assert receipt['version']==probe['version'] and receipt['frame']==row['frame'] and receipt['mean_shift']==probe['mean_shift']
         assert len(receipt['gaussian_noise'])==4 and all(math.isfinite(v) for v in receipt['gaussian_noise'])
         assert math.isfinite(receipt['fire_uniform']) and 0<=receipt['fire_uniform']<1
         indexes.append(i); records.append(receipt)
-    assert len(records)==1,'The selected intervention frame must be exported exactly once'
+    observed=[rows[i]['frame'] for i in indexes]
+    assert observed and observed[0]==probe['frame'] and len(observed)==len(set(observed))
+    assert len(records)<=duration(probe),'Duplicate intervention frames'
+    if probe['version']==VERSION: assert len(records)==1
     from combat_precision_head import selected_means
     from combat_conditional_fire import logits as fire_logits
     idx=torch.tensor(indexes,device='cuda',dtype=torch.long)

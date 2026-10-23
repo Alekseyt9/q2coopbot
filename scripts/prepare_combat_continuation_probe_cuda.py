@@ -13,6 +13,7 @@ from fork_conditional_weapon_exploration_cuda import equal_tree
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     for name in ('collection','protocol','out'):ap.add_argument('--'+name,type=Path,required=True)
+    ap.add_argument('--window-prepared',type=Path,help='Accepted CUDA five-frame preparation, technical overlap smoke only')
     a=ap.parse_args();assert not a.out.exists();pins={}
     def pin(path,expected=None):
         path=Path(path).resolve();h=sha(path);assert expected is None or expected==h,str(path)
@@ -26,7 +27,13 @@ def main():
         selected.append(min([r for r in records if r['map']==mp],key=lambda r:r['seed']))
     assert len(selected)==4
     record=selected[0];context=record['context']
-    old=root/'preparations'/context['context_id'];old_seal=read(pin(old/'complete.json'))
+    assert bool(a.window_prepared)==bool(p.get('window_acceptance'))
+    if a.window_prepared:
+        proof_path=Path(p['window_acceptance']);proof_seal=read(pin(proof_path/'complete.json'))
+        proof=read(pin(proof_path/'report.json',proof_seal['report_sha256']))
+        assert proof['baseline_full_exact'] and proof['admitted']==5 and proof['excluded']==0
+        assert proof['context']==context and proof['source_weights_sha256']==p['source_weights_sha256']
+    old=a.window_prepared or root/'preparations'/context['context_id'];old_seal=read(pin(old/'complete.json'))
     old_p=read(pin(old/'report.json',old_seal['report_sha256']))
     for path,h in old_p['inputs'].items():pin(path,h)
     source=Path(old_p['source']);source_seal=read(pin(source/'complete.json'))
@@ -38,7 +45,7 @@ def main():
     original_actor=branch(base_model(model,allow_shared=True),'actor').requires_grad_(False)
     original_joint=JointAim(model,allow_shared=True).requires_grad_(False)
     variants=[];a.out.mkdir(parents=True)
-    for index,(label,move,with_fork) in enumerate([('control','control',True),('ordinary_reference',None,True),('left','left',True),('ordinary_no_fork',None,False)]):
+    for index,(label,move,with_fork) in enumerate([('control','control',True),('ordinary_reference',None,True),('left','left_five' if a.window_prepared else 'left',True),('ordinary_no_fork',None,False)]):
         m=read(pin(movement[move]['model'],movement[move]['model_sha256'])) if move else copy.deepcopy(model)
         if with_fork:m['diagnostic_continuation_probe']=fork
         validate(m)
@@ -60,6 +67,7 @@ def main():
         source_weights_sha256=p['source_weights_sha256'],registry=old_p['registry'],baseline=old_p['baseline'],
         original_collection=str(root),protocol=str(a.protocol.resolve()),protocol_sha256=sha(a.protocol),fork=fork,
         inputs=pins,neural_parameters_exact=True,training_performed=False,validation_used=False,confirmation_used=False,promotion=False)
+    if a.window_prepared:report.update(window_smoke=True,movement_duration_frames=5)
     save(a.out/'report.json',report);save(a.out/'complete.json',dict(state='complete',report_sha256=sha(a.out/'report.json')))
     print(dict(context=context['context_id'],fork=fork,variants=len(variants)))
 

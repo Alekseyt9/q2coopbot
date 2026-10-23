@@ -104,3 +104,55 @@ func TestDiagnosticMovementDrawReceipt(t *testing.T) {
 		t.Fatal("invalid draw accepted")
 	}
 }
+
+// Exercise window boundaries and receipts without constructing a neural model.
+func TestDiagnosticMovementWindowMetadataAndScalars(t *testing.T) {
+	f := movementMetadata()
+	f.DiagnosticMovementProbe.Version = DiagnosticMovementWindowVersion
+	f.DiagnosticMovementProbe.Duration = 5
+	if err := validateDiagnosticMovementProbe(f); err != nil {
+		t.Fatal(err)
+	}
+	p := PPO{file: f}
+	means := [4]float64{.2, .3, -.2, .1}
+	for frame := 109; frame <= 115; frame++ {
+		want := means
+		inside := frame >= 110 && frame < 115
+		if inside {
+			want[1] += 1
+		}
+		if got := p.movementProbeMeans(frame, means); got != want {
+			t.Fatalf("frame %d: %v != %v", frame, got, want)
+		}
+		s := Sample{}
+		if inside {
+			s.MovementProbe = &DiagnosticMovementSample{Version: DiagnosticMovementWindowVersion, Frame: frame,
+				MeanShift: []float64{0, 1}, GaussianNoise: []float64{0, 0, 0, 0}, FireUniform: .5}
+		}
+		if err := p.validateMovementSample(frame, s); err != nil {
+			t.Fatal(frame, err)
+		}
+		if inside {
+			s.MovementProbe.Frame = 109
+			if p.validateMovementSample(frame, s) == nil {
+				t.Fatal("wrong receipt frame accepted")
+			}
+		}
+	}
+	for _, duration := range []int{-1, 0, 1, 11} {
+		f.DiagnosticMovementProbe.Duration = duration
+		if validateDiagnosticMovementProbe(f) == nil {
+			t.Fatal("invalid duration accepted", duration)
+		}
+	}
+	f.DiagnosticMovementProbe.Duration = 5
+	f.DiagnosticMovementProbe.Frame = math.MaxInt32 - 3
+	if validateDiagnosticMovementProbe(f) == nil {
+		t.Fatal("overflowing window accepted")
+	}
+	f = movementMetadata()
+	f.DiagnosticMovementProbe.Duration = 5
+	if validateDiagnosticMovementProbe(f) == nil {
+		t.Fatal("legacy probe accepted window metadata")
+	}
+}

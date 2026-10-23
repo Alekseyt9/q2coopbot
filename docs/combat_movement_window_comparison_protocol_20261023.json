@@ -1,0 +1,31 @@
+{
+  "version":"combat_movement_continuation_stability_v1",
+  "study":"combat_movement_window_comparison_v1",
+  "source_weights_sha256":"559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "dataset":"workspace/artifacts/combat-movement-pairs-v1-20261023/dataset",
+  "window_continuation_acceptance":"workspace/artifacts/combat-movement-window-continuation-proof-v1-20261023",
+  "selection":"Same lowest TRAIN seed per map as the closed MC study. Four fixed worlds. No outcome-based context or action selection. No new fitting or development use.",
+  "purpose":"Compare one-frame and five-frame movement shifts under identical initial worlds/root actions and four shared future-policy RNG streams. Test whether longer actions provide a more repeatable benefit before collecting a new independent teacher. Four repetitions remain insufficient for general training admission by the previous study.",
+  "movement_duration_frames":5,
+  "movement_labels":["control","left","right","forward","backward"],
+  "continuation_replicates":4,
+  "continuation_seeds":[2026102301,2026102302,2026102303,2026102304],
+  "previous_collections":[
+    {"collection":"workspace/artifacts/combat-movement-continuation-stability-v1-20261023","proofs":"workspace/artifacts/combat-movement-continuation-stability-v1-20261023/proofs-native-tail-v2"},
+    {"collection":"workspace/artifacts/combat-movement-mc-budget8-v1-20261023","proofs":"workspace/artifacts/combat-movement-mc-budget8-v1-20261023/proofs"}
+  ],
+  "native_cases":100,
+  "cuda_cases":100,
+  "goal_tail_protocol":"docs/combat_continuation_goal_tail_raw_supplement_20261023.json",
+  "controls":"Each context/stream: five-frame zero control vs fork-only reference with exact task/full proof. One no-fork replay per context vs historical ordinary baseline, always full exact. Exact initial state, prefix and root Gaussian/fire/category draws. All shared future Gaussian/fire draws equal; CUDA reconstructs all in-window samples including overlap with continuation fork. Unknown tail effects require existing independent completed raw-window proof, never zero filling. Source NN/std remain unchanged.",
+  "reuse":"Reuse accepted old one-frame captures for streams1..4 unchanged, excluding near_stationary to retain the same four fixed directions. Do not replay them. Require matching zero controls across one/five collections at physical/task level before comparing interventions. Source original stream0 and streams5..7 are outside this comparison.",
+  "utility":"4*alive_goal+0.25*kills-received/100-death; paired against own same-stream zero control. Also paired long-minus-short for each direction. All four contexts are descriptive TRAIN conditions, not independent battle quality confirmation.",
+  "analysis":"Report all raw outcomes and paired deltas, means, sample standard deviations, first2/new2 best-action sets with tie gap0.05 and fixed order control,left,right,forward,backward. For each duration choose first-half best action and measure its second-half gain. Report same-action long-minus-short effects for all directions without replacing failed contexts or seeds.",
+  "long_action_signal_screen":{"minimum_contexts_repeated_noncontrol_gain_at_least0.25":2,"minimum_worst_newhalf_gain":-0.25,"minimum_contexts_same_action_long_minus_short_mean_at_least0.25":2},
+  "next":"Only a passed technical and signal screen justifies a new independent broader teacher pilot with root-action conditioning and separately chosen replication budget. No fitting on these four states, no promotion; if failed investigate longer options or state/action-value learning rather than retuning development thresholds.",
+  "max_instances":16,
+  "timescale":2,
+  "training_performed":false,
+  "ordinary_training_eligible":false,
+  "promotion":false
+}

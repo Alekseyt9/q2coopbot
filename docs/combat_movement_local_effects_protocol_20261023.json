@@ -1,0 +1,20 @@
+{
+  "version":"combat_movement_local_effects_v1",
+  "source_comparison":"workspace/artifacts/combat-movement-window-comparison-v1-20261023",
+  "comparison_report":"workspace/artifacts/combat-movement-window-comparison-v1-20261023/dataset-full-control-v2/report.json",
+  "horizons_frames":[1,3,5,10,20],
+  "purpose":"Measure local action-conditioned effects and their variability across four shared future streams before selecting a new training target. Reuse closed short/long captures without fitting or new games.",
+  "scope":"Four previously explored TRAIN worlds only. No development/confirmation use. Whole-episode admission failure remains a failure for final utility. A separate local window can be known only when all required provider/native steps and effects within that window are observed and accepted.",
+  "admission":"Each case requires exact no-fork baseline, forked zero reference full/task identity, unchanged pre-F prefix/root state/root draws/categories/shared future draws. Cross-duration zero control must match physically, by commands, selected sample fields and encoded features through each compared local horizon. Future loss of visibility cannot invalidate earlier fully recorded effects or supply a final outcome. An intervening rules command, missing native dispatch, missing next observation or unavailable effect masks that local horizon.",
+  "labels":["monster_health_damage","received_health_damage","self_health_damage","teammate_health_damage","monster_kills","deaths"],
+  "measurement":"Sum only available server_step_effects matched to unique single-frame native provider windows F..F+H-1. Require observed same-life state at F+H. Do not infer damage from commands/reward and do not zero-fill after termination/handoff. Record censor reasons and available observed totals separately.",
+  "inputs":"Only CUDA-verified pre-command F features, actually proposed/executed root action, declared movement shift/duration. Seed/map/context and future RNG stream identify groups only, never NN input. Future state and native effects are labels only. This audit performs no neural execution or fitting.",
+  "sanity":"One/five-frame versions of the same direction have identical state, root command/sample and H1 effects because the intervention first differs at F+1. Root inputs and H1 effects must also agree across future RNG streams for each context/duration/direction. Check these sentinels before interpreting later variation.",
+  "analysis":"For every direction/horizon report all four paired long-minus-short effect vectors, mean/std and sign instability. Summarize known/censored coverage and nonzero paired effects. Signal-to-noise abs(mean)>=sample_std is descriptive only, with zero variance handled explicitly; no hypothesis p-value or policy gate. No utility weights or best-action choice selected on these data.",
+  "training_performed":false,
+  "neural_execution":false,
+  "new_games":false,
+  "ordinary_training_eligible":false,
+  "fit_admission":false,
+  "promotion":false
+}
