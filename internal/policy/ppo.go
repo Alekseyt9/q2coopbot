@@ -40,6 +40,7 @@ type PPOFile struct {
 	GeometryAimExplore  *GeometryAimExploreFile `json:"geometry_aim_exploration,omitempty"`
 	ActionDistribution  string                  `json:"action_distribution,omitempty"`
 	AimCandidateHead    *AimCandidateFile       `json:"aim_candidate_head,omitempty"`
+	DiagnosticAimProbe  *DiagnosticAimProbeFile `json:"diagnostic_joint_aim_probe,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
@@ -176,10 +177,13 @@ func (p *PPO) FeatureVersion() string     { return p.file.Features }
 func (p *PPO) WeaponHeadVersion() string  { return p.file.WeaponHead }
 func (p *PPO) SamplingSeed() int64        { return p.file.SamplingSeed }
 func (p *PPO) ActionDistribution() string { return p.file.ActionDistribution }
+func (p *PPO) IsDiagnosticAimProbe() bool { return p.file.DiagnosticAimProbe != nil }
 
 // IsStochastic reports eligibility for the standard full-head PPO sampler.
 // Selective inference modes retain randomness but cannot produce PPO rollouts.
-func (p *PPO) IsStochastic() bool  { return !p.file.Deterministic && p.file.ExecutionMode == "" }
+func (p *PPO) IsStochastic() bool {
+	return !p.file.Deterministic && p.file.ExecutionMode == "" && !p.IsDiagnosticAimProbe()
+}
 func (p *PPO) LastSample() *Sample { return p.last }
 func (p *PPO) IsRecurrent() bool   { return p.file.Memory != nil || p.file.Attention != nil }
 func (p *PPO) MemoryVersion() string {

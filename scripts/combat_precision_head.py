@@ -16,6 +16,8 @@ FINE_DEGREES=15.
 COARSE_DEGREES=180.
 
 def validate_precision_model(model):
+    if model.get('diagnostic_joint_aim_probe'):
+        raise ValueError('Diagnostic one-frame probes require explicit CUDA native verification and cannot train ordinary PPO')
     if model.get('action_distribution') or model.get('aim_candidate_head') is not None:
         raise ValueError('Joint aim-candidate policy requires its dedicated versioned scorer; standard precision PPO is forbidden')
     if model.get('execution_mode'):

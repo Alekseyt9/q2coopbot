@@ -117,7 +117,7 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	if !behavior.IsStochastic() {
+	if !behavior.IsStochastic() && !(*cudaOnly && behavior.IsDiagnosticAimProbe()) {
 		return fmt.Errorf("deterministic rollout cannot train PPO")
 	}
 	if behavior.ActionDistribution() != "" && !*cudaOnly {
@@ -223,7 +223,7 @@ func run() error {
 		if e != nil {
 			return e
 		}
-		if p.Version() != behavior.Version() || !p.IsStochastic() || p.SamplingSeed() != int64(r.Seed) {
+		if p.Version() != behavior.Version() || (!p.IsStochastic() && !(*cudaOnly && p.IsDiagnosticAimProbe())) || p.SamplingSeed() != int64(r.Seed) {
 			return fmt.Errorf("episode weight version or sampling seed differs")
 		}
 		var eligibility struct {
@@ -569,6 +569,10 @@ func run() error {
 	}
 	metadata := map[string]any{"version": "combat_ppo_rollout_v1", "feature_version": behavior.FeatureVersion(), "reward_config_sha256": strings.ToLower(manifest.RewardSHA), "reward_version": manifest.Reward.Version, "aim_gamma": manifest.Reward.AimGamma, "training_monster_health": manifest.TrainingHealth, "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE; v2 verified control handoff retains reward with zero segment bootstrap; full world reset equivalence unproven"}
 	if *cudaOnly {
+		if behavior.IsDiagnosticAimProbe() {
+			metadata["diagnostic_only"] = true
+			metadata["ppo_training_ready"] = false
+		}
 		metadata["version"] = "combat_ppo_native_cuda_pending_v1"
 		if behavior.ActionDistribution() != "" {
 			metadata["action_distribution"] = behavior.ActionDistribution()

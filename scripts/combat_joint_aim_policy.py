@@ -11,13 +11,18 @@ from combat_conditional_fire import inputs as fire_inputs,logits as fire_logits
 from combat_action_effect import FactorizedMotor,inputs as motor_inputs,projected_geometry,POSITION_COLUMNS,DIRECTION_COLUMNS
 
 
-def base_model(model):
+PROBE_VERSION='combat_joint_aim_one_frame_probe_v1'
+
+
+def base_model(model,*,allow_probe=False):
     assert model.get('action_distribution')==candidates.VERSION
     assert model.get('aim_candidate_head',{}).get('version')==candidates.VERSION
     assert not model.get('execution_mode') and not model.get('geometry_aim_ranker') and not model.get('geometry_aim_exploration')
     assert not model.get('deterministic') and model['feature_version']=='combat_features_v10'
+    assert allow_probe or not model.get('diagnostic_joint_aim_probe'),'Diagnostic one-frame probes cannot enter ordinary training/scoring'
     result=copy.deepcopy(model)
     result.pop('action_distribution');result.pop('aim_candidate_head')
+    result.pop('diagnostic_joint_aim_probe',None)
     from combat_precision_head import validate_precision_model
     validate_precision_model(result)
     return result
@@ -31,12 +36,19 @@ def _layers(spec,width,outputs):
         width=output
 
 
-def validate(model):
-    base_model(model)
+def validate(model,*,allow_probe=False):
+    base_model(model,allow_probe=allow_probe)
     h=model['aim_candidate_head']
     assert set(h)=={'version','offset_degrees','sampler','layers','predictor'}
     assert h['offset_degrees']==list(candidates.OFFSETS) and h['sampler']=='frame_hash_categorical_v1'
     _layers(h['layers'],1359,(64,25))
+    probe=model.get('diagnostic_joint_aim_probe')
+    if probe:
+        assert allow_probe and set(probe)=={'version','frame','logits'}
+        assert probe['version']==PROBE_VERSION and type(probe['frame']) is int and 0<probe['frame']<=2**31-1
+        for values in (probe['logits'],h['layers'][-1]['bias']):
+            assert len(values)==25 and all(math.isfinite(v) and abs(v)<=100 for v in values) and max(values)-min(values)<=60
+        assert all(v==0 for row in h['layers'][-1]['weight'] for v in row),'Probe requires constant baseline head'
     p=h['predictor'];m=p['motor']
     assert p['kind']=='combat_geometry_shot_predictor_v1' and p['geometry_version']=='combat_predicted_action_geometry_v1'
     assert p['input_width']==214 and p['causal_width']==185 and p['trained_weapon']=='machinegun' and len(p['dataset_sha256'])==64
@@ -76,8 +88,11 @@ class FrozenHints(nn.Module):
 
 
 class JointAim(nn.Module):
-    def __init__(self,model):
-        super().__init__();validate(model)
+    def __init__(self,model,*,allow_probe=False):
+        super().__init__();validate(model,allow_probe=allow_probe)
+        probe=model.get('diagnostic_joint_aim_probe')
+        self.probe_frame=probe['frame'] if probe else None
+        self.register_buffer('probe_logits',torch.tensor(probe['logits'],device='cuda',dtype=torch.float32) if probe else None)
         self.head=candidates.AimCandidateHead()
         with torch.no_grad():
             for index,layer in zip((0,2),model['aim_candidate_head']['layers']):
@@ -89,9 +104,13 @@ class JointAim(nn.Module):
         c=fire_inputs(features,target,mode,source,vertical,weapon)
         return torch.cat((c,features[:,810:814].detach()),-1)
 
-    def forward(self,features,source,target,mode,vertical,weapon,timing):
+    def forward(self,features,source,target,mode,vertical,weapon,timing,frames=None):
         c=self.action_context(features,source,target,mode,vertical,weapon)
         active=candidates.eligible(c)
+        if self.probe_frame is not None:
+            assert frames is not None and frames.is_cuda and frames.dtype==torch.long and frames.shape==(len(c),),'Probe scoring requires explicit recorded frames'
+            constant=self.head.layers[-1].bias[None,:].expand(len(c),-1)
+            return torch.where((frames==self.probe_frame)[:,None],self.probe_logits[None,:],constant),active
         # Ineligible rows contribute no categorical event. Avoid forecasting
         # their absent bbox while retaining a differentiable zero head branch.
         hints=torch.zeros((len(c),25),device='cuda',dtype=features.dtype)
@@ -125,13 +144,13 @@ def events(rows,features,target,mode,vertical,weapon):
     return source.to(features.dtype),choice,timing.to(features.dtype),active
 
 
-def probabilities(joint,raw,std,source,final,attack,vertical,weapon,features,target,mode,choice,timing,motion_branch=None,reference_branch=None,fire_branch=None):
+def probabilities(joint,raw,std,source,final,attack,vertical,weapon,features,target,mode,choice,timing,motion_branch=None,reference_branch=None,fire_branch=None,*,frames=None):
     from combat_precision_head import probabilities as original
     lp,ent=original(raw,std,source,attack,vertical,weapon,features,target,mode,motion_branch,reference_branch,fire_branch)
     # Gaussian terms keep source latent. Only fire sees the final aim.
     before=torch.distributions.Bernoulli(logits=fire_logits(fire_branch,features,raw,target,mode,source,vertical,weapon))
     after=torch.distributions.Bernoulli(logits=fire_logits(fire_branch,features,raw,target,mode,final,vertical,weapon))
-    logits,active=joint(features,source,target,mode,vertical,weapon,timing)
+    logits,active=joint(features,source,target,mode,vertical,weapon,timing,frames=frames)
     lp=lp+after.log_prob(attack)-before.log_prob(attack)+candidates.log_probability(logits,choice,active)
     ent=ent+after.entropy()-before.entropy()+candidates.entropy(logits,active)
     assert bool(torch.isfinite(lp).all()) and bool(torch.isfinite(ent).all())

@@ -1,6 +1,7 @@
 """Audit common-state native outcomes; fixed TRAIN grid is not quality evidence."""
 import argparse
 import collections
+import copy
 import json
 from pathlib import Path
 from evaluate_registered_combat_models import read, save, sha
@@ -9,9 +10,34 @@ from report_combat_machinegun_hits import scan
 from report_registered_machinegun_outcomes import outcome
 
 
+def physical_equal_with_entity_bijection(current,baseline,forward,reverse):
+    """Relabel only observed enemy/threat IDs; preserve tracks, ordering and physics."""
+    c=copy.deepcopy(normalized(current));b=normalized(baseline)
+    def canonicalize(x,y):
+        for key in ('enemies','remembered_threats'):
+            if len(x.get(key,[]))!=len(y.get(key,[])):return False
+            for u,v in zip(x.get(key,[]),y.get(key,[])):
+                if 'id' not in u or 'id' not in v:continue
+                left,right=u['id'],v['id']
+                if forward.get(left,right)!=right or reverse.get(right,left)!=left:return False
+                forward[left]=right;reverse[right]=left;u['id']=right
+        if len(x.get('history',[]))!=len(y.get('history',[])):return False
+        for u,v in zip(x.get('history',[]),y.get('history',[])):
+            if not canonicalize(u,v):return False
+        u=x.get('previous_target_intent');v=y.get('previous_target_intent')
+        if isinstance(u,dict) and isinstance(v,dict) and 'entity' in u and 'entity' in v:
+            left,right=u['entity'],v['entity']
+            if forward.get(left,left)!=right or reverse.get(right,right)!=left:return False
+            u['entity']=right
+        return x==y
+    return canonicalize(c,b)
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     for n in ('probe','out'):ap.add_argument('--'+n,type=Path,required=True)
+    ap.add_argument('--allow-entity-relabeling',action='store_true',
+        help='Require a stable bijection of raw enemy/threat IDs; retain every other physical field')
     a=ap.parse_args();assert not a.out.exists();root=a.probe.resolve();pins={}
     def pin(p,expected=None):
         p=Path(p).resolve();h=sha(p);assert expected is None or h==expected,str(p);pins[str(p)]=h;return p
@@ -59,12 +85,14 @@ def main():
         for s,h in zip(baseline,historical))
     results=[]
     for k,(rows,features,log,result) in sorted(loaded.items()):
-        current=prefix(rows);issues=[];matched=0
+        current=prefix(rows);issues=[];matched=0;entity_forward={};entity_reverse={};raw_equal=True
         if len(current)!=len(baseline):issues.append('prefix length differs')
         if result['generated_fixture']!=br['generated_fixture']:issues.append('fixture differs')
         for s,b in zip(current,baseline):
             frame=s['observation']['identity']['frame'];ss=s['sample'];bs=b['sample']
-            if normalized(s['observation'])!=normalized(b['observation']):issues.append(f'physical observation differs at {frame}');break
+            exact=normalized(s['observation'])==normalized(b['observation']);raw_equal=raw_equal and exact
+            equivalent=physical_equal_with_entity_bijection(s['observation'],b['observation'],entity_forward,entity_reverse) if a.allow_entity_relabeling else exact
+            if not equivalent:issues.append(f'physical observation differs at {frame}');break
             if features[frame]!=bf[frame]:issues.append(f'encoded input differs at {frame}');break
             if source_latent(ss)!=source_latent(bs) or ss.get('memory')!=bs.get('memory') or any(
                     ss.get(n,0)!=bs.get(n,0) for n in ('sampling_seed','target','aim_mode','vertical','weapon')):
@@ -86,13 +114,15 @@ def main():
         damage=result['first_life']['damage']
         results.append(dict(category=k,offset_yaw_degrees=spec['variants'][k]['offset_yaw_degrees'],
             offset_pitch_degrees=spec['variants'][k]['offset_pitch_degrees'],common_state_verified=history_exact and not issues,
+            raw_normalized_observations_equal=raw_equal,entity_id_bijection=entity_forward if a.allow_entity_relabeling else None,
             matching_prefix_frames=matched,issues=issues,attack=target['sample']['attack'],shots=shot_records,
             selected_target=target_index,selected_enemy=selected,
-            battle=dict(goal=result['goal_stop'],deaths=int(result['death_stop']),
+            battle=dict(goal=bool(result['goal_stop']),deaths=int(bool(result['death_stop'])),
                 kills=sum(v['monster_kills'] for v in damage['by_mod']),received=damage['received_health_damage'])))
     accepted=[r for r in results if r['common_state_verified']]
     counts=collections.Counter(q['outcome'] for r in accepted for q in r['shots'])
-    report=dict(state='complete',version='combat_joint_aim_grid_native_audit_v1',baseline_reproduces_prior_actions_features=history_exact,
+    report=dict(state='complete',version='combat_joint_aim_grid_native_audit_v3' if a.allow_entity_relabeling else 'combat_joint_aim_grid_native_audit_v1',
+        entity_relabeling_allowed=a.allow_entity_relabeling,baseline_reproduces_prior_actions_features=history_exact,
         all_common_states_verified=len(accepted)==25,accepted_categories=len(accepted),results=results,outcomes=dict(counts),
         inputs=pins,script_sha256=sha(__file__),training_performed=False,quality_confirmation=False,promotion=False,
         scope='One selected TRAIN world state and fixed seeded spread. Native outcomes, not predicted labels or population accuracy. Later battle outcomes are descriptive, not one-step causal labels.')

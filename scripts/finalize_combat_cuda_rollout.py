@@ -30,8 +30,9 @@ def finalize(model_path, data, out):
     joint,core_model=None,model
     if model.get('action_distribution'):
         from combat_joint_aim_policy import JointAim,base_model
-        core_model=base_model(model)
-        joint=JointAim(model)
+        diagnostic_probe=bool(model.get('diagnostic_joint_aim_probe'))
+        core_model=base_model(model,allow_probe=diagnostic_probe)
+        joint=JointAim(model,allow_probe=diagnostic_probe)
     paired = meta.get('paired_adapter_version')
     if paired:
         assert paired == 'coop_primary_native_adapter_v1' and meta['paired_adapter_verified']
@@ -127,7 +128,8 @@ def finalize(model_path, data, out):
             from combat_aim_candidates import log_probability,frame_uniforms,choose
             source,choice,timing,active=events(rows,x,target,mode,vertical,weapon)
             lp,_,logits,score_active=probabilities(joint,raw,std,source,z,attack,vertical,weapon,x,target,mode,choice,timing,
-                getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None),getattr(actor,'conditional_fire_branch',None))
+                getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None),getattr(actor,'conditional_fire_branch',None),
+                frames=torch.tensor([r['frame'] for r in rows],device='cuda',dtype=torch.long))
             assert torch.equal(active,score_active)
             expected_category=torch.tensor([r['sample']['aim_candidate']['log_probability'] if r['sample'].get('aim_candidate') else 0. for r in rows],device='cuda')
             candidate_error=float((log_probability(logits,choice,active)-expected_category).abs().max())
@@ -193,6 +195,9 @@ def finalize(model_path, data, out):
     meta.update(version='combat_ppo_rollout_v1', numerical_verification='cuda_verified_v1',
                 rollout_sha256=sha(out / 'rollout.jsonl'), source_sha256=sources,
                 cuda_verification_sha256=sha(out / 'cuda-verification.json'))
+    if model.get('diagnostic_joint_aim_probe'):
+        meta.update(version='combat_diagnostic_joint_aim_probe_rollout_v1',diagnostic_only=True,ppo_training_ready=False,
+                    diagnostic_probe_version=model['diagnostic_joint_aim_probe']['version'])
     if paired:
         meta['paired_training_ready'] = True
         meta['paired_training_scope'] = 'Experimental verified primary learner pilot; scripted peer excluded. Registry-wide eligibility unproven.'

@@ -8,6 +8,51 @@ import (
 
 const JointAimCandidateVersion = "combat_joint_aim_candidates_v1"
 const JointAimCandidateWidth = 1359
+const DiagnosticAimProbeVersion = "combat_joint_aim_one_frame_probe_v1"
+
+// Diagnostic acquisition only. A constant head is replaced at one declared
+// observation frame; actor RNG and all other decisions remain unchanged.
+type DiagnosticAimProbeFile struct {
+	Version string    `json:"version"`
+	Frame   int       `json:"frame"`
+	Logits  []float64 `json:"logits"`
+}
+
+func validateProbeLogits(logits []float64) bool {
+	if len(logits) != 25 {
+		return false
+	}
+	low, high := math.Inf(1), math.Inf(-1)
+	for _, v := range logits {
+		if math.IsNaN(v) || math.IsInf(v, 0) || math.Abs(v) > 100 {
+			return false
+		}
+		low, high = math.Min(low, v), math.Max(high, v)
+	}
+	return high-low <= 60 // Positive support in both float32 and float64.
+}
+
+func validateDiagnosticAimProbe(f PPOFile) error {
+	p := f.DiagnosticAimProbe
+	if p == nil {
+		return nil
+	}
+	if f.AimCandidateHead == nil || len(f.AimCandidateHead.Layers) != 2 {
+		return fmt.Errorf("diagnostic aim probe requires a validated joint head")
+	}
+	if p.Version != DiagnosticAimProbeVersion || p.Frame <= 0 || p.Frame > math.MaxInt32 ||
+		!validateProbeLogits(p.Logits) || !validateProbeLogits(f.AimCandidateHead.Layers[1].Bias) {
+		return fmt.Errorf("invalid diagnostic one-frame aim probe")
+	}
+	for _, row := range f.AimCandidateHead.Layers[1].Weight {
+		for _, w := range row {
+			if w != 0 {
+				return fmt.Errorf("diagnostic aim probe requires a constant baseline head")
+			}
+		}
+	}
+	return nil
+}
 
 type AimCandidateFile struct {
 	Version   string                `json:"version"`
@@ -29,6 +74,9 @@ type AimCandidateSample struct {
 
 func validateAimCandidates(f PPOFile) error {
 	h := f.AimCandidateHead
+	if f.DiagnosticAimProbe != nil && h == nil {
+		return fmt.Errorf("diagnostic aim probe requires joint head")
+	}
 	if h == nil && f.ActionDistribution == "" {
 		return nil
 	}
@@ -60,7 +108,7 @@ func validateAimCandidates(f PPOFile) error {
 		}
 		width = output
 	}
-	return nil
+	return validateDiagnosticAimProbe(f)
 }
 
 // ApplyJointAimOffsets is pure action geometry, also usable by offline packers.
@@ -182,6 +230,16 @@ func (p *PPO) jointAimLogits(o Observation, base Sample) ([]float64, error) {
 	}
 	if !jointAimActive(c) {
 		return nil, nil
+	}
+	if probe := p.file.DiagnosticAimProbe; probe != nil {
+		// Validation proved all final-layer weights are exactly zero. Its
+		// logits outside the selected frame are its biases, independent of
+		// hidden activations/hints; no neural shortcut applies to normal models.
+		logits := p.file.AimCandidateHead.Layers[1].Bias
+		if o.Identity.Frame == probe.Frame {
+			logits = probe.Logits
+		}
+		return append([]float64(nil), logits...), nil
 	}
 	timing := [2]float64{float64(o.AgeMS) / 300, float64(o.PreviousCommand.Msec) / 100}
 	hints := make([]float64, 25)
