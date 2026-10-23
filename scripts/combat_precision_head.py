@@ -16,6 +16,10 @@ FINE_DEGREES=15.
 COARSE_DEGREES=180.
 
 def validate_precision_model(model):
+    if model.get('action_distribution') or model.get('aim_candidate_head') is not None:
+        raise ValueError('Joint aim-candidate policy requires its dedicated versioned scorer; standard precision PPO is forbidden')
+    if model.get('execution_mode'):
+        raise ValueError('Inference-only execution mode cannot train or replay standard PPO')
     if model.get('aim_mode_head') != VERSION or len(model['actor'][-1]['bias']) != WIDTH:
         raise ValueError('Invalid precision contract')
     view=copy.deepcopy(model)

@@ -120,6 +120,9 @@ func run() error {
 	if !behavior.IsStochastic() {
 		return fmt.Errorf("deterministic rollout cannot train PPO")
 	}
+	if behavior.ActionDistribution() != "" && !*cudaOnly {
+		return fmt.Errorf("joint action distribution requires CUDA-only export")
+	}
 	var report struct {
 		Valid    bool `json:"provenance_valid"`
 		Complete bool `json:"capture_complete"`
@@ -567,6 +570,9 @@ func run() error {
 	metadata := map[string]any{"version": "combat_ppo_rollout_v1", "feature_version": behavior.FeatureVersion(), "reward_config_sha256": strings.ToLower(manifest.RewardSHA), "reward_version": manifest.Reward.Version, "aim_gamma": manifest.Reward.AimGamma, "training_monster_health": manifest.TrainingHealth, "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE; v2 verified control handoff retains reward with zero segment bootstrap; full world reset equivalence unproven"}
 	if *cudaOnly {
 		metadata["version"] = "combat_ppo_native_cuda_pending_v1"
+		if behavior.ActionDistribution() != "" {
+			metadata["action_distribution"] = behavior.ActionDistribution()
+		}
 		metadata["numerical_verification"] = "cuda_pending"
 		metadata["native_rollout_sha256"] = rolloutSHA
 		delete(metadata, "rollout_sha256")

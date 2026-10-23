@@ -176,6 +176,7 @@ def main():
         (out/'report.json').write_text(json.dumps({'scope':'BC initialized stochastic actor, zero value; no PPO update yet','bc_sha256':sha(pathlib.Path(a.init_bc)),'config_sha256':sha(pathlib.Path(a.config))},indent=2));return
     assert a.model and a.data
     model_path=pathlib.Path(a.model);root=pathlib.Path(a.data);model=json.loads(model_path.read_text());meta=json.loads((root/'report.json').read_text())
+    assert not model.get('execution_mode'), 'Inference-only execution modes cannot train PPO'
     assert not model.get('conditional_fire'), 'Conditional fire optimizer/checkpoint integration is not verified yet'
     assert not any(model.get(k) for k in ('memory','attention','entity_attention')), 'Architecture models require ppo_recurrent.py'
     validate_objective(config,meta)

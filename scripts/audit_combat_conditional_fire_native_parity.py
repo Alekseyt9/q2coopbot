@@ -19,7 +19,12 @@ def main():
     zero=read(plans[1]['model_path'])
     assert zero['conditional_fire']['version']=='combat_action_conditioned_fire_v1'
     original=read(plans[0]['model_path']); view=dict(zero);view.pop('conditional_fire')
-    assert view==original, 'Non-fire model fields changed'
+    original_view=dict(original);previous_fire=original_view.pop('conditional_fire',None)
+    if previous_fire is not None:
+        assert previous_fire['version']=='combat_action_conditioned_fire_v1'
+        previous_last=previous_fire['layers'][-1]
+        assert all(v==0 for row,bias in zip(previous_last['weight'],previous_last['bias']) for v in [*row,bias]), 'Source fire branch is not identically zero'
+    assert view==original_view, 'Non-fire model fields changed'
     last=zero['conditional_fire']['layers'][-1]
     assert all(value==0 for row,bias in zip(last['weight'],last['bias']) for value in [*row,bias])
     groups={};pins={str(pool_path):sha(pool_path)}

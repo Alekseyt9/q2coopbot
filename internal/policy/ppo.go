@@ -15,42 +15,50 @@ import (
 const PPOKind = "combat_ppo_v1"
 
 type PPOFile struct {
-	Kind                string                 `json:"kind"`
-	Features            string                 `json:"feature_version"`
-	Actor               []DenseLayer           `json:"actor"`
-	Value               []DenseLayer           `json:"value"`
-	LogStd              [4]float64             `json:"log_std"`
-	SamplingSeed        int64                  `json:"sampling_seed"`
-	Deterministic       bool                   `json:"deterministic"`
-	Memory              *GRUFile               `json:"memory,omitempty"`
-	Attention           *AttentionFile         `json:"attention,omitempty"`
-	EntityAttention     *EntityAttentionFile   `json:"entity_attention,omitempty"`
-	WeaponHead          string                 `json:"weapon_head,omitempty"`
-	TargetHead          string                 `json:"target_head,omitempty"`
-	AimModeHead         string                 `json:"aim_mode_head,omitempty"`
-	SpatialAim          *SpatialAimFile        `json:"spatial_aim,omitempty"`
-	SharedTarget        *SpatialAimFile        `json:"shared_target,omitempty"`
-	WeaponStateResidual *SpatialAimFile        `json:"weapon_state_residual,omitempty"`
-	WeaponExploration   *WeaponExplorationFile `json:"weapon_exploration,omitempty"`
-	SampledMotionAim    *SpatialAimFile        `json:"sampled_motion_aim,omitempty"`
-	MotorResidual       *SpatialAimFile        `json:"motor_residual,omitempty"`
-	ConditionalFire     *SpatialAimFile        `json:"conditional_fire,omitempty"`
+	Kind                string                  `json:"kind"`
+	Features            string                  `json:"feature_version"`
+	Actor               []DenseLayer            `json:"actor"`
+	Value               []DenseLayer            `json:"value"`
+	LogStd              [4]float64              `json:"log_std"`
+	SamplingSeed        int64                   `json:"sampling_seed"`
+	Deterministic       bool                    `json:"deterministic"`
+	Memory              *GRUFile                `json:"memory,omitempty"`
+	Attention           *AttentionFile          `json:"attention,omitempty"`
+	EntityAttention     *EntityAttentionFile    `json:"entity_attention,omitempty"`
+	WeaponHead          string                  `json:"weapon_head,omitempty"`
+	TargetHead          string                  `json:"target_head,omitempty"`
+	AimModeHead         string                  `json:"aim_mode_head,omitempty"`
+	SpatialAim          *SpatialAimFile         `json:"spatial_aim,omitempty"`
+	SharedTarget        *SpatialAimFile         `json:"shared_target,omitempty"`
+	WeaponStateResidual *SpatialAimFile         `json:"weapon_state_residual,omitempty"`
+	WeaponExploration   *WeaponExplorationFile  `json:"weapon_exploration,omitempty"`
+	SampledMotionAim    *SpatialAimFile         `json:"sampled_motion_aim,omitempty"`
+	MotorResidual       *SpatialAimFile         `json:"motor_residual,omitempty"`
+	ConditionalFire     *SpatialAimFile         `json:"conditional_fire,omitempty"`
+	ExecutionMode       string                  `json:"execution_mode,omitempty"`
+	GeometryAimRanker   *GeometryAimRankerFile  `json:"geometry_aim_ranker,omitempty"`
+	GeometryAimExplore  *GeometryAimExploreFile `json:"geometry_aim_exploration,omitempty"`
+	ActionDistribution  string                  `json:"action_distribution,omitempty"`
+	AimCandidateHead    *AimCandidateFile       `json:"aim_candidate_head,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
 // Jacobian cancels. Quantization/guards belong to environment execution.
 type Sample struct {
-	Version        string        `json:"version"`
-	SamplingSeed   int64         `json:"sampling_seed"`
-	Latent         [4]float64    `json:"latent"`
-	Attack         bool          `json:"attack"`
-	Vertical       int           `json:"vertical"`
-	Weapon         int           `json:"weapon,omitempty"`
-	Target         int           `json:"target,omitempty"`
-	AimMode        int           `json:"aim_mode,omitempty"`
-	LogProbability float64       `json:"log_probability"`
-	Value          float64       `json:"value"`
-	Memory         *MemorySample `json:"memory,omitempty"`
+	Version        string                    `json:"version"`
+	SamplingSeed   int64                     `json:"sampling_seed"`
+	Latent         [4]float64                `json:"latent"`
+	Attack         bool                      `json:"attack"`
+	Vertical       int                       `json:"vertical"`
+	Weapon         int                       `json:"weapon,omitempty"`
+	Target         int                       `json:"target,omitempty"`
+	AimMode        int                       `json:"aim_mode,omitempty"`
+	LogProbability float64                   `json:"log_probability"`
+	Value          float64                   `json:"value"`
+	Memory         *MemorySample             `json:"memory,omitempty"`
+	AimRanking     *GeometryAimRankSample    `json:"aim_ranking,omitempty"`
+	AimExploration *GeometryAimExploreSample `json:"aim_exploration,omitempty"`
+	AimCandidate   *AimCandidateSample       `json:"aim_candidate,omitempty"`
 }
 type PPO struct {
 	file          PPOFile
@@ -81,6 +89,12 @@ func LoadPPO(path string) (*PPO, error) {
 	}
 	if f.Kind != PPOKind || (f.Features != FeatureVersion && f.Features != AimFeatureVersion && f.Features != BBoxFeatureVersion && f.Features != TypedFeatureVersion && f.Features != RecoilFeatureVersion && f.Features != WeaponFeatureVersion && f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion && f.Features != ThreatFeatureVersion && f.Features != EquippedWeaponFeatureVersion) || f.SamplingSeed < 0 {
 		return nil, fmt.Errorf("invalid PPO header")
+	}
+	if e = validateExecutionMode(f); e != nil {
+		return nil, e
+	}
+	if e = validateAimCandidates(f); e != nil {
+		return nil, e
 	}
 	outputs := 8
 	if f.WeaponHead != "" {
@@ -157,13 +171,17 @@ func LoadPPO(path string) (*PPO, error) {
 	p.critic = &MLP{file: MLPFile{Features: f.Features, Layers: f.Value}}
 	return p, nil
 }
-func (p *PPO) Version() string           { return p.version }
-func (p *PPO) FeatureVersion() string    { return p.file.Features }
-func (p *PPO) WeaponHeadVersion() string { return p.file.WeaponHead }
-func (p *PPO) SamplingSeed() int64       { return p.file.SamplingSeed }
-func (p *PPO) IsStochastic() bool        { return !p.file.Deterministic }
-func (p *PPO) LastSample() *Sample       { return p.last }
-func (p *PPO) IsRecurrent() bool         { return p.file.Memory != nil || p.file.Attention != nil }
+func (p *PPO) Version() string            { return p.version }
+func (p *PPO) FeatureVersion() string     { return p.file.Features }
+func (p *PPO) WeaponHeadVersion() string  { return p.file.WeaponHead }
+func (p *PPO) SamplingSeed() int64        { return p.file.SamplingSeed }
+func (p *PPO) ActionDistribution() string { return p.file.ActionDistribution }
+
+// IsStochastic reports eligibility for the standard full-head PPO sampler.
+// Selective inference modes retain randomness but cannot produce PPO rollouts.
+func (p *PPO) IsStochastic() bool  { return !p.file.Deterministic && p.file.ExecutionMode == "" }
+func (p *PPO) LastSample() *Sample { return p.last }
+func (p *PPO) IsRecurrent() bool   { return p.file.Memory != nil || p.file.Attention != nil }
 func (p *PPO) MemoryVersion() string {
 	if p.file.Attention != nil {
 		return AttentionVersion
@@ -258,7 +276,12 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	if e != nil {
 		return Action{}, 0, 0, e
 	}
-	for i, z := range s.Latent {
+	densityLatent, candidateLP, e := p.jointAimReview(o, s)
+	if e != nil {
+		return Action{}, 0, 0, e
+	}
+	lp += candidateLP
+	for i, z := range densityLatent {
 		delta := (z - means[i]) / math.Exp(p.file.LogStd[i])
 		lp += -.5*delta*delta - p.file.LogStd[i] - .5*math.Log(2*math.Pi)
 	}
@@ -337,25 +360,7 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		if err != nil {
 			return Action{}, err
 		}
-		if p.file.Deterministic {
-			for i, lp := range probs {
-				if lp > probs[s.Target] {
-					s.Target = i
-				}
-			}
-		} else {
-			u := p.rng.Float64()
-			for i, lp := range probs {
-				if math.IsInf(lp, -1) {
-					continue
-				}
-				s.Target = i // Last available category covers rounding at the CDF tail.
-				u -= math.Exp(lp)
-				if u <= 0 {
-					break
-				}
-			}
-		}
+		s.Target = selectExecutionTarget(probs, p.rng, p.file.Deterministic, greedyExecutionCategories(p.file.ExecutionMode))
 		means, err = targetMeans(x[:TargetOutputWidth], s.Target)
 		if err != nil {
 			return Action{}, err
@@ -366,13 +371,7 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		if err != nil {
 			return Action{}, err
 		}
-		if p.file.Deterministic {
-			if probs[1] > probs[0] {
-				s.AimMode = 1
-			}
-		} else if p.rng.Float64() >= math.Exp(probs[0]) {
-			s.AimMode = 1
-		}
+		s.AimMode = selectExecutionAimMode(probs[:], p.rng, p.file.Deterministic, greedyExecutionCategories(p.file.ExecutionMode))
 		means, err = precisionMeans(x, s.Target, s.AimMode)
 		if err != nil {
 			return Action{}, err
@@ -454,13 +453,22 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		}
 		s.Latent[2], s.Latent[3] = means[2]+noise[2], means[3]+noise[3]
 	}
-	if p.file.ConditionalFire != nil {
+	if e = p.exploreGeometryAim(o, &s); e != nil {
+		return Action{}, e
+	}
+	if e = p.rankGeometryAim(o, &s); e != nil {
+		return Action{}, e
+	}
+	if e = p.selectJointAim(o, &s); e != nil {
+		return Action{}, e
+	}
+	if p.file.ConditionalFire != nil || p.file.ExecutionMode == ExecutionGreedyTargetModeFire {
 		fireLogit, err := p.conditionalFireLogit(o, x[4], s)
 		if err != nil {
 			return Action{}, err
 		}
 		s.Attack = fireLogit >= 0
-		if !p.file.Deterministic {
+		if !p.file.Deterministic && p.file.ExecutionMode != ExecutionGreedyTargetModeFire {
 			s.Attack = fireUniform < math.Exp(-softplus(-fireLogit))
 		}
 	}

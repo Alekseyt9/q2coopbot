@@ -13,6 +13,8 @@ def main():
     ap = argparse.ArgumentParser()
     for name in ('evaluation', 'spec', 'out'):
         ap.add_argument('--'+name, type=pathlib.Path, required=True)
+    ap.add_argument('--native-capture-datasets', action='store_true',
+                    help='Read sealed native capture datasets; no PPO replay requirement')
     args = ap.parse_args()
     root = args.evaluation.resolve()
     assert not args.out.exists()
@@ -35,13 +37,14 @@ def main():
         assert execution['state'] == 'complete' and execution['pool_sha256'] == seal['pool_sha256']
         assert execution['selected_plan_index'] == index
         pins[ep] = sha(ep)
-        pp = root/('processing-'+label)/'report.json'
-        processed = read(pp)
-        assert processed['device'] == 'cuda' and processed['state'] == 'complete'
-        assert processed['pool_sha256'] == seal['pool_sha256'] and processed['selected_plan_index'] == index
-        pins[pp] = sha(pp)
         bindings = {c['job']: c for c in execution['cases']}
-        assert len(bindings) == len(processed['cases'])
+        if not args.native_capture_datasets:
+            pp = root/('processing-'+label)/'report.json'
+            processed = read(pp)
+            assert processed['device'] == 'cuda' and processed['state'] == 'complete'
+            assert processed['pool_sha256'] == seal['pool_sha256'] and processed['selected_plan_index'] == index
+            pins[pp] = sha(pp)
+            assert len(bindings) == len(processed['cases'])
         cases = []
         for job in pool['jobs']:
             if job['plan_index'] != index:
@@ -51,9 +54,13 @@ def main():
             capture = read(cp)
             assert sha(cp) == binding['capture_sha256']
             result = capture['results'][0]
+            assert capture['capture_complete'] and capture['provenance_valid']
+            assert result['capture_valid'] and result['dispatch_valid']
             log = pathlib.Path(result['root'])/'server.log'
             assert sha(log) == binding['server_log_sha256']
             steps = root/('processing-'+label)/f"case-{job['job']:04d}"/'native/replay-0/steps.jsonl'
+            if args.native_capture_datasets:
+                steps = pathlib.Path(result['root'])/'dataset/steps.jsonl'
             for p in (cp, log, steps):
                 pins[p] = sha(p)
             windows = {}
@@ -103,6 +110,7 @@ def main():
     for p, digest in pins.items():
         assert sha(p) == digest, str(p)
     save(args.out, dict(state='complete', version='registered_machinegun_selected_aim_v1',
+        data_source=('native_capture_dataset_v1' if args.native_capture_datasets else 'cuda_verified_native_exports_v1'),
         variants=variants, inputs=[dict(path=str(p), sha256=d) for p, d in pins.items()],
         script_sha256=sha(__file__), helper_sha256=sha(pathlib.Path(__file__).with_name('report_combat_machinegun_aim.py')),
         training_performed=False, promotion=False,

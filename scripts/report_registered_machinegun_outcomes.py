@@ -40,6 +40,7 @@ def main():
     spec=read(pin(args.spec,closed['spec_sha256']))
     pool=read(pin(root/'pool/report.json',closed['pool_sha256']));assert pool['state']=='complete' and pool['source_unchanged']
     aim=read(pin(args.aim));assert aim['state']=='complete' and not aim['training_performed']
+    assert aim.get('data_source','cuda_verified_native_exports_v1') in ('native_capture_dataset_v1','cuda_verified_native_exports_v1')
     for item in aim['inputs']:pin(item['path'],item['sha256'])
     for name in ('report_combat_machinegun_hits.py','report_combat_machinegun_aim.py','native_projectile_window.py'):
         pin(pathlib.Path(__file__).with_name(name))
@@ -54,7 +55,10 @@ def main():
             job=jobs[case['job']];binding=bindings[job['job']];assert job['plan_index']==index and not job['error']
             capture=read(pin(pathlib.Path(job['root'])/'report.json',binding['capture_sha256']))
             log=pin(pathlib.Path(capture['results'][0]['root'])/'server.log',case['server_log_sha256'])
-            steps=pin(root/('processing-'+label)/f"case-{job['job']:04d}/native/replay-0/steps.jsonl",case['steps_sha256'])
+            steps_path=root/('processing-'+label)/f"case-{job['job']:04d}/native/replay-0/steps.jsonl"
+            if aim.get('data_source')=='native_capture_dataset_v1':
+                steps_path=pathlib.Path(capture['results'][0]['root'])/'dataset/steps.jsonl'
+            steps=pin(steps_path,case['steps_sha256'])
             windows={}
             with steps.open(encoding='utf-8-sig') as stream:
                 for step in map(json.loads,stream):

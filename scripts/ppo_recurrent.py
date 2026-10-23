@@ -157,6 +157,7 @@ def main():
     torch.backends.cudnn.allow_tf32=False;torch.backends.cuda.matmul.allow_tf32=False
     torch.backends.cuda.enable_flash_sdp(False);torch.backends.cuda.enable_mem_efficient_sdp(False);torch.backends.cuda.enable_math_sdp(True)
     model=read(args.model);assert model['kind']=='combat_ppo_v1' and not model['deterministic']
+    assert not model.get('execution_mode'), 'Inference-only execution modes cannot train PPO'
     if model.get('conditional_fire'):
         from combat_conditional_fire import validate as validate_fire,VERSION as FIRE_VERSION
         validate_fire(model)

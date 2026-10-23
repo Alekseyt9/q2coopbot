@@ -79,6 +79,7 @@ def main():
     base = repo / 'workspace/artifacts'
     paths = set(base.glob('*plan*.json')) | set(base.glob('*/*plan*.json'))
     paths |= set(base.glob('*/round-*/*plan*.json')) | set(base.glob('*/preflight/*plan*.json'))
+    paths |= set(base.glob('*/corpus/*plan*.json'))
     paths |= set(base.glob('*/evaluation/*plan*.json')) | set(base.glob('*/screen/*plan*.json'))
     for path in sorted(paths):
         value = read(path)

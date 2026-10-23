@@ -26,6 +26,12 @@ def finalize(model_path, data, out):
     assert meta['numerical_verification'] == 'cuda_pending'
     assert meta['model_sha256'] == sha(model_path) and not model['deterministic']
     assert meta['feature_version'] == model['feature_version']
+    assert meta.get('action_distribution','') == model.get('action_distribution',''), 'Action distribution differs'
+    joint,core_model=None,model
+    if model.get('action_distribution'):
+        from combat_joint_aim_policy import JointAim,base_model
+        core_model=base_model(model)
+        joint=JointAim(model)
     paired = meta.get('paired_adapter_version')
     if paired:
         assert paired == 'coop_primary_native_adapter_v1' and meta['paired_adapter_verified']
@@ -44,6 +50,9 @@ def finalize(model_path, data, out):
                     str(pathlib.Path(__file__).with_name('combat_sequence_storage.py').resolve()):
                         sha(pathlib.Path(__file__).with_name('combat_sequence_storage.py'))})
     weapon_helpers=[]
+    if joint is not None:
+        weapon_helpers.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
+            ('combat_joint_aim_policy.py','combat_aim_candidates.py','combat_action_effect.py','combat_action_geometry.py','combat_conditional_fire.py'))
     if model.get('conditional_fire'):
         weapon_helpers.append(pathlib.Path(__file__).with_name('combat_conditional_fire.py').resolve())
     if model.get('weapon_state_residual'):
@@ -83,7 +92,7 @@ def finalize(model_path, data, out):
             module = network(model[name])
         if name == 'actor' and model.get('spatial_aim'):
             from combat_spatial_aim import wrap
-            module = wrap(module, model)
+            module = wrap(module, core_model)
         return module.to('cuda')
 
     actor, value = build('actor'), build('value')
@@ -112,7 +121,21 @@ def finalize(model_path, data, out):
     with torch.no_grad():
         raw, actor_memory_error = evaluate(actor, 'actor')
         predicted, critic_memory_error = evaluate(value, 'value')
-        if model.get('aim_mode_head'):
+        candidate_error=None
+        if joint is not None:
+            from combat_joint_aim_policy import events,probabilities
+            from combat_aim_candidates import log_probability,frame_uniforms,choose
+            source,choice,timing,active=events(rows,x,target,mode,vertical,weapon)
+            lp,_,logits,score_active=probabilities(joint,raw,std,source,z,attack,vertical,weapon,x,target,mode,choice,timing,
+                getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None),getattr(actor,'conditional_fire_branch',None))
+            assert torch.equal(active,score_active)
+            expected_category=torch.tensor([r['sample']['aim_candidate']['log_probability'] if r['sample'].get('aim_candidate') else 0. for r in rows],device='cuda')
+            candidate_error=float((log_probability(logits,choice,active)-expected_category).abs().max())
+            assert candidate_error<.003, candidate_error
+            # The native exporter accepts first-life rows only.
+            uniforms=torch.tensor([frame_uniforms(r['sample']['sampling_seed'],r['frame'],1) for r in rows],device='cuda',dtype=torch.float64)
+            assert torch.equal(choose(logits.double(),uniforms[:,0],uniforms[:,1],active),choice),'Frame-hash categorical assignment differs'
+        elif model.get('aim_mode_head'):
             from combat_precision_head import probabilities
             lp, _ = probabilities(raw, std, z, attack, vertical, weapon, x, target, mode,
                                   getattr(actor, 'sampled_motion_aim_branch', None),getattr(actor,'motor_branch',None),getattr(actor,'conditional_fire_branch',None))
@@ -162,6 +185,9 @@ def finalize(model_path, data, out):
                  next_resets=int(reset.sum()), zero_bootstraps=int(zero.sum()),
                  native_rollout_sha256=meta['native_rollout_sha256'], model_sha256=sha(model_path),
                  scope='Exact native Step.Next features and reset flags; numerical checks and bootstrap on CUDA. Go performs only native proof, feature extraction and sampled action contract checks.')
+    if joint is not None:
+        audit.update(action_distribution=model['action_distribution'],candidate_log_probability_max_error=candidate_error,
+                     original_latent_transform_verified=True,frame_hash_candidate_assignments_verified=True)
     save(out / 'cuda-verification.json', audit)
     sources[str((out / 'cuda-verification.json').resolve())] = sha(out / 'cuda-verification.json')
     meta.update(version='combat_ppo_rollout_v1', numerical_verification='cuda_verified_v1',

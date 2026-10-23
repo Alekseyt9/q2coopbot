@@ -99,6 +99,7 @@ def main():
                     assert check == expected, 'Deterministic copy changed parameters'
                 if variant['cuda_replay']:
                     assert not variant['deterministic'], 'Deterministic actions are not stochastic PPO replay'
+                    assert not original.get('execution_mode'), 'Inference-only execution cannot replay standard PPO'
                 bindings.append(dict(label=label, update=str(update), update_seal_sha256=sha(update/'complete.json'),
                                      model=str(model), model_sha256=sha(model), cuda_replay=variant['cuda_replay']))
             else:

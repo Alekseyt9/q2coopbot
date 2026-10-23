@@ -18,6 +18,9 @@ func (p *PPO) ActionForSample(o Observation, s Sample) (Action, error) {
 			return Action{}, fmt.Errorf("nonfinite latent")
 		}
 	}
+	if _, _, _, err := p.jointAimSample(o, s); err != nil {
+		return Action{}, err
+	}
 	scale := 180.0
 	if s.AimMode == 1 {
 		scale = PrecisionFineDegrees

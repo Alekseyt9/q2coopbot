@@ -1,6 +1,6 @@
 # Fire reward signal и проверка бюджета обучения
 
-22.10.2026. Диагностический relabel32TRAIN боёв закрыт. Он уточнил прежнюю интерпретацию: группа «нет выбранной цели» неоднородна; реальные MG misses без цели уже имели отрицательный локальный fire signal. После этого выполнен отдельный300-step fire-only fit **с прежней наградой**, не с новым штрафом. Native качество длинного fit пока неизвестно.
+22.10.2026. Диагностический relabel32TRAIN боёв закрыт. Он уточнил прежнюю интерпретацию: группа «нет выбранной цели» неоднородна; реальные MG misses без цели уже имели отрицательный локальный fire signal. После этого выполнен отдельный300-step fire-only fit **с прежней наградой**, не с новым штрафом. Fresh native screen закрыт:300-step вариант3/8 против start4/8 иrules5/8; длинный fit отклонён.
 
 ## Диагностический relabel
 
@@ -49,6 +49,19 @@ Score=`normalized_advantage*(attack-probability)` — локальный сиг�
 
 ## Следующий native gate
 
-После закрытого audit-v2 отдельно зафиксированы `native-gate-decision.json` и `evaluation-spec.json`:32native/24CUDA, start/fire-10/fire-300/rules по8freshусловий, seed offset755, base3/ware2 с разнымиsite/loadout/composition, pool16×2. Промежуточные checkpoints не выбирались. Сравнение **запущено, качество пока неизвестно**.
+После закрытого audit-v2 отдельно зафиксированы `native-gate-decision.json` и `evaluation-spec.json`:32native/24CUDA, start/fire-10/fire-300/rules по8freshусловий, seed offset755, base3/ware2 с разнымиsite/loadout/composition, pool16×2. Промежуточные checkpoints не выбирались. Сравнение закрыто.
 
 Критерии: verified wins/deaths/received damage вместе с настоящими MG hits/misses и лишними действиями. Без выигрыша native metrics длинное обучение не объявлять решением проблемы, а удачный малый screen отдельно подтверждать. Default и публикуемые weights остаются прежними.
+
+| Вариант | Победы | Убийства | Received damage | Смерти |
+|---|---:|---:|---:|---:|
+| start |4/8|12|513|3|
+| fire-10 |4/8|12|513|3|
+| fire-300 |3/8|12|531|4|
+| rules |5/8|14|481|3|
+
+Long fit потерял1победу без новых; short не изменил набор побед. Native MG live damage167/280→167/280→153/280(59.64→59.64→54.64%); targetless solid shots13→13→14. Large yaw3.56→3.56→8.27%; stationary clear15.44→15.44→22.01%. Снижение вероятности на TRAIN subset не перенеслось на полезное управление новыми боями.
+
+На base3 site02 исходная модель и оба кандидата продолжают спускаться на168–192units и терять бой; в одном recovery92/80frames находятся ниже старта без видимого противника и с remembered threat наверху. Потерянная long-fit победа относится к site01 без спуска: геометрия не объясняет все проигрыши.
+
+`combat-conditional-fire-budget-v1-20261022/decision.json`: reject long fit, no promotion, прежний zero source остаётся исходной точкой. Не увеличивать PPO steps этого же опыта вслепую. Следующий [action-outcome prediction probe](combat_shot_prediction_probe_20261022.md) проверяет обучаемость физического результата на сохранённых TRAIN captures до какой-либо интеграции предиктора в policy.

@@ -36,6 +36,7 @@ func MergeRollouts(dirs []string, out string) error {
 			return fmt.Errorf("unsupported rollout")
 		}
 		keys := []string{"version", "feature_version", "reward_config_sha256", "reward_version", "aim_gamma", "training_monster_health", "policy_version", "model_sha256", "recurrent_version", "numerical_verification", "paired_adapter_version", "paired_adapter_verified", "paired_training_ready"}
+		keys = append(keys, "action_distribution")
 		if meta["paired_adapter_version"] != nil && (meta["paired_adapter_verified"] != true || meta["paired_training_ready"] != true || meta["numerical_verification"] != "cuda_verified_v1") {
 			return fmt.Errorf("paired rollout is not CUDA finalized")
 		}
