@@ -62,7 +62,7 @@ def selected_means(raw,target,mode,features=None,movement=None,motion_branch=Non
         aim=aim+correction(motion_branch,features,raw,movement,target,mode,vertical,reference_branch)
     return torch.cat((coarse[:,:2],aim),1)
 
-def probabilities(raw,std,z,attack,vertical,weapon,features,target,mode,motion_branch=None,reference_branch=None,fire_branch=None):
+def probabilities(raw,std,z,attack,vertical,weapon,features,target,mode,motion_branch=None,reference_branch=None,fire_branch=None,*,movement_shift=None):
     if getattr(motion_branch,'requires_conditional_fire',False) and fire_branch is None:
         raise ValueError('Conditional fire branch is required for joint likelihood')
     choice=targets(raw[:,:45],features);stage=mode_distribution(raw,target)
@@ -70,6 +70,9 @@ def probabilities(raw,std,z,attack,vertical,weapon,features,target,mode,motion_b
     # Joint likelihood includes P(vertical) and P(aim|move,target,mode,vertical).
     # The recorded pre-tanh movement is fixed when evaluating a PPO sample.
     means=selected_means(raw,target,mode,features,z[:,:2],motion_branch,vertical,reference_branch)
+    if movement_shift is not None:
+        assert movement_shift.is_cuda and movement_shift.shape==(len(raw),2) and bool(torch.isfinite(movement_shift).all())
+        means=torch.cat((means[:,:2]+movement_shift,means[:,2:]),-1)
     if fire_branch is None:
         common=torch.cat((means,raw[:,4:20]),1)
     else:

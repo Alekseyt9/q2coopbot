@@ -30,7 +30,7 @@ def finalize(model_path, data, out):
     joint,core_model=None,model
     if model.get('action_distribution'):
         from combat_joint_aim_policy import JointAim,base_model
-        diagnostic_probe=bool(model.get('diagnostic_joint_aim_probe'))
+        diagnostic_probe=bool(model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe'))
         core_model=base_model(model,allow_probe=diagnostic_probe,allow_shared=True)
         joint=JointAim(model,allow_probe=diagnostic_probe,allow_shared=True)
     paired = meta.get('paired_adapter_version')
@@ -52,6 +52,8 @@ def finalize(model_path, data, out):
                         sha(pathlib.Path(__file__).with_name('combat_sequence_storage.py'))})
     weapon_helpers=[]
     if joint is not None:
+        if model.get('diagnostic_movement_probe'):
+            weapon_helpers.append(pathlib.Path(__file__).with_name('combat_movement_probe.py').resolve())
         weapon_helpers.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
             ('combat_joint_aim_policy.py','combat_aim_candidates.py','combat_action_effect.py','combat_action_geometry.py','combat_conditional_fire.py'))
     if model.get('conditional_fire'):
@@ -122,7 +124,7 @@ def finalize(model_path, data, out):
     with torch.no_grad():
         raw, actor_memory_error = evaluate(actor, 'actor')
         predicted, critic_memory_error = evaluate(value, 'value')
-        candidate_error=None
+        candidate_error=None; movement_draw_error=None
         if joint is not None:
             from combat_joint_aim_policy import events,probabilities
             from combat_aim_candidates import log_probability,frame_uniforms,choose
@@ -137,10 +139,18 @@ def finalize(model_path, data, out):
                 sz=torch.tensor([(r['sample'].get('aim_candidate') or {}).get('source_latent',r['sample']['latent']) for r in rows],device='cuda',dtype=torch.float64)
                 st=torch.tensor([(r['sample'].get('aim_candidate') or {}).get('timing',[0.,0.]) for r in rows],device='cuda',dtype=torch.float64)
                 score_inputs=(sf,sz,st)
+            frame_tensor=torch.tensor([r['frame'] for r in rows],device='cuda',dtype=torch.long)
+            movement_shift=None
+            if model.get('diagnostic_movement_probe'):
+                from combat_movement_probe import shifts as movement_shifts
+                movement_shift=movement_shifts(model,frame_tensor)
             lp,_,logits,score_active=probabilities(joint,raw,std,source,z,attack,vertical,weapon,x,target,mode,choice,timing,
                 getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None),getattr(actor,'conditional_fire_branch',None),
-                frames=torch.tensor([r['frame'] for r in rows],device='cuda',dtype=torch.long),score_inputs=score_inputs)
+                frames=frame_tensor,score_inputs=score_inputs,movement_shift=movement_shift)
             assert torch.equal(active,score_active)
+            if model.get('diagnostic_movement_probe'):
+                from combat_movement_probe import verify_draw_receipts
+                movement_draw_error=verify_draw_receipts(model,rows,raw,std,source,z,x,target,mode,vertical,weapon,actor)
             expected_category=torch.tensor([r['sample']['aim_candidate']['log_probability'] if r['sample'].get('aim_candidate') else 0. for r in rows],device='cuda')
             candidate_error=float((log_probability(logits,choice,active)-expected_category).abs().max())
             assert candidate_error<.003, candidate_error
@@ -231,6 +241,11 @@ def finalize(model_path, data, out):
         audit.update(diagnostic_probe_version=model['diagnostic_joint_aim_probe']['version'],
                      diagnostic_probe_frame=model['diagnostic_joint_aim_probe']['frame'],
                      frame_conditioned_logits_verified=True,ordinary_training_eligible=False)
+    if model.get('diagnostic_movement_probe'):
+        audit.update(diagnostic_movement_version=model['diagnostic_movement_probe']['version'],
+                     diagnostic_movement_frame=model['diagnostic_movement_probe']['frame'],
+                     diagnostic_movement_shift=model['diagnostic_movement_probe']['mean_shift'],
+                     diagnostic_gaussian_noise_max_error=movement_draw_error,diagnostic_fire_draw_verified=True,ordinary_training_eligible=False)
     if model.get('aim_candidate_head',{}).get('shared_scorer'):
         audit.update(shared_candidate_all_logits_max_error=shared_logit_error,shared_candidate_all_probabilities_max_error=shared_probability_error,
                      shared_candidate_frames=len(records),shared_candidate_precision='float64' if joint.geometry_head else 'float32',ordinary_training_eligible=False)
@@ -242,6 +257,9 @@ def finalize(model_path, data, out):
     if model.get('diagnostic_joint_aim_probe'):
         meta.update(version='combat_diagnostic_joint_aim_probe_rollout_v1',diagnostic_only=True,ppo_training_ready=False,
                     diagnostic_probe_version=model['diagnostic_joint_aim_probe']['version'])
+    if model.get('diagnostic_movement_probe'):
+        meta.update(version='combat_diagnostic_movement_probe_rollout_v1',diagnostic_only=True,ppo_training_ready=False,
+                    diagnostic_movement_version=model['diagnostic_movement_probe']['version'])
     if model.get('aim_candidate_head',{}).get('shared_scorer'):
         meta.update(shared_scorer_training_supported=False,ppo_training_ready=False)
     if paired:

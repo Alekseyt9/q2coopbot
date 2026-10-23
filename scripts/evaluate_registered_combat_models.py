@@ -91,7 +91,7 @@ def main():
                     assert sha(update/filename) == seal[key], filename
                 report = read(update/'report.json'); assert report['device'] == 'cuda'
                 model = update/'weights.json'; original = read(model)
-                assert not original.get('diagnostic_joint_aim_probe'), 'Diagnostic one-frame acquisition models cannot enter quality evaluation'
+                assert not original.get('diagnostic_joint_aim_probe') and original.get('diagnostic_movement_probe') is None, 'Diagnostic one-frame acquisition models cannot enter quality evaluation'
                 assert original['kind'] == 'combat_ppo_v1' and not original.get('deterministic', False)
                 if variant['deterministic']:
                     original['deterministic'] = True; model = root/(label+'-weights.json'); save(model, original)

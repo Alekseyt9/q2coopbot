@@ -14,6 +14,7 @@ const StepVersion = "combat_step_v1"
 const OutcomeVersion = "observed_outcome_v1"
 
 type Step struct {
+	GoalHandoff    bool                  `json:"goal_handoff_verified,omitempty"`
 	JointTerminal  *PairedDeathBoundary  `json:"joint_terminal,omitempty"`
 	Sample         *policy.Sample        `json:"sample,omitempty"`
 	Native         *NativeStep           `json:"native_step,omitempty"`

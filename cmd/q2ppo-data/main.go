@@ -117,7 +117,7 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	if !behavior.IsStochastic() && !(*cudaOnly && behavior.IsDiagnosticAimProbe()) {
+	if !behavior.IsStochastic() && !(*cudaOnly && behavior.IsDiagnosticCombatProbe()) {
 		return fmt.Errorf("inference-only, deterministic or diagnostic rollout cannot train PPO")
 	}
 	if behavior.ActionDistribution() != "" && !*cudaOnly {
@@ -223,7 +223,7 @@ func run() error {
 		if e != nil {
 			return e
 		}
-		if p.Version() != behavior.Version() || (!p.IsStochastic() && !(*cudaOnly && p.IsDiagnosticAimProbe())) || p.SamplingSeed() != int64(r.Seed) {
+		if p.Version() != behavior.Version() || (!p.IsStochastic() && !(*cudaOnly && p.IsDiagnosticCombatProbe())) || p.SamplingSeed() != int64(r.Seed) {
 			return fmt.Errorf("episode weight version or sampling seed differs")
 		}
 		var eligibility struct {
@@ -319,6 +319,9 @@ func run() error {
 				}
 			}
 			args = append(args, "--goal-observed-frame", fmt.Sprint(goal.ObservedFrame))
+			if manifest.Reward.HandoffBootstrap == "nonterminal_v1" {
+				args = append(args, "--goal-kill-frame", fmt.Sprint(goal.KillFrame))
+			}
 		}
 		if r.Death != nil {
 			if !manifest.StopOnGoal || r.Goal != nil {
@@ -526,7 +529,17 @@ func run() error {
 				return e
 			}
 			nv := 0.0
-			zero := s.Terminal || manifest.Reward.HasKillReward() && s.Truncated && s.Reason == "control_handoff"
+			if manifest.Reward.HasKillReward() && s.Truncated && s.Reason == "control_handoff" {
+				confirmedGoal := r.Goal != nil && s.Native != nil && s.Next.Health > 0 &&
+					r.Goal.KillFrame <= s.Native.EndFrame && s.Native.EndFrame <= r.Goal.ObservedFrame
+				if manifest.Reward.HandoffBootstrap == "" && !confirmedGoal {
+					return fmt.Errorf("unfinished control handoff requires explicit nonterminal_v1 objective: seed %d frame %d", r.Seed, s.Next.Identity.Frame)
+				}
+				if manifest.Reward.HandoffBootstrap == "nonterminal_v1" && s.GoalHandoff != confirmedGoal {
+					return fmt.Errorf("goal handoff marker differs from verified supervisor receipt")
+				}
+			}
+			zero := manifest.Reward.ZeroBootstrap(&s)
 			if !*cudaOnly && !zero {
 				nv, e = p.ValueAfter(s.Observation, *s.Sample, *s.Next)
 				if e != nil {
@@ -568,8 +581,12 @@ func run() error {
 		return e
 	}
 	metadata := map[string]any{"version": "combat_ppo_rollout_v1", "feature_version": behavior.FeatureVersion(), "reward_config_sha256": strings.ToLower(manifest.RewardSHA), "reward_version": manifest.Reward.Version, "aim_gamma": manifest.Reward.AimGamma, "training_monster_health": manifest.TrainingHealth, "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE; v2 verified control handoff retains reward with zero segment bootstrap; full world reset equivalence unproven"}
+	if manifest.Reward.HandoffBootstrap != "" {
+		metadata["handoff_bootstrap"] = manifest.Reward.HandoffBootstrap
+		metadata["scope"] = "Explicit objective fork: verified goals/deaths close bootstrap; unfinished ownership handoffs retain exact observed next-state CUDA value."
+	}
 	if *cudaOnly {
-		if behavior.IsDiagnosticAimProbe() {
+		if behavior.IsDiagnosticCombatProbe() {
 			metadata["diagnostic_only"] = true
 			metadata["ppo_training_ready"] = false
 		}

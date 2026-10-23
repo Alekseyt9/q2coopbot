@@ -17,8 +17,21 @@ func MarkGoalBoundary(s *Step) error {
 	}
 	if !s.Truncated {
 		s.Terminal, s.Reason = true, "combat_goal_complete"
+	} else {
+		s.GoalHandoff = true
 	}
 	return nil
+}
+
+// MarkGoalHandoff uses an already independently verified supervisor receipt.
+// It never labels visibility loss or disappearance as a completed goal.
+func MarkGoalHandoff(s *Step, killFrame, observedFrame int) error {
+	if !s.Truncated || s.Reason != "control_handoff" || s.Next == nil ||
+		killFrame <= 0 || observedFrame <= killFrame ||
+		s.Next.Identity.Frame < killFrame || s.Next.Identity.Frame > observedFrame {
+		return fmt.Errorf("handoff outside verified goal interval")
+	}
+	return MarkGoalBoundary(s)
 }
 
 // GoalStop is supervisor evidence for an offline episode boundary, never a policy input.

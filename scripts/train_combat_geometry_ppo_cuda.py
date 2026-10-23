@@ -46,6 +46,7 @@ def main():
         ap.add_argument('--' + name.replace('_', '-'), type=Path, required=True)
     ap.add_argument('--arm', choices=('B', 'G'), required=True)
     ap.add_argument('--round', type=int, choices=(1, 2), required=True)
+    ap.add_argument('--boundary-acceptance', type=Path)
     a = ap.parse_args(); assert not a.out.exists()
     training_devices(); torch.set_default_device('cuda'); torch.set_num_threads(2)
     torch.use_deterministic_algorithms(True)
@@ -70,6 +71,15 @@ def main():
     assert experiment['actor_group_lrs'] == [3e-5, .0003, .0003, .0003]
     assert experiment['head_lr'] == .0003 and experiment['value_lr'] == .001
     assert experiment['target_full_kl'] == .005 and experiment['target_factor_kl'] == .0025
+    boundary_sha = None
+    if experiment.get('handoff_bootstrap')=='nonterminal_v1':
+        assert a.boundary_acceptance is not None, 'New objective requires four live boundary proofs before fitting'
+        bs = read(pin(a.boundary_acceptance/'complete.json'))
+        boundary = read(pin(a.boundary_acceptance/'report.json',bs['report_sha256']))
+        assert boundary['version']=='combat_nonterminal_boundary_acceptance_v1' and boundary['state']=='complete'
+        assert boundary['native_cases']==boundary['cuda_cases']==4 and boundary['physical_starts_exact']
+        assert boundary['handoff_bootstrap']=='nonterminal_v1' and boundary['reward_sha256']==experiment['reward_sha256']
+        boundary_sha = bs['report_sha256']
     model = read(source / 'weights.json'); validate(model, allow_shared=True)
     core = base_model(model, allow_shared=True)
     closed = read(pin(corpus / 'complete.json'))
@@ -105,7 +115,12 @@ def main():
     assert native['inputs'][str(corpus / 'complete.json')] == sha(corpus / 'complete.json')
     assert gae['inputs'][str((a.credit_audit / 'report.json').resolve())] == sha(a.credit_audit / 'report.json')
     assert native['totals']['rows'] == gae['rows'] == meta['rows']
-    assert not native['unassigned_native_effects'] and all(h['confirmed_goal'] for h in native['handoffs'])
+    if experiment.get('handoff_bootstrap')=='nonterminal_v1':
+        assert meta.get('handoff_bootstrap')=='nonterminal_v1'
+        assert all(h['bootstrap_contract_verified'] and h['handoff_bootstrap']=='nonterminal_v1' for h in native['handoffs'])
+    else:
+        assert not meta.get('handoff_bootstrap') and all(h['confirmed_goal'] for h in native['handoffs'])
+    assert not native['unassigned_native_effects']
     assert native['spacing_telescoping_max_error'] < 1e-8 and gae['gae_closed_form_max_error'] < 1e-8
     cp = torch.load(source / 'checkpoint.pt', map_location='cuda', weights_only=True)
     snapshot = copy.deepcopy(cp)
@@ -124,6 +139,7 @@ def main():
         assert initial['actor_value_std_adam_rng_history_exact'] and initial['checkpoint_roundtrip_exact'] and not initial['ppo_update_performed']
     else:
         assert geometry['arm'] == a.arm and geometry['protocol_sha256'] == sha(a.protocol)
+        assert geometry.get('boundary_acceptance_sha256') == boundary_sha
         assert cp['actor_training']['scope'] == TRAINING_VERSION + '_' + a.arm
     validate_objective(cp['config'], meta)
     rows = [json.loads(line) for line in (data / 'rollout.jsonl').read_text().splitlines()]
@@ -287,7 +303,7 @@ def main():
         actor_optimizer=base_state, value_optimizer=value_opt.state_dict(), geometry_aim_head=joint.geometry_state(), geometry_aim_optimizer=head_state,
         consumed_rollouts=cp['consumed_rollouts'] + [meta['rollout_sha256']], updates_completed=cp['updates_completed']+1,
         total_actor_steps=cp['total_actor_steps']+base_steps,
-        geometry_aim_training={**geometry, 'updates_completed': a.round, 'arm': a.arm, 'protocol_sha256': sha(a.protocol)},
+        geometry_aim_training={**geometry, 'updates_completed': a.round, 'arm': a.arm, 'protocol_sha256': sha(a.protocol), 'boundary_acceptance_sha256': boundary_sha},
         geometry_aim_history=cp.get('geometry_aim_history', []) + [record],
         actor_training={**cp['actor_training'], 'scope': TRAINING_VERSION + '_' + a.arm},
         rng=torch.get_rng_state(), cuda_rng=torch.cuda.get_rng_state_all())

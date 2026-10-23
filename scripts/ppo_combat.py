@@ -177,7 +177,7 @@ def main():
     assert a.model and a.data
     model_path=pathlib.Path(a.model);root=pathlib.Path(a.data);model=json.loads(model_path.read_text());meta=json.loads((root/'report.json').read_text())
     assert not model.get('execution_mode'), 'Inference-only execution modes cannot train PPO'
-    assert not model.get('diagnostic_joint_aim_probe'), 'Diagnostic one-frame probes cannot train ordinary PPO'
+    assert not model.get('diagnostic_joint_aim_probe') and model.get('diagnostic_movement_probe') is None, 'Diagnostic one-frame probes cannot train ordinary PPO'
     assert not model.get('aim_candidate_head',{}).get('shared_scorer'), 'Shared scorer optimizer/resume is not integrated'
     assert not model.get('conditional_fire'), 'Conditional fire optimizer/checkpoint integration is not verified yet'
     assert not any(model.get(k) for k in ('memory','attention','entity_attention')), 'Architecture models require ppo_recurrent.py'

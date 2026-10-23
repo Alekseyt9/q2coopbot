@@ -1,0 +1,78 @@
+{
+  "version": "combat_geometry_delta_ppo_v1",
+  "initializer_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "arms": [
+    "B",
+    "G"
+  ],
+  "arm_meanings": {
+    "B": "Full actor and critic; geometry head frozen",
+    "G": "Full actor, critic and geometry head"
+  },
+  "rounds": 2,
+  "actor_steps": 30,
+  "critic_steps": 40,
+  "actor_group_lrs": [
+    3e-05,
+    0.0003,
+    0.0003,
+    0.0003
+  ],
+  "head_lr": 0.0003,
+  "value_lr": 0.001,
+  "target_full_kl": 0.005,
+  "target_factor_kl": 0.0025,
+  "gamma": 0.99,
+  "lambda": 0.95,
+  "clip": 0.2,
+  "entropy": 0.001,
+  "max_grad_norm": 0.5,
+  "actor_guard": "Same full KL and base/category factor KL guards for both arms; bounded Adam backtracking",
+  "native_training_cases": 96,
+  "cases_per_update": 32,
+  "first_corpus_shared": true,
+  "later_corpora": "Fresh own-policy TRAIN only, one corpus per arm, dynamic shared pool",
+  "max_instances": 16,
+  "timescale": 2,
+  "training_device": "cuda",
+  "maps": [
+    "base3",
+    "city1",
+    "jail1",
+    "ware2"
+  ],
+  "conditions": [
+    "ordinary",
+    "weapon_recovery"
+  ],
+  "reward_sha256": "6b77081d0d9621100fc503debe89b560d0a2f466e93eef89c9d6b9305bbd5c0d",
+  "evaluation": {
+    "checkpoint": "Final second update only; no selection using validation",
+    "cases_per_variant": 8,
+    "variants": [
+      "sourceS4",
+      "geometry_initializer",
+      "B_round2",
+      "G_round2",
+      "rules"
+    ],
+    "native_cases": 40,
+    "cuda_cases": 32,
+    "primary": "Completed goals; paired wins/losses versus initializer, frozen-head arm and rules",
+    "secondary": [
+      "deaths",
+      "received_damage",
+      "living_damage_machinegun_shots",
+      "solid_contacts",
+      "stationary_clear_enemy",
+      "large_yaw",
+      "weapon_choices"
+    ],
+    "expansion_gate": "Trained candidate goals >= initializer+2 and >=rules; deaths <=initializer; received <=1.1*initializer; G also goals>=B. If both pass, choose more goals, then fewer deaths, then lower received damage. No default promotion on this screen alone."
+  },
+  "provenance": "New fixed experiment after a verified unfinished-handoff failure. Same policy/Adam/RNG initializer; only objective SHA changes. No old B/G endpoint selected or compared across objectives. Fresh ordinary TRAIN; diagnostic data excluded.",
+  "handoff_bootstrap": "nonterminal_v1",
+  "objective_fork": "combat_nonterminal_handoff_objective_v1",
+  "parent_protocol_sha256": "87dc2c658f6c7003b03ab08132d2f487735d4f45d8774cb86db676ada5f24a20",
+  "initializer": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-geometry-nonterminal-objective-v3-20261023\\initializer"
+}

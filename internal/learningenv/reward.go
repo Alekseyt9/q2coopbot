@@ -24,6 +24,7 @@ const SequenceHitscanRewardVersion = "combat_reward_v13"
 // RewardConfig is an explicit experimental objective, not a measured success
 // metric. Server effects never enter the policy observation.
 type RewardConfig struct {
+	HandoffBootstrap       string  `json:"handoff_bootstrap,omitempty"`
 	Version                string  `json:"version"`
 	MonsterDamage          float64 `json:"monster_damage"`
 	ReceivedDamage         float64 `json:"received_damage"`
@@ -51,6 +52,13 @@ type RewardConfig struct {
 
 func (c RewardConfig) HasKillReward() bool {
 	return c.Version == KillRewardVersion || c.HasPotentialReward()
+}
+
+// ZeroBootstrap preserves the legacy engagement boundary unless an explicit
+// objective fork requests normal next-state value at unfinished handoffs.
+func (c RewardConfig) ZeroBootstrap(s *Step) bool {
+	return s.Terminal || c.HasKillReward() && s.Truncated && s.Reason == "control_handoff" &&
+		(c.HandoffBootstrap == "" || s.GoalHandoff)
 }
 func (c RewardConfig) HasPotentialReward() bool {
 	return c.Version == AimRewardVersion || c.Version == ManeuverRewardVersion || c.Version == MissRewardVersion || c.HasActionQualityCosts()
@@ -83,6 +91,9 @@ func (c RewardConfig) HasProjectileMissCost() bool {
 }
 
 func (c RewardConfig) Validate() error {
+	if c.HandoffBootstrap != "" && (c.HandoffBootstrap != "nonterminal_v1" || !c.HasKillReward()) {
+		return fmt.Errorf("invalid handoff bootstrap contract")
+	}
 	if c.Version != RewardVersion && !c.HasKillReward() {
 		return fmt.Errorf("unsupported reward version")
 	}
@@ -206,6 +217,7 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 	// A control handoff ends the learned segment after its final command has
 	// already executed. Keep its verified effect window in v2, including kills.
 	completeHandoff := c.HasKillReward() && s.Truncated && s.Reason == "control_handoff"
+	zeroBootstrap := c.ZeroBootstrap(s)
 	if s.Truncated && !completeHandoff || s.Next == nil || !sameWorld(s) || s.Next.Identity.Frame != s.Observation.Identity.Frame+1 || s.Observation.Health <= 0 || s.Observation.AgeMS < 0 || s.Observation.AgeMS > 300 || s.Next.AgeMS < 0 || s.Next.AgeMS > 300 {
 		return deny("incomplete_transition")
 	}
@@ -307,7 +319,7 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 	}
 	if c.HasPotentialReward() {
 		if c.Version == SelectedAimRewardVersion || c.HasTargetCommitmentReward() || c.Version == NativeWasteRewardVersion || c.HasNavigationReward() {
-			shaping, evidence, err := c.selectedAimShaping(s, s.Terminal || completeHandoff)
+			shaping, evidence, err := c.selectedAimShaping(s, zeroBootstrap)
 			if err != nil {
 				r.Components = nil
 				return deny("invalid_aim_observation")
@@ -322,7 +334,7 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 				return deny("invalid_aim_observation")
 			}
 			after := 0.0
-			if !s.Terminal && !completeHandoff {
+			if !zeroBootstrap {
 				after, err = aimPotentialWithKick(*s.Next, c.AimPotential, c.AimKickAngles)
 				if err != nil {
 					r.Components = nil
@@ -340,7 +352,7 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 			return deny("invalid_spacing_observation")
 		}
 		after := 0.0
-		if !s.Terminal && !completeHandoff {
+		if !zeroBootstrap {
 			after, err = spacingPotential(*s.Next, c.SpacingPotential, c.ParasiteRange)
 		}
 		if err != nil {
@@ -371,7 +383,7 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 		}
 	}
 	if c.HasNavigationReward() {
-		shaping, evidence, err := c.navigationShaping(s, s.Terminal || completeHandoff)
+		shaping, evidence, err := c.navigationShaping(s, zeroBootstrap)
 		if err != nil {
 			r.Components = nil
 			return deny("invalid_navigation_observation")

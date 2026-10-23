@@ -241,7 +241,15 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             }|ConvertTo-Json|Set-Content -LiteralPath $resetExpectation -Encoding utf8NoBOM
             $exportArguments=@('--trace',(Join-Path $out 'bot.jsonl'),'--out',$dataset,'--worker',"worker-$worker",'--episode',"seed-$($using:Seed+$index)",'--end-reason',$(if($goalValid){'combat_goal_complete'}elseif($deathValid){'combat_first_life_death'}else{'game_frame_limit'}),'--server-log',(Join-Path $out 'server.log'),'--client-name','SoloRetreatBot','--require-execution','--reset-expectation',$resetExpectation)
             if($using:Synchronous){$exportArguments+='--synchronous'}
-            if($goalValid){$exportArguments+=@('--goal-observed-frame',"$($goal.observed_frame)")}
+            if($goalValid){
+                $exportArguments+=@('--goal-observed-frame',"$($goal.observed_frame)")
+                if($using:RewardConfig){
+                    $goalReward=Get-Content -LiteralPath $using:RewardConfig -Raw|ConvertFrom-Json
+                    if($goalReward.handoff_bootstrap -eq 'nonterminal_v1'){
+                        $exportArguments+=@('--goal-kill-frame',"$($goal.kill_frame)")
+                    }
+                }
+            }
             if($deathValid){$exportArguments+=@('--death-stop',(Join-Path $out 'death-stop.json'))}
             if($using:RewardConfig){$exportArguments+=@('--reward-config',$using:RewardConfig)}
             & $using:exporter @exportArguments

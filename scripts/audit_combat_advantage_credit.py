@@ -19,7 +19,7 @@ def main():
         pins[str(p)]=digest;return p
     closed=read(pin(a.native_audit/'complete.json'));native=read(pin(a.native_audit/'report.json',closed['report_sha256']))
     assert native['totals']['rows']>0 and not native['unassigned_native_effects']
-    assert all(h['confirmed_goal'] for h in native['handoffs']) and native['spacing_telescoping_max_error']<1e-8
+    assert all(h.get('bootstrap_contract_verified',h['confirmed_goal']) for h in native['handoffs']) and native['spacing_telescoping_max_error']<1e-8
     config=read(pin(a.corpus/'training-config.json'));gamma,lam=config['gamma'],config['lambda']
     root=a.corpus/'processing-train';meta=read(pin(root/'merged/report.json'))
     rows=list(map(json.loads,pin(root/'merged/rollout.jsonl',meta['rollout_sha256']).open(encoding='utf-8-sig')))
@@ -67,7 +67,8 @@ def main():
         if c['monster_kill']>0:keys.append('kill_effect_window')
         if c['death']<0:keys.append('death_effect_window')
         if annotation:keys.append('candidate_nonzero' if annotation['candidate'] else 'candidate_zero')
-        if r['bootstrap_zero'] and r['truncated']:keys.append('completed_goal_handoff')
+        if s.get('reason')=='control_handoff':
+            keys.append('completed_goal_handoff' if r['bootstrap_zero'] else 'unfinished_handoff_with_bootstrap')
         for key in keys:groups[key].append(i)
     summary={key:dict(rows=len(ids),raw_advantage_mean=mean([advantages[i] for i in ids]),normalized_advantage_mean=mean([normalized[i] for i in ids]),
         normalized_positive_fraction=mean([float(normalized[i]>0) for i in ids]),mc_return_mean=mean([mc[i] for i in ids]),

@@ -32,6 +32,7 @@ func run() error {
 	episode := flag.String("episode", "", "Episode identity")
 	endReason := flag.String("end-reason", "trace_end", "Reason for truncating the final command")
 	goalFrame := flag.Int("goal-observed-frame", 0, "Supervisor-verified goal boundary; offline terminal label only")
+	goalKillFrame := flag.Int("goal-kill-frame", 0, "Independently verified goal kill frame; explicit nonterminal handoff objective only")
 	deathFile := flag.String("death-stop", "", "Supervisor first-life death receipt; requires a complete native death terminal and reward")
 	serverLog := flag.String("server-log", "", "Optional native log for separate server damage windows")
 	clientName := flag.String("client-name", "GoCoopMate", "Name selected by native sv_test_trace_client")
@@ -99,6 +100,9 @@ func run() error {
 	}
 	if *goalFrame < 0 || *goalFrame > 0 && (!*synchronous || *endReason != "combat_goal_complete") {
 		return fmt.Errorf("goal boundary requires synchronous goal completion")
+	}
+	if *goalKillFrame != 0 && (*goalKillFrame < 1 || *goalFrame <= *goalKillFrame) {
+		return fmt.Errorf("goal kill frame requires a later verified goal observation")
 	}
 	if *input == "" || *out == "" || *worker == "" || *episode == "" {
 		return fmt.Errorf("trace, out, worker and episode required")
@@ -329,6 +333,12 @@ func run() error {
 			return nil // Full traces remain bound/audited; stop-latency tail is excluded.
 		}
 		if *goalFrame > 0 {
+			if *goalKillFrame > 0 && s.Truncated && s.Reason == "control_handoff" && s.Next != nil &&
+				s.Next.Identity.Frame >= *goalKillFrame && s.Next.Identity.Frame <= *goalFrame {
+				if err := learningenv.MarkGoalHandoff(s, *goalKillFrame, *goalFrame); err != nil {
+					return err
+				}
+			}
 			if s.Next != nil && s.Next.Identity.Frame == *goalFrame {
 				if err := markGoalBoundary(s); err != nil {
 					return err

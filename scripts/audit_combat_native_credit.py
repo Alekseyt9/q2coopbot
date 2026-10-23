@@ -72,7 +72,7 @@ def main():
     assert all(not j['error'] for j in pool['jobs'])
     jobs={j['job']:j for j in pool['jobs']};processing=read(pin(a.corpus/'processing-train/report.json'))
     assert len(jobs)==len(pool['jobs']) and len({c['job'] for c in processing['cases']})==closed['native_cases']
-    counts=collections.Counter();components=collections.Counter();cases=[];handoffs=[];unassigned=[];telescoping=[]
+    counts=collections.Counter();components=collections.Counter();cases=[];handoffs=[];unassigned=[];telescoping=[];post_goal_tail=[]
     for case_info in processing['cases']:
         job=jobs[case_info['job']];assert not job['error'] and case_info['split']=='train' and job['seed']==case_info['seed']
         capture=read(pin(Path(job['root'])/'report.json'));manifest=read(pin(Path(job['root'])/'manifest.json'))
@@ -112,16 +112,25 @@ def main():
                 'monster_kills':('monster_kill','monster_kill'),'deaths':('death','death')}
             for key,(component,weight) in weights.items():assert abs(r['components'][component]-measured[key]*config[weight])<1e-8
             assert abs(row['reward']-r['score'])<1e-8 and abs(math.fsum(r['components'].values())-row['reward'])<1e-8
-            zero=bool(s['terminal'] or (s['truncated'] and s.get('reason')=='control_handoff'))
+            handoff_mode=config.get('handoff_bootstrap','')
+            assert handoff_mode in ('','nonterminal_v1')
+            zero=bool(s['terminal'] or (s['truncated'] and s.get('reason')=='control_handoff' and
+                      (handoff_mode=='' or s.get('goal_handoff_verified',False))))
             assert row['bootstrap_zero']==zero and (not zero or row['next_value']==0)
             if measured['deaths']:
                 assert row['terminal'] and s['reason']=='observed_death' and nxt['health']<=0
             if s.get('reason')=='control_handoff':
                 goal=result['goal_stop'];confirmed=bool(goal and goal['kill_frame']<=native['end_frame']<=goal['observed_frame'] and nxt['health']>0)
+                if handoff_mode=='nonterminal_v1':
+                    assert bool(s.get('goal_handoff_verified',False))==confirmed,'Goal marker differs from raw supervisor evidence'
+                    assert row['bootstrap_zero']==confirmed,'Unfinished handoff must retain CUDA next-state value'
+                else:
+                    assert confirmed,'Control handoff ended an unfinished goal'
                 handoffs.append(dict(job=job['job'],seed=job['seed'],index=row['index'],confirmed_goal=confirmed,
+                    bootstrap_contract_verified=True,handoff_bootstrap=handoff_mode or 'legacy_goal_only',
+                    bootstrap_zero=row['bootstrap_zero'],next_value=row['next_value'],
                     end_frame=native['end_frame'],goal_kill_frame=goal['kill_frame'] if goal else None,kill_reward=r['components']['monster_kill']))
-                assert confirmed,'Control handoff ended an unfinished goal'
-                c['goal_handoff']+=1
+                c['goal_handoff' if confirmed else 'unfinished_handoff']+=1
             if s.get('reason')=='combat_goal_complete':
                 assert result['goal_stop'] and row['terminal'] and nxt['health']>0 and row['next_frame']>=result['goal_stop']['kill_frame']
                 c['goal_terminal']+=1
@@ -138,16 +147,24 @@ def main():
             if not consecutive:segments.append([])
             segments[-1].append((row,s,r,before,after))
         life=result['first_life'];actor=life['bot_entity']
-        eligible=[k for k,e in enumerate(raw) if e['map']==life['map'] and e['spawncount']==life['spawncount'] and life['start_frame']<=e['frame']<=life['end_frame'] and e['game_frame']>=manifest['release_game_frame'] and (e['attacker']==actor or e['target']==actor)]
-        outside=[k for k in eligible if k not in used]
-        for k in outside:
-            e=raw[k]
-            if e['health_before']>0 and (e['target']==actor or e['target_class'].startswith('monster_')):unassigned.append(dict(job=job['job'],seed=job['seed'],event=e))
         goal=result['goal_stop']
         if goal:
             lethal=[e for e in raw if e['map']==life['map'] and e['spawncount']==goal['spawncount'] and e['attacker']==actor and e['health_before']>0>=e['health_after'] and e['target_class'].startswith('monster_')]
             for kill in goal['kills']:assert any(e['target']==kill['target'] and e['target_class']==kill['target_class'] and e['frame']==kill['frame'] for e in lethal)
             assert goal['kill_frame']==max(k['frame'] for k in goal['kills'])
+            assert goal['kill_frame']<goal['observed_frame']<=life['end_frame'] and goal['health']>0
+        first_life_events=[k for k,e in enumerate(raw) if e['map']==life['map'] and e['spawncount']==life['spawncount'] and life['start_frame']<=e['frame']<=life['end_frame'] and e['game_frame']>=manifest['release_game_frame'] and (e['attacker']==actor or e['target']==actor)]
+        # The same independently verified supervisor boundary used by the
+        # exporter closes the finite training task. Keep stop-latency effects
+        # visible, but never attach them to an earlier on-policy command.
+        tail=[k for k in first_life_events if goal and raw[k]['frame']>goal['observed_frame']]
+        assert not used.intersection(tail),'Exported learning window extends beyond verified goal'
+        for k in tail:post_goal_tail.append(dict(job=job['job'],seed=job['seed'],goal_observed_frame=goal['observed_frame'],event=raw[k]))
+        eligible=[k for k in first_life_events if k not in set(tail)]
+        outside=[k for k in eligible if k not in used]
+        for k in outside:
+            e=raw[k]
+            if e['health_before']>0 and (e['target']==actor or e['target_class'].startswith('monster_')):unassigned.append(dict(job=job['job'],seed=job['seed'],event=e))
         for segment in segments:
             gamma=config['aim_gamma'];actual=math.fsum(gamma**i*v[2]['components']['spacing_potential'] for i,v in enumerate(segment))
             expected=-segment[0][3]+gamma**len(segment)*segment[-1][4]
@@ -156,14 +173,14 @@ def main():
             telescoping.append(dict(job=job['job'],seed=job['seed'],start_index=segment[0][0]['index'],rows=len(segment),
                 discounted_spacing=actual,expected_boundary=expected,error=error,max_adjacent_potential_jump=max(jumps,default=0.)))
         cases.append(dict(job=job['job'],seed=job['seed'],rows=len(exported),counts=dict(c),segments=len(segments),goal=bool(goal),death=bool(result['death_stop']),
-            native_events=len(eligible),joined_events=len(used),unassigned_post_release_events=len(outside)))
+            native_events=len(eligible),joined_events=len(used),unassigned_post_release_events=len(outside),excluded_post_goal_tail_events=len(tail)))
         print(job['job'],'native effects checked',len(exported),'rows',flush=True)
     assert len(cases)==closed['native_cases'] and counts['rows']==processing['rows']
     for path,digest in pins.items():assert sha(Path(path))==digest
     a.out.mkdir(parents=True)
     report=dict(state='complete',version='combat_native_credit_audit_v1',neural_execution=False,training_performed=False,new_games=False,
         totals=dict(counts),component_sums=dict(components),cases=cases,handoffs=handoffs,
-        unassigned_native_effects=unassigned,spacing_segments=telescoping,
+        unassigned_native_effects=unassigned,excluded_post_goal_tail_effects=post_goal_tail,spacing_segments=telescoping,
         spacing_telescoping_max_error=max(x['error'] for x in telescoping),spacing_adjacent_max_jump=max(x['max_adjacent_potential_jump'] for x in telescoping),
         inputs=pins,script_sha256=sha(__file__),
         scope='Independent raw-log actor/world/frame join and reward arithmetic. Effect-time reward is not proof the latest action launched a projectile. Selected aim is an explicitly masked progress preference, not invariant potential. No fitting or claim of optimal reward design.')

@@ -8,6 +8,9 @@ import (
 // ActionForSample verifies the sampled action contract without running a
 // network. Likelihood, critic and memory checks belong to the CUDA finalizer.
 func (p *PPO) ActionForSample(o Observation, s Sample) (Action, error) {
+	if err := p.validateMovementSample(o.Identity.Frame, s); err != nil {
+		return Action{}, err
+	}
 	if s.Version != p.version || s.Vertical < 0 || s.Vertical > 2 ||
 		s.AimMode < 0 || s.AimMode > 1 || p.file.AimModeHead == "" && s.AimMode != 0 ||
 		p.file.WeaponHead == "" && s.Weapon != 0 || p.file.TargetHead == "" && s.Target != 0 {

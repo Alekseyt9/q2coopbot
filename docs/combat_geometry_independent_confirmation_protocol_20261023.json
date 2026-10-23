@@ -1,0 +1,39 @@
+{
+  "version": "combat_geometry_independent_confirmation_v1",
+  "candidate_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "selection": "Exploratory parent choice after the new independent endpoint control gave7/8 vs rules4/8; both PPO arms failed. Prior geometry gate remains false; no criterion is retrospectively changed.",
+  "split": "confirmation",
+  "cases_per_variant": 24,
+  "variants": [
+    "source",
+    "shared",
+    "constant",
+    "rules"
+  ],
+  "native_cases": 96,
+  "cuda_cases": 72,
+  "maps": [
+    "base3",
+    "city1",
+    "jail1",
+    "ware2"
+  ],
+  "max_instances": 16,
+  "timescale": 2,
+  "training_performed": false,
+  "checkpoint_selection": false,
+  "training_and_weight_changes_forbidden": true,
+  "reward_sha256": "6b77081d0d9621100fc503debe89b560d0a2f466e93eef89c9d6b9305bbd5c0d",
+  "criteria": {
+    "goals_source_margin": 4,
+    "goals_constant_margin": 3,
+    "goals_rules_margin": 3,
+    "deaths_max": "rules",
+    "received_max": "1.1*rules",
+    "mg_live_fraction_min": "source-0.03",
+    "large_yaw_max": "source+0.02",
+    "targetless_attack_max": "source+0.03"
+  },
+  "promotion": false,
+  "scope": "Independent finite four-map confirmation, not full campaign/coop acceptance. No tuning, no merging previous cohorts, no automatic production promotion."
+}

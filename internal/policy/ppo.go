@@ -15,32 +15,33 @@ import (
 const PPOKind = "combat_ppo_v1"
 
 type PPOFile struct {
-	Kind                string                  `json:"kind"`
-	Features            string                  `json:"feature_version"`
-	Actor               []DenseLayer            `json:"actor"`
-	Value               []DenseLayer            `json:"value"`
-	LogStd              [4]float64              `json:"log_std"`
-	SamplingSeed        int64                   `json:"sampling_seed"`
-	Deterministic       bool                    `json:"deterministic"`
-	Memory              *GRUFile                `json:"memory,omitempty"`
-	Attention           *AttentionFile          `json:"attention,omitempty"`
-	EntityAttention     *EntityAttentionFile    `json:"entity_attention,omitempty"`
-	WeaponHead          string                  `json:"weapon_head,omitempty"`
-	TargetHead          string                  `json:"target_head,omitempty"`
-	AimModeHead         string                  `json:"aim_mode_head,omitempty"`
-	SpatialAim          *SpatialAimFile         `json:"spatial_aim,omitempty"`
-	SharedTarget        *SpatialAimFile         `json:"shared_target,omitempty"`
-	WeaponStateResidual *SpatialAimFile         `json:"weapon_state_residual,omitempty"`
-	WeaponExploration   *WeaponExplorationFile  `json:"weapon_exploration,omitempty"`
-	SampledMotionAim    *SpatialAimFile         `json:"sampled_motion_aim,omitempty"`
-	MotorResidual       *SpatialAimFile         `json:"motor_residual,omitempty"`
-	ConditionalFire     *SpatialAimFile         `json:"conditional_fire,omitempty"`
-	ExecutionMode       string                  `json:"execution_mode,omitempty"`
-	GeometryAimRanker   *GeometryAimRankerFile  `json:"geometry_aim_ranker,omitempty"`
-	GeometryAimExplore  *GeometryAimExploreFile `json:"geometry_aim_exploration,omitempty"`
-	ActionDistribution  string                  `json:"action_distribution,omitempty"`
-	AimCandidateHead    *AimCandidateFile       `json:"aim_candidate_head,omitempty"`
-	DiagnosticAimProbe  *DiagnosticAimProbeFile `json:"diagnostic_joint_aim_probe,omitempty"`
+	Kind                    string                       `json:"kind"`
+	Features                string                       `json:"feature_version"`
+	Actor                   []DenseLayer                 `json:"actor"`
+	Value                   []DenseLayer                 `json:"value"`
+	LogStd                  [4]float64                   `json:"log_std"`
+	SamplingSeed            int64                        `json:"sampling_seed"`
+	Deterministic           bool                         `json:"deterministic"`
+	Memory                  *GRUFile                     `json:"memory,omitempty"`
+	Attention               *AttentionFile               `json:"attention,omitempty"`
+	EntityAttention         *EntityAttentionFile         `json:"entity_attention,omitempty"`
+	WeaponHead              string                       `json:"weapon_head,omitempty"`
+	TargetHead              string                       `json:"target_head,omitempty"`
+	AimModeHead             string                       `json:"aim_mode_head,omitempty"`
+	SpatialAim              *SpatialAimFile              `json:"spatial_aim,omitempty"`
+	SharedTarget            *SpatialAimFile              `json:"shared_target,omitempty"`
+	WeaponStateResidual     *SpatialAimFile              `json:"weapon_state_residual,omitempty"`
+	WeaponExploration       *WeaponExplorationFile       `json:"weapon_exploration,omitempty"`
+	SampledMotionAim        *SpatialAimFile              `json:"sampled_motion_aim,omitempty"`
+	MotorResidual           *SpatialAimFile              `json:"motor_residual,omitempty"`
+	ConditionalFire         *SpatialAimFile              `json:"conditional_fire,omitempty"`
+	ExecutionMode           string                       `json:"execution_mode,omitempty"`
+	GeometryAimRanker       *GeometryAimRankerFile       `json:"geometry_aim_ranker,omitempty"`
+	GeometryAimExplore      *GeometryAimExploreFile      `json:"geometry_aim_exploration,omitempty"`
+	ActionDistribution      string                       `json:"action_distribution,omitempty"`
+	AimCandidateHead        *AimCandidateFile            `json:"aim_candidate_head,omitempty"`
+	DiagnosticAimProbe      *DiagnosticAimProbeFile      `json:"diagnostic_joint_aim_probe,omitempty"`
+	DiagnosticMovementProbe *DiagnosticMovementProbeFile `json:"diagnostic_movement_probe,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
@@ -60,6 +61,7 @@ type Sample struct {
 	AimRanking     *GeometryAimRankSample    `json:"aim_ranking,omitempty"`
 	AimExploration *GeometryAimExploreSample `json:"aim_exploration,omitempty"`
 	AimCandidate   *AimCandidateSample       `json:"aim_candidate,omitempty"`
+	MovementProbe  *DiagnosticMovementSample `json:"movement_probe,omitempty"`
 }
 type PPO struct {
 	file          PPOFile
@@ -95,6 +97,9 @@ func LoadPPO(path string) (*PPO, error) {
 		return nil, e
 	}
 	if e = validateAimCandidates(f); e != nil {
+		return nil, e
+	}
+	if e = validateDiagnosticMovementProbe(f); e != nil {
 		return nil, e
 	}
 	outputs := 8
@@ -178,11 +183,14 @@ func (p *PPO) WeaponHeadVersion() string  { return p.file.WeaponHead }
 func (p *PPO) SamplingSeed() int64        { return p.file.SamplingSeed }
 func (p *PPO) ActionDistribution() string { return p.file.ActionDistribution }
 func (p *PPO) IsDiagnosticAimProbe() bool { return p.file.DiagnosticAimProbe != nil }
+func (p *PPO) IsDiagnosticCombatProbe() bool {
+	return p.IsDiagnosticAimProbe() || p.file.DiagnosticMovementProbe != nil
+}
 
 // IsStochastic reports eligibility for the standard full-head PPO sampler.
 // Selective inference modes retain randomness but cannot produce PPO rollouts.
 func (p *PPO) IsStochastic() bool {
-	return !p.file.Deterministic && p.file.ExecutionMode == "" && !p.IsDiagnosticAimProbe()
+	return !p.file.Deterministic && p.file.ExecutionMode == "" && !p.IsDiagnosticCombatProbe()
 }
 func (p *PPO) LastSample() *Sample { return p.last }
 func (p *PPO) IsRecurrent() bool   { return p.file.Memory != nil || p.file.Attention != nil }
@@ -212,6 +220,9 @@ func (p *PPO) Value(o Observation) (float64, error) {
 }
 func softplus(x float64) float64 { return math.Max(x, 0) + math.Log1p(math.Exp(-math.Abs(x))) }
 func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) {
+	if err := p.validateMovementSample(o.Identity.Frame, s); err != nil {
+		return Action{}, 0, 0, err
+	}
 	if s.Version != p.version || s.Vertical < 0 || s.Vertical > 2 {
 		return Action{}, 0, 0, fmt.Errorf("PPO sample version/category")
 	}
@@ -271,6 +282,7 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 		}
 		lp += probs[s.AimMode]
 	}
+	means = p.movementProbeMeans(o.Identity.Frame, means)
 	for _, z := range s.Latent {
 		if math.IsNaN(z) || math.IsInf(z, 0) {
 			return Action{}, 0, 0, fmt.Errorf("nonfinite latent")
@@ -381,6 +393,7 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 			return Action{}, err
 		}
 	}
+	means = p.movementProbeMeans(o.Identity.Frame, means)
 	verticalAim := p.file.SampledMotionAim != nil && p.file.SampledMotionAim.Version != SampledMotionAimVersion
 	var noise [4]float64
 	for i := range s.Latent {
@@ -475,6 +488,10 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		if !p.file.Deterministic && p.file.ExecutionMode != ExecutionGreedyTargetModeFire {
 			s.Attack = fireUniform < math.Exp(-softplus(-fireLogit))
 		}
+	}
+	if probe := p.file.DiagnosticMovementProbe; probe != nil && probe.Frame == o.Identity.Frame {
+		s.MovementProbe = &DiagnosticMovementSample{Version: DiagnosticMovementProbeVersion, Frame: probe.Frame,
+			MeanShift: append([]float64(nil), probe.MeanShift...), GaussianNoise: append([]float64(nil), noise[:]...), FireUniform: fireUniform}
 	}
 	a, lp, value, e := p.Review(o, s)
 	if e != nil {

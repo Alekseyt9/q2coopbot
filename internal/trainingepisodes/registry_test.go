@@ -43,6 +43,18 @@ func TestRegistryRejectsLeakageAndUnregisteredScenes(t *testing.T) {
 		t.Fatalf("unlisted scene accepted: %v", err)
 	}
 }
+
+func TestRegistryNonterminalHandoffRecipe(t *testing.T) {
+	_, ep := fixture(t)
+	ep.Recipe.RewardConfig = "scripts/scenarios/combat-reward-nonterminal-handoff-v13.json"
+	if err := ep.validate(); err != nil {
+		t.Fatal(err)
+	}
+	ep.Recipe.RewardConfig = "scripts/scenarios/unregistered-reward.json"
+	if err := ep.validate(); err == nil {
+		t.Fatal("unregistered reward accepted")
+	}
+}
 func TestPlanRejectsPlannedSceneAndInvalidSplitBudget(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {

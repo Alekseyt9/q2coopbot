@@ -158,7 +158,7 @@ def main():
     torch.backends.cuda.enable_flash_sdp(False);torch.backends.cuda.enable_mem_efficient_sdp(False);torch.backends.cuda.enable_math_sdp(True)
     model=read(args.model);assert model['kind']=='combat_ppo_v1' and not model['deterministic']
     assert not model.get('execution_mode'), 'Inference-only execution modes cannot train PPO'
-    assert not model.get('diagnostic_joint_aim_probe'), 'Diagnostic one-frame probes cannot train ordinary PPO'
+    assert not model.get('diagnostic_joint_aim_probe') and model.get('diagnostic_movement_probe') is None, 'Diagnostic one-frame probes cannot train ordinary PPO'
     assert not model.get('aim_candidate_head',{}).get('shared_scorer'), 'Shared scorer optimizer/resume is not integrated'
     if model.get('conditional_fire'):
         from combat_conditional_fire import validate as validate_fire,VERSION as FIRE_VERSION

@@ -36,7 +36,7 @@ def main():
             assert r['experiment_protocol_sha256'] == sha(a.protocol)
         if label == 'initial': assert seal['weights_sha256'] == protocol['initializer_weights_sha256']
         variants.append(dict(label=label, mode='learned', update=str(root), deterministic=False, cuda_replay=True, checked_wall_slide=True))
-    variants.append(dict(label='rules', mode='rules', checked_wall_slide=True))
+    variants.append(dict(label='rules', mode='rules', cuda_replay=False))
     comparisons = [(x, y) for x, y in (('source', 'initial'), ('initial', 'B'), ('initial', 'G'), ('B', 'G'), ('rules', 'B'), ('rules', 'G'))]
     spec = dict(version='registered_combat_model_comparison_v1', registry=str(a.registry.resolve()), split='validation', count=1,
         max_instances=16, episodes=sorted(e['id'] for e in descriptors), seed_offset=offset, port=a.port, minimum_free_gib=32,

@@ -22,11 +22,15 @@ def base_model(model,*,allow_probe=False,allow_shared=False):
     assert model.get('aim_candidate_head',{}).get('version')==candidates.VERSION
     assert not model.get('execution_mode') and not model.get('geometry_aim_ranker') and not model.get('geometry_aim_exploration')
     assert not model.get('deterministic') and model['feature_version']=='combat_features_v10'
-    assert allow_probe or not model.get('diagnostic_joint_aim_probe'),'Diagnostic one-frame probes cannot enter ordinary training/scoring'
+    assert allow_probe or not (model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') is not None),'Diagnostic one-frame probes cannot enter ordinary training/scoring'
+    if model.get('diagnostic_movement_probe') is not None:
+        from combat_movement_probe import validate as validate_movement
+        validate_movement(model)
     assert allow_shared or not model['aim_candidate_head'].get('shared_scorer'),'Shared scorer optimizer/resume is not integrated; use explicit evaluation scoring'
     result=copy.deepcopy(model)
     result.pop('action_distribution');result.pop('aim_candidate_head')
     result.pop('diagnostic_joint_aim_probe',None)
+    result.pop('diagnostic_movement_probe',None)
     from combat_precision_head import validate_precision_model
     validate_precision_model(result)
     return result
@@ -194,9 +198,9 @@ def events(rows,features,target,mode,vertical,weapon):
     return source.to(features.dtype),choice,timing.to(features.dtype),active
 
 
-def probabilities(joint,raw,std,source,final,attack,vertical,weapon,features,target,mode,choice,timing,motion_branch=None,reference_branch=None,fire_branch=None,*,frames=None,score_inputs=None):
+def probabilities(joint,raw,std,source,final,attack,vertical,weapon,features,target,mode,choice,timing,motion_branch=None,reference_branch=None,fire_branch=None,*,frames=None,score_inputs=None,movement_shift=None):
     from combat_precision_head import probabilities as original
-    lp,ent=original(raw,std,source,attack,vertical,weapon,features,target,mode,motion_branch,reference_branch,fire_branch)
+    lp,ent=original(raw,std,source,attack,vertical,weapon,features,target,mode,motion_branch,reference_branch,fire_branch,movement_shift=movement_shift)
     # Gaussian terms keep source latent. Only fire sees the final aim.
     before=torch.distributions.Bernoulli(logits=fire_logits(fire_branch,features,raw,target,mode,source,vertical,weapon))
     after=torch.distributions.Bernoulli(logits=fire_logits(fire_branch,features,raw,target,mode,final,vertical,weapon))
