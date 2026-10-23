@@ -1,0 +1,29 @@
+{
+  "version": "combat_movement_selector_fit_v1",
+  "dataset_report_sha256": "7ef8af4c583dff575e0527af5d76674295fefb75c6f63a9e6bb8711e8c5e4818",
+  "records_sha256": "0147c01e7df88346ac5204b88deb8024e6adc96e34b530d1662c75afea90e471",
+  "source_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "hypothesis": "A small selector can use the frozen full-observation temporal representation to choose among measured movement-mean shifts better than a state-independent frequency control.",
+  "input": "Concatenate frozen actor base.head input64 and temporal residual input64 at the recorded context. Both cover the original full observed state/history. Normalize128 using TRAIN mean/std with minimum std0.1; clamp [-10,10]. No seed, map, frame number, native pose, outcome or future observation enters selector inputs.",
+  "source_frozen": "All actor, critic, attention, aim, fire, weapon, std, predictors and source Adam/RNG/checkpoint files unchanged. Only separate offline selector parameters fit. No policy export or ordinary PPO admission.",
+  "candidates": ["control", "left", "right", "forward", "backward", "near_stationary"],
+  "availability": "Use only accepted measured variants; near_stationary is absent if its shift exceeds the predeclared bound2. No unmeasured action receives a negative outcome.",
+  "architectures": {"linear128x6": [128,6], "mlp128x8x6": [128,8,6]},
+  "initialization": "Final weights zero, final bias control=log495, other biases0. MLP first layer standard initialization. Fixed torch seed20261023 independently for each architecture.",
+  "utility": "4*alive_goal + 0.25*kills - received_health_damage/100 - death; labels describe a single observed conditional continuation, not expected Q.",
+  "loss": "For each TRAIN context, mean softplus(score_loser-score_winner) over all accepted pairs whose utility differs by at least0.05; average contexts equally. Add0.05*(-log P(control)). No development labels enter gradients or normalization.",
+  "optimizer": {"kind":"Adam", "lr":0.003, "weight_decay":0.0001, "clip_norm":0.5, "steps":500, "score_clip":20},
+  "constant_control": "TRAIN mean final probabilities, then renormalize over available actions independently for each context. No development refitting.",
+  "gate": {
+    "development_useful_mass_over_constant": 0.05,
+    "development_harmful_mass_over_constant_max": 0.02,
+    "development_observed_utility_delta_over_constant": 0.05,
+    "minimum_development_contexts_with_useful_mass_gain": 2
+  },
+  "harmful": "Loses an alive goal, or preserves alive goal and kills with at least5 additional received HP, relative to its own control. Useful comes unchanged from admitted dataset.",
+  "selection": "If multiple pass, largest development useful-minus-constant, then smaller harmful mass, then fewer parameters. No early stopping/checkpoint search or further fit of failed endpoints.",
+  "next_if_pass": "Implement a separately versioned native/CUDA categorical movement-mean selector contract before fresh independent game comparison with source, trained, constant and rules. Offline probabilities do not establish a better combat policy; rollout distribution shift remains untested.",
+  "next_if_fail": "Retain negative results and stop these fits; do not launch quality games or change thresholds. Investigate representation or label variance under a new protocol.",
+  "device": "cuda_only",
+  "promotion": false
+}

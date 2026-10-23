@@ -1,0 +1,20 @@
+{
+  "version": "combat_movement_motor_pair_audit_v1",
+  "source_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "dataset_report_sha256": "7ef8af4c583dff575e0527af5d76674295fefb75c6f63a9e6bb8711e8c5e4818",
+  "split": "train_only",
+  "model": "Unchanged embedded frozen factorized motor from Geometry8 source; original causal185 plus action/timing. All neural forward and numerical comparisons CUDA only.",
+  "membership": "Only admitted context intervention frames. Require exactly one actual native MG shot in the same exclusive dispatch window. Missing/multiple shots are reported, never fabricated or replaced with next-observation poses.",
+  "target": "Actual native muzzle displacement relative to current observed centered muzzle, rotated into OLD observed yaw frame and scaled32, as in the predictor's original supervised target. Native pose is labels only.",
+  "comparisons": "Report absolute horizontal muzzle error against zero and constant-velocity100ms. For each alternative with a shot and its own control with a shot, compare predicted and actual horizontal displacement differences. Zero-delta baseline means no action effect. Also measure native muzzle XY versus next observation XY to check timing, without assuming equality.",
+  "feature_admission": {
+    "minimum_pairs":12,
+    "minimum_seeds":6,
+    "minimum_maps":3,
+    "paired_horizontal_rmse_over_zero_max":0.8,
+    "minimum_cosine_on_effects_at_least5":0.7
+  },
+  "interpretation": "Passing only supports exploratory use of predicted motor geometry as features, not a useful maneuver selector or better battle quality. Failure requires understanding timing/coverage/model error before trusting this geometry. No new training/games/default changes.",
+  "training_performed":false,
+  "promotion":false
+}

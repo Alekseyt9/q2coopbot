@@ -1,0 +1,20 @@
+{
+  "version":"combat_movement_continuation_stability_v1",
+  "source_weights_sha256":"559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "dataset":"workspace/artifacts/combat-movement-pairs-v1-20261023/dataset",
+  "purpose":"Estimate whether one-frame movement preferences persist under different subsequent policy randomness. Not a learned-policy quality evaluation.",
+  "selection":"Lowest TRAIN seed per each of4maps from the accepted dataset. No alternative outcome selection; development and confirmation excluded.",
+  "continuation_replicates":3,
+  "continuation_seeds":[2026102301,2026102302,2026102303],
+  "intervention":"Same original context frameF, movement mean shifts and Gaussian/fire draws. Fork randomness only at F+1. Prefix, state and intervention-frame draws must match the accepted original context.",
+  "fork_contract":"diagnostic_continuation_probe combat_policy_continuation_rng_fork_v1: first life only, exact fork_frameF+1, declared nonnegative31-bit seed. Reset main sampling PRNG once; use this seed for subsequent frame-hash aim choices. No NN/std changes, no reset of temporal memory or game world RNG. Record post-fork Gaussian/fire draw receipts. Sample.sampling_seed remains initial episode seed; explicit receipt declares effective continuation seed.",
+  "controls":"For each fork seed and context, a fork-only ordinary-source reference and zero-shift fork model must reproduce the full same trajectory. Separate no-fork source replays must reproduce the old ordinary baseline. Other movement variants share prefix/draws but may differ afterF as intended.",
+  "technical_smoke":"Before full collection: one selected TRAIN context, fork-only reference plus zero-shift and one nonzero movement variant, then explicit native/CUDA/prefix/control acceptance. No fitting.",
+  "labels":"Compare actual alive goals, deaths, kills, receivedHP and fixed observed utility4*alive_goal+0.25*kills-received/100-death with own same-fork control. Include original continuation as replicate0, clearly distinguished from newly forked streams. These are policy-randomness repeats in one fixed initial world, not independent environment seeds or expected Q proof.",
+  "analysis":"Report per-action utility delta range/mean, useful frequency, sign changes beyond +/-0.05, and ranking agreement across continuations. No action or context replacement to improve stability; exclusions remain explicit. No predeclared learned winner or automatic fitting from these repeats.",
+  "ordinary_training_eligible":false,
+  "training_performed":false,
+  "max_instances":16,
+  "timescale":2,
+  "promotion":false
+}

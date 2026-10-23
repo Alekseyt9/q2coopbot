@@ -22,15 +22,19 @@ def base_model(model,*,allow_probe=False,allow_shared=False):
     assert model.get('aim_candidate_head',{}).get('version')==candidates.VERSION
     assert not model.get('execution_mode') and not model.get('geometry_aim_ranker') and not model.get('geometry_aim_exploration')
     assert not model.get('deterministic') and model['feature_version']=='combat_features_v10'
-    assert allow_probe or not (model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') is not None),'Diagnostic one-frame probes cannot enter ordinary training/scoring'
+    assert allow_probe or not (model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') is not None or model.get('diagnostic_continuation_probe') is not None),'Diagnostic acquisition cannot enter ordinary training/scoring'
     if model.get('diagnostic_movement_probe') is not None:
         from combat_movement_probe import validate as validate_movement
         validate_movement(model)
+    if model.get('diagnostic_continuation_probe') is not None:
+        from combat_continuation_probe import validate as validate_continuation
+        validate_continuation(model)
     assert allow_shared or not model['aim_candidate_head'].get('shared_scorer'),'Shared scorer optimizer/resume is not integrated; use explicit evaluation scoring'
     result=copy.deepcopy(model)
     result.pop('action_distribution');result.pop('aim_candidate_head')
     result.pop('diagnostic_joint_aim_probe',None)
     result.pop('diagnostic_movement_probe',None)
+    result.pop('diagnostic_continuation_probe',None)
     from combat_precision_head import validate_precision_model
     validate_precision_model(result)
     return result

@@ -1,0 +1,17 @@
+{
+  "version":"combat_continuation_goal_tail_supplement_v1",
+  "reason":"One full-capture zero-control differs only after the same verified native goal: one extra provider frame and missing final next observation. Original full-capture gate=false remains immutable.",
+  "scope":"Supplemental acceptance of task-equivalent zero controls from existing captures only. No replay to repair a quota, no NN tolerance or utility threshold changes.",
+  "requirements":[
+    "Both zero-shift and fork-only reference have verified alive native goal, no death, identical classes and sorted per-class kill frames; last kill frame identical.",
+    "All common observations, sampled fields, aim timing/logits, continuation draw receipts, commands and CUDA features match exactly under the existing stable entity-ID bijection, including post-goal common states.",
+    "Both captures contain the native completion window and its next observation. Missing next observation is permitted only strictly after the last native goal kill frame.",
+    "All extra records lie strictly after completion. Every native effect after completion is available and has zero monster damage, received damage, self/teammate damage, kills and deaths in BOTH captures.",
+    "Pre-intervention state/draws, no-fork full replay, common future draws, CUDA likelihood/value/memory/transform and absence of rules before task end keep the original checks."
+  ],
+  "application":"Run the same supplemental audit on every one of12units. Write new proofs and a separate report. Retain zero_fork_full_exact=false where applicable and record whether goal-tail acceptance was actually needed. Original85captures, v1proofs/report/exclusion and observed utility labels unchanged.",
+  "interpretation":"Accepting an empty post-completion capture tail does not establish matching unobserved physical states after recording stops. The claim is exact observed task trajectory plus unchanged measured outcomes, explicitly weaker than complete capture identity.",
+  "training_performed":false,
+  "new_games":false,
+  "promotion":false
+}

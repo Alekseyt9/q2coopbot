@@ -1,0 +1,33 @@
+{
+  "version": "combat_movement_pair_collection_v1",
+  "source_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "observation_timing_contract": "frozen_world_v1",
+  "registry": "workspace/artifacts/combat-geometry-nonterminal-objective-v3-20261023/train-registry/index.json",
+  "baseline_cases": 32,
+  "maps": ["base3", "city1", "jail1", "ware2"],
+  "max_contexts": 24,
+  "context_limit_per_seed": 1,
+  "selection": "Observable late grounded MG attack with a clear parasite within288; prefer moving while targeting another class. Select before alternative outcomes. First3 seed slots eligible TRAIN, fourth internal development; never use confirmation.",
+  "family_quota": "At most2 TRAIN contexts and1 development context per eight ordinary/recovery family; report missing availability, no outcome-driven quota repair",
+  "maximum_variants_per_context": 6,
+  "maximum_probe_cases": 144,
+  "variants": ["zero_shift", "side_minus_1.25", "side_plus_1.25", "forward_plus_1.25", "forward_minus_1.25", "near_zero_mean_if_shift_within_bounds"],
+  "max_instances": 16,
+  "timescale": 2,
+  "diagnostic_only": true,
+  "training_performed": false,
+  "source_weight_changes_forbidden": true,
+  "required_proofs": ["full_zero_control_matches_frozen_world_ordinary_baseline", "prefix_and_intervention_state_exact", "Gaussian_noise_and_fire_uniform_exact", "unmodified_categories_exact", "native_CUDA_likelihood_value_memory_transform", "no_rules_commands_before_task_end"],
+  "labels": "Actual finite observed native consequences and provider-only continuation returns without critic bootstrap. One conditional continuation is not expected Q. Unknown alternatives never become measured negatives.",
+  "dataset_admission": {
+    "minimum_train_contexts": 12,
+    "minimum_train_maps": 3,
+    "minimum_development_contexts": 4,
+    "minimum_development_maps": 3,
+    "minimum_train_seeds_with_useful_variant": 6,
+    "minimum_train_maps_with_useful_variant": 3,
+    "useful": "Gain a completed alive goal without greater death, or preserve alive goal and kills with at least5 less received HP versus its own zero control. Native proofs required before labeling."
+  },
+  "on_failure": "Retain exclusions and stop fitting; no threshold changes or replacing unfavorable native outcomes. Investigate errors or predeclare a new collection.",
+  "promotion": false
+}

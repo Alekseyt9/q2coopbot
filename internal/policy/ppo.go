@@ -42,35 +42,38 @@ type PPOFile struct {
 	AimCandidateHead        *AimCandidateFile            `json:"aim_candidate_head,omitempty"`
 	DiagnosticAimProbe      *DiagnosticAimProbeFile      `json:"diagnostic_joint_aim_probe,omitempty"`
 	DiagnosticMovementProbe *DiagnosticMovementProbeFile `json:"diagnostic_movement_probe,omitempty"`
+	DiagnosticContinuation  *DiagnosticContinuationFile  `json:"diagnostic_continuation_probe,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
 // Jacobian cancels. Quantization/guards belong to environment execution.
 type Sample struct {
-	Version        string                    `json:"version"`
-	SamplingSeed   int64                     `json:"sampling_seed"`
-	Latent         [4]float64                `json:"latent"`
-	Attack         bool                      `json:"attack"`
-	Vertical       int                       `json:"vertical"`
-	Weapon         int                       `json:"weapon,omitempty"`
-	Target         int                       `json:"target,omitempty"`
-	AimMode        int                       `json:"aim_mode,omitempty"`
-	LogProbability float64                   `json:"log_probability"`
-	Value          float64                   `json:"value"`
-	Memory         *MemorySample             `json:"memory,omitempty"`
-	AimRanking     *GeometryAimRankSample    `json:"aim_ranking,omitempty"`
-	AimExploration *GeometryAimExploreSample `json:"aim_exploration,omitempty"`
-	AimCandidate   *AimCandidateSample       `json:"aim_candidate,omitempty"`
-	MovementProbe  *DiagnosticMovementSample `json:"movement_probe,omitempty"`
+	Version           string                        `json:"version"`
+	SamplingSeed      int64                         `json:"sampling_seed"`
+	Latent            [4]float64                    `json:"latent"`
+	Attack            bool                          `json:"attack"`
+	Vertical          int                           `json:"vertical"`
+	Weapon            int                           `json:"weapon,omitempty"`
+	Target            int                           `json:"target,omitempty"`
+	AimMode           int                           `json:"aim_mode,omitempty"`
+	LogProbability    float64                       `json:"log_probability"`
+	Value             float64                       `json:"value"`
+	Memory            *MemorySample                 `json:"memory,omitempty"`
+	AimRanking        *GeometryAimRankSample        `json:"aim_ranking,omitempty"`
+	AimExploration    *GeometryAimExploreSample     `json:"aim_exploration,omitempty"`
+	AimCandidate      *AimCandidateSample           `json:"aim_candidate,omitempty"`
+	MovementProbe     *DiagnosticMovementSample     `json:"movement_probe,omitempty"`
+	ContinuationProbe *DiagnosticContinuationSample `json:"continuation_probe,omitempty"`
 }
 type PPO struct {
-	file          PPOFile
-	actor, critic *MLP
-	version       string
-	rng           *rand.Rand
-	last          *Sample
-	memory        memoryState
-	lastAction    *Action
+	file                PPOFile
+	actor, critic       *MLP
+	version             string
+	rng                 *rand.Rand
+	last                *Sample
+	memory              memoryState
+	lastAction          *Action
+	continuationStarted bool
 }
 
 func LoadPPO(path string) (*PPO, error) {
@@ -100,6 +103,9 @@ func LoadPPO(path string) (*PPO, error) {
 		return nil, e
 	}
 	if e = validateDiagnosticMovementProbe(f); e != nil {
+		return nil, e
+	}
+	if e = validateDiagnosticContinuation(f); e != nil {
 		return nil, e
 	}
 	outputs := 8
@@ -184,7 +190,7 @@ func (p *PPO) SamplingSeed() int64        { return p.file.SamplingSeed }
 func (p *PPO) ActionDistribution() string { return p.file.ActionDistribution }
 func (p *PPO) IsDiagnosticAimProbe() bool { return p.file.DiagnosticAimProbe != nil }
 func (p *PPO) IsDiagnosticCombatProbe() bool {
-	return p.IsDiagnosticAimProbe() || p.file.DiagnosticMovementProbe != nil
+	return p.IsDiagnosticAimProbe() || p.file.DiagnosticMovementProbe != nil || p.file.DiagnosticContinuation != nil
 }
 
 // IsStochastic reports eligibility for the standard full-head PPO sampler.
@@ -220,6 +226,9 @@ func (p *PPO) Value(o Observation) (float64, error) {
 }
 func softplus(x float64) float64 { return math.Max(x, 0) + math.Log1p(math.Exp(-math.Abs(x))) }
 func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) {
+	if err := p.validateContinuationSample(o, s); err != nil {
+		return Action{}, 0, 0, err
+	}
 	if err := p.validateMovementSample(o.Identity.Frame, s); err != nil {
 		return Action{}, 0, 0, err
 	}
@@ -346,6 +355,9 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 func (p *PPO) Decide(o Observation) (Action, error) {
 	if p.IsRecurrent() && p.memory.valid && p.memory.identity == o.Identity && p.lastAction != nil {
 		return *p.lastAction, nil
+	}
+	if err := p.beginContinuation(o); err != nil {
+		return Action{}, err
 	}
 	p.last = nil
 	before := p.beforeMemory(o)
@@ -492,6 +504,11 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 	if probe := p.file.DiagnosticMovementProbe; probe != nil && probe.Frame == o.Identity.Frame {
 		s.MovementProbe = &DiagnosticMovementSample{Version: DiagnosticMovementProbeVersion, Frame: probe.Frame,
 			MeanShift: append([]float64(nil), probe.MeanShift...), GaussianNoise: append([]float64(nil), noise[:]...), FireUniform: fireUniform}
+	}
+	if probe := p.file.DiagnosticContinuation; probe != nil && o.Identity.Frame >= probe.Frame {
+		s.ContinuationProbe = &DiagnosticContinuationSample{Version: DiagnosticContinuationVersion, Frame: probe.Frame,
+			Seed: probe.Seed, Reset: o.Identity.Frame == probe.Frame,
+			GaussianNoise: append([]float64(nil), noise[:]...), FireUniform: fireUniform}
 	}
 	a, lp, value, e := p.Review(o, s)
 	if e != nil {

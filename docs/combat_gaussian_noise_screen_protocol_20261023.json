@@ -1,0 +1,21 @@
+{
+  "version":"combat_gaussian_noise_screen_v1",
+  "plan":"docs/combat_post_variance_next_steps_20261023.md",
+  "source_weights_sha256":"559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "variants":{"movement-quarter":[0.25,0.25,1,1],"all-quarter":[0.25,0.25,0.25,0.25]},
+  "fork":"Only log_std changes. Preserve all other neural state, source optimizer clocks/moments except zeroing changed std-coordinate moments, critic/head optimizer, RNG, history, config and retention. No fitting or discarded optimizer steps.",
+  "verification":"CUDA real TRAIN histories: actor/value raw output unchanged, conditional modules exact for fixed contexts, checkpoint/JSON consistency, original geometry optimizer restored, and serialized RNG remains usable on CPU. Fresh own-policy corpus required before fitting.",
+  "registry":"workspace/artifacts/combat-geometry-nonterminal-objective-v3-20261023/comparison-registry/index.json",
+  "split":"validation",
+  "count":1,
+  "families":8,
+  "max_instances":16,
+  "timescale":2,
+  "native_cases":32,
+  "cuda_cases":24,
+  "criteria":{"goals_source_margin":2,"goals_rules_margin":1,"goal_ceiling":8,"deaths_source_max":true,"deaths_rules_max":true,"received_rules_ratio_max":1.1,"mg_live_fraction_source_margin_min":-0.03,"large_yaw_source_margin_max":0.02,"targetless_source_margin_max":0.03},
+  "selection":"All criteria required. If multiple pass: goals descending, deaths ascending, received ascending, name ascending. Goal thresholds min(8, source+2) and min(8,rules+1) fixed before games.",
+  "next":"Passing only admits independent confirmation. Otherwise retain negative results and do not expand unchanged endpoints. No promotion/campaign/coop claim from this screen.",
+  "training_performed":false,
+  "promotion":false
+}

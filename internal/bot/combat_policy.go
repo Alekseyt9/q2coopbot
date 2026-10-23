@@ -27,6 +27,16 @@ type combatControl struct {
 	observation          *policy.Observation
 }
 
+// In the released synchronous harness the server is paused at this observed
+// frame until the next native command. Wall time spent computing is not world
+// motion. Preserve invalid/stale ages so the existing safety rejection remains.
+func combatObservationAge(wallAge int64, synchronous, released bool) int64 {
+	if synchronous && released && wallAge >= 0 && wallAge <= 300 {
+		return 0
+	}
+	return wallAge
+}
+
 func (c *Client) combatObservation(now time.Time) policy.Observation {
 	s := c.planner.World.Snapshot
 	id := policy.Identity{Map: s.Map, Connection: c.connection, Spawncount: c.spawncount, Actor: c.decoder.PlayerNumber, Frame: s.Frame}
@@ -45,12 +55,12 @@ func (c *Client) combatObservation(now time.Time) policy.Observation {
 	// twice and invalidating the target of an already sampled action.
 	if b.observation != nil && b.observation.Identity == id {
 		o := *b.observation
-		o.AgeMS = now.Sub(c.planner.World.Updated).Milliseconds()
+		o.AgeMS = combatObservationAge(now.Sub(c.planner.World.Updated).Milliseconds(), c.testSynchronous, c.testCombatGo)
 		return o
 	}
 	o := policy.Observe(s, id, c.previous)
 	b.weaponRequests.enrich(&o)
-	o.AgeMS = now.Sub(c.planner.World.Updated).Milliseconds()
+	o.AgeMS = combatObservationAge(now.Sub(c.planner.World.Updated).Milliseconds(), c.testSynchronous, c.testCombatGo)
 	policy.EnrichEnvironment(&o, s, c.planner.World.Geometry)
 	o.Navigation = c.planner.combatNavigationContext()
 	b.history.Enrich(&o)

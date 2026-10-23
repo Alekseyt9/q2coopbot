@@ -1,5 +1,6 @@
 """Run sealed TRAIN movement interventions; never merge them into PPO data."""
 import argparse
+import copy
 import concurrent.futures
 import os
 from pathlib import Path
@@ -15,6 +16,7 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__)
     for name in ('prepared','out'):ap.add_argument('--'+name,type=Path,required=True)
     ap.add_argument('--port',type=int,default=45100)
+    ap.add_argument('--fresh-reference',action='store_true',help='Add an ordinary same-policy control under the current frozen-world clock')
     a=ap.parse_args(); repo=Path(__file__).resolve().parents[1]; out=a.out.resolve()
     assert not out.exists() and shutil.disk_usage('F:/').free>=32*1024**3
     pins={}
@@ -24,10 +26,17 @@ def main():
         pins[str(path)]=h;return path
 
     seal=read(pin(a.prepared/'complete.json')); prepared=read(pin(a.prepared/'report.json',seal['report_sha256']))
-    assert prepared['version']=='combat_movement_probe_preparation_v1' and prepared['device']=='cuda'
+    assert prepared['version'] in ('combat_movement_probe_preparation_v1','combat_continuation_probe_preparation_v1') and prepared['device']=='cuda'
+    continuation=prepared['version']=='combat_continuation_probe_preparation_v1'
+    assert not continuation or not a.fresh_reference,'Continuation preparations supply their own forked and unmodified references'
     assert prepared['diagnostic_only'] and not prepared['training_performed'] and not prepared['validation_used']
     context=prepared['context']; assert context['split']=='train'
-    variants=prepared['variants']; assert 2<=len(variants)<=6 and variants[0]['label']=='control'
+    variants=copy.deepcopy(prepared['variants']); assert 2<=len(variants)<=6 and variants[0]['label']=='control'
+    if a.fresh_reference:
+        ordinary=Path(prepared['source'])/'weights.json'
+        assert sha(ordinary)==prepared['source_weights_sha256']
+        variants.append(dict(label='ordinary_reference',index=len(variants),model=str(ordinary.resolve()),
+            model_sha256=sha(ordinary),mean_shift=None,frame=context['frame']))
     for path,h in prepared['inputs'].items():pin(path,h)
     registry=pin(prepared['registry'])
     for v in variants:pin(v['model'],v['model_sha256'])
@@ -51,10 +60,10 @@ def main():
             p=read(path);assert len(p['tasks'])==1 and p['tasks'][0]['instances']==[context['instance']]
             assert p['tasks'][0]['seeds']==[context['seed']] and p['tasks'][0]['split']=='train'
             plans.append(path)
-        save(out/'spec.json',dict(version='combat_native_movement_probe_v1',prepared=str(a.prepared.resolve()),
+        save(out/'spec.json',dict(version='combat_native_continuation_probe_v1' if continuation else 'combat_native_movement_probe_v1',prepared=str(a.prepared.resolve()),
             prepared_report_sha256=seal['report_sha256'],context=context,variants=variants,inputs=pins,
             diagnostic_only=True,ordinary_training_eligible=False,training_performed=False,quality_confirmation=False,
-            max_instances=16,timescale=2,seed_reuse_intentional=True,promotion=False))
+            max_instances=16,timescale=2,seed_reuse_intentional=True,fresh_reference=a.fresh_reference,promotion=False))
         shell=shutil.which('pwsh');assert shell
         quote=lambda p:"'"+str(p).replace("'","''")+"'"
         command='& '+quote(repo/'scripts/run_registered_combat_pool.ps1')+' -Plans @('+','.join(map(quote,plans))+') -MaxInstances 16 -Port '+str(a.port)+' -OutputRoot '+quote(out/'pool')
@@ -85,7 +94,7 @@ def main():
         run('cuda-batch',[sys.executable,repo/'scripts/finalize_combat_cuda_batch.py','--request',request,'--receipt-root',out/'cuda-batch'])
         receipt=read(out/'cuda-batch/report.json');assert receipt['state']=='complete' and receipt['device']=='cuda' and len(receipt['tasks'])==len(variants)
         for path,h in pins.items():assert sha(path)==h,path
-        save(out/'complete.json',dict(state='complete',version='combat_native_movement_probe_v1',native_cases=len(variants),cuda_cases=len(variants),
+        save(out/'complete.json',dict(state='complete',version='combat_native_continuation_probe_v1' if continuation else 'combat_native_movement_probe_v1',native_cases=len(variants),cuda_cases=len(variants),
             spec_sha256=sha(out/'spec.json'),pool_sha256=sha(out/'pool/report.json'),cuda_receipt_sha256=sha(out/'cuda-batch/report.json'),
             diagnostic_only=True,ordinary_training_eligible=False,training_performed=False,promotion=False,
             scope='Technical native/CUDA capture only; baseline/prefix/draw acceptance and consequence labels remain separate.'))

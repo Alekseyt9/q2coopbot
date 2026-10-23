@@ -87,24 +87,28 @@ func run() error {
 		return trainingepisodes.MergeRollouts(strings.Split(*merge, ","), *out)
 	}
 	var manifest struct {
-		Provider       string                   `json:"provider"`
-		Kind           string                   `json:"provider_kind"`
-		Synchronous    bool                     `json:"synchronous"`
-		RewardSHA      string                   `json:"reward_config_sha256"`
-		ExporterSHA    string                   `json:"exporter_sha256"`
-		ModelSHA       string                   `json:"model_weights_sha256"`
-		Reward         learningenv.RewardConfig `json:"reward_config"`
-		TrainingHealth int                      `json:"training_monster_health"`
-		PostFrameRNG   bool                     `json:"post_frame_rng_reset"`
-		ReleaseFrame   int                      `json:"release_game_frame"`
-		Loadout        string                   `json:"loadout"`
-		StopOnGoal     bool                     `json:"stop_on_goal"`
+		Provider          string                   `json:"provider"`
+		Kind              string                   `json:"provider_kind"`
+		Synchronous       bool                     `json:"synchronous"`
+		ObservationTiming string                   `json:"observation_timing_contract"`
+		RewardSHA         string                   `json:"reward_config_sha256"`
+		ExporterSHA       string                   `json:"exporter_sha256"`
+		ModelSHA          string                   `json:"model_weights_sha256"`
+		Reward            learningenv.RewardConfig `json:"reward_config"`
+		TrainingHealth    int                      `json:"training_monster_health"`
+		PostFrameRNG      bool                     `json:"post_frame_rng_reset"`
+		ReleaseFrame      int                      `json:"release_game_frame"`
+		Loadout           string                   `json:"loadout"`
+		StopOnGoal        bool                     `json:"stop_on_goal"`
 	}
 	if e := read(filepath.Join(*batch, "manifest.json"), &manifest); e != nil {
 		return e
 	}
 	if manifest.Provider != "learned" || manifest.Kind != policy.PPOKind || !manifest.Synchronous {
 		return fmt.Errorf("fresh direct synchronous PPO batch required")
+	}
+	if manifest.ObservationTiming != "" && manifest.ObservationTiming != "frozen_world_v1" {
+		return fmt.Errorf("unsupported synchronous observation timing contract")
 	}
 	modelSHA, e := sha(*model)
 	if e != nil {
@@ -484,6 +488,9 @@ func run() error {
 				return fmt.Errorf("missing or foreign on-policy sample")
 			}
 			if s.Observation.Identity.Life == 1 && s.Owner == "provider" && s.Provider == p.Version() && s.Sample != nil {
+				if manifest.ObservationTiming == "frozen_world_v1" && s.Observation.AgeMS != 0 {
+					return fmt.Errorf("frozen-world provider observation has nonzero physical age")
+				}
 				if !*cudaOnly {
 					e = p.VerifyMemory(s.Observation, *s.Sample)
 				}
@@ -581,6 +588,10 @@ func run() error {
 		return e
 	}
 	metadata := map[string]any{"version": "combat_ppo_rollout_v1", "feature_version": behavior.FeatureVersion(), "reward_config_sha256": strings.ToLower(manifest.RewardSHA), "reward_version": manifest.Reward.Version, "aim_gamma": manifest.Reward.AimGamma, "training_monster_health": manifest.TrainingHealth, "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE; v2 verified control handoff retains reward with zero segment bootstrap; full world reset equivalence unproven"}
+	metadata["observation_timing_contract"] = manifest.ObservationTiming
+	if manifest.ObservationTiming == "" {
+		metadata["observation_timing_contract"] = "legacy_wall_clock_v0"
+	}
 	if manifest.Reward.HandoffBootstrap != "" {
 		metadata["handoff_bootstrap"] = manifest.Reward.HandoffBootstrap
 		metadata["scope"] = "Explicit objective fork: verified goals/deaths close bootstrap; unfinished ownership handoffs retain exact observed next-state CUDA value."

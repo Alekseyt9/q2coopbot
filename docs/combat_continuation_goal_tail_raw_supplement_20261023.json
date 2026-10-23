@@ -1,0 +1,11 @@
+{
+  "version":"combat_continuation_goal_tail_supplement_v2_raw_windows",
+  "inherits":"docs/combat_continuation_goal_tail_supplement_20261023.json",
+  "reason":"The first supplemental audit correctly rejected unknown server_step_effects with reason no_next_observation. Raw complete native command windows provide independent evidence; unknown effect records themselves are never treated as zero.",
+  "additional_evidence":"For a post-goal effect record unavailable ONLY because no_next_observation, require the exact native window identified by spawncount/begin_frame/actor/sequence to be present and completed in the raw server log, using the existing begin/end parser. Require NO sv_test_damage record at all in that window, plus both complete captures have no death_stop. Other unavailable reasons or any raw damage still reject.",
+  "unchanged":"All exact common-state/action/features/receipt comparisons, verified identical alive goal, completion-window next observation, extra-tail-after-goal and zero AVAILABLE effect requirements from v1 remain. Original full-capture v1 exclusion and failed first supplement remain immutable.",
+  "application":"Apply to all12units, write separate proofs and report. No new games, fitting, outcome replacement or numeric tolerance changes.",
+  "training_performed":false,
+  "new_games":false,
+  "promotion":false
+}

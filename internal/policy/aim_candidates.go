@@ -443,7 +443,7 @@ func (p *PPO) selectJointAim(o Observation, s *Sample) error {
 		return err
 	}
 	lp := candidateLogProbabilities(logits)
-	gate, u := JointAimUniforms(p.file.SamplingSeed, o.Identity.Frame, o.Identity.Life)
+	gate, u := JointAimUniforms(p.continuationSamplingSeed(o), o.Identity.Frame, o.Identity.Life)
 	k := 0
 	if gate >= math.Exp(lp[0]) {
 		tail := candidateLogProbabilities(logits[1:])

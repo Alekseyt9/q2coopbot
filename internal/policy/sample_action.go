@@ -8,6 +8,9 @@ import (
 // ActionForSample verifies the sampled action contract without running a
 // network. Likelihood, critic and memory checks belong to the CUDA finalizer.
 func (p *PPO) ActionForSample(o Observation, s Sample) (Action, error) {
+	if err := p.validateContinuationSample(o, s); err != nil {
+		return Action{}, err
+	}
 	if err := p.validateMovementSample(o.Identity.Frame, s); err != nil {
 		return Action{}, err
 	}

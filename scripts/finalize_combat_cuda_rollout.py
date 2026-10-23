@@ -30,7 +30,7 @@ def finalize(model_path, data, out):
     joint,core_model=None,model
     if model.get('action_distribution'):
         from combat_joint_aim_policy import JointAim,base_model
-        diagnostic_probe=bool(model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe'))
+        diagnostic_probe=bool(model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') or model.get('diagnostic_continuation_probe'))
         core_model=base_model(model,allow_probe=diagnostic_probe,allow_shared=True)
         joint=JointAim(model,allow_probe=diagnostic_probe,allow_shared=True)
     paired = meta.get('paired_adapter_version')
@@ -52,6 +52,8 @@ def finalize(model_path, data, out):
                         sha(pathlib.Path(__file__).with_name('combat_sequence_storage.py'))})
     weapon_helpers=[]
     if joint is not None:
+        if model.get('diagnostic_continuation_probe'):
+            weapon_helpers.append(pathlib.Path(__file__).with_name('combat_continuation_probe.py').resolve())
         if model.get('diagnostic_movement_probe'):
             weapon_helpers.append(pathlib.Path(__file__).with_name('combat_movement_probe.py').resolve())
         weapon_helpers.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
@@ -124,7 +126,7 @@ def finalize(model_path, data, out):
     with torch.no_grad():
         raw, actor_memory_error = evaluate(actor, 'actor')
         predicted, critic_memory_error = evaluate(value, 'value')
-        candidate_error=None; movement_draw_error=None
+        candidate_error=None; movement_draw_error=None;continuation_audit=None
         if joint is not None:
             from combat_joint_aim_policy import events,probabilities
             from combat_aim_candidates import log_probability,frame_uniforms,choose
@@ -151,6 +153,9 @@ def finalize(model_path, data, out):
             if model.get('diagnostic_movement_probe'):
                 from combat_movement_probe import verify_draw_receipts
                 movement_draw_error=verify_draw_receipts(model,rows,raw,std,source,z,x,target,mode,vertical,weapon,actor)
+            if model.get('diagnostic_continuation_probe'):
+                from combat_continuation_probe import verify_draw_receipts as verify_continuation_receipts
+                continuation_audit=verify_continuation_receipts(model,rows,raw,source,z,x,target,mode,vertical,weapon,actor)
             expected_category=torch.tensor([r['sample']['aim_candidate']['log_probability'] if r['sample'].get('aim_candidate') else 0. for r in rows],device='cuda')
             candidate_error=float((log_probability(logits,choice,active)-expected_category).abs().max())
             assert candidate_error<.003, candidate_error
@@ -162,7 +167,11 @@ def finalize(model_path, data, out):
                 shared_probability_error=float((logits[active].softmax(-1)-recorded.softmax(-1)).abs().max()) if records else 0.
                 assert bool(torch.isfinite(recorded).all()) and shared_logit_error<.001 and shared_probability_error<.0001,(shared_logit_error,shared_probability_error)
             # The native exporter accepts first-life rows only.
-            uniforms=torch.tensor([frame_uniforms(r['sample']['sampling_seed'],r['frame'],1) for r in rows],device='cuda',dtype=torch.float64)
+            sampling_seeds=[r['sample']['sampling_seed'] for r in rows]
+            if model.get('diagnostic_continuation_probe'):
+                from combat_continuation_probe import effective_seed
+                sampling_seeds=[effective_seed(model,r) for r in rows]
+            uniforms=torch.tensor([frame_uniforms(seed,r['frame'],1) for seed,r in zip(sampling_seeds,rows)],device='cuda',dtype=torch.float64)
             assert torch.equal(choose(logits.double(),uniforms[:,0],uniforms[:,1],active),choice),'Frame-hash categorical assignment differs'
         elif model.get('aim_mode_head'):
             from combat_precision_head import probabilities
@@ -241,6 +250,9 @@ def finalize(model_path, data, out):
         audit.update(diagnostic_probe_version=model['diagnostic_joint_aim_probe']['version'],
                      diagnostic_probe_frame=model['diagnostic_joint_aim_probe']['frame'],
                      frame_conditioned_logits_verified=True,ordinary_training_eligible=False)
+    if model.get('diagnostic_continuation_probe'):
+        audit.update(diagnostic_continuation_version=model['diagnostic_continuation_probe']['version'],
+                     diagnostic_continuation=continuation_audit,ordinary_training_eligible=False)
     if model.get('diagnostic_movement_probe'):
         audit.update(diagnostic_movement_version=model['diagnostic_movement_probe']['version'],
                      diagnostic_movement_frame=model['diagnostic_movement_probe']['frame'],
@@ -262,6 +274,9 @@ def finalize(model_path, data, out):
                     diagnostic_movement_version=model['diagnostic_movement_probe']['version'])
     if model.get('aim_candidate_head',{}).get('shared_scorer'):
         meta.update(shared_scorer_training_supported=False,ppo_training_ready=False)
+    if model.get('diagnostic_continuation_probe'):
+        meta.update(version='combat_diagnostic_continuation_rollout_v1',diagnostic_only=True,ppo_training_ready=False,
+                    diagnostic_continuation_version=model['diagnostic_continuation_probe']['version'])
     if paired:
         meta['paired_training_ready'] = True
         meta['paired_training_scope'] = 'Experimental verified primary learner pilot; scripted peer excluded. Registry-wide eligibility unproven.'
