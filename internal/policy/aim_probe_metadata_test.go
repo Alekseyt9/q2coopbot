@@ -22,6 +22,18 @@ func TestDiagnosticAimProbeMetadata(t *testing.T) {
 	if validateDiagnosticAimProbe(f) == nil {
 		t.Fatal("nonconstant baseline accepted")
 	}
+	f.DiagnosticAimProbe.Version = DiagnosticPolicyAimProbeVersion
+	if err := validateDiagnosticAimProbe(f); err != nil {
+		t.Fatal("ordinary-policy V2 probe rejected:", err)
+	}
+	if (&PPO{file: f}).IsStochastic() {
+		t.Fatal("V2 diagnostic acquisition advertised as PPO eligible")
+	}
+	f.DiagnosticAimProbe.Version = "unknown"
+	if validateDiagnosticAimProbe(f) == nil {
+		t.Fatal("unknown diagnostic version accepted")
+	}
+	f.DiagnosticAimProbe.Version = DiagnosticAimProbeVersion
 	f.AimCandidateHead.Layers[1].Weight[0][0] = 0
 	f.DiagnosticAimProbe.Logits[0] = -61
 	if validateDiagnosticAimProbe(f) == nil {

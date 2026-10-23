@@ -1,0 +1,11 @@
+# Независимая confirmation shared aim
+
+23.10.2026. Фиксируется после native32screen, до его закрытияCUDA и до новых confirmation исходов. Предварительно shared6/8целей,source3/8,constant3/8,rules5/8;shared deaths0,source4,rules3. Это малый screen; запуск confirmation разрешён только после полной технической приёмки32native/24CUDA и заранее установленного screen gate из combat_shared_aim_native_protocol_20261023.md.
+
+Веса и25-action distribution заморожены: никакого дообучения, изменения sampler или выбора нового checkpoint по этим исходам. Те же4варианта sourceS4/shared/matchedconstant/rules,8условий base3/ware2 site01/02 ordinary/recovery,по3новыхseed/условие.24боя/вариант,96native/72CUDA,одинпул16×2. Validation seed offsets34..36, обязательная штатная проверка отсутствия исторических пересечений и полного совпадения fixtures. Старыйscreenoffset33не входит в confirmation. Еслиpreflightоткажет до игр — сохранятьотказ и назначатьдругой неиспользованный диапазон до исходов.
+
+Сохранить все quality/action-efficiency/native MG outcomes, однозначно отделить новый24-case результат от прежнего8-case. Сравнить paired gained/lost, обычные/recovery и каждую геометрию. Бои с временным усечением не считать победой без штатного goal. Показать frames/бой: дополнительныевыигрыши не означают более быстрое прохождение.
+
+Критерий допуска к более широкой проверке других карт/оружия: shared goals≥rules+3,≥source+4,≥constant+3; shared deaths≤rules и received≤1,1rules. Дополнительныеbehavior guards: доля actual MG shots с живымуроном≥source−0,03; доля large-yaw commands≤source+0,02 иattack-without-selected-target≤source+0,03. Метрики использовать в тех же определениях штатных reporters. Если обязательной метрикинет — критерийнепройден, анепропущен. Это практический gate следующего этапа, не автоматическая productionpromotion и не проверка всех карт/оружия.
+
+Еслиgateнепройден, сохранитьвсеотрицательныеисходы; не объединять8screenи24confirmationвподобранныйрезультат и не менятьпороги. Дальше отдельно исследоватьисходыодного выстрела/return labels и согласование движения/цели, сновымTRAINпротоколом, безобученияпоconfirmation. Не запускатьещё большуюматрицутехжевесоврадиулучшениястатистики.

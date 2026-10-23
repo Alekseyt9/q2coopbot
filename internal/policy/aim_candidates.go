@@ -8,10 +8,13 @@ import (
 
 const JointAimCandidateVersion = "combat_joint_aim_candidates_v1"
 const JointAimCandidateWidth = 1359
+const GeometryDeltaAimSampler = "frame_hash_geometry_delta31_v1"
+const GeometryDeltaAimKind = "geometry_candidate_delta31_mlp_v1"
 const DiagnosticAimProbeVersion = "combat_joint_aim_one_frame_probe_v1"
+const DiagnosticPolicyAimProbeVersion = "combat_joint_aim_one_frame_policy_probe_v2"
 
-// Diagnostic acquisition only. A constant head is replaced at one declared
-// observation frame; actor RNG and all other decisions remain unchanged.
+// Diagnostic acquisition only. V1 requires a constant head; V2 preserves the
+// ordinary head outside one declared frame. Actor RNG is unchanged.
 type DiagnosticAimProbeFile struct {
 	Version string    `json:"version"`
 	Frame   int       `json:"frame"`
@@ -40,9 +43,21 @@ func validateDiagnosticAimProbe(f PPOFile) error {
 	if f.AimCandidateHead == nil || len(f.AimCandidateHead.Layers) != 2 {
 		return fmt.Errorf("diagnostic aim probe requires a validated joint head")
 	}
-	if p.Version != DiagnosticAimProbeVersion || p.Frame <= 0 || p.Frame > math.MaxInt32 ||
-		!validateProbeLogits(p.Logits) || !validateProbeLogits(f.AimCandidateHead.Layers[1].Bias) {
+	if (p.Version != DiagnosticAimProbeVersion && p.Version != DiagnosticPolicyAimProbeVersion) || p.Frame <= 0 || p.Frame > math.MaxInt32 || !validateProbeLogits(p.Logits) {
 		return fmt.Errorf("invalid diagnostic one-frame aim probe")
+	}
+	if p.Version == DiagnosticPolicyAimProbeVersion {
+		if f.AimCandidateHead.Shared != nil {
+			for _, v := range p.Logits {
+				if math.Abs(v) > 40 {
+					return fmt.Errorf("shared probe logit outside live record bounds")
+				}
+			}
+		}
+		return nil
+	}
+	if !validateProbeLogits(f.AimCandidateHead.Layers[1].Bias) {
+		return fmt.Errorf("invalid constant diagnostic baseline logits")
 	}
 	for _, row := range f.AimCandidateHead.Layers[1].Weight {
 		for _, w := range row {
@@ -60,6 +75,49 @@ type AimCandidateFile struct {
 	Sampler   string                `json:"sampler"`
 	Layers    []DenseLayer          `json:"layers"`
 	Predictor GeometryShotPredictor `json:"predictor"`
+	Shared    *SharedAimScorerFile  `json:"shared_scorer,omitempty"`
+}
+
+// Shared scorer replaces only category logits; the base actor and sampler stay.
+type SharedAimScorerFile struct {
+	Kind       string       `json:"kind"`
+	Layers     []DenseLayer `json:"layers"`
+	Beta       float64      `json:"beta"`
+	ScoreClip  float64      `json:"score_clip"`
+	BetaBounds []float64    `json:"beta_bounds"`
+}
+
+func validateSharedAimScorer(s *SharedAimScorerFile) error {
+	if s == nil {
+		return nil
+	}
+	if (s.Kind != "shared_candidate_causal191_v1" && s.Kind != GeometryDeltaAimKind) || s.ScoreClip != 20 || !reflect.DeepEqual(s.BetaBounds, []float64{-20, 20}) || math.IsNaN(s.Beta) || math.IsInf(s.Beta, 0) || math.Abs(s.Beta) > 20 || len(s.Layers) != 2 {
+		return fmt.Errorf("invalid shared candidate scorer contract")
+	}
+	width := 191
+	hidden := 16
+	if s.Kind == GeometryDeltaAimKind {
+		width = 31
+		hidden = 8
+	}
+	for i, output := range []int{hidden, 1} {
+		l := s.Layers[i]
+		if len(l.Weight) != output || len(l.Bias) != output {
+			return fmt.Errorf("invalid shared candidate output width")
+		}
+		for r, row := range l.Weight {
+			if len(row) != width {
+				return fmt.Errorf("invalid shared candidate input width")
+			}
+			for _, v := range append(append([]float64(nil), row...), l.Bias[r]) {
+				if math.IsNaN(v) || math.IsInf(v, 0) || math.Abs(v) > 1e6 {
+					return fmt.Errorf("invalid shared candidate parameter")
+				}
+			}
+		}
+		width = output
+	}
+	return nil
 }
 
 // The probability event includes the original Gaussian draw and correction.
@@ -70,6 +128,7 @@ type AimCandidateSample struct {
 	Candidates     int        `json:"candidates"`
 	LogProbability float64    `json:"log_probability"`
 	Timing         [2]float64 `json:"timing"`
+	Logits         []float64  `json:"logits,omitempty"`
 }
 
 func validateAimCandidates(f PPOFile) error {
@@ -80,15 +139,25 @@ func validateAimCandidates(f PPOFile) error {
 	if h == nil && f.ActionDistribution == "" {
 		return nil
 	}
+	expectedSampler := "frame_hash_categorical_v1"
+	if h != nil && h.Shared != nil && h.Shared.Kind == GeometryDeltaAimKind {
+		expectedSampler = GeometryDeltaAimSampler
+	}
 	if h == nil || f.ActionDistribution != JointAimCandidateVersion || h.Version != JointAimCandidateVersion ||
 		f.Deterministic || f.ExecutionMode != "" || f.GeometryAimExplore != nil || f.GeometryAimRanker != nil ||
 		f.Features != EquippedWeaponFeatureVersion || f.TargetHead != TargetHeadVersion || f.AimModeHead != PrecisionHeadVersion ||
-		h.Sampler != "frame_hash_categorical_v1" || !reflect.DeepEqual(h.Offsets, []float64{0, -5, -2.5, 2.5, 5}) ||
+		h.Sampler != expectedSampler || !reflect.DeepEqual(h.Offsets, []float64{0, -5, -2.5, 2.5, 5}) ||
 		h.Predictor.GeometryVersion != ActionEffectGeometryVersion || len(h.Layers) != 2 {
 		return fmt.Errorf("invalid joint aim candidate contract")
 	}
 	if err := validateGeometryAimRanker(PPOFile{Features: f.Features, GeometryAimRanker: &GeometryAimRankerFile{Version: GeometryAimRankerVersion, Offsets: h.Offsets, Predictor: h.Predictor}}); err != nil {
 		return err
+	}
+	if err := validateSharedAimScorer(h.Shared); err != nil {
+		return err
+	}
+	if h.Shared != nil && f.DiagnosticAimProbe != nil && f.DiagnosticAimProbe.Version != DiagnosticPolicyAimProbeVersion {
+		return fmt.Errorf("shared scorer cannot use constant one-frame probe")
 	}
 	width := JointAimCandidateWidth
 	for i, output := range []int{64, 25} {
@@ -199,6 +268,18 @@ func (p *PPO) jointAimSample(o Observation, s Sample) (Sample, []float64, bool, 
 	if r == nil || r.Candidates != 25 || math.IsNaN(r.LogProbability) || math.IsInf(r.LogProbability, 0) {
 		return base, nil, false, fmt.Errorf("missing/invalid candidate event")
 	}
+	if p.file.AimCandidateHead.Shared != nil {
+		if len(r.Logits) != 25 {
+			return base, nil, false, fmt.Errorf("missing shared candidate live logits")
+		}
+		for _, v := range r.Logits {
+			if math.IsNaN(v) || math.IsInf(v, 0) || math.Abs(v) > 40 {
+				return base, nil, false, fmt.Errorf("invalid shared candidate live logits")
+			}
+		}
+	} else if len(r.Logits) != 0 {
+		return base, nil, false, fmt.Errorf("unexpected shared candidate live logits")
+	}
 	final, err := ApplyJointAimOffsets(base.Latent, s.AimMode, r.Candidate)
 	if err != nil {
 		return base, nil, false, err
@@ -232,17 +313,26 @@ func (p *PPO) jointAimLogits(o Observation, base Sample) ([]float64, error) {
 		return nil, nil
 	}
 	if probe := p.file.DiagnosticAimProbe; probe != nil {
-		// Validation proved all final-layer weights are exactly zero. Its
-		// logits outside the selected frame are its biases, independent of
-		// hidden activations/hints; no neural shortcut applies to normal models.
-		logits := p.file.AimCandidateHead.Layers[1].Bias
-		if o.Identity.Frame == probe.Frame {
-			logits = probe.Logits
+		if probe.Version == DiagnosticPolicyAimProbeVersion {
+			if o.Identity.Frame == probe.Frame {
+				return append([]float64(nil), probe.Logits...), nil
+			}
+		} else {
+			// Validation proved all final-layer weights are exactly zero. Its
+			// logits outside the selected frame are its biases, independent of
+			// hidden activations/hints; no neural shortcut applies to normal models.
+			logits := p.file.AimCandidateHead.Layers[1].Bias
+			if o.Identity.Frame == probe.Frame {
+				logits = probe.Logits
+			}
+			return append([]float64(nil), logits...), nil
 		}
-		return append([]float64(nil), logits...), nil
 	}
 	timing := [2]float64{float64(o.AgeMS) / 300, float64(o.PreviousCommand.Msec) / 100}
 	hints := make([]float64, 25)
+	causals := make([][]float64, 25)
+	geometryHead := p.file.AimCandidateHead.Shared != nil && p.file.AimCandidateHead.Shared.Kind == GeometryDeltaAimKind
+	geometries := make([][]float64, 25)
 	for k := range hints {
 		candidate := base
 		candidate.Latent, err = ApplyJointAimOffsets(base.Latent, base.AimMode, k)
@@ -253,10 +343,57 @@ func (p *PPO) jointAimLogits(o Observation, base Sample) ([]float64, error) {
 		if e != nil {
 			return nil, e
 		}
-		hints[k], err = scoreGeometryAim(p.file.AimCandidateHead.Predictor, causal, timing)
+		causals[k] = causal
+		if geometryHead {
+			hints[k], geometries[k], err = scoreGeometryAimWithGeometry(p.file.AimCandidateHead.Predictor, causal, timing)
+		} else {
+			hints[k], err = scoreGeometryAim(p.file.AimCandidateHead.Predictor, causal, timing)
+		}
 		if err != nil {
 			return nil, err
 		}
+	}
+	if shared := p.file.AimCandidateHead.Shared; shared != nil {
+		logits := make([]float64, 25)
+		predictor := p.file.AimCandidateHead.Predictor
+		for k, causal := range causals {
+			x := make([]float64, 0, 191)
+			prob := sigmoid(hints[k])
+			baseline := 0.
+			if k == 0 {
+				baseline = 1
+			}
+			if geometryHead {
+				for j, v := range geometries[k] {
+					x = append(x, math.Max(-20, math.Min(20, (v-geometries[0][j])/predictor.Std[185+j])))
+				}
+				dy, dp := p.file.AimCandidateHead.Offsets[k/5], p.file.AimCandidateHead.Offsets[k%5]
+				x = append(x, prob-sigmoid(hints[0]), (dy*dy+dp*dp)/25)
+			} else {
+				for j, v := range causal {
+					x = append(x, math.Max(-20, math.Min(20, (v-predictor.Mean[j])/predictor.Std[j])))
+				}
+				x = append(x, p.file.AimCandidateHead.Offsets[k/5]/5, p.file.AimCandidateHead.Offsets[k%5]/5, prob, sigmoid(hints[0]), prob-sigmoid(hints[0]), baseline)
+			}
+			for i, l := range shared.Layers {
+				y := make([]float64, len(l.Bias))
+				for r, row := range l.Weight {
+					y[r] = l.Bias[r]
+					for j, w := range row {
+						y[r] += w * x[j]
+					}
+					if i == 0 {
+						y[r] = math.Max(0, y[r])
+					}
+				}
+				x = y
+			}
+			logits[k] = math.Max(-20, math.Min(20, x[0])) + shared.Beta*baseline
+			if math.IsNaN(logits[k]) || math.IsInf(logits[k], 0) {
+				return nil, fmt.Errorf("nonfinite shared candidate logits")
+			}
+		}
+		return logits, nil
 	}
 	x, err := JointAimCandidateInputs(f, c, hints, timing)
 	if err != nil {
@@ -321,6 +458,9 @@ func (p *PPO) selectJointAim(o Observation, s *Sample) error {
 		}
 	}
 	s.AimCandidate = &AimCandidateSample{SourceLatent: s.Latent, Candidate: k, Candidates: 25, LogProbability: lp[k], Timing: [2]float64{float64(o.AgeMS) / 300, float64(o.PreviousCommand.Msec) / 100}}
+	if p.file.AimCandidateHead.Shared != nil {
+		s.AimCandidate.Logits = append([]float64(nil), logits...)
+	}
 	s.Latent, err = ApplyJointAimOffsets(s.Latent, s.AimMode, k)
 	return err
 }

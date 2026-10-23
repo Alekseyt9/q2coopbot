@@ -118,7 +118,7 @@ func run() error {
 		return e
 	}
 	if !behavior.IsStochastic() && !(*cudaOnly && behavior.IsDiagnosticAimProbe()) {
-		return fmt.Errorf("deterministic rollout cannot train PPO")
+		return fmt.Errorf("inference-only, deterministic or diagnostic rollout cannot train PPO")
 	}
 	if behavior.ActionDistribution() != "" && !*cudaOnly {
 		return fmt.Errorf("joint action distribution requires CUDA-only export")

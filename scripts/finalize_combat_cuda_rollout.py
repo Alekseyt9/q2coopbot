@@ -31,8 +31,8 @@ def finalize(model_path, data, out):
     if model.get('action_distribution'):
         from combat_joint_aim_policy import JointAim,base_model
         diagnostic_probe=bool(model.get('diagnostic_joint_aim_probe'))
-        core_model=base_model(model,allow_probe=diagnostic_probe)
-        joint=JointAim(model,allow_probe=diagnostic_probe)
+        core_model=base_model(model,allow_probe=diagnostic_probe,allow_shared=True)
+        joint=JointAim(model,allow_probe=diagnostic_probe,allow_shared=True)
     paired = meta.get('paired_adapter_version')
     if paired:
         assert paired == 'coop_primary_native_adapter_v1' and meta['paired_adapter_verified']
@@ -134,6 +134,13 @@ def finalize(model_path, data, out):
             expected_category=torch.tensor([r['sample']['aim_candidate']['log_probability'] if r['sample'].get('aim_candidate') else 0. for r in rows],device='cuda')
             candidate_error=float((log_probability(logits,choice,active)-expected_category).abs().max())
             assert candidate_error<.003, candidate_error
+            if model['aim_candidate_head'].get('shared_scorer'):
+                records=[r['sample']['aim_candidate']['logits'] for r in rows if r['sample'].get('aim_candidate')]
+                assert all(len(v)==25 and all(isinstance(q,(int,float)) for q in v) for v in records)
+                recorded=torch.tensor(records,device='cuda',dtype=logits.dtype).reshape(-1,25)
+                shared_logit_error=float((logits[active]-recorded).abs().max()) if records else 0.
+                shared_probability_error=float((logits[active].softmax(-1)-recorded.softmax(-1)).abs().max()) if records else 0.
+                assert bool(torch.isfinite(recorded).all()) and shared_logit_error<.001 and shared_probability_error<.0001,(shared_logit_error,shared_probability_error)
             # The native exporter accepts first-life rows only.
             uniforms=torch.tensor([frame_uniforms(r['sample']['sampling_seed'],r['frame'],1) for r in rows],device='cuda',dtype=torch.float64)
             assert torch.equal(choose(logits.double(),uniforms[:,0],uniforms[:,1],active),choice),'Frame-hash categorical assignment differs'
@@ -150,10 +157,29 @@ def finalize(model_path, data, out):
                                    weapon if model.get('weapon_head') else None,
                                    feature_mask(x) if model.get('weapon_head') else None)
         log_error = float((lp - torch.tensor([r['sample']['log_probability'] for r in rows], device='cuda')).abs().max())
-        value_error = float((predicted[:, 0] - torch.tensor([r['sample']['value'] for r in rows], device='cuda')).abs().max())
+        value_error = float((predicted[:, 0] - torch.tensor([r['sample']['value'] for r in rows], device='cuda',dtype=predicted.dtype)).abs().max())
+        initial_value_error=value_error
+        critic_precision='float32'
+        bootstrap_prepared=prepared
+        bootstrap_features=nx
+        if value_error>=1e-4:
+            # Match the live Go float64 critic without weakening acceptance.
+            # Recreate inputs from JSON; promoting already-rounded float32
+            # context would retain the error being diagnosed.
+            value=value.double()
+            exact_x=torch.tensor([r['features'] for r in rows],device='cuda',dtype=torch.float64)
+            bootstrap_features=torch.tensor([r['next_features'] for r in rows],device='cuda',dtype=torch.float64)
+            bootstrap_prepared=prepare_context(context,rows,'cuda',dtype=torch.float64) if prepared is not None else None
+            if bootstrap_prepared is not None:
+                predicted,critic_memory_error=sequence(value,bootstrap_prepared,32,True,'value')
+            elif model.get('entity_attention'):
+                predicted=value.single(exact_x)
+            else:predicted=value(exact_x)
+            value_error=float((predicted[:,0]-torch.tensor([r['sample']['value'] for r in rows],device='cuda',dtype=torch.float64)).abs().max())
+            critic_precision='float64_fallback'
         assert log_error < .003 and value_error < 1e-4 and max(actor_memory_error, critic_memory_error) < 2e-5, (
             log_error, value_error, actor_memory_error, critic_memory_error)
-        bootstrap = next_values(value, nx, prepared, reset=reset)
+        bootstrap = next_values(value, bootstrap_features, bootstrap_prepared, reset=reset)
         bootstrap[zero] = 0
         assert bool(torch.isfinite(bootstrap).all())
         values = bootstrap.cpu().tolist()  # Serialization only; neural computation stays on CUDA.
@@ -184,12 +210,20 @@ def finalize(model_path, data, out):
     audit = dict(state='passed', device='cuda', rows=len(rows), context_rows=len(context),
                  log_probability_max_error=log_error, value_max_error=value_error,
                  actor_memory_max_error=actor_memory_error, critic_memory_max_error=critic_memory_error,
+                 critic_precision=critic_precision,initial_float32_value_max_error=initial_value_error,
                  next_resets=int(reset.sum()), zero_bootstraps=int(zero.sum()),
                  native_rollout_sha256=meta['native_rollout_sha256'], model_sha256=sha(model_path),
                  scope='Exact native Step.Next features and reset flags; numerical checks and bootstrap on CUDA. Go performs only native proof, feature extraction and sampled action contract checks.')
     if joint is not None:
         audit.update(action_distribution=model['action_distribution'],candidate_log_probability_max_error=candidate_error,
                      original_latent_transform_verified=True,frame_hash_candidate_assignments_verified=True)
+    if model.get('diagnostic_joint_aim_probe'):
+        audit.update(diagnostic_probe_version=model['diagnostic_joint_aim_probe']['version'],
+                     diagnostic_probe_frame=model['diagnostic_joint_aim_probe']['frame'],
+                     frame_conditioned_logits_verified=True,ordinary_training_eligible=False)
+    if model.get('aim_candidate_head',{}).get('shared_scorer'):
+        audit.update(shared_candidate_all_logits_max_error=shared_logit_error,shared_candidate_all_probabilities_max_error=shared_probability_error,
+                     shared_candidate_frames=len(records),ordinary_training_eligible=False)
     save(out / 'cuda-verification.json', audit)
     sources[str((out / 'cuda-verification.json').resolve())] = sha(out / 'cuda-verification.json')
     meta.update(version='combat_ppo_rollout_v1', numerical_verification='cuda_verified_v1',
@@ -198,6 +232,8 @@ def finalize(model_path, data, out):
     if model.get('diagnostic_joint_aim_probe'):
         meta.update(version='combat_diagnostic_joint_aim_probe_rollout_v1',diagnostic_only=True,ppo_training_ready=False,
                     diagnostic_probe_version=model['diagnostic_joint_aim_probe']['version'])
+    if model.get('aim_candidate_head',{}).get('shared_scorer'):
+        meta.update(shared_scorer_training_supported=False,ppo_training_ready=False)
     if paired:
         meta['paired_training_ready'] = True
         meta['paired_training_scope'] = 'Experimental verified primary learner pilot; scripted peer excluded. Registry-wide eligibility unproven.'

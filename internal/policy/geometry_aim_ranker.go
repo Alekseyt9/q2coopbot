@@ -73,6 +73,12 @@ func validateGeometryAimRanker(f PPOFile) error {
 
 // scoreGeometryAim evaluates learned parameters only during live Decide calls.
 func scoreGeometryAim(p GeometryShotPredictor, causal []float64, timing [2]float64) (float64, error) {
+	value, _, err := scoreGeometryAimWithGeometry(p, causal, timing)
+	return value, err
+}
+
+// Same live-only forecast, with its causal geometry available to shared heads.
+func scoreGeometryAimWithGeometry(p GeometryShotPredictor, causal []float64, timing [2]float64) (float64, []float64, error) {
 	var g []float64
 	var err error
 	if p.Motor != nil {
@@ -85,7 +91,7 @@ func scoreGeometryAim(p GeometryShotPredictor, causal []float64, timing [2]float
 		g, err = ObservedActionGeometryForVersion(causal, p.GeometryVersion)
 	}
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	x := append(append([]float64(nil), causal...), g...)
 	value := p.Bias
@@ -93,9 +99,9 @@ func scoreGeometryAim(p GeometryShotPredictor, causal []float64, timing [2]float
 		value += w * (x[i] - p.Mean[i]) / p.Std[i]
 	}
 	if math.IsNaN(value) || math.IsInf(value, 0) {
-		return 0, fmt.Errorf("nonfinite geometry predictor score")
+		return 0, nil, fmt.Errorf("nonfinite geometry predictor score")
 	}
-	return value, nil
+	return value, g, nil
 }
 
 // Only the learned critic selects among nearby angles. No new random draws,

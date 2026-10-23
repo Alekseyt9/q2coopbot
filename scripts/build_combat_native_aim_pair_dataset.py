@@ -9,6 +9,7 @@ from evaluate_registered_combat_models import read, save, sha
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--proof',action='append',type=Path,required=True)
+    ap.add_argument('--parent-dataset',type=Path)
     for n in ('protocol','out'):ap.add_argument('--'+n,type=Path,required=True)
     a=ap.parse_args();assert not a.out.exists();pins={};rows=[];sources=[]
     def pin(p,expected=None):
@@ -28,13 +29,21 @@ def main():
             assert baseline['health_damage']==item['baseline_health_damage']
             item['label_proof']=str(root.resolve());item['label_proof_sha256']=seal['report_sha256'];rows.append(item)
     assert len(set(sources))==1,'Different source weights require a separately justified data contract'
-    assert len(rows)==16 and len({(r['seed'],r['frame']) for r in rows})==16
-    assert len({r['context_id'] for r in rows})==16
+    expected=17 if a.parent_dataset else 16
+    assert len(rows)==expected and len({(r['seed'],r['frame']) for r in rows})==expected
+    assert len({r['context_id'] for r in rows})==expected
     geometries=sorted({r['geometry'] for r in rows});assert len(geometries)==4
-    assert all(sum(r['geometry']==g for r in rows)==4 for g in geometries)
+    assert sorted(sum(r['geometry']==g for r in rows) for g in geometries)==([4,4,4,5] if a.parent_dataset else [4,4,4,4])
     seeds=collections.Counter(r['seed'] for r in rows);assert max(seeds.values())<=2
     heldout={max(r['seed'] for r in rows if r['geometry']==g) for g in geometries};assert len(heldout)==4
     for r in rows:r['split']='development' if r['seed'] in heldout else 'train'
+    if a.parent_dataset:
+        parent_seal=read(pin(a.parent_dataset/'complete.json'));parent=read(pin(a.parent_dataset/'report.json',parent_seal['report_sha256']))
+        prior=list(map(json.loads,pin(a.parent_dataset/'contexts.jsonl',parent_seal['labels_sha256']).open(encoding='utf-8-sig')))
+        assert parent['contexts']==16 and not parent['fit_admission_passed'] and set(parent['heldout_seeds'])==heldout
+        assert parent['source_weights_sha256']==sources[0]
+        indexed={(r['seed'],r['frame']):r for r in rows}
+        assert all(indexed[(r['seed'],r['frame'])]==r for r in prior),'Existing contexts/splits changed'
     statistics={}
     for split in ('train','development'):
         group=[r for r in rows if r['split']==split]
@@ -49,7 +58,8 @@ def main():
     for p,h in pins.items():assert sha(Path(p))==h,p
     a.out.mkdir(parents=True);dataset=a.out/'contexts.jsonl'
     dataset.write_text(''.join(json.dumps(r,separators=(',',':'),allow_nan=False)+'\n' for r in rows),encoding='utf-8')
-    report=dict(state='complete',version='combat_native_aim_pair_dataset_v1',contexts=16,geometries=geometries,
+    report=dict(state='complete',version='combat_native_aim_pair_dataset_v2' if a.parent_dataset else 'combat_native_aim_pair_dataset_v1',contexts=expected,geometries=geometries,
+        parent_dataset=str(a.parent_dataset.resolve()) if a.parent_dataset else None,
         source_weights_sha256=sources[0],statistics=statistics,heldout_seeds=sorted(heldout),
         split_rule='Maximum selected seed per geometry, whole seed assigned to development. Fixed before alternative labels.',
         protocol_sha256=sha(a.protocol),fit_admission_passed=not reasons,fit_admission_reasons=reasons,

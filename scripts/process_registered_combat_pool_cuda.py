@@ -57,6 +57,7 @@ def main():
     models = {str(pathlib.Path(p['model_path']).resolve()) for p in selected_plans}
     assert len(models) == 1
     model = pathlib.Path(models.pop())
+    assert not read(model).get('diagnostic_joint_aim_probe'), 'One-frame probes require diagnostic per-case CUDA batches, never a merged ordinary PPO corpus'
     assert all(sha(model) == p['model_sha256'] for p in selected_plans)
     if args.config:
         assert args.resume and args.anchor and args.bank

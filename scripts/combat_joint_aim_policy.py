@@ -12,14 +12,18 @@ from combat_action_effect import FactorizedMotor,inputs as motor_inputs,projecte
 
 
 PROBE_VERSION='combat_joint_aim_one_frame_probe_v1'
+POLICY_PROBE_VERSION='combat_joint_aim_one_frame_policy_probe_v2'
+GEOMETRY_KIND='geometry_candidate_delta31_mlp_v1'
+GEOMETRY_SAMPLER='frame_hash_geometry_delta31_v1'
 
 
-def base_model(model,*,allow_probe=False):
+def base_model(model,*,allow_probe=False,allow_shared=False):
     assert model.get('action_distribution')==candidates.VERSION
     assert model.get('aim_candidate_head',{}).get('version')==candidates.VERSION
     assert not model.get('execution_mode') and not model.get('geometry_aim_ranker') and not model.get('geometry_aim_exploration')
     assert not model.get('deterministic') and model['feature_version']=='combat_features_v10'
     assert allow_probe or not model.get('diagnostic_joint_aim_probe'),'Diagnostic one-frame probes cannot enter ordinary training/scoring'
+    assert allow_shared or not model['aim_candidate_head'].get('shared_scorer'),'Shared scorer optimizer/resume is not integrated; use explicit evaluation scoring'
     result=copy.deepcopy(model)
     result.pop('action_distribution');result.pop('aim_candidate_head')
     result.pop('diagnostic_joint_aim_probe',None)
@@ -36,19 +40,28 @@ def _layers(spec,width,outputs):
         width=output
 
 
-def validate(model,*,allow_probe=False):
-    base_model(model,allow_probe=allow_probe)
+def validate(model,*,allow_probe=False,allow_shared=False):
+    base_model(model,allow_probe=allow_probe,allow_shared=allow_shared)
     h=model['aim_candidate_head']
-    assert set(h)=={'version','offset_degrees','sampler','layers','predictor'}
-    assert h['offset_degrees']==list(candidates.OFFSETS) and h['sampler']=='frame_hash_categorical_v1'
+    assert set(h)=={'version','offset_degrees','sampler','layers','predictor'} | ({'shared_scorer'} if h.get('shared_scorer') else set())
+    shared=h.get('shared_scorer')
+    if shared:
+        assert allow_shared and (not model.get('diagnostic_joint_aim_probe') or model['diagnostic_joint_aim_probe']['version']==POLICY_PROBE_VERSION)
+        assert set(shared)=={'kind','layers','beta','score_clip','beta_bounds'}
+        assert shared['kind'] in ('shared_candidate_causal191_v1',GEOMETRY_KIND) and shared['score_clip']==20 and shared['beta_bounds']==[-20,20]
+        assert math.isfinite(shared['beta']) and abs(shared['beta'])<=20
+        _layers(shared['layers'],31 if shared['kind']==GEOMETRY_KIND else 191,(8,1) if shared['kind']==GEOMETRY_KIND else (16,1))
+    expected_sampler=GEOMETRY_SAMPLER if shared and shared['kind']==GEOMETRY_KIND else 'frame_hash_categorical_v1'
+    assert h['offset_degrees']==list(candidates.OFFSETS) and h['sampler']==expected_sampler
     _layers(h['layers'],1359,(64,25))
     probe=model.get('diagnostic_joint_aim_probe')
     if probe:
         assert allow_probe and set(probe)=={'version','frame','logits'}
-        assert probe['version']==PROBE_VERSION and type(probe['frame']) is int and 0<probe['frame']<=2**31-1
-        for values in (probe['logits'],h['layers'][-1]['bias']):
+        assert probe['version'] in (PROBE_VERSION,POLICY_PROBE_VERSION) and type(probe['frame']) is int and 0<probe['frame']<=2**31-1
+        for values in ([probe['logits'],h['layers'][-1]['bias']] if probe['version']==PROBE_VERSION else [probe['logits']]):
             assert len(values)==25 and all(math.isfinite(v) and abs(v)<=100 for v in values) and max(values)-min(values)<=60
-        assert all(v==0 for row in h['layers'][-1]['weight'] for v in row),'Probe requires constant baseline head'
+        if probe['version']==PROBE_VERSION:assert all(v==0 for row in h['layers'][-1]['weight'] for v in row),'Probe requires constant baseline head'
+        if shared:assert all(abs(v)<=40 for v in probe['logits'])
     p=h['predictor'];m=p['motor']
     assert p['kind']=='combat_geometry_shot_predictor_v1' and p['geometry_version']=='combat_predicted_action_geometry_v1'
     assert p['input_width']==214 and p['causal_width']==185 and p['trained_weapon']=='machinegun' and len(p['dataset_sha256'])==64
@@ -80,18 +93,22 @@ class FrozenHints(nn.Module):
         self.requires_grad_(False)
 
     def forward(self,causal,timing):
+        return self.with_geometry(causal,timing)[0]
+
+    def with_geometry(self,causal,timing):
         with torch.no_grad():
             c=causal.detach().double();t=timing.detach().double()
             motor=self.motor((motor_inputs(c,t)-self.motor_mean)/self.motor_std)
             g=projected_geometry(c,motor,False)
-            return (((torch.cat((c,g),-1)-self.shot_mean)/self.shot_std)*self.shot_weight).sum(-1)+self.shot_bias
+            return (((torch.cat((c,g),-1)-self.shot_mean)/self.shot_std)*self.shot_weight).sum(-1)+self.shot_bias,g
 
 
 class JointAim(nn.Module):
-    def __init__(self,model,*,allow_probe=False):
-        super().__init__();validate(model,allow_probe=allow_probe)
+    def __init__(self,model,*,allow_probe=False,allow_shared=False):
+        super().__init__();validate(model,allow_probe=allow_probe,allow_shared=allow_shared)
         probe=model.get('diagnostic_joint_aim_probe')
         self.probe_frame=probe['frame'] if probe else None
+        self.probe_version=probe['version'] if probe else None
         self.register_buffer('probe_logits',torch.tensor(probe['logits'],device='cuda',dtype=torch.float32) if probe else None)
         self.head=candidates.AimCandidateHead()
         with torch.no_grad():
@@ -99,6 +116,17 @@ class JointAim(nn.Module):
                 self.head.layers[index].weight.copy_(torch.tensor(layer['weight'],device='cuda',dtype=torch.float32))
                 self.head.layers[index].bias.copy_(torch.tensor(layer['bias'],device='cuda',dtype=torch.float32))
         self.hints=FrozenHints(model['aim_candidate_head']['predictor'])
+        self.shared=None
+        shared=model['aim_candidate_head'].get('shared_scorer')
+        self.geometry_head=bool(shared and shared['kind']==GEOMETRY_KIND)
+        if shared:
+            width,hidden=(31,8) if self.geometry_head else (191,16)
+            self.shared=nn.Sequential(nn.Linear(width,hidden,device='cuda'),nn.ReLU(),nn.Linear(hidden,1,device='cuda'))
+            with torch.no_grad():
+                for index,layer in zip((0,2),shared['layers']):
+                    self.shared[index].weight.copy_(torch.tensor(layer['weight'],device='cuda',dtype=torch.float32))
+                    self.shared[index].bias.copy_(torch.tensor(layer['bias'],device='cuda',dtype=torch.float32))
+            self.register_buffer('shared_beta',torch.tensor(shared['beta'],device='cuda',dtype=torch.float32))
 
     def action_context(self,features,source,target,mode,vertical,weapon):
         c=fire_inputs(features,target,mode,source,vertical,weapon)
@@ -109,11 +137,14 @@ class JointAim(nn.Module):
         active=candidates.eligible(c)
         if self.probe_frame is not None:
             assert frames is not None and frames.is_cuda and frames.dtype==torch.long and frames.shape==(len(c),),'Probe scoring requires explicit recorded frames'
+        if self.probe_version==PROBE_VERSION:
             constant=self.head.layers[-1].bias[None,:].expand(len(c),-1)
             return torch.where((frames==self.probe_frame)[:,None],self.probe_logits[None,:],constant),active
         # Ineligible rows contribute no categorical event. Avoid forecasting
         # their absent bbox while retaining a differentiable zero head branch.
         hints=torch.zeros((len(c),25),device='cuda',dtype=features.dtype)
+        candidate_context=c[:,None,:].expand(-1,25,-1).clone() if self.shared is not None else None
+        geometry=torch.zeros((len(c),25,29),device='cuda',dtype=torch.float64) if self.geometry_head else None
         if bool(active.any()):
             cc=c[active];count=len(cc)
             expanded=cc[:,None,:].expand(-1,25,-1).clone()
@@ -124,8 +155,27 @@ class JointAim(nn.Module):
             scale=torch.where(modes==1,15./180.,1.).double()
             expanded[:,:,164:166]=(final[:,2:].tanh()*scale[:,None]).reshape(count,25,2).to(expanded.dtype)
             t=timing[active,None,:].expand(-1,25,-1).reshape(-1,2)
-            hints[active]=self.hints(expanded.reshape(-1,185),t).reshape(count,25).to(features.dtype)
-        return self.head(candidates.inputs(features,c,hints,timing.to(features.dtype))),active
+            if self.geometry_head:
+                predicted,g=self.hints.with_geometry(expanded.reshape(-1,185),t)
+                geometry[active]=g.reshape(count,25,29)
+                hints[active]=predicted.reshape(count,25).to(features.dtype)
+            else:hints[active]=self.hints(expanded.reshape(-1,185),t).reshape(count,25).to(features.dtype)
+            if candidate_context is not None:candidate_context[active]=expanded
+        if self.shared is not None:
+            p=hints.sigmoid();ids=torch.arange(25,device='cuda').expand(len(c),-1)
+            offsets=torch.tensor(candidates.OFFSETS,device='cuda',dtype=features.dtype)
+            deltas=torch.stack((offsets[ids//5],offsets[ids%5]),-1)/5
+            if self.geometry_head:
+                relative=((geometry-geometry[:,:1])/self.hints.shot_std[185:214]).clamp(-20,20).to(features.dtype)
+                shared_inputs=torch.cat((relative,(p-p[:,:1])[:,:,None],deltas.square().sum(-1)[:,:,None]),-1)
+            else:
+                normalized=((candidate_context-self.hints.shot_mean[:185].to(features.dtype))/self.hints.shot_std[:185].to(features.dtype)).clamp(-20,20)
+                shared_inputs=torch.cat((normalized,deltas,p[:,:,None],p[:,:1,None].expand(-1,25,-1),(p-p[:,:1])[:,:,None],(ids==0).to(features.dtype)[:,:,None]),-1)
+            logits=self.shared(shared_inputs).squeeze(-1).clamp(-20,20)+self.shared_beta*(ids==0).to(features.dtype)
+        else:logits=self.head(candidates.inputs(features,c,hints,timing.to(features.dtype)))
+        if self.probe_version==POLICY_PROBE_VERSION:
+            logits=torch.where((frames==self.probe_frame)[:,None],self.probe_logits[None,:],logits)
+        return logits,active
 
 
 def events(rows,features,target,mode,vertical,weapon):
@@ -137,7 +187,7 @@ def events(rows,features,target,mode,vertical,weapon):
     active=candidates.eligible(torch.cat((fire_inputs(features,target,mode,source,vertical,weapon),features[:,810:814]),-1))
     present=torch.tensor([a is not None for a in annotations],device='cuda',dtype=torch.bool)
     assert torch.equal(active,present),'Missing or ineligible joint aim event'
-    assert all(a is None or (set(a)=={'source_latent','candidate','candidates','log_probability','timing'} and a['candidates']==25 and math.isfinite(a['log_probability'])) for a in annotations)
+    assert all(a is None or (set(a)=={'source_latent','candidate','candidates','log_probability','timing'} | ({'logits'} if 'logits' in a else set()) and a['candidates']==25 and math.isfinite(a['log_probability'])) for a in annotations)
     final=torch.tensor([r['sample']['latent'] for r in rows],device='cuda',dtype=torch.float64)
     expected=candidates.apply_offsets(source,mode,choice)
     assert bool(torch.isfinite(timing).all()) and float((expected-final).abs().max())<1e-8,'Recorded correction transform differs'

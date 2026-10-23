@@ -24,9 +24,11 @@ def main():
     closed=read(pin(root/'complete.json'));assert closed['version']=='combat_native_aim_pairs_probe_v1' and closed['native_cases']==closed['cuda_cases']
     spec=read(pin(root/'spec.json',closed['spec_sha256']));assert spec['split']=='train' and not spec['training_performed']
     prepared=read(pin(Path(spec['prepared'])/'report.json',spec['prepared_report_sha256']))
-    one_frame=prepared['version']=='combat_one_frame_aim_preparation_v1'
+    one_frame=prepared['version'] in ('combat_one_frame_aim_preparation_v1','combat_one_frame_aim_batch_preparation_v1','combat_one_frame_aim_batch_preparation_v2_policy')
     count=len(spec['variants']);assert count==closed['native_cases']
-    if one_frame:assert len(prepared['contexts'])==1 and count in (2,5)
+    if one_frame:
+        assert 1<=len(prepared['contexts'])<=32
+        assert all(2<=sum(v['context_id']==c['context_id'] for v in spec['variants'])<=25 for c in prepared['contexts'])
     else:assert count==5*len(prepared['contexts'])
     baseline=Path(prepared['baseline']);baseclosed=read(pin(baseline/'complete.json'))
     basepool=read(pin(baseline/'pool/report.json',baseclosed['pool_sha256']));basejobs={j['job']:j for j in basepool['jobs']}
@@ -36,7 +38,7 @@ def main():
     for v in spec['variants']:
         model=read(pin(v['model'],v['model_sha256']));assert model['aim_candidate_head']['layers'][0]==source['aim_candidate_head']['layers'][0]
         if one_frame:
-            probe=model.pop('diagnostic_joint_aim_probe');assert probe['version']=='combat_joint_aim_one_frame_probe_v1' and probe['frame']==v['frame']
+            probe=model.pop('diagnostic_joint_aim_probe');assert probe['version']==prepared.get('probe_version','combat_joint_aim_one_frame_probe_v1') and probe['frame']==v['frame']
             assert model==source,'Neural parameters changed in metadata-only probe'
         model['aim_candidate_head']['layers']=None;s=json.loads(json.dumps(source));s['aim_candidate_head']['layers']=None;assert model==s
     for receipt in closed['cuda_receipts']:
@@ -49,18 +51,19 @@ def main():
             assert meta['version']=='combat_diagnostic_joint_aim_probe_rollout_v1' and meta['diagnostic_only'] and not meta['ppo_training_ready']
         path=pin(folder/'native/replay-0/steps.jsonl');assert meta['source_sha256'][str(path)]==sha(path)
         rows=list(map(json.loads,pin(folder/'cuda/rollout.jsonl',meta['rollout_sha256']).open(encoding='utf-8-sig')))
-        byframe={r['frame']:r for r in rows};steps=[]
+        byframe={r['frame']:r for r in rows};all_steps=[]
         for s in map(json.loads,path.open(encoding='utf-8-sig')):
             o=s['observation'];d=s.get('server_execution') or {}
             if (s['owner']=='provider' and s.get('sample') and s.get('native_step') and o['identity']['life']==1 and o['health']>0
-                and d.get('matched') and d.get('window_exclusive') and d.get('recovery_commands')==0 and o['identity']['frame']<=frame):steps.append(s)
+                and d.get('matched') and d.get('window_exclusive') and d.get('recovery_commands')==0):all_steps.append(s)
+        steps=[s for s in all_steps if s['observation']['identity']['frame']<=frame]
         assert steps and steps[-1]['observation']['identity']['frame']==frame
         capture=read(pin(Path(job['root'])/'report.json'));assert capture['capture_complete'] and capture['provenance_valid']
         result=capture['results'][0];assert result['capture_valid'] and result['dispatch_valid'] and result['seed_confirmed']
         assert result['seed']==job['seed'] and result['generated_fixture']['split']=='train'
         log=pin(Path(result['root'])/'server.log');n=steps[-1]['native_step'];key=(n['spawncount'],n['begin_frame'],n['actor'],n['sequence'])
         with log.open(encoding='utf-8-sig') as stream:shots=[q for q in scan(stream,{key}) if q['eligible']]
-        return dict(steps=steps,rows=byframe,result=result,shots=shots)
+        return dict(steps=steps,all_steps=all_steps,rows=byframe,result=result,shots=shots)
     results=[];labels=[]
     for context in prepared['contexts']:
         ci=context['context_id'];frame=context['frame'];variants=[(i,v) for i,v in enumerate(spec['variants']) if v['context_id']==ci]
@@ -71,9 +74,26 @@ def main():
             and s['sample']['attack']==o['sample']['attack'] and s['sent_command']==o['sent_command']
             and base['rows'][s['observation']['identity']['frame']]['features']==old['rows'][o['observation']['identity']['frame']]['features'] for s,o in zip(bs,os))
         samples=[]
+        full_history_exact=None
+        if prepared['version']=='combat_one_frame_aim_batch_preparation_v2_policy':
+            full_history_exact=len(base['all_steps'])==len(old['all_steps']);forward={};reverse={}
+            for s,o in zip(base['all_steps'],old['all_steps']):
+                f=s['observation']['identity']['frame']
+                full_history_exact=full_history_exact and (
+                    physical_equal_with_entity_bijection(s['observation'],o['observation'],forward,reverse)
+                    and same_draws(s['sample'],o['sample']) and s['sample']['latent']==o['sample']['latent']
+                    and category(s['sample'])==category(o['sample']) and s['sample']['attack']==o['sample']['attack']
+                    and s['sent_command']==o['sent_command'] and ((f in base['rows'])==(f in old['rows']))
+                    and (f not in base['rows'] or base['rows'][f]['features']==old['rows'][f]['features']))
+                sn,on=s.get('next_observation'),o.get('next_observation')
+                if sn is not None and on is not None:
+                    full_history_exact=full_history_exact and physical_equal_with_entity_bijection(sn,on,forward,reverse)
+                else:full_history_exact=full_history_exact and sn==on
+                if not full_history_exact:break
         for index,v in variants:
             current=base if index==bi else load(root/f'case-{index:02d}',jobs[index],frame);steps=current['steps'];issues=[];forward={};reverse={};matched=0
             if not history_exact:issues.append('Baseline failed to reproduce historical actions/features')
+            if full_history_exact is False:issues.append('Baseline failed to reproduce full ordinary-policy trajectory')
             if len(steps)!=len(bs):issues.append('Prefix length differs')
             if current['result']['generated_fixture']!=base['result']['generated_fixture']:issues.append('Fixture differs')
             for s,b in zip(steps,bs):
@@ -83,7 +103,7 @@ def main():
                 if f==frame:
                     if category(ss)!=v['category']:issues.append('Unexpected intervention category')
                     if (ss.get('aim_candidate') or {}).get('timing')!=(bb.get('aim_candidate') or {}).get('timing'):issues.append('Head timing differs at intervention')
-                elif s['sent_command']!=b['sent_command'] or ss['latent']!=bb['latent'] or ss['attack']!=bb['attack'] or category(ss)!=0:
+                elif s['sent_command']!=b['sent_command'] or ss['latent']!=bb['latent'] or ss['attack']!=bb['attack'] or category(ss)!=(category(bb) if one_frame else 0):
                     issues.append(f'Executed prefix differs at {f}');break
                 else:matched+=1
             records=[];target_index=steps[-1]['sample']['target'];enemies=steps[-1]['observation']['enemies']
@@ -108,9 +128,12 @@ def main():
         regressions=[s['category'] for s in accepted if s['health_damage']<b['health_damage']] if b['accepted'] else []
         results.append(dict(context_id=ci,geometry=context['geometry'],seed=context['seed'],frame=frame,baseline_selection_outcome=context['baseline_outcome'],
             historical_actions_features_reproduced=history_exact,baseline_native_outcome_reproduced=b['native_outcome']==context['baseline_outcome'],
+            full_baseline_trajectory_reproduced=full_history_exact,
+            full_baseline_provider_windows=len(base['all_steps']) if full_history_exact is not None else None,
             accepted_alternatives=len(accepted),improving_categories=improvements,regressing_categories=regressions,samples=samples))
         if b['accepted']:
-            row=base['rows'][frame];labels.append(dict(version='combat_native_one_frame_aim_probe_labels_v1' if one_frame and count==2 else 'combat_native_aim_pair_labels_v1',context_id=ci,geometry=context['geometry'],
+            row=base['rows'][frame];labels.append(dict(version='combat_native_one_frame_aim_probe_labels_v1' if one_frame and len(variants)==2 else 'combat_native_aim_pair_labels_v1',context_id=ci,geometry=context['geometry'],
+                split=context.get('split'),purpose=context.get('purpose'),
                 episode=context.get('episode',spec['variants'][bi]['episode']),seed=context['seed'],frame=frame,features=row['features'],sample=row['sample'],
                 predictor_hit_probabilities=context.get('predicted_hit_probabilities'),baseline_health_damage=b['health_damage'],
                 alternatives=[dict(category=s['category'],outcome=s['native_outcome'],health_damage=s['health_damage'],

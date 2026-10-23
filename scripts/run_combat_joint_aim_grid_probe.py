@@ -22,12 +22,14 @@ def main():
     def pin(p,expected=None):
         p=Path(p).resolve();h=sha(p);assert expected is None or h==expected,str(p);pins[str(p)]=h;return p
     seal=read(pin(a.prepared/'complete.json'));prepared=read(pin(a.prepared/'report.json',seal['report_sha256']))
-    one_frame=prepared['version']=='combat_one_frame_aim_preparation_v1'
+    one_frame=prepared['version'] in ('combat_one_frame_aim_preparation_v1','combat_one_frame_aim_batch_preparation_v1','combat_one_frame_aim_batch_preparation_v2_policy')
     paired=one_frame or prepared['version']=='combat_aim_pair_context_preparation_v1'
     assert prepared['state']=='complete' and prepared['device']=='cuda' and (paired or prepared['diagnostic_only'])
     assert not prepared['training_performed'] and not prepared['validation_used']
     if paired:
-        if one_frame:assert len(prepared['contexts'])==1 and len(prepared['variants']) in (2,5) and a.planner
+        if one_frame:
+            assert 1<=len(prepared['contexts'])<=32 and a.planner
+            assert all(2<=sum(v['context_id']==c['context_id'] for v in prepared['variants'])<=25 for c in prepared['contexts'])
         else:assert len(prepared['contexts']) in (4,12) and len(prepared['variants'])==5*len(prepared['contexts'])
         assert len({v['context_id'] for v in prepared['variants']})==len(prepared['contexts'])
     else:assert [v['category'] for v in prepared['variants']]==list(range(25))

@@ -49,7 +49,7 @@ def initialize(model,width=64):
         cell['output']={'weight':[[0.]*width for _ in base[-1]['bias']],'bias':[0.]*len(base[-1]['bias'])};memory[name]=cell
     return {**copy.deepcopy(model),'memory':memory}
 
-def prepare_context(context,rows,device):
+def prepare_context(context,rows,device,dtype=torch.float32):
     selected={(r['seed'],r['index']):i for i,r in enumerate(rows)}
     assert len(selected)==len(rows)
     segments=[];seen=set();last=None
@@ -63,10 +63,10 @@ def prepare_context(context,rows,device):
             row=rows[selected[key]];assert row['features']==c['features'] and row['sample']['memory']==c['memory'] and row['frame']==c['frame']
         segments[-1].append(c);last=c
     assert set(selected)<=seen
-    x=torch.zeros(len(segments),max(map(len,segments)),len(context[0]['features']),device=device)
+    x=torch.zeros(len(segments),max(map(len,segments)),len(context[0]['features']),device=device,dtype=dtype)
     order=[];locations=[]
     for b,segment in enumerate(segments):
-        x[b,:len(segment)]=torch.tensor([c['features'] for c in segment],dtype=torch.float32,device=device)
+        x[b,:len(segment)]=torch.tensor([c['features'] for c in segment],dtype=dtype,device=device)
         for t,c in enumerate(segment):
             k=(c['seed'],c['index'])
             if k in selected:order.append(selected[k]);locations.append((b,t))
@@ -85,7 +85,7 @@ def sequence(model,prepared,bptt=32,check_states=False,name='actor'):
                 for t,c in enumerate(segment):
                     assert c['memory'].get('position',0)==t
                     observed=tokens[b,max(0,t-core.window+1):t].flatten()
-                    expected=torch.tensor(c['memory'][name],dtype=torch.float32,device=x.device)
+                    expected=torch.tensor(c['memory'][name],dtype=x.dtype,device=x.device)
                     assert observed.shape==expected.shape
                     if len(expected):errors.append(float((observed-expected).abs().max()))
         return output[indices[:,0],indices[:,1]][inverse],max(errors,default=0.)
@@ -98,7 +98,7 @@ def sequence(model,prepared,bptt=32,check_states=False,name='actor'):
             for b,segment in enumerate(segments):
                 valid=segment[start:start+bptt]
                 if valid:
-                    expected=torch.tensor([c['memory'][name] for c in valid],dtype=torch.float32,device=x.device)
+                    expected=torch.tensor([c['memory'][name] for c in valid],dtype=x.dtype,device=x.device)
                     errors.append(float((observed[b,:len(valid)]-expected).abs().max()))
         outputs.append(y);h=h.detach()  # current-model prefix; gradients stop every32 frames
     output=torch.cat(outputs,1);result=output[indices[:,0],indices[:,1]][inverse]
@@ -159,6 +159,7 @@ def main():
     model=read(args.model);assert model['kind']=='combat_ppo_v1' and not model['deterministic']
     assert not model.get('execution_mode'), 'Inference-only execution modes cannot train PPO'
     assert not model.get('diagnostic_joint_aim_probe'), 'Diagnostic one-frame probes cannot train ordinary PPO'
+    assert not model.get('aim_candidate_head',{}).get('shared_scorer'), 'Shared scorer optimizer/resume is not integrated'
     if model.get('conditional_fire'):
         from combat_conditional_fire import validate as validate_fire,VERSION as FIRE_VERSION
         validate_fire(model)
