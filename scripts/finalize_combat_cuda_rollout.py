@@ -127,9 +127,19 @@ def finalize(model_path, data, out):
             from combat_joint_aim_policy import events,probabilities
             from combat_aim_candidates import log_probability,frame_uniforms,choose
             source,choice,timing,active=events(rows,x,target,mode,vertical,weapon)
+            score_inputs=None
+            if joint.geometry_head:
+                # The live Go scorer uses float64. Preserve original JSON
+                # inputs for geometry differences and hash-CDF verification;
+                # training and prototype export remain float32 on CUDA.
+                joint.double()
+                sf=torch.tensor([r['features'] for r in rows],device='cuda',dtype=torch.float64)
+                sz=torch.tensor([(r['sample'].get('aim_candidate') or {}).get('source_latent',r['sample']['latent']) for r in rows],device='cuda',dtype=torch.float64)
+                st=torch.tensor([(r['sample'].get('aim_candidate') or {}).get('timing',[0.,0.]) for r in rows],device='cuda',dtype=torch.float64)
+                score_inputs=(sf,sz,st)
             lp,_,logits,score_active=probabilities(joint,raw,std,source,z,attack,vertical,weapon,x,target,mode,choice,timing,
                 getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None),getattr(actor,'conditional_fire_branch',None),
-                frames=torch.tensor([r['frame'] for r in rows],device='cuda',dtype=torch.long))
+                frames=torch.tensor([r['frame'] for r in rows],device='cuda',dtype=torch.long),score_inputs=score_inputs)
             assert torch.equal(active,score_active)
             expected_category=torch.tensor([r['sample']['aim_candidate']['log_probability'] if r['sample'].get('aim_candidate') else 0. for r in rows],device='cuda')
             candidate_error=float((log_probability(logits,choice,active)-expected_category).abs().max())
@@ -223,7 +233,7 @@ def finalize(model_path, data, out):
                      frame_conditioned_logits_verified=True,ordinary_training_eligible=False)
     if model.get('aim_candidate_head',{}).get('shared_scorer'):
         audit.update(shared_candidate_all_logits_max_error=shared_logit_error,shared_candidate_all_probabilities_max_error=shared_probability_error,
-                     shared_candidate_frames=len(records),ordinary_training_eligible=False)
+                     shared_candidate_frames=len(records),shared_candidate_precision='float64' if joint.geometry_head else 'float32',ordinary_training_eligible=False)
     save(out / 'cuda-verification.json', audit)
     sources[str((out / 'cuda-verification.json').resolve())] = sha(out / 'cuda-verification.json')
     meta.update(version='combat_ppo_rollout_v1', numerical_verification='cuda_verified_v1',

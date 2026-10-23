@@ -22,6 +22,19 @@ func TestSharedAimScorerMetadata(t *testing.T) {
 	if err := validateSharedAimScorer(valid()); err != nil {
 		t.Fatal(err)
 	}
+	g := valid()
+	g.Kind = GeometryDeltaAimKind
+	g.Layers = []DenseLayer{{Weight: make([][]float64, 8), Bias: make([]float64, 8)}, {Weight: [][]float64{make([]float64, 8)}, Bias: make([]float64, 1)}}
+	for r := range g.Layers[0].Weight {
+		g.Layers[0].Weight[r] = make([]float64, 31)
+	}
+	if err := validateSharedAimScorer(g); err != nil {
+		t.Fatal(err)
+	}
+	g.Layers[0].Weight[0] = make([]float64, 191)
+	if validateSharedAimScorer(g) == nil {
+		t.Fatal("legacy feature width accepted for geometry delta scorer")
+	}
 	for _, mutate := range []func(*SharedAimScorerFile){
 		func(s *SharedAimScorerFile) { s.Beta = math.NaN() },
 		func(s *SharedAimScorerFile) { s.Beta = 21 },

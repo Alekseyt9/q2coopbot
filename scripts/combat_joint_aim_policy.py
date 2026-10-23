@@ -194,13 +194,14 @@ def events(rows,features,target,mode,vertical,weapon):
     return source.to(features.dtype),choice,timing.to(features.dtype),active
 
 
-def probabilities(joint,raw,std,source,final,attack,vertical,weapon,features,target,mode,choice,timing,motion_branch=None,reference_branch=None,fire_branch=None,*,frames=None):
+def probabilities(joint,raw,std,source,final,attack,vertical,weapon,features,target,mode,choice,timing,motion_branch=None,reference_branch=None,fire_branch=None,*,frames=None,score_inputs=None):
     from combat_precision_head import probabilities as original
     lp,ent=original(raw,std,source,attack,vertical,weapon,features,target,mode,motion_branch,reference_branch,fire_branch)
     # Gaussian terms keep source latent. Only fire sees the final aim.
     before=torch.distributions.Bernoulli(logits=fire_logits(fire_branch,features,raw,target,mode,source,vertical,weapon))
     after=torch.distributions.Bernoulli(logits=fire_logits(fire_branch,features,raw,target,mode,final,vertical,weapon))
-    logits,active=joint(features,source,target,mode,vertical,weapon,timing,frames=frames)
+    sf,sz,st=score_inputs if score_inputs is not None else (features,source,timing)
+    logits,active=joint(sf,sz,target,mode,vertical,weapon,st,frames=frames)
     lp=lp+after.log_prob(attack)-before.log_prob(attack)+candidates.log_probability(logits,choice,active)
     ent=ent+after.entropy()-before.entropy()+candidates.entropy(logits,active)
     assert bool(torch.isfinite(lp).all()) and bool(torch.isfinite(ent).all())
