@@ -1,6 +1,6 @@
 # Near-identity: свежий TRAIN и сравнение бюджетов обновления
 
-23.10.2026. Зафиксирован четырёхраундовый протокол `combat_joint_aim_near_training_protocol_20261023.md`. Первый раунд завершён на GPU; преимущества по реальным боям новых весов пока не измерены. Ни одна версия не заменяет default.
+23.10.2026. Четыре раунда завершены на GPU, сравнение 48 native / 40 CUDA принято. S 4/8 целей, source/B/G по 2/8, rules 6/8. Ни один вариант не прошёл порог расширенной проверки; default не меняется. Полные результаты: [combat_joint_aim_near_budget_results_20261023.md](combat_joint_aim_near_budget_results_20261023.md). Ниже сохранён разбор первого обновления.
 
 ## Общий первый корпус
 
@@ -20,7 +20,7 @@
 
 У S изменение головы заметнее, чем у G, при сохранении общего ограничения. Это факт TRAIN обновления, не доказательство более точной стрельбы или большего числа побед. У всех трёх critic и его Adam совпали; одинаковые данные и critic update дают одинаковый результат. Сохранение predictor, исходного checkpoint в памяти, RNG и неактивных параметров/Adam проверено на CUDA. JSON и checkpoint roundtrip пройдены.
 
-Веса/чекпоинты: `combat-joint-aim-near-budget-round1-v1-20261023/{B,G,S}`. Проверка: `combat-joint-aim-near-budget-round1-proof-v1-20261023`. Новый trainer: `scripts/train_combat_joint_aim_budget_cuda.py`; scope versioned, повторное потребление rollout и несовпадение behavior SHA отвергаются. Реальный resume со следующего собственного корпуса ещё предстоит.
+Веса/чекпоинты первого обновления: `combat-joint-aim-near-budget-round1-v1-20261023/{B,G,S}`. Проверка: `combat-joint-aim-near-budget-round1-proof-v1-20261023`. Новый trainer: `scripts/train_combat_joint_aim_budget_cuda.py`; scope versioned, повторное потребление rollout и несовпадение behavior SHA отвергаются. Реальное продолжение на собственных новых корпусах проверено в раундах 2–4.
 
 ## Следующие раунды и endpoint
 
