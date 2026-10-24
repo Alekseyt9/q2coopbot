@@ -22,6 +22,8 @@ def finalize(model_path, data, out):
     torch.backends.cuda.enable_mem_efficient_sdp(False)
     torch.backends.cuda.enable_math_sdp(True)
     model, meta = read(model_path), read(data / 'report.json')
+    from combat_execution_contract import require_same
+    contract = require_same(model.get('combat_execution_contract'),meta.get('combat_execution_contract'))
     assert meta['version'] == 'combat_ppo_native_cuda_pending_v1'
     assert meta['numerical_verification'] == 'cuda_pending'
     assert meta['model_sha256'] == sha(model_path) and not model['deterministic']
@@ -273,6 +275,8 @@ def finalize(model_path, data, out):
                      diagnostic_stopped_crouch_all_frames=meta.get('diagnostic_stopped_crouch_all_frames',False),ordinary_training_eligible=False)
     if meta.get('diagnostic_checked_ground_request_frame',0) or meta.get('diagnostic_checked_ground_request_all_frames',False):
         audit.update(diagnostic_checked_ground_request_frame=meta.get('diagnostic_checked_ground_request_frame',0),diagnostic_checked_ground_request_all_frames=meta.get('diagnostic_checked_ground_request_all_frames',False),ordinary_training_eligible=False)
+    audit.update(combat_execution_contract=contract,execution_contract_verified=True)
+    meta['combat_execution_contract']=contract
     save(out / 'cuda-verification.json', audit)
     sources[str((out / 'cuda-verification.json').resolve())] = sha(out / 'cuda-verification.json')
     meta.update(version='combat_ppo_rollout_v1', numerical_verification='cuda_verified_v1',

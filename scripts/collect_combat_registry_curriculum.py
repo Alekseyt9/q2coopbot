@@ -23,6 +23,7 @@ def main():
     ap.add_argument('--ppo-ready', action='store_true', help='Require reward SHA matching source checkpoint; allow all registered loadouts')
     ap.add_argument('--record-combat-advice', action='store_true', help='Log hypothetical reactive expert on learner states; never applied')
     ap.add_argument('--train-only', action='store_true', help='Collect training data only; evaluate quality with a separate held-out run')
+    ap.add_argument('--prepare-only',action='store_true',help='Freeze collection plans for a shared multi-model native pool; run no games')
     ap.add_argument('--minimum-free-gib',type=float,default=32.,help='Explicit storage reserve, at least16 GiB; default32')
     ap.add_argument('--train-count',type=int,default=2)
     ap.add_argument('--history-spec',type=pathlib.Path,required=True)
@@ -136,6 +137,11 @@ def main():
             minimum_free_gib=args.minimum_free_gib,free_start_bytes=free_start,
             combat_execution_contract=args.execution_contract,diagnostic_intervention=False, record_combat_advice=args.record_combat_advice, allow_groups=args.allow_groups, train_only=args.train_only, ppo_training_objective=objective, training_performed=False,
             scope='Registered own-policy trajectories. PPO-ready requires checkpoint-aligned reward. Native poses are offline labels only; no validation data enters fitting. Development is not final quality evidence.'))
+        if args.prepare_only:
+            save(out/'prepared.json',dict(state='prepared',protocol_sha256=sha(out/'protocol.json'),
+                native_cases_planned=sum(len(c['seeds']) for c in chosen),native_cases_run=0))
+            save(out/'progress.json',dict(stage='prepared',training_performed=False))
+            return
         shell = shutil.which('pwsh'); assert shell
         literal = lambda p: "'" + str(p).replace("'", "''") + "'"
         command = '& ' + literal(repo / 'scripts/run_registered_combat_pool.ps1')

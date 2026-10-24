@@ -934,7 +934,7 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 	for _, entity := range f.Entities {
 		path := strings.ToLower(d.Config[32+entity.Model])
 		if entity.Number != d.PlayerNumber && entity.Solid != 0 && entity.Solid != 31 {
-			s.CollisionBodies = append(s.CollisionBodies, Object{ID: entity.Number, ModelPath: path, Origin: entity.Origin, Solid: entity.Solid})
+			s.CollisionBodies = append(s.CollisionBodies, Object{ID: entity.Number, ModelPath: path, Origin: entity.Origin, Solid: entity.Solid, Frame: entity.Frame, Angles: entity.Angles, Skin: entity.Skin})
 		}
 		if path == "models/objects/barrels/tris.md2" && entity.Solid != 0 {
 			s.Barrels = append(s.Barrels, Object{ID: entity.Number, Class: "misc_explobox", Origin: entity.Origin, Solid: entity.Solid})
@@ -964,7 +964,7 @@ func (d *Decoder) Snapshot(f Frame) Snapshot {
 				s.Obstacles = append(s.Obstacles, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame})
 			}
 			if monsterDeathAnimation(kind, entity.Frame) {
-				s.Defeated = append(s.Defeated, Object{ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame})
+				s.Defeated = append(s.Defeated, Object{ID: entity.Number, Class: "monster_" + kind, ModelPath: path, Origin: entity.Origin, Frame: entity.Frame, Solid: entity.Solid, Angles: entity.Angles, Skin: entity.Skin})
 				continue
 			}
 			s.Enemies = append(s.Enemies, Object{ModelPath: path, Angles: entity.Angles, Skin: entity.Skin, ID: entity.Number, Class: "monster_" + kind, Origin: entity.Origin, Frame: entity.Frame, Solid: entity.Solid})

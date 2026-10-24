@@ -159,6 +159,7 @@ func EnrichEnvironment(o *Observation, s quake.Snapshot, g *quake.MapInfo) {
 	}
 	o.Pickups = objects(s.Pickups)
 	o.Props = objects(s.Barrels)
+	o.DynamicBodies = observedDynamicBodies(o.Identity.Actor, s, visible)
 	movers := []NearbyMover{}
 	for _, m := range s.Movers {
 		model, ok := g.Model(m.Model)
