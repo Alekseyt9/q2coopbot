@@ -1,0 +1,67 @@
+{
+  "version": "registered_combat_model_comparison_v1",
+  "registry": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-blocked-ground-forks-v2-20261024\\zero\\registry\\index.json",
+  "episodes": [
+    "campaign-base3-site-01-group-parasite-infantry-gunner-weapons",
+    "campaign-city1-site-01-group-parasite-infantry-gunner-weapons",
+    "campaign-jail1-site-01-group-parasite-infantry-gunner-weapons",
+    "campaign-ware2-site-01-group-parasite-infantry-gunner-weapons"
+  ],
+  "count": 1,
+  "max_instances": 16,
+  "minimum_free_gib": 32,
+  "split": "test",
+  "seed_offset": 511,
+  "port": 49500,
+  "training_performed": false,
+  "promotion": false,
+  "variants": [
+    {
+      "label": "source-v11",
+      "mode": "learned",
+      "update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-body-training-workflow-v2-20261024\\round-04\\ablated\\update",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true,
+      "combat_execution_contract": "legacy_v1"
+    },
+    {
+      "label": "typed-initial",
+      "mode": "learned",
+      "update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-type-initial-v1-20261024\\typed",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true,
+      "combat_execution_contract": "legacy_v1"
+    },
+    {
+      "label": "neutral-initial",
+      "mode": "learned",
+      "update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-type-initial-v1-20261024\\neutral",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true,
+      "combat_execution_contract": "legacy_v1"
+    }
+  ],
+  "comparisons": [
+    {
+      "name": "typed-source",
+      "before": "source-v11",
+      "after": "typed-initial"
+    },
+    {
+      "name": "neutral-source",
+      "before": "source-v11",
+      "after": "neutral-initial"
+    }
+  ],
+  "ready": [
+    "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-type-initial-v1-20261024\\typed\\complete.json",
+    "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-type-initial-v1-20261024\\neutral\\complete.json"
+  ],
+  "purpose": "Technical zero-column parity only. Four fresh test recipes, no fitting, no quality/architecture superiority or promotion. Automatic physical plan history exclusion is enabled.",
+  "initialization_protocol": "F:\\src\\quake2\\q2coopbot-src\\docs\\combat_projectile_type_initializer_protocol_20261024.json",
+  "pair_proof": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-type-initial-v1-20261024\\pair-proof.json",
+  "pair_proof_sha256": "9734bb86201936d3731a6309766af5ecd601ebe4639b483c33c4a00412de9c1c"
+}

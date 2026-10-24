@@ -52,7 +52,7 @@ def finalize(model_path, data, out):
                         sha(pathlib.Path(__file__).with_name('combat_cuda_bootstrap.py')),
                     str(pathlib.Path(__file__).with_name('combat_sequence_storage.py').resolve()):
                         sha(pathlib.Path(__file__).with_name('combat_sequence_storage.py'))})
-    weapon_helpers=[pathlib.Path(__file__).with_name('combat_body_features.py').resolve()]
+    weapon_helpers=[pathlib.Path(__file__).with_name(name).resolve() for name in ('combat_body_features.py','combat_projectile_type_features.py')]
     if joint is not None:
         weapon_helpers.append(pathlib.Path(__file__).with_name('combat_target_sampling.py').resolve())
         if model.get('diagnostic_continuation_probe'):

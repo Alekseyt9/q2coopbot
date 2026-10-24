@@ -1,5 +1,6 @@
 """Observed target selection and target-conditioned aim, shared by all actors."""
 from combat_body_features import VERSIONS as BODY_FEATURE_VERSIONS, WIDTH as BODY_FEATURE_WIDTH, legacy as body_legacy
+from combat_projectile_type_features import VERSIONS as PROJECTILE_VERSIONS, WIDTH as PROJECTILE_FEATURE_WIDTH
 import copy
 from combat_weapon_head import probabilities as legacy_probabilities, feature_mask
 from train_combat_bc import torch
@@ -8,6 +9,7 @@ HEAD_VERSION = 'combat_target_conditioned_aim_v1'
 FEATURE_VERSION = 'combat_features_v7'
 WIDTH = 854
 FEATURE_WIDTHS = {FEATURE_VERSION: WIDTH, 'combat_features_v8': 881, 'combat_features_v9': 1121, 'combat_features_v10': 1147, 'combat_features_v11': BODY_FEATURE_WIDTH, 'combat_features_v11_body_ablated': BODY_FEATURE_WIDTH}
+FEATURE_WIDTHS.update({version: PROJECTILE_FEATURE_WIDTH for version in PROJECTILE_VERSIONS})
 OUTPUTS = 45
 
 def validate_model(model):

@@ -1,0 +1,113 @@
+{
+  "version": "registered_combat_model_comparison_v1",
+  "registry": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-blocked-ground-forks-v2-20261024\\zero\\registry\\index.json",
+  "episodes": [
+    "campaign-base3-site-01-group-parasite-infantry-gunner-weapons",
+    "campaign-base3-site-01-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-city1-site-01-group-parasite-infantry-weapons",
+    "campaign-city1-site-02-group-parasite-infantry-gunner-weapons-grenades-recovery",
+    "campaign-jail1-site-01-group-parasite-infantry-weapons",
+    "campaign-jail1-site-02-group-parasite-infantry-gunner-weapons-grenades-recovery",
+    "campaign-ware2-site-02-group-parasite-infantry-gunner-weapons",
+    "campaign-ware2-site-02-group-parasite-infantry-weapons-grenades-recovery"
+  ],
+  "count": 1,
+  "max_instances": 16,
+  "minimum_free_gib": 32,
+  "split": "validation",
+  "seed_offset": 511,
+  "port": 41100,
+  "historical_plans": [],
+  "variants": [
+    {
+      "label": "neutral-initial",
+      "mode": "learned",
+      "update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-type-initial-v1-20261024\\neutral",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true,
+      "combat_execution_contract": "legacy_v1"
+    },
+    {
+      "label": "neutral-trained",
+      "mode": "learned",
+      "update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\proj-type-ppo-v1-20261024\\round-04\\neutral\\update",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true,
+      "combat_execution_contract": "legacy_v1"
+    },
+    {
+      "label": "typed-initial",
+      "mode": "learned",
+      "update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-type-initial-v1-20261024\\typed",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true,
+      "combat_execution_contract": "legacy_v1"
+    },
+    {
+      "label": "typed-trained",
+      "mode": "learned",
+      "update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\proj-type-ppo-v1-20261024\\round-04\\typed\\update",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true,
+      "combat_execution_contract": "legacy_v1"
+    },
+    {
+      "label": "rules",
+      "mode": "rules",
+      "deterministic": false,
+      "cuda_replay": false
+    }
+  ],
+  "comparisons": [
+    {
+      "name": "typed-neutral-initial",
+      "before": "neutral-initial",
+      "after": "typed-trained"
+    },
+    {
+      "name": "typed-neutral-trained",
+      "before": "neutral-trained",
+      "after": "typed-trained"
+    },
+    {
+      "name": "typed-typed-initial",
+      "before": "typed-initial",
+      "after": "typed-trained"
+    },
+    {
+      "name": "typed-rules",
+      "before": "rules",
+      "after": "typed-trained"
+    }
+  ],
+  "ready": [
+    "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\proj-type-ppo-v1-20261024\\round-04\\typed\\update\\complete.json",
+    "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\proj-type-ppo-v1-20261024\\round-04\\neutral\\update\\complete.json"
+  ],
+  "training_performed": false,
+  "promotion": false,
+  "experiment_protocol": "F:\\src\\quake2\\q2coopbot-src\\docs\\combat_projectile_type_training_protocol_20261024.json",
+  "experiment_protocol_sha256": "fd576cb360b2dcb2fdd68197a50aea72fbcf379009a98a590862ea67d267935a",
+  "expansion_gate": {
+    "additional_goals_over_neutral_trained": 2,
+    "additional_goals_over_typed_initial": 1,
+    "goals_at_least_neutral_initial": true,
+    "goals_at_least_rules": true,
+    "deaths_no_more_than": [
+      "neutral-trained",
+      "rules"
+    ],
+    "received_compare_to": [
+      "neutral-trained",
+      "rules"
+    ],
+    "received_numerator": 11,
+    "received_denominator": 10,
+    "automatic_promotion": false
+  },
+  "purpose": "Fixed final endpoints after four equal-budget rounds, no held-out fitting or checkpoint selection. Main control retains occupied projectile slots and hides class only."
+}

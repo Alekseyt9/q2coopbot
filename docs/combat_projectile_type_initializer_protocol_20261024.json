@@ -1,0 +1,20 @@
+{
+  "version": "combat_projectile_type_input_ppo_v1",
+  "parent_scope": "combat_body_input_ppo_v2",
+  "parent_width": 1469,
+  "width": 1489,
+  "source": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-body-training-workflow-v2-20261024\\round-04\\ablated\\update",
+  "source_seal_sha256": "08d9ff94b0b15eb9b303e44a325c596f94270dc9fa5b08c3728003066b4009a6",
+  "source_weights_sha256": "dca2e0cb8c7805324c4291cb3ad5dae4e3d01338bb94259dd0bb9a4424bf44fe",
+  "source_checkpoint_sha256": "258e9442d9840590512daab90d513fb1c456364a92564b0307114e082631fa51",
+  "corpus": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-body-training-workflow-v2-20261024\\round-04\\ablated\\corpus",
+  "corpus_seal_sha256": "57769cc28f5ede6686a75a219f950c6fe85afdd0e6c107c849cee3e0a89cc7a9",
+  "corpus_behavior_weights_sha256": "6d19072a8232b60df35a06b71403b4c203368a2cec1d25853c40722073c5dd64",
+  "modes": [
+    "typed",
+    "neutral"
+  ],
+  "initialization_only": true,
+  "training_performed": false,
+  "scope": "Same source network, seven actor Adam groups, critic moments and RNG. Twenty zero columns; one fresh type-input Adam group. Prior consumed own TRAIN rows only for equivalence/resume probes, no new fitting or quality selection."
+}

@@ -1,0 +1,100 @@
+{
+  "registry": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-blocked-ground-forks-v2-20261024\\cost\\registry\\index.json",
+  "episodes": [
+    "campaign-base3-site-01-group-parasite-infantry-gunner-weapons",
+    "campaign-base3-site-01-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-base3-site-02-group-parasite-infantry-gunner-weapons",
+    "campaign-base3-site-02-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-base3-site-01-group-parasite-infantry-weapons",
+    "campaign-base3-site-02-group-parasite-infantry-gunner-weapons-grenades-recovery",
+    "campaign-city1-site-01-group-parasite-infantry-gunner-weapons",
+    "campaign-city1-site-01-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-city1-site-02-group-parasite-infantry-gunner-weapons",
+    "campaign-city1-site-02-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-city1-site-01-group-parasite-infantry-weapons",
+    "campaign-city1-site-02-group-parasite-infantry-gunner-weapons-grenades-recovery",
+    "campaign-jail1-site-01-group-parasite-infantry-gunner-weapons",
+    "campaign-jail1-site-01-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-jail1-site-02-group-parasite-infantry-gunner-weapons",
+    "campaign-jail1-site-02-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-jail1-site-01-group-parasite-infantry-weapons",
+    "campaign-jail1-site-02-group-parasite-infantry-gunner-weapons-grenades-recovery",
+    "campaign-ware2-site-01-group-parasite-infantry-gunner-weapons",
+    "campaign-ware2-site-01-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-ware2-site-02-group-parasite-infantry-gunner-weapons",
+    "campaign-ware2-site-02-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-ware2-site-01-group-parasite-infantry-weapons",
+    "campaign-ware2-site-02-group-parasite-infantry-gunner-weapons-grenades-recovery"
+  ],
+  "rounds": 4,
+  "cases_per_update": 24,
+  "actor_steps": 30,
+  "critic_steps": 40,
+  "target_full_kl": 0.005,
+  "target_base_kl": 0.0025,
+  "reward_sha256": "e72591c6d24a330f2183cf48771ac62fed9e3a3f0b0014d94e0e549e69bb1867",
+  "max_instances": 16,
+  "timescale": 2,
+  "version": "combat_projectile_type_input_ppo_v1",
+  "root_source_weights_sha256": "dca2e0cb8c7805324c4291cb3ad5dae4e3d01338bb94259dd0bb9a4424bf44fe",
+  "initialization_protocol": "F:\\src\\quake2\\q2coopbot-src\\docs\\combat_projectile_type_initializer_protocol_20261024.json",
+  "initialization_protocol_sha256": "0cdcd455c0bd98176cb35004b1b97913e5eb857d11a85e756cc6eb50baf6f2d8",
+  "initial_sources": {
+    "typed": {
+      "path": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-type-initial-v1-20261024\\typed",
+      "seal_sha256": "e66e929d34906464fe5b9434a0d6d56b5fb491a7031164d0e736edd8c74cc9db",
+      "state": "complete",
+      "weights_sha256": "4867d17ac6385a4cc78a3f97f86d782b2a1e07616b4295d5c4f6dd90f91d40e5",
+      "checkpoint_sha256": "6f4835f352808b24c118ddc5b16258dc3229d5dba40d09c6e6e4079ac34b00b3",
+      "report_sha256": "06d9232b69bfb38e9ff410f1c270fd1ea82113b62705d0ecd5986e7bf5935180"
+    },
+    "neutral": {
+      "path": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-type-initial-v1-20261024\\neutral",
+      "seal_sha256": "1af227098023a847ad23213177d23e904ea6114b9ace5011b3e8e0069bcf83d3",
+      "state": "complete",
+      "weights_sha256": "f99f49f28d2d6b0b566d259484fb58f15a4b181e5477f9d32e9a2a9aed961d77",
+      "checkpoint_sha256": "5fc594e5e1f462b5f2f72a75313f1df4c0f9c0dbd39fcb2004b47d1d623263d2",
+      "report_sha256": "12a5bab54cb36ec7e2003cd1bbccee9383dfdf9da20669b88b7a9edc38ab1d90"
+    }
+  },
+  "features_by_arm": {
+    "typed": "combat_features_v12_projectile_types",
+    "neutral": "combat_features_v12_projectile_types_neutral"
+  },
+  "group_lrs": [
+    3e-05,
+    3e-05,
+    0.0003,
+    0.0003,
+    0.0003,
+    3e-05,
+    3e-05,
+    3e-05
+  ],
+  "shared_input_bias": true,
+  "parity_audit": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-type-parity-recovery-v1-20261024\\parity-audit\\report.json",
+  "parity_report_sha256": "712f7e22b75aedc1cf1cf24504cd82f8cd7f69390980360d012d820a9622edd4",
+  "pair_proof": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-type-initial-v1-20261024\\pair-proof.json",
+  "pair_proof_sha256": "9734bb86201936d3731a6309766af5ecd601ebe4639b483c33c4a00412de9c1c",
+  "historical_plans": [],
+  "train_offset": 476,
+  "port": 41100,
+  "expansion_gate": {
+    "additional_goals_over_neutral_trained": 2,
+    "additional_goals_over_typed_initial": 1,
+    "goals_at_least_neutral_initial": true,
+    "goals_at_least_rules": true,
+    "deaths_no_more_than": [
+      "neutral-trained",
+      "rules"
+    ],
+    "received_compare_to": [
+      "neutral-trained",
+      "rules"
+    ],
+    "received_numerator": 11,
+    "received_denominator": 10,
+    "automatic_promotion": false
+  },
+  "scope": "Four24case own-policy rounds per arm, same source network/Adam/RNG and eight-group scope. Typed class versus neutral presence only. Reward unchanged. Fresh registry seeds, native16slots x2, fitting/NN checks CUDA only, final round04 endpoints only. Failed/partial stages preserved; no automatic promotion."
+}
