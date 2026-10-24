@@ -1,0 +1,94 @@
+{
+  "version": "registered_combat_model_comparison_v1",
+  "registry": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-enemy-projectile-curriculum-v1-20261024\\registry\\index.json",
+  "episodes": [
+    "campaign-base3-site-02-group-soldier-light-gunner-blaster",
+    "campaign-city1-site-02-group-soldier-light-gunner-blaster",
+    "campaign-jail1-site-02-group-soldier-light-gunner-blaster",
+    "campaign-ware2-site-02-group-soldier-light-gunner-blaster",
+    "campaign-base3-site-01-group-parasite-soldier-light-gunner-blaster",
+    "campaign-city1-site-01-group-parasite-soldier-light-gunner-blaster",
+    "campaign-jail1-site-01-group-parasite-soldier-light-gunner-blaster",
+    "campaign-ware2-site-01-group-parasite-soldier-light-gunner-blaster",
+    "campaign-base3-site-01-group-soldier-light-gunner-machinegun",
+    "campaign-city1-site-01-group-soldier-light-gunner-machinegun",
+    "campaign-jail1-site-01-group-soldier-light-gunner-machinegun",
+    "campaign-ware2-site-01-group-soldier-light-gunner-machinegun",
+    "campaign-base3-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-city1-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-jail1-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-ware2-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-base3-site-02-group-soldier-light-gunner-weapons",
+    "campaign-city1-site-02-group-soldier-light-gunner-weapons",
+    "campaign-jail1-site-02-group-soldier-light-gunner-weapons",
+    "campaign-ware2-site-02-group-soldier-light-gunner-weapons",
+    "campaign-base3-site-01-group-parasite-soldier-light-gunner-weapons",
+    "campaign-city1-site-01-group-parasite-soldier-light-gunner-weapons",
+    "campaign-jail1-site-01-group-parasite-soldier-light-gunner-weapons",
+    "campaign-ware2-site-01-group-parasite-soldier-light-gunner-weapons"
+  ],
+  "count": 1,
+  "max_instances": 8,
+  "minimum_free_gib": 32,
+  "split": "confirmation",
+  "seed_offset": 1,
+  "port": 41500,
+  "historical_plans": [],
+  "variants": [
+    {
+      "label": "source",
+      "mode": "learned",
+      "update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\enemy-projectile-ppo-v1-20261024\\round-02\\neutral\\update",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true,
+      "combat_execution_contract": "legacy_v1"
+    },
+    {
+      "label": "candidate",
+      "mode": "learned",
+      "policy_artifact": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-blaster-exploration-preflight-v1-20261024\\evaluation-policy",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true,
+      "combat_execution_contract": "legacy_v1"
+    },
+    {
+      "label": "rules",
+      "mode": "rules",
+      "deterministic": false,
+      "cuda_replay": false
+    }
+  ],
+  "comparisons": [
+    {
+      "name": "candidate-source",
+      "before": "source",
+      "after": "candidate"
+    },
+    {
+      "name": "candidate-rules",
+      "before": "rules",
+      "after": "candidate"
+    }
+  ],
+  "ready": [
+    "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\enemy-projectile-ppo-v1-20261024\\round-02\\neutral\\update\\complete.json",
+    "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-blaster-exploration-preflight-v1-20261024\\evaluation-policy\\complete.json"
+  ],
+  "training_performed": false,
+  "promotion": false,
+  "experiment_protocol": "F:\\src\\quake2\\q2coopbot-src\\docs\\combat_blaster_exploration_confirmation_protocol_20261024.json",
+  "experiment_protocol_sha256": "4214acec1aae8c8d5e825e4112f08538287bf6364b2cc6b674d70db528c4a0ae",
+  "expansion_gate": {
+    "additional_goals_over_source": 2,
+    "additional_goals_over_rules": 3,
+    "deaths_no_more_than": [
+      "source",
+      "rules"
+    ],
+    "received_numerator": 11,
+    "received_denominator": 10,
+    "automatic_promotion": false
+  }
+}

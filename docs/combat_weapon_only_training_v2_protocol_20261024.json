@@ -1,0 +1,89 @@
+{
+  "version": "combat_observed_weapon_residual_only_ppo_v1",
+  "rounds": 1,
+  "cases_per_update": 24,
+  "actor_steps": 30,
+  "critic_steps": 40,
+  "group_lrs": [
+    0.0003
+  ],
+  "target_full_kl": 0.005,
+  "target_base_kl": 0.0025,
+  "reward_sha256": "e72591c6d24a330f2183cf48771ac62fed9e3a3f0b0014d94e0e549e69bb1867",
+  "registry": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-enemy-projectile-curriculum-v1-20261024\\registry\\index.json",
+  "episodes": [
+    "campaign-base3-site-02-group-soldier-light-gunner-blaster",
+    "campaign-city1-site-02-group-soldier-light-gunner-blaster",
+    "campaign-jail1-site-02-group-soldier-light-gunner-blaster",
+    "campaign-ware2-site-02-group-soldier-light-gunner-blaster",
+    "campaign-base3-site-01-group-parasite-soldier-light-gunner-blaster",
+    "campaign-city1-site-01-group-parasite-soldier-light-gunner-blaster",
+    "campaign-jail1-site-01-group-parasite-soldier-light-gunner-blaster",
+    "campaign-ware2-site-01-group-parasite-soldier-light-gunner-blaster",
+    "campaign-base3-site-01-group-soldier-light-gunner-machinegun",
+    "campaign-city1-site-01-group-soldier-light-gunner-machinegun",
+    "campaign-jail1-site-01-group-soldier-light-gunner-machinegun",
+    "campaign-ware2-site-01-group-soldier-light-gunner-machinegun",
+    "campaign-base3-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-city1-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-jail1-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-ware2-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-base3-site-02-group-soldier-light-gunner-weapons",
+    "campaign-city1-site-02-group-soldier-light-gunner-weapons",
+    "campaign-jail1-site-02-group-soldier-light-gunner-weapons",
+    "campaign-ware2-site-02-group-soldier-light-gunner-weapons",
+    "campaign-base3-site-01-group-parasite-soldier-light-gunner-weapons",
+    "campaign-city1-site-01-group-parasite-soldier-light-gunner-weapons",
+    "campaign-jail1-site-01-group-parasite-soldier-light-gunner-weapons",
+    "campaign-ware2-site-01-group-parasite-soldier-light-gunner-weapons"
+  ],
+  "max_instances": 8,
+  "timescale": 2,
+  "train_offset": 20,
+  "port": 41600,
+  "historical_plans": [],
+  "root_source_weights_sha256": "5dcf0d640d28394817bc105a58b379e4e6723eee747867d16a0cfbd87535ea0c",
+  "initialization_protocol": "F:\\src\\quake2\\q2coopbot-src\\docs\\combat_weapon_only_initializer_protocol_20261024.json",
+  "initialization_protocol_sha256": "aa633f57ed8d33da740f932693e8b5cae71f991f3c113b121d296584933d2733",
+  "initializer_complete": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-initial-v1-20261024\\complete.json",
+  "initializer_complete_sha256": "c292b177120252cec887f24937e3f2295742c1007f7c8f1ae003dc279879912b",
+  "initial_sources": {
+    "control": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-initial-v1-20261024\\control",
+    "explore": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-initial-v1-20261024\\explore"
+  },
+  "pre_fit_exposure": {
+    "first_update_minimum_enemy_velocity_rows": 0,
+    "first_update_minimum_enemy_velocity_cases": 0,
+    "maximum_velocity_error": 10.0
+  },
+  "weapon_exposure": {
+    "minimum_opportunity_rows": 8,
+    "minimum_opportunity_cases": 2,
+    "minimum_explore_choice_cases": 2
+  },
+  "screen_gate": {
+    "additional_goals_over_control_trained": 2,
+    "additional_goals_over_explore_static": 1,
+    "goals_at_least_rules": true,
+    "deaths_no_more_than": [
+      "control-trained",
+      "rules"
+    ],
+    "received_numerator": 11,
+    "received_denominator": 10,
+    "automatic_promotion": false
+  },
+  "scope": "Revised data admission for a weapon-only pilot after original v1 failed an inherited projectile-learning coverage gate. Reuse all48 own-policy TRAIN battles, original control update retained, one fresh explore update with frozen nonweapon parameters/outputs. Same predeclared eight-condition five-variant screen and quality gate. No automatic promotion or campaign/coop claim.",
+  "experiment_revision": "frozen_projectile_weapon_admission_v2",
+  "original_failed_workflow": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-training-v1-20261024",
+  "original_failure_sha256": "c873572ffaae9d1c28337b7a3a9cdd0aeaa81ce16bcb39c22715df68b56575df",
+  "reuse_native_cases": 48,
+  "new_native_train_cases": 0,
+  "trained_updates": {
+    "control": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-training-v1-20261024\\control\\update",
+    "explore": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-training-v2-20261024\\explore\\update"
+  },
+  "retained_control_training_protocol": "F:\\src\\quake2\\q2coopbot-src\\docs\\combat_weapon_only_training_protocol_20261024.json",
+  "retained_control_training_protocol_sha256": "74bc160b555ca17c90df18e4a7c87105dd7d0bc925a7e403671b1fa21f092ec0",
+  "admission_rationale": "Original v1 stops at enemy bolt velocity exposure 7<8 before explore fitting. V2 explicitly studies weapon residual only: source projectile/body/memory and all nonweapon outputs must remain frozen, verified by CUDA initializer and dedicated trainer. Enemy velocity frequency is descriptive; no-infighting, velocity error bound, grenade presence, weapon opportunities/choices, complete native credit/advantage remain mandatory. All48 existing own-policy TRAIN captures retained, no replay/resampling, no evaluation outcomes observed, no reward/KL/optimizer/screen gate changes. Control update is retained as-is from original v1 protocol and is not relabeled as v2 fitting."
+}

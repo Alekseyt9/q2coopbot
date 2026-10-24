@@ -1,0 +1,23 @@
+{
+  "version": "combat_blaster_exploration_confirmation_v1",
+  "selection": "Fixed BT4 from own-TRAIN diagnosis, admitted by closed eight-condition fresh screen. No parameter tuning or fitting on either evaluation.",
+  "model_sha256": {
+    "source": "5dcf0d640d28394817bc105a58b379e4e6723eee747867d16a0cfbd87535ea0c",
+    "candidate": "d697fb2d59ed4def744171ab4959fb9e4864f62156d45f97130aff0badc2fa30"
+  },
+  "gate": {
+    "additional_goals_over_source": 2,
+    "additional_goals_over_rules": 3,
+    "deaths_no_more_than": [
+      "source",
+      "rules"
+    ],
+    "received_numerator": 11,
+    "received_denominator": 10,
+    "automatic_promotion": false
+  },
+  "native_cases": 72,
+  "cuda_cases": 48,
+  "training_performed": false,
+  "scope": "24 fresh paired confirmation recipes: four maps, two sites, duos/trios, eight each blaster/machinegun/weapons. One independent seed per recipe, source versus fixed BT4 versus rules. GPU replay only, no fitting, selection or automatic promotion. Temporary pool cap8 for Windows commit pressure. This remains a small registered-combat confirmation, not campaign/human-coop acceptance."
+}

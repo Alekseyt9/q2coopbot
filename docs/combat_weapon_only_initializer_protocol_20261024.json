@@ -1,0 +1,15 @@
+{
+  "version": "combat_observed_weapon_residual_only_ppo_v1",
+  "profiles": {
+    "control": 1,
+    "explore": 4
+  },
+  "source_weights_sha256": "5dcf0d640d28394817bc105a58b379e4e6723eee747867d16a0cfbd87535ea0c",
+  "confirmation_report": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-blaster-exploration-confirmation-v1-20261024\\result\\report.json",
+  "confirmation_report_sha256": "7072b996fbb4bfc4554783dc9d471428402668bdd27fb36b80dbd59d3f2133cd",
+  "own_train_data": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\enemy-projectile-ppo-v1-20261024\\round-03\\neutral\\corpus\\processing-train\\case-0029\\cuda",
+  "own_train_split": "train",
+  "scope": "Initializer only. Identical tensors/Adam/RNG/history, inherited active weapon moments, separate explicit scope, other actor frozen. Disposable CUDA actor/critic steps are discarded. No fitting/promotion.",
+  "own_train_plan": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\enemy-projectile-ppo-v1-20261024\\round-03\\neutral\\corpus\\train-plan.json",
+  "own_train_plan_sha256": "4ffbea33d8d00388a5277f15d94786d1ea52397e697053a0361ff8f9ef08c94a"
+}

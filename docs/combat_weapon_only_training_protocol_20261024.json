@@ -1,0 +1,77 @@
+{
+  "version": "combat_observed_weapon_residual_only_ppo_v1",
+  "rounds": 1,
+  "cases_per_update": 24,
+  "actor_steps": 30,
+  "critic_steps": 40,
+  "group_lrs": [
+    0.0003
+  ],
+  "target_full_kl": 0.005,
+  "target_base_kl": 0.0025,
+  "reward_sha256": "e72591c6d24a330f2183cf48771ac62fed9e3a3f0b0014d94e0e549e69bb1867",
+  "registry": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-enemy-projectile-curriculum-v1-20261024\\registry\\index.json",
+  "episodes": [
+    "campaign-base3-site-02-group-soldier-light-gunner-blaster",
+    "campaign-city1-site-02-group-soldier-light-gunner-blaster",
+    "campaign-jail1-site-02-group-soldier-light-gunner-blaster",
+    "campaign-ware2-site-02-group-soldier-light-gunner-blaster",
+    "campaign-base3-site-01-group-parasite-soldier-light-gunner-blaster",
+    "campaign-city1-site-01-group-parasite-soldier-light-gunner-blaster",
+    "campaign-jail1-site-01-group-parasite-soldier-light-gunner-blaster",
+    "campaign-ware2-site-01-group-parasite-soldier-light-gunner-blaster",
+    "campaign-base3-site-01-group-soldier-light-gunner-machinegun",
+    "campaign-city1-site-01-group-soldier-light-gunner-machinegun",
+    "campaign-jail1-site-01-group-soldier-light-gunner-machinegun",
+    "campaign-ware2-site-01-group-soldier-light-gunner-machinegun",
+    "campaign-base3-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-city1-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-jail1-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-ware2-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-base3-site-02-group-soldier-light-gunner-weapons",
+    "campaign-city1-site-02-group-soldier-light-gunner-weapons",
+    "campaign-jail1-site-02-group-soldier-light-gunner-weapons",
+    "campaign-ware2-site-02-group-soldier-light-gunner-weapons",
+    "campaign-base3-site-01-group-parasite-soldier-light-gunner-weapons",
+    "campaign-city1-site-01-group-parasite-soldier-light-gunner-weapons",
+    "campaign-jail1-site-01-group-parasite-soldier-light-gunner-weapons",
+    "campaign-ware2-site-01-group-parasite-soldier-light-gunner-weapons"
+  ],
+  "max_instances": 8,
+  "timescale": 2,
+  "train_offset": 20,
+  "port": 41600,
+  "historical_plans": [],
+  "root_source_weights_sha256": "5dcf0d640d28394817bc105a58b379e4e6723eee747867d16a0cfbd87535ea0c",
+  "initialization_protocol": "F:\\src\\quake2\\q2coopbot-src\\docs\\combat_weapon_only_initializer_protocol_20261024.json",
+  "initialization_protocol_sha256": "aa633f57ed8d33da740f932693e8b5cae71f991f3c113b121d296584933d2733",
+  "initializer_complete": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-initial-v1-20261024\\complete.json",
+  "initializer_complete_sha256": "c292b177120252cec887f24937e3f2295742c1007f7c8f1ae003dc279879912b",
+  "initial_sources": {
+    "control": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-initial-v1-20261024\\control",
+    "explore": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-initial-v1-20261024\\explore"
+  },
+  "pre_fit_exposure": {
+    "first_update_minimum_enemy_velocity_rows": 8,
+    "first_update_minimum_enemy_velocity_cases": 2,
+    "maximum_velocity_error": 10.0
+  },
+  "weapon_exposure": {
+    "minimum_opportunity_rows": 8,
+    "minimum_opportunity_cases": 2,
+    "minimum_explore_choice_cases": 2
+  },
+  "screen_gate": {
+    "additional_goals_over_control_trained": 2,
+    "additional_goals_over_explore_static": 1,
+    "goals_at_least_rules": true,
+    "deaths_no_more_than": [
+      "control-trained",
+      "rules"
+    ],
+    "received_numerator": 11,
+    "received_denominator": 10,
+    "automatic_promotion": false
+  },
+  "scope": "One matched own-policy update per arm; 24 TRAIN cases each, separate seeds, CUDA-only fitting/verification. Only weapon residual learns, other actor outputs frozen on identical inputs. Fresh eight-condition screen compares trained control/explore, untrained source/explore and rules. No evaluation fitting, intermediate selection or automatic promotion. Expansion gate does not prove campaign/coop superiority."
+}

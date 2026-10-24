@@ -1,0 +1,107 @@
+{
+  "version": "registered_combat_model_comparison_v1",
+  "registry": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-enemy-projectile-curriculum-v1-20261024\\registry\\index.json",
+  "episodes": [
+    "campaign-base3-site-02-group-soldier-light-gunner-blaster",
+    "campaign-city1-site-02-group-soldier-light-gunner-blaster",
+    "campaign-jail1-site-02-group-soldier-light-gunner-blaster",
+    "campaign-ware2-site-02-group-soldier-light-gunner-blaster",
+    "campaign-base3-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-city1-site-02-group-parasite-soldier-light-gunner-machinegun",
+    "campaign-base3-site-01-group-parasite-soldier-light-gunner-weapons",
+    "campaign-city1-site-01-group-parasite-soldier-light-gunner-weapons"
+  ],
+  "count": 1,
+  "max_instances": 8,
+  "minimum_free_gib": 32,
+  "split": "validation",
+  "seed_offset": 2,
+  "port": 41700,
+  "historical_plans": [],
+  "variants": [
+    {
+      "label": "source",
+      "mode": "learned",
+      "update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\enemy-projectile-ppo-v1-20261024\\round-02\\neutral\\update",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true,
+      "combat_execution_contract": "legacy_v1"
+    },
+    {
+      "label": "control-trained",
+      "mode": "learned",
+      "update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-training-v1-20261024\\control\\update",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true,
+      "combat_execution_contract": "legacy_v1"
+    },
+    {
+      "label": "explore-static",
+      "mode": "learned",
+      "update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-initial-v1-20261024\\explore",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true,
+      "combat_execution_contract": "legacy_v1"
+    },
+    {
+      "label": "explore-trained",
+      "mode": "learned",
+      "update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-training-v1-20261024\\explore\\update",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true,
+      "combat_execution_contract": "legacy_v1"
+    },
+    {
+      "label": "rules",
+      "mode": "rules",
+      "deterministic": false,
+      "cuda_replay": false
+    }
+  ],
+  "comparisons": [
+    {
+      "name": "explore-vs-source",
+      "before": "source",
+      "after": "explore-trained"
+    },
+    {
+      "name": "explore-vs-control-trained",
+      "before": "control-trained",
+      "after": "explore-trained"
+    },
+    {
+      "name": "explore-vs-explore-static",
+      "before": "explore-static",
+      "after": "explore-trained"
+    },
+    {
+      "name": "explore-vs-rules",
+      "before": "rules",
+      "after": "explore-trained"
+    }
+  ],
+  "ready": [
+    "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-training-v1-20261024\\control\\update\\complete.json",
+    "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-weapon-only-training-v1-20261024\\explore\\update\\complete.json"
+  ],
+  "training_performed": false,
+  "promotion": false,
+  "experiment_protocol": "F:\\src\\quake2\\q2coopbot-src\\docs\\combat_weapon_only_training_protocol_20261024.json",
+  "experiment_protocol_sha256": "74bc160b555ca17c90df18e4a7c87105dd7d0bc925a7e403671b1fa21f092ec0",
+  "expansion_gate": {
+    "additional_goals_over_control_trained": 2,
+    "additional_goals_over_explore_static": 1,
+    "goals_at_least_rules": true,
+    "deaths_no_more_than": [
+      "control-trained",
+      "rules"
+    ],
+    "received_numerator": 11,
+    "received_denominator": 10,
+    "automatic_promotion": false
+  }
+}
