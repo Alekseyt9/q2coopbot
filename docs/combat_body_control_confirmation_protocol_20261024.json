@@ -1,0 +1,38 @@
+{
+  "version": "combat_body_control_confirmation_v1",
+  "selection": "Post-hoc promising control from a failed body-input screen; body hypothesis remains rejected. Fresh confirmation only, no refitting or checkpoint selection.",
+  "prerequisite_report": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-body-training-workflow-v2-20261024\\result\\report.json",
+  "prerequisite_report_sha256": "0ff740f9317d5ecabc555f04442bc1129b29e5c847b46c75b01220b34fe6c631",
+  "endpoints": {
+    "initial": {
+      "path": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-body-training-workflow-v2-20261024\\initial\\ablated",
+      "weights_sha256": "b61c1cff73876dc8eb9791d4832e2d417fb56b788d2c5974704870e63c8fcd77",
+      "seal_sha256": "4729edf2b51389a765e43dfc0ed62fa0d06da4db37816bb8402b97e5dee22ba8"
+    },
+    "candidate": {
+      "path": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-body-training-workflow-v2-20261024\\round-04\\ablated\\update",
+      "weights_sha256": "dca2e0cb8c7805324c4291cb3ad5dae4e3d01338bb94259dd0bb9a4424bf44fe",
+      "seal_sha256": "08d9ff94b0b15eb9b303e44a325c596f94270dc9fa5b08c3728003066b4009a6"
+    }
+  },
+  "cases_per_variant": 24,
+  "native_cases": 72,
+  "cuda_cases": 48,
+  "gate": {
+    "additional_goals_over_rules": 3,
+    "additional_goals_over_initial": 1,
+    "deaths_no_more_than": [
+      "initial",
+      "rules"
+    ],
+    "received_compare_to": [
+      "initial",
+      "rules"
+    ],
+    "received_numerator": 11,
+    "received_denominator": 10,
+    "automatic_promotion": false
+  },
+  "training_performed": false,
+  "scope": "Independent confirmation on 24 registered recipes, four maps, two sites, duos/trios and ordinary/recovery loadouts. One seed per recipe; passing is not whole-campaign or human-coop acceptance."
+}

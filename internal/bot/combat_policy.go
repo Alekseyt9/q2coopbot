@@ -104,7 +104,7 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		return rules()
 	}
 	grace := combatOcclusionFrames
-	if p, ok := b.provider.(*policy.PPO); ok && (p.FeatureVersion() == policy.ThreatFeatureVersion || p.FeatureVersion() == policy.EquippedWeaponFeatureVersion) {
+	if p, ok := b.provider.(*policy.PPO); ok && p.UsesThreatMemory() {
 		grace = policy.ThreatMemoryFrames
 	}
 	active, continuation, fallback := b.engagement.observe(o, c.planner.World.Snapshot.Defeated, grace)

@@ -9,6 +9,8 @@ import subprocess
 import sys
 import time
 
+from combat_plan_history import historical_plans
+
 
 def read(path):
     return json.loads(pathlib.Path(path).read_text(encoding='utf-8-sig'))
@@ -142,10 +144,10 @@ def main():
         frozen = [read(p) for p in plans]; tasks = frozen[0]['tasks']
         assert len(tasks) == len(files)
         historical = set()
-        old_plans = list((repo/'workspace/artifacts').glob('*plan*.json'))
-        old_plans += [pathlib.Path(p) for p in spec.get('historical_plans', [])]
-        for path in old_plans:
-            for task in read(path).get('tasks', []): historical.update(task.get('seeds', []))
+        for path, previous in historical_plans(repo/'workspace/artifacts',
+                spec.get('historical_plans', []), exclude_roots=(root,)):
+            for task in previous['tasks']:
+                historical.update(task.get('seeds', []))
         for task in tasks:
             assert task['split'] == spec['split'] and len(task['seeds']) == spec['count']
             assert not historical.intersection(task['seeds']), 'Historical seed reused'

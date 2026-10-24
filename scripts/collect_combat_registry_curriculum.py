@@ -84,17 +84,10 @@ def main():
     historical = set()
     history = []
     base = repo / 'workspace/artifacts'
-    paths = set(base.glob('*plan*.json')) | set(base.glob('*/*plan*.json'))
-    paths |= set(base.glob('*/round-*/*plan*.json')) | set(base.glob('*/preflight/*plan*.json'))
-    paths |= set(base.glob('*/corpus/*plan*.json'))
-    paths |= set(base.glob('*/evaluation/*plan*.json')) | set(base.glob('*/screen/*plan*.json'))
     external_history=read(args.history_spec)
     assert isinstance(external_history.get('historical_plans'),list)
-    paths.update(pathlib.Path(p).resolve() for p in external_history['historical_plans'])
-    for path in sorted(paths):
-        value = read(path)
-        if not isinstance(value, dict) or not isinstance(value.get('tasks'), list):
-            continue
+    from combat_plan_history import historical_plans
+    for path, value in historical_plans(base, external_history['historical_plans'], exclude_roots=(out,)):
         history.append(dict(path=str(path), sha256=sha(path)))
         for task in value['tasks']:
             historical.update(task.get('seeds', []))

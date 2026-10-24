@@ -39,7 +39,7 @@ type GeometryAimRankSample struct {
 
 func validateGeometryAimRanker(f PPOFile) error {
 	s := f.GeometryAimRanker
-	if s == nil || s.Version != GeometryAimRankerVersion || f.Features != EquippedWeaponFeatureVersion ||
+	if s == nil || s.Version != GeometryAimRankerVersion || !equippedPrefixFeatures(f.Features) ||
 		!reflect.DeepEqual(s.Offsets, []float64{0, -5, -2.5, 2.5, 5}) {
 		return fmt.Errorf("invalid geometry aim ranker contract")
 	}

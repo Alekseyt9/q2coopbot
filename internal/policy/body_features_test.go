@@ -2,11 +2,39 @@ package policy
 
 import (
 	"math"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"q2coopbot/internal/quake"
 )
+
+func TestBodyFeaturePPOHeadersMetadata(t *testing.T) {
+	root := os.Getenv("Q2_BODY_MODEL_ROOT")
+	if root == "" {
+		t.Skip("requires CUDA-migrated body model artifacts")
+	}
+	for _, test := range []struct{ name, version string }{{"observed", BodyFeatureVersion}, {"ablated", BodyAblatedFeatureVersion}} {
+		model, err := LoadPPO(filepath.Join(root, test.name, "weights.json"))
+		if err != nil {
+			t.Fatal("body model metadata rejected", test.name, err)
+		}
+		if model.FeatureVersion() != test.version || model.CombatExecutionContract() != LegacyCombatExecution || !model.UsesThreatMemory() {
+			t.Fatal("wrong body schema/contract", test.name)
+		}
+	}
+}
+
+func TestBodyFeatureThreatMemoryCapabilityMetadata(t *testing.T) {
+	for _, version := range []string{FeatureVersion, AimFeatureVersion, BBoxFeatureVersion, TypedFeatureVersion, RecoilFeatureVersion, WeaponFeatureVersion, TargetFeatureVersion, NavigationFeatureVersion, ThreatFeatureVersion, EquippedWeaponFeatureVersion, BodyFeatureVersion, BodyAblatedFeatureVersion} {
+		model := PPO{file: PPOFile{Features: version}}
+		expected := version == ThreatFeatureVersion || version == EquippedWeaponFeatureVersion || version == BodyFeatureVersion || version == BodyAblatedFeatureVersion
+		if model.UsesThreatMemory() != expected {
+			t.Fatal("wrong memory capability", version)
+		}
+	}
+}
 
 func TestBodyFeatureSchemaPrefixAndMasks(t *testing.T) {
 	o := testObservation()

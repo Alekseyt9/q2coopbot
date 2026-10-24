@@ -199,8 +199,11 @@ func LoadPPO(path string) (*PPO, error) {
 	p.critic = &MLP{file: MLPFile{Features: f.Features, Layers: f.Value}}
 	return p, nil
 }
-func (p *PPO) Version() string            { return p.version }
-func (p *PPO) FeatureVersion() string     { return p.file.Features }
+func (p *PPO) Version() string        { return p.version }
+func (p *PPO) FeatureVersion() string { return p.file.Features }
+func (p *PPO) UsesThreatMemory() bool {
+	return p.file.Features == ThreatFeatureVersion || equippedPrefixFeatures(p.file.Features)
+}
 func (p *PPO) WeaponHeadVersion() string  { return p.file.WeaponHead }
 func (p *PPO) SamplingSeed() int64        { return p.file.SamplingSeed }
 func (p *PPO) ActionDistribution() string { return p.file.ActionDistribution }
