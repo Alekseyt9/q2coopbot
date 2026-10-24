@@ -1,0 +1,45 @@
+{
+  "version": "combat_memory_contact_refresh_corpus_v1",
+  "source": "workspace/artifacts/combat-geometry-nonterminal-objective-v3-20261023/initializer",
+  "source_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "registry": "workspace/artifacts/combat-enemy-fresh-preparation-v1-20261023/registry/index.json",
+  "episodes_source": "workspace/artifacts/combat-enemy-fresh-preparation-v1-20261023/report.json",
+  "maps": [
+    "base3",
+    "city1",
+    "jail1",
+    "ware2"
+  ],
+  "collection": "32 source trajectories with compact frame-bound inventory v2, eight families times4 unused TRAIN seeds, search from212. Whole prior32 attempt rejected for a native packet capacity failure; do not retain a quality-selected subset.",
+  "world_roles": {
+    "train_slots": [
+      0,
+      1,
+      2
+    ],
+    "development_slots": [
+      3
+    ]
+  },
+  "excluded_dataset": "workspace/artifacts/combat-enemy-fresh-dataset-v1-20261023",
+  "excluded_world_seeds": [
+    1164065144,
+    1228065144,
+    1174065146,
+    1172065145
+  ],
+  "role": "24whole worlds auxiliary training,8whole worlds exploratory auxiliary development, split by within-family seed slot before outcomes. Native actor remains unchanged. No ordinary PPO fitting from diagnostic interventions. Prior fresh32audit worlds and previous4MC worlds excluded entirely.",
+  "purpose": "Fresh references for causal movement after contact loss. Preserve24auxiliary TRAIN/8development whole-world roles before outcomes. No fitting in collection; development does not enter action/root selection or fitting.",
+  "native_cases": 32,
+  "cuda_cases": 32,
+  "max_instances": 16,
+  "timescale": 2,
+  "training_performed": false,
+  "actor_training": false,
+  "ordinary_training_eligible": false,
+  "promotion": false,
+  "memory_loss_context": "First accepted grounded no-visible state with fresh memory age1..10; lowest eligible TRAIN world seed per map. Future damage/contact/goal excluded from selection.",
+  "prior_technical_proof": "workspace/artifacts/combat-inventory-sparse-native-audit-v1-20261024/complete.json",
+  "inventory_transport_version": "native_frame_inventory_sparse_v2",
+  "supersedes_failed_corpus": "workspace/artifacts/combat-memory-contact-refresh-corpus-v1-20261024"
+}

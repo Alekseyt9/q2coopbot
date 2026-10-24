@@ -22,7 +22,8 @@ def main():
         pins[str(path)]=h;return path
     protocol=read(pin(a.protocol));assert protocol['version']=='combat_movement_window_smoke_v1'
     seal=read(pin(a.prepared/'complete.json'));old=read(pin(a.prepared/'report.json',seal['report_sha256']))
-    assert old['device']=='cuda' and old['context']['split']=='train' and old['context']['context_id']==protocol['context_id']
+    assert (old['device']=='cuda' or (old['version']=='combat_observed_damage_context_v1' and old['device']=='metadata_only'))
+    assert old['context']['split']=='train' and old['context']['context_id']==protocol['context_id']
     for path,h in old['inputs'].items():pin(path,h)
     source=Path(old['source']);model=read(pin(source/'weights.json',protocol['source_weights_sha256']))
     assert not model.get('diagnostic_movement_probe') and not model.get('diagnostic_continuation_probe')
@@ -77,7 +78,7 @@ def main():
         folder=a.out/'models'/v['label'];folder.mkdir(parents=True);save(folder/'weights.json',changed)
         variants.append(dict(**v,index=len(variants),frame=frame,model=str((folder/'weights.json').resolve()),
                              model_sha256=sha(folder/'weights.json'),gaussian_joint_formula_max_error=error))
-    assert len(variants)+1==protocol['native_cases']==protocol['cuda_cases']
+    assert len(variants)+int(protocol.get('fresh_ordinary_reference',True))==protocol['native_cases']==protocol['cuda_cases']
     for path,h in pins.items():assert sha(path)==h,path
     report=dict(state='complete',version='combat_movement_probe_preparation_v1',device='cuda',diagnostic_only=True,
                 context=old['context'],source=str(source),source_weights_sha256=protocol['source_weights_sha256'],

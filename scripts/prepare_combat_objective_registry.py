@@ -31,10 +31,16 @@ def main():
     for name in names:
         path,episode=descriptors[name];pins[str(path)]=sha(path)
         updated=copy.deepcopy(episode);updated['recipe']['reward_config']=relative
+        if updated.get('generator'):
+            # Revision participates in fixture RNG unless explicitly pinned.
+            # A reward-only clone must preserve the original effective seed.
+            updated['generator']['seed_revision']=episode['generator'].get('seed_revision',episode['revision'])
         updated['revision']+=1
         # Positions, generator, split ranges, monsters and loadout are untouched.
         a,b=copy.deepcopy(episode),copy.deepcopy(updated)
-        a['revision']=b['revision'];a['recipe']['reward_config']=b['recipe']['reward_config'];assert a==b
+        a['revision']=b['revision'];a['recipe']['reward_config']=b['recipe']['reward_config']
+        if a.get('generator'):a['generator']['seed_revision']=a['generator'].get('seed_revision',episode['revision'])
+        assert a==b
         filename=name+'.json';assert pathlib.Path(filename).name==filename
         destination=args.out/filename;save(destination,updated);files.append(filename)
         outputs.append(dict(path=str(destination.resolve()),sha256=sha(destination),source=str(path),source_sha256=pins[str(path)]))
@@ -45,7 +51,7 @@ def main():
         registry_sha256=sha(args.out/'index.json'),objective_reward_sha256=sha(reward),
         config_sha256=sha(config),inputs=[dict(path=p,sha256=h) for p,h in pins.items()],outputs=outputs,
         script_sha256=sha(__file__),training_performed=False,
-        scope='Only reward binding and descriptor revision changed. Source conditions/loadout/generator/splits preserved. Collector must still validate the source checkpoint objective and choose fresh seeds.'))
+        scope='Reward binding/revision changed; generated descriptors explicitly pin original effective seed revision. Source physical conditions/loadout/splits and fixture RNG preserved. Collector must validate the checkpoint objective and choose fresh seeds.'))
     print(args.out/'index.json')
 
 

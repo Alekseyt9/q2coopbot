@@ -1,0 +1,40 @@
+{
+  "version": "combat_movement_continuation_stability_v1",
+  "study": "combat_memory_contact_movement_pilot_v1",
+  "source_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "corpus": "workspace/artifacts/combat-underfire-teacher-corpus-v1-20261024",
+  "prepared_index": "workspace/artifacts/combat-memory-contact-movement-units-v1-20261024",
+  "continuation_replicates": 3,
+  "continuation_seeds": [
+    2026102412,
+    2026102413,
+    2026102414
+  ],
+  "movement_duration_frames": 5,
+  "movement_labels": [
+    "control",
+    "left",
+    "right",
+    "forward",
+    "backward"
+  ],
+  "motivation": "Fresh held-out memory gaze/fire models lost a base3 goal through prolonged contact loss. Test TRAIN movement causal signal before any new architecture fitting; source gaze and fire remain intact.",
+  "selection": "First2 future streams select by mean alive-goal, then mean kills, then observed full-task utility4*goal+.25*kills-received/100-death. Fixed label order for ties. Third stream excluded from selection. Alive unfinished is censored; no invented terminal outcome or post-limit survival reward.",
+  "controls": "Full strict nofork/source, zero-fork/reference, fork-prefix/root/category/draw and intervention-window audits. One nofork per world, fork-only reference plus control each stream, plus only the frozen selected action if noncontrol. No tail supplement, seed replacement or further action search.",
+  "signal": {
+    "minimum_strict_units": 12,
+    "minimum_complete_pairs": 4,
+    "minimum_net_gained_alive_goals": 1,
+    "maximum_lost_alive_goals": 1,
+    "minimum_worlds_positive_utility": 2,
+    "minimum_mean_utility_gain": 0.1
+  },
+  "interpretation": "4 dependent TRAIN-world conditional repeats, not policy superiority. Full capture controls required. Reacquisition timing descriptive only; full task outcomes govern scaling.",
+  "native_cases": 76,
+  "cuda_cases": 76,
+  "max_instances": 16,
+  "timescale": 2,
+  "training_performed": false,
+  "ordinary_training_eligible": false,
+  "promotion": false
+}

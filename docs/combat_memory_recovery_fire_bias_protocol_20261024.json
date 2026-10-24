@@ -1,0 +1,13 @@
+{
+  "version":"combat_memory_recovery_fire_bias_fit_v1",
+  "source_weights_sha256":"559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "source_gaze_fit":"workspace/artifacts/combat-memory-recovery-training-v1-20261024",
+  "cache":"workspace/artifacts/combat-memory-recovery-source-cache-v1-20261024",
+  "motivation":"Gaze-only passed offline/zero/native parity and improved actual active memory direction, but fresh8case probe retained5/8goals,204MGshots and36solid contacts. Shared gaze+fire endpoint missed frozen fire ratio gate0.75 and was not played. Isolate firing from gaze instead of changing either result or threshold.",
+  "scope":"Clone admitted gaze-only head exactly. Freeze every tensor and gaze output; train one scalar offset, then write it only into final fire bias index2. Existing v2 runtime applies this output only when equippedMG, no visible enemy and memory age<=10. No raw movement/target/mode/weapon/vertical, actor/critic/std or gaze parameter updates.",
+  "data":"Same whole TRAIN/development roles. Only recovery_known target0/coarse actual attack MG shots with H1 live-monster damage or solid/corpse contacts. No-shot and unclassified damageable/prop contacts excluded. Existing coverage30TRAIN negative contacts in7worlds/8development in3worlds; no positive hidden-shot labels. This is a scoped negative-context correction, not general hit-probability calibration.",
+  "training":{"device":"cuda","steps":200,"learning_rate":0.03,"l2_bias_weight":0.01,"seed":2026102411,"loss":"Full world-balanced TRAIN Bernoulli BCE on cached original action-conditioned fire logit plus scalar bias, with L2 prior toward0. Fixed final endpoint; no development optimizer or checkpoint selection."},
+  "validation":"Development negative-context probability ratio<=0.75 against source; same original threshold, no reclassification of rejected shared endpoint. CUDA checks require exact unchanged gaze on all4693actual source feature/raw rows, unchanged all outputs outside gate, unchanged fire on nonMG, unchanged old head tensors except bias2 and GPUreload.",
+  "next":"A passed scalar endpoint supports a new frozen source/gaze/scalar/rules full-fight probe on unused registry seeds,16x2. Previous8probe cases are discovery only. New outputs require real-game CUDA density parity before quality claims. No production/default update or ordinary PPO checkpoint admission.",
+  "promotion":false
+}

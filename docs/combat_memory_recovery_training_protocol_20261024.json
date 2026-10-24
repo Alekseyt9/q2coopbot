@@ -1,0 +1,19 @@
+{
+  "version":"combat_memory_recovery_training_v1",
+  "source":"workspace/artifacts/combat-geometry-nonterminal-objective-v3-20261023/initializer",
+  "source_weights_sha256":"559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "dataset":"workspace/artifacts/combat-target-lifecycle-dataset-v1-20261024",
+  "prototype":"workspace/artifacts/combat-memory-recovery-prototype-v2-20261024",
+  "cache":"workspace/artifacts/combat-memory-recovery-source-cache-v1-20261024",
+  "cache_contract":"CUDA full temporal sequence replay of original source actor and joint aim scorer, never synthetic raw outputs. Match dataset step/frame/features/actions to original exported rows. Actor-memory error<2e-5 and original joint likelihood error<0.003. Cache source raw81 and action-conditioned fire logit per row. Snapshot loaded Python sources in artifact, verify live sources unchanged during execution. No source parameter updates.",
+  "models":["gaze_only","gaze_and_mg_fire"],
+  "core":{"version":"combat_memory_recovery_prototype_v2","input":46,"hidden":[32,16],"output":3,"parameters":2083,"active":"No visible enemy and most recent remembered threat age<=10frames. Correct raw yaw/pitch and raw fire; fire only for equippedMGfeature1125. Others raw coordinates unchanged. Runtime integration not admitted by offline fit."},
+  "targets":"Gaze: wrapped pitch/yaw memory-direction labels from past observed position/bbox only, reorder to actor yaw/pitch, atanh(clamp(degrees/180,-0.999,0.999)). Only recovery_known, target0/coarse rows. Fire: actual attack MG shots with known live-monster damage or solid/corpse contact in H1; hit label1, solid/corpse label0. No shot is not a miss. Current eligible corpus has30TRAIN/8development negative solid rows and no positive hidden-shot rows; no general pHit calibration claim.",
+  "training":{"device":"cuda","seed":2026102410,"initialization_seed":2026102409,"steps":400,"gaze_batch":128,"fire_batch":64,"learning_rate":0.001,"weight_decay":0.001,"gradient_clip":1,"fire_loss_weight":0.25,"loss":"Gaussian gaze teacher squared error normalized by frozen source std plus weighted Bernoulli BCE on action-conditioned fire logit. Gaze-only fire output row/bias projected to0each step. Same initial state and all sampled batches for both models. Fixed final endpoint, no checkpoint selection."},
+  "weighting":"Each eligible whole TRAIN world equal, then eligible rows within world equal, separately for gaze and fire. No map/seed input. Development six eligible gaze worlds stays entirely out of optimizer; correlated frames are not independent battles.",
+  "evaluation":"World-balanced physical angular mean RMSE on development gaze rows versus source actor mean and zero-command keep-current-view baseline; mean fire probability/BCE on eight known negative wall-shot rows separately labelled as negative-only coverage. Check finite parameters, CUDA reload, outside-gate identity and nonMGfire identity. No source actor/critic/std/PPOoptimizer/state/history mutation, no ordinary PPO data consumption or weights export.",
+  "offline_probe_admission":{"development_gaze_rmse_ratio_to_source_max":0.8,"development_gaze_rmse_ratio_to_zero_command_max":0.95,"joint_development_negative_fire_probability_ratio_to_source_max":0.75},
+  "next":"Only passed offline endpoints justify implementing optional Go/CUDA raw projection and exact zero-source native compatibility, then a frozen fresh full-battle source/gaze/joint/rules probe with pool16x2. Offline direction regression is not optimal movement, recovered visibility, full fight superiority or runtime admission. No Go/CPU neural training/comparison.",
+  "training_scope":"New standalone head only; source actor/critic/std unchanged. Head checkpoints are experimental auxiliary modules, not supported policy JSON or resumable PPO checkpoints.",
+  "promotion":false
+}

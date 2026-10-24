@@ -1,0 +1,65 @@
+{
+  "version": "combat_movement_variance_replication_v1",
+  "seed_offset": 45,
+  "historical_plan_count": 2378,
+  "historical_seed_count": 7326,
+  "cases_per_variant": 24,
+  "native_cases": 72,
+  "cuda_cases": 48,
+  "max_instances": 16,
+  "timescale": 2,
+  "variants": [
+    {
+      "label": "source",
+      "mode": "learned",
+      "update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-geometry-nonterminal-objective-v3-20261023\\initializer",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true
+    },
+    {
+      "label": "noise-only",
+      "mode": "learned",
+      "policy_artifact": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-action-inertia-evaluation-policies-v1-20261024\\noise-only",
+      "deterministic": false,
+      "cuda_replay": true,
+      "checked_wall_slide": true
+    },
+    {
+      "label": "rules",
+      "mode": "rules",
+      "deterministic": false,
+      "cuda_replay": false
+    }
+  ],
+  "episodes": [
+    "campaign-base3-site-01-group-parasite-infantry-gunner-weapons",
+    "campaign-base3-site-01-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-base3-site-02-group-parasite-infantry-gunner-weapons",
+    "campaign-base3-site-02-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-base3-site-01-group-parasite-infantry-weapons",
+    "campaign-base3-site-02-group-parasite-infantry-gunner-weapons-grenades-recovery",
+    "campaign-city1-site-01-group-parasite-infantry-gunner-weapons",
+    "campaign-city1-site-01-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-city1-site-02-group-parasite-infantry-gunner-weapons",
+    "campaign-city1-site-02-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-city1-site-01-group-parasite-infantry-weapons",
+    "campaign-city1-site-02-group-parasite-infantry-gunner-weapons-grenades-recovery",
+    "campaign-jail1-site-01-group-parasite-infantry-gunner-weapons",
+    "campaign-jail1-site-01-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-jail1-site-02-group-parasite-infantry-gunner-weapons",
+    "campaign-jail1-site-02-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-jail1-site-01-group-parasite-infantry-weapons",
+    "campaign-jail1-site-02-group-parasite-infantry-gunner-weapons-grenades-recovery",
+    "campaign-ware2-site-01-group-parasite-infantry-gunner-weapons",
+    "campaign-ware2-site-01-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-ware2-site-02-group-parasite-infantry-gunner-weapons",
+    "campaign-ware2-site-02-group-parasite-infantry-weapons-grenades-recovery",
+    "campaign-ware2-site-01-group-parasite-infantry-weapons",
+    "campaign-ware2-site-02-group-parasite-infantry-gunner-weapons-grenades-recovery"
+  ],
+  "selection": "All24originalconditions retained. First unused common offset>=45 chosen without observing new outcomes.",
+  "decision": "Report all paired wins/losses, deaths, damage, map/site/loadout/composition strata, and combined48-pair results. No automatic promotion or source/default change. A repeat supports or contradicts the hypothesis; it is not general campaign/coop acceptance.",
+  "training_performed": false,
+  "promotion": false
+}

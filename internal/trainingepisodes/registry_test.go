@@ -55,6 +55,20 @@ func TestRegistryNonterminalHandoffRecipe(t *testing.T) {
 		t.Fatal("unregistered reward accepted")
 	}
 }
+
+func TestRegistryBlockedGroundObjectiveRecipes(t *testing.T) {
+	_, ep := fixture(t)
+	for _, path := range []string{"scripts/scenarios/combat-reward-blocked-ground-control-v14.json", "scripts/scenarios/combat-reward-blocked-ground-cost-v14.json"} {
+		ep.Recipe.RewardConfig = path
+		if err := ep.validate(); err != nil {
+			t.Fatal(path, err)
+		}
+	}
+	ep.Recipe.RewardConfig = "workspace/artifacts/unregistered-reward.json"
+	if ep.validate() == nil {
+		t.Fatal("arbitrary reward path accepted")
+	}
+}
 func TestPlanRejectsPlannedSceneAndInvalidSplitBudget(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {

@@ -37,4 +37,15 @@ $futureDeath=[pscustomobject]@{spawncount=42;map='base1';frame=171;target=1;targ
 if((Get-CombatEarliestGoalReceipt $rows @($events+$futureDeath) $context $classes).observed_frame -ne 170){throw 'Future post-goal event changed earlier terminal'}
 if(Get-CombatEarliestGoalReceipt $rows @($events+$death) $context $classes){throw 'Pre-goal death accepted by earliest selector'}
 if(Get-CombatEarliestGoalReceipt @($early) $events $context $classes){throw 'Earliest selector lacks post-kill observation'}
+$deadTail=$row.PSObject.Copy();$deadTail.observation_frame=171;$deadTail.health=0
+$verified=Get-CombatVerifiedSavedGoalReceipt $receipt @($row,$deadTail) @($events+$futureDeath) $context $classes
+if(!$verified -or $verified.observed_frame -ne 170 -or $verified.health -ne 56){throw 'Post-goal death invalidated saved alive boundary'}
+if(Get-CombatVerifiedSavedGoalReceipt $receipt @($row,$deadTail) @($events+$death) $context $classes){throw 'Saved goal accepted a pre-goal death'}
+if(Get-CombatVerifiedSavedGoalReceipt $receipt @($early,$deadTail) $events $context $classes){throw 'Saved goal accepted missing complete observation'}
+foreach($key in @('observed_frame','kill_frame','health','actor','spawncount')){
+    $changed=$receipt.PSObject.Copy();$changed.$key++
+    if(Get-CombatVerifiedSavedGoalReceipt $changed @($row,$deadTail) $events $context $classes){throw "Tampered saved $key accepted"}
+}
+$changed=$receipt.PSObject.Copy();$changed.classes=@('monster_parasite')
+if(Get-CombatVerifiedSavedGoalReceipt $changed @($row,$deadTail) $events $context $classes){throw 'Tampered saved classes accepted'}
 'Goal stop regression checks passed'

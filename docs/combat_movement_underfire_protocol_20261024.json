@@ -1,0 +1,32 @@
+{
+  "version":"combat_movement_underfire_pairs_v1",
+  "source":"workspace/artifacts/combat-geometry-nonterminal-objective-v3-20261023/initializer",
+  "source_weights_sha256":"559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "corpus":"workspace/artifacts/combat-enemy-fresh-corpus-v1-20261023",
+  "dataset":"workspace/artifacts/combat-enemy-fresh-dataset-v1-20261023",
+  "registry":"workspace/artifacts/combat-enemy-fresh-preparation-v1-20261023/registry/index.json",
+  "maps":["base3","city1","jail1","ware2"],
+  "selection":"For each map choose the lowest seed among the sealed fresh audit dataset contexts. Each world's root was selected as earliest eligible past observed HP decrease. Never inspect future effects or forecasts to select or replace roots.",
+  "variants":[
+    {"label":"control","mean_shift":[0,0],"duration":5},
+    {"label":"left_one","mean_shift":[0,-1.25],"duration":1},
+    {"label":"right_one","mean_shift":[0,1.25],"duration":1},
+    {"label":"forward_one","mean_shift":[1.25,0],"duration":1},
+    {"label":"backward_one","mean_shift":[-1.25,0],"duration":1},
+    {"label":"left_five","mean_shift":[0,-1.25],"duration":5},
+    {"label":"right_five","mean_shift":[0,1.25],"duration":5},
+    {"label":"forward_five","mean_shift":[1.25,0],"duration":5},
+    {"label":"backward_five","mean_shift":[-1.25,0],"duration":5}
+  ],
+  "horizons_frames":[1,3,5,10,20],
+  "native_cases":36,
+  "cuda_cases":36,
+  "max_instances":16,
+  "timescale":2,
+  "contract":"One dynamic pool. Frozen original source actor/std/critic/aim/fire; additive movement mean shift only on [F,F+D), same original policy RNG, no continuation fork. CUDA-only NN preparation and replay. Control must exactly match full ordinary source capture; exact common prefix/root state/features/categories and root Gaussian/fire draws; all intervention receipts verified. D1/D5 same-direction root action and H1 effects must match exactly.",
+  "admission":"Retain existing strict full-episode admission including rules-before-end exclusions unchanged. Local effects reported separately only after full ordinary zero control and common prefix/root/draw/category checks. Every local horizon additionally needs consecutive accepted exclusive same-life provider native windows, available native effects and same-life endpoint observation. Unknowns remain masked, even after real goal/death; no invented post-terminal zeros in this audit.",
+  "interpretation":"Four dependent audit worlds, one actual root action/noise stream each. Report per-world alternatives minus control, D5 minus D1, incoming/outgoing health damage and causal coverage. No independence claim across nine variants, no expected-Q or learned-policy superiority. H1 forecasters do not forecast H5; this study does not fit or select a controller.",
+  "training_performed":false,
+  "ordinary_training_eligible":false,
+  "promotion":false
+}

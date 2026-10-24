@@ -1,0 +1,17 @@
+{
+  "version":"combat_memory_recovery_zero_compatibility_v1",
+  "source_weights_sha256":"559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "models":"workspace/artifacts/combat-memory-recovery-native-models-v1-20261024",
+  "source_cache":"workspace/artifacts/combat-memory-recovery-source-cache-v1-20261024",
+  "corpus":"workspace/artifacts/combat-underfire-teacher-corpus-v1-20261024",
+  "registry":"workspace/artifacts/combat-enemy-fresh-preparation-v1-20261023/registry/index.json",
+  "selection":"Lowest eligible auxiliary TRAIN seed per map with observable core activation in source client features; fill to4with lowest remaining eligible TRAIN seeds if a map has none. Eligibility is no visible enemy plus most recent memory age<=10, never future outcome. Preserve complete original fixture/seed. Technical source/zero replay, not quality evaluation.",
+  "controls":"Four fresh ordinary source runs must fully repeat their archived frozen-world source cases. Four zero-head runs must fully repeat the fresh ordinary source: physical current/next observations under entity bijection, commands/actions, samples except model version, actor memory, CUDA features/log probabilities. Require observed active memory-only states in every selected case. No tail supplement, source swaps, rewrites or threshold relaxation.",
+  "neural":"All forward/numerical comparisons CUDA; Go neural execution only in actual games. Parent preparation already proves zero equality on all4693actual source actor rows and frozen core parameters. Native export CUDA-only and replay proof for all8cases. No ordinary PPO admission before checkpoint/optimizer migration.",
+  "native_cases":8,
+  "cuda_cases":8,
+  "max_instances":16,
+  "timescale":2,
+  "training_performed":false,
+  "promotion":false
+}

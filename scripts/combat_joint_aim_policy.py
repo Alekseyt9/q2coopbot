@@ -17,7 +17,10 @@ GEOMETRY_KIND='geometry_candidate_delta31_mlp_v1'
 GEOMETRY_SAMPLER='frame_hash_geometry_delta31_v1'
 
 
-def base_model(model,*,allow_probe=False,allow_shared=False):
+def base_model(model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False):
+    from combat_target_sampling import validate as validate_target_sampling
+    header=validate_target_sampling(model.get("target_sampling"))
+    assert header is None or allow_target_sampling,"Target calibration requires explicit scoring; ordinary training unsupported"
     assert model.get('action_distribution')==candidates.VERSION
     assert model.get('aim_candidate_head',{}).get('version')==candidates.VERSION
     assert not model.get('execution_mode') and not model.get('geometry_aim_ranker') and not model.get('geometry_aim_exploration')
@@ -31,7 +34,7 @@ def base_model(model,*,allow_probe=False,allow_shared=False):
         validate_continuation(model)
     assert allow_shared or not model['aim_candidate_head'].get('shared_scorer'),'Shared scorer optimizer/resume is not integrated; use explicit evaluation scoring'
     result=copy.deepcopy(model)
-    result.pop('action_distribution');result.pop('aim_candidate_head')
+    result.pop('action_distribution');result.pop('aim_candidate_head');result.pop('target_sampling',None)
     result.pop('diagnostic_joint_aim_probe',None)
     result.pop('diagnostic_movement_probe',None)
     result.pop('diagnostic_continuation_probe',None)
@@ -48,8 +51,8 @@ def _layers(spec,width,outputs):
         width=output
 
 
-def validate(model,*,allow_probe=False,allow_shared=False):
-    base_model(model,allow_probe=allow_probe,allow_shared=allow_shared)
+def validate(model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False):
+    base_model(model,allow_probe=allow_probe,allow_shared=allow_shared,allow_target_sampling=allow_target_sampling)
     h=model['aim_candidate_head']
     assert set(h)=={'version','offset_degrees','sampler','layers','predictor'} | ({'shared_scorer'} if h.get('shared_scorer') else set())
     shared=h.get('shared_scorer')
@@ -112,8 +115,10 @@ class FrozenHints(nn.Module):
 
 
 class JointAim(nn.Module):
-    def __init__(self,model,*,allow_probe=False,allow_shared=False):
-        super().__init__();validate(model,allow_probe=allow_probe,allow_shared=allow_shared)
+    def __init__(self,model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False):
+        super().__init__();validate(model,allow_probe=allow_probe,allow_shared=allow_shared,allow_target_sampling=allow_target_sampling)
+        from combat_target_sampling import validate as validate_target_sampling
+        self.target_sampling=validate_target_sampling(model.get("target_sampling"))
         probe=model.get('diagnostic_joint_aim_probe')
         self.probe_frame=probe['frame'] if probe else None
         self.probe_version=probe['version'] if probe else None
@@ -205,6 +210,10 @@ def events(rows,features,target,mode,vertical,weapon):
 def probabilities(joint,raw,std,source,final,attack,vertical,weapon,features,target,mode,choice,timing,motion_branch=None,reference_branch=None,fire_branch=None,*,frames=None,score_inputs=None,movement_shift=None):
     from combat_precision_head import probabilities as original
     lp,ent=original(raw,std,source,attack,vertical,weapon,features,target,mode,motion_branch,reference_branch,fire_branch,movement_shift=movement_shift)
+    from combat_target_sampling import correction as target_correction
+    correction=target_correction(raw,features,target,joint.target_sampling)
+    if correction is not None:
+        lp=lp+correction[0];ent=ent+correction[1]
     # Gaussian terms keep source latent. Only fire sees the final aim.
     before=torch.distributions.Bernoulli(logits=fire_logits(fire_branch,features,raw,target,mode,source,vertical,weapon))
     after=torch.distributions.Bernoulli(logits=fire_logits(fire_branch,features,raw,target,mode,final,vertical,weapon))

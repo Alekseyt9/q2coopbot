@@ -1,0 +1,411 @@
+{
+  "id": "combat-curriculum-balance-v1-20261024/balanced/1228165303/104",
+  "runtime_root": "F:\\src\\quake2\\assets\\baseq2",
+  "snapshot": {
+    "ducked": false,
+    "inventory": [
+      {
+        "id": 7,
+        "name": "Blaster",
+        "count": 1
+      },
+      {
+        "id": 8,
+        "name": "Shotgun",
+        "count": 1
+      },
+      {
+        "id": 10,
+        "name": "Machinegun",
+        "count": 1
+      },
+      {
+        "id": 18,
+        "name": "Shells",
+        "count": 20
+      },
+      {
+        "id": 19,
+        "name": "Bullets",
+        "count": 34
+      }
+    ],
+    "inventory_known": true,
+    "inventory_age_frames": 0,
+    "map": "city1",
+    "frame": 104,
+    "delta_frame": -1,
+    "self": [
+      -1164.25,
+      690.5,
+      424.125
+    ],
+    "self_velocity": [
+      -24.125,
+      -1.625,
+      2
+    ],
+    "gravity": 800,
+    "on_ground": true,
+    "pm_type": 0,
+    "pm_time": 0,
+    "pm_flags": 4,
+    "pm_state_known": true,
+    "collision_bodies": [
+      {
+        "model_path": "models/monsters/infantry/tris.md2",
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "id": 467,
+        "class": "",
+        "origin": [
+          -963.375,
+          713.5,
+          416
+        ],
+        "solid": 8290
+      },
+      {
+        "model_path": "models/monsters/gunner/tris.md2",
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "id": 468,
+        "class": "",
+        "origin": [
+          -998.75,
+          681,
+          416
+        ],
+        "solid": 8290
+      },
+      {
+        "model_path": "models/monsters/parasite/tris.md2",
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "id": 479,
+        "class": "",
+        "origin": [
+          -1056.875,
+          652.5,
+          416
+        ],
+        "solid": 7266
+      }
+    ],
+    "health": 80,
+    "armor": 0,
+    "ammo": 34,
+    "weapon": "models/weapons/v_machn/tris.md2",
+    "gun_frame": 4,
+    "view_angles": [
+      1441,
+      -2725,
+      0
+    ],
+    "kick_angles_degrees": [
+      -7.5,
+      0.5,
+      0.25
+    ],
+    "kick_angles_known": true,
+    "delta_angles": [
+      0,
+      -32768,
+      0
+    ],
+    "enemies": [
+      {
+        "model_path": "models/monsters/gunner/tris.md2",
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "id": 468,
+        "class": "monster_gunner",
+        "origin": [
+          -998.75,
+          681,
+          416
+        ],
+        "frame": 181,
+        "solid": 8290,
+        "clear_shot": true
+      },
+      {
+        "model_path": "models/monsters/parasite/tris.md2",
+        "angles": [
+          0,
+          99.84375,
+          0
+        ],
+        "id": 479,
+        "class": "monster_parasite",
+        "origin": [
+          -1056.875,
+          652.5,
+          416
+        ],
+        "frame": 71,
+        "solid": 7266,
+        "clear_shot": true
+      },
+      {
+        "model_path": "models/monsters/infantry/tris.md2",
+        "angles": [
+          0,
+          90,
+          0
+        ],
+        "id": 467,
+        "class": "monster_infantry",
+        "origin": [
+          -963.375,
+          713.5,
+          416
+        ],
+        "frame": 95,
+        "solid": 8290,
+        "clear_shot": true
+      }
+    ],
+    "obstacles": [
+      {
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "id": 468,
+        "class": "monster_gunner",
+        "origin": [
+          -998.75,
+          681,
+          416
+        ],
+        "frame": 181
+      },
+      {
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "id": 479,
+        "class": "monster_parasite",
+        "origin": [
+          -1056.875,
+          652.5,
+          416
+        ],
+        "frame": 71
+      },
+      {
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "id": 467,
+        "class": "monster_infantry",
+        "origin": [
+          -963.375,
+          713.5,
+          416
+        ],
+        "frame": 95
+      }
+    ],
+    "pickups": [
+      {
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "id": 260,
+        "class": "item_health",
+        "origin": [
+          -1360,
+          696,
+          407
+        ],
+        "health_amount": 10
+      },
+      {
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "id": 457,
+        "class": "item_keys",
+        "origin": [
+          -1428,
+          608,
+          431
+        ]
+      },
+      {
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "id": 281,
+        "class": "item_health",
+        "origin": [
+          -1360,
+          736,
+          407
+        ],
+        "health_amount": 10
+      },
+      {
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "id": 282,
+        "class": "item_health",
+        "origin": [
+          -1360,
+          656,
+          407
+        ],
+        "health_amount": 10
+      }
+    ],
+    "movers": [
+      {
+        "solid": 31,
+        "solid_known": true,
+        "id": 61,
+        "model": 7,
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "angles": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "solid": 31,
+        "solid_known": true,
+        "id": 88,
+        "model": 20,
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "angles": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "solid": 31,
+        "solid_known": true,
+        "id": 453,
+        "model": 93,
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "angles": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "solid": 31,
+        "solid_known": true,
+        "id": 455,
+        "model": 95,
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "angles": [
+          0,
+          0,
+          0
+        ]
+      }
+    ]
+  },
+  "proposed": {
+    "Pitch": 2632,
+    "Yaw": 29946,
+    "Roll": 0,
+    "Forward": -97,
+    "Side": 396,
+    "Up": -400,
+    "Buttons": 1,
+    "Impulse": 0,
+    "Msec": 100,
+    "Light": 0
+  },
+  "applied": {
+    "Pitch": 2632,
+    "Yaw": 29946,
+    "Roll": 0,
+    "Forward": 0,
+    "Side": 0,
+    "Up": 0,
+    "Buttons": 1,
+    "Impulse": 0,
+    "Msec": 100,
+    "Light": 69
+  },
+  "logged_applied_prediction": {
+    "position": [
+      -1164.25,
+      690.5,
+      424.125
+    ],
+    "velocity": [
+      0,
+      0,
+      0
+    ],
+    "segments": [
+      [
+        [
+          -1164.25,
+          690.5,
+          424.125
+        ],
+        [
+          -1164.25,
+          690.5,
+          424.125
+        ]
+      ]
+    ],
+    "contacts": null,
+    "model": "baseq2_dry_ground_step_slide_observed_entities_diagnostic_v4",
+    "initial_grounded": true,
+    "support_ambiguous": false
+  },
+  "logged_ground_surface": "dry_flat"
+}

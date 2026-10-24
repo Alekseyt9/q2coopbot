@@ -20,6 +20,7 @@ const NavigationRewardVersion = "combat_reward_v10"
 const CoopRewardVersion = "combat_reward_v11"
 const TargetCommitmentRewardVersion = "combat_reward_v12"
 const SequenceHitscanRewardVersion = "combat_reward_v13"
+const BlockedGroundRequestRewardVersion = "combat_reward_v14"
 
 // RewardConfig is an explicit experimental objective, not a measured success
 // metric. Server effects never enter the policy observation.
@@ -48,6 +49,7 @@ type RewardConfig struct {
 	TargetCommitmentBudget float64 `json:"target_commitment_budget,omitempty"`
 	NavigationPotential    float64 `json:"navigation_potential,omitempty"`
 	PeerDeath              float64 `json:"peer_death,omitempty"`
+	BlockedGroundRequest   float64 `json:"blocked_ground_request,omitempty"`
 }
 
 func (c RewardConfig) HasKillReward() bool {
@@ -69,7 +71,7 @@ func (c RewardConfig) HasActionQualityCosts() bool {
 }
 
 func (c RewardConfig) HasTargetCommitmentReward() bool {
-	return c.Version == TargetCommitmentRewardVersion || c.Version == SequenceHitscanRewardVersion
+	return c.Version == TargetCommitmentRewardVersion || c.Version == SequenceHitscanRewardVersion || c.Version == BlockedGroundRequestRewardVersion
 }
 
 func (c RewardConfig) HasTargetSequenceReward() bool {
@@ -79,7 +81,7 @@ func (c RewardConfig) HasTargetSequenceReward() bool {
 // v13 keeps v12's sequence objective and joins actual MG outcomes. A zero
 // coefficient supports a paired control with exactly the same evidence mask.
 func (c RewardConfig) HasHitscanMissCost() bool {
-	return c.Version == NativeWasteRewardVersion || c.Version == SequenceHitscanRewardVersion
+	return c.Version == NativeWasteRewardVersion || c.Version == SequenceHitscanRewardVersion || c.Version == BlockedGroundRequestRewardVersion
 }
 
 func (c RewardConfig) HasNavigationReward() bool {
@@ -97,6 +99,16 @@ func (c RewardConfig) Validate() error {
 	if c.Version != RewardVersion && !c.HasKillReward() {
 		return fmt.Errorf("unsupported reward version")
 	}
+	if math.IsNaN(c.BlockedGroundRequest) || math.IsInf(c.BlockedGroundRequest, 0) {
+		return fmt.Errorf("nonfinite blocked ground request cost")
+	}
+	if c.Version == BlockedGroundRequestRewardVersion {
+		if c.BlockedGroundRequest > 0 || c.BlockedGroundRequest < -.05 {
+			return fmt.Errorf("v14 requires blocked ground request cost in [-.05,0]")
+		}
+	} else if c.BlockedGroundRequest != 0 {
+		return fmt.Errorf("blocked ground request cost requires reward v14")
+	}
 	for _, v := range []float64{c.MonsterDamage, c.ReceivedDamage, c.SelfDamage, c.FriendlyDamage, c.Death, c.Tick, c.MonsterKill, c.AimPotential, c.AimGamma, c.SpacingPotential, c.ParasiteRange, c.BlasterMiss, c.MachinegunMiss, c.OffTargetAttack, c.TurnAway, c.StalledMovement, c.TargetChurn, c.TargetCommitmentDamage, c.TargetCommitmentBudget, c.NavigationPotential, c.PeerDeath} {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
 			return fmt.Errorf("nonfinite reward coefficient")
@@ -107,7 +119,7 @@ func (c RewardConfig) Validate() error {
 			return fmt.Errorf("v12 requires paired bounded commitment rate/budget or both zero")
 		}
 	} else if c.TargetCommitmentDamage != 0 || c.TargetCommitmentBudget != 0 {
-		return fmt.Errorf("commitment bonus requires reward v12 or v13")
+		return fmt.Errorf("commitment bonus requires reward v12, v13 or v14")
 	}
 	if c.Version == CoopRewardVersion {
 		if c.PeerDeath >= 0 || c.PeerDeath < -10 {
@@ -144,12 +156,12 @@ func (c RewardConfig) Validate() error {
 		if c.MachinegunMiss >= 0 || c.MachinegunMiss < -.1 {
 			return fmt.Errorf("v9 requires bounded negative MG miss cost")
 		}
-	} else if c.Version == SequenceHitscanRewardVersion {
+	} else if c.Version == SequenceHitscanRewardVersion || c.Version == BlockedGroundRequestRewardVersion {
 		if c.MachinegunMiss > 0 || c.MachinegunMiss < -.1 {
-			return fmt.Errorf("v13 requires MG miss cost in [-.1,0]")
+			return fmt.Errorf("v13/v14 requires MG miss cost in [-.1,0]")
 		}
 	} else if c.MachinegunMiss != 0 {
-		return fmt.Errorf("MG miss cost requires reward v9 or v13")
+		return fmt.Errorf("MG miss cost requires reward v9, v13 or v14")
 	}
 	for _, cost := range []float64{c.OffTargetAttack, c.TurnAway, c.StalledMovement} {
 		if c.HasActionQualityCosts() {
@@ -381,6 +393,11 @@ func (c RewardConfig) evaluate(s *Step, o ServerOutcome) Reward {
 			r.Components[name] = cost
 			score += cost
 		}
+	}
+	if c.Version == BlockedGroundRequestRewardVersion {
+		cost := c.blockedGroundRequestCost(s)
+		r.Components["blocked_ground_request"] = cost
+		score += cost
 	}
 	if c.HasNavigationReward() {
 		shaping, evidence, err := c.navigationShaping(s, zeroBootstrap)

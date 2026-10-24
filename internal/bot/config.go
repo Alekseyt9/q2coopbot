@@ -15,6 +15,7 @@ import (
 // separate section so ordinary companion settings stay easy to read.
 type ConfigFile struct {
 	Combat struct {
+		ExecutionContract    string `json:"execution_contract,omitempty"`
 		Mode                 string `json:"mode"`
 		ProviderFile         string `json:"provider_file"`
 		ActionQualityGuard   bool   `json:"action_quality_guard,omitempty"`
@@ -58,71 +59,75 @@ type ConfigFile struct {
 		StopFile      string `json:"stop_file"`
 	} `json:"output"`
 	Test struct {
-		CampaignCombatEvaluation     bool   `json:"campaign_combat_evaluation"`
-		CheckpointControl            string `json:"checkpoint_control"`
-		CheckpointRestore            string `json:"checkpoint_restore"`
-		CheckpointMode               string `json:"checkpoint_mode"`
-		DisableProjectileLead        bool   `json:"disable_projectile_lead"`
-		ProjectileComparison         bool   `json:"projectile_comparison"`
-		CombatBarrier                bool   `json:"combat_barrier"`
-		CombatOnly                   bool   `json:"combat_only"`
-		Synchronous                  bool   `json:"synchronous"`
-		HitscanGuardProbe            bool   `json:"hitscan_guard_probe"`
-		CombatAdvice                 bool   `json:"combat_advice"`
-		TeacherVertical              bool   `json:"teacher_vertical"`
-		Light                        *int   `json:"light"`
-		WeaponSwitchFixture          string `json:"weapon_switch_fixture"`
-		Invulnerable                 bool   `json:"invulnerable"`
-		InitialHealth                int    `json:"initial_health"`
-		ChangeEntry                  string `json:"change_entry"`
-		Session                      string `json:"session"`
-		SessionRole                  string `json:"session_role"`
-		ScenarioResult               string `json:"scenario_result"`
-		ScenarioTailFrames           int    `json:"scenario_tail_frames"`
-		Scenario                     string `json:"scenario"`
-		DisableSearch                bool   `json:"disable_search"`
-		DisableProbe                 bool   `json:"disable_probe"`
-		SetupHoldFrames              int    `json:"setup_hold_frames"`
-		HideHealthFrames             []int  `json:"hide_health_frames"`
-		ScenarioFrameOrigin          int    `json:"scenario_frame_origin"`
-		WalkTarget                   string `json:"walk_target"`
-		WalkRoute                    bool   `json:"walk_route"`
-		WalkRunIn                    bool   `json:"walk_run_in"`
-		WalkThenPlan                 bool   `json:"walk_then_plan"`
-		WalkAfterFrames              int    `json:"walk_after_frames"`
-		WalkFrames                   int    `json:"walk_frames"`
-		RunInSpeed                   int    `json:"run_in_speed"`
-		Idle                         bool   `json:"idle"`
-		ExitOnReconnect              bool   `json:"exit_on_reconnect"`
-		ChangeMap                    string `json:"change_map"`
-		ChangeAfterFrames            int    `json:"change_after_frames"`
-		TeleportMap                  string `json:"teleport_map"`
-		Teleport                     string `json:"teleport"`
-		CampaignGoal                 string `json:"campaign_goal"`
-		TeleportAfter                string `json:"teleport_after"`
-		TeleportAfterFrames          int    `json:"teleport_after_frames"`
-		TeleportReturn               string `json:"teleport_return"`
-		TeleportReturnAfterFrames    int    `json:"teleport_return_after_frames"`
-		JumpAfterTeleportFrames      int    `json:"jump_after_teleport_frames"`
-		JumpAgainAfterTeleportFrames int    `json:"jump_again_after_teleport_frames"`
-		SpawnMap                     string `json:"spawn_map"`
-		SpawnSoldier                 string `json:"spawn_soldier"`
-		SpawnClass                   string `json:"spawn_class"`
-		ObservationGapStart          int    `json:"observation_gap_start"`
-		ObservationGapFrames         int    `json:"observation_gap_frames"`
-		LineCross                    bool   `json:"line_cross"`
-		HoldPosition                 bool   `json:"hold_position"`
-		HoldPositionMap              string `json:"hold_position_map"`
-		GroundEdgeProbe              bool   `json:"ground_edge_probe"`
-		NoAAS                        bool   `json:"no_aas"`
-		DoorProbe                    bool   `json:"door_probe"`
-		DoorPassProbe                bool   `json:"door_pass_probe"`
-		DoorPassSpeed                int    `json:"door_pass_speed"`
-		ButtonProbe                  bool   `json:"button_probe"`
-		ButtonAutoGoal               bool   `json:"button_auto_goal"`
-		NoBSP                        bool   `json:"no_bsp"`
-		PartialBSP                   bool   `json:"partial_bsp"`
-		HideDoor53                   bool   `json:"hide_door_53"`
+		CampaignCombatEvaluation           bool   `json:"campaign_combat_evaluation"`
+		CheckpointControl                  string `json:"checkpoint_control"`
+		CheckpointRestore                  string `json:"checkpoint_restore"`
+		CheckpointMode                     string `json:"checkpoint_mode"`
+		DisableProjectileLead              bool   `json:"disable_projectile_lead"`
+		ProjectileComparison               bool   `json:"projectile_comparison"`
+		CombatBarrier                      bool   `json:"combat_barrier"`
+		CombatOnly                         bool   `json:"combat_only"`
+		StoppedCrouchProbeFrame            int    `json:"stopped_crouch_probe_frame,omitempty"`
+		CheckedGroundRequestProbeFrame     int    `json:"checked_ground_request_probe_frame,omitempty"`
+		CheckedGroundRequestProbeAllFrames bool   `json:"checked_ground_request_probe_all_frames,omitempty"`
+		StoppedCrouchProbeAllFrames        bool   `json:"stopped_crouch_probe_all_frames,omitempty"`
+		Synchronous                        bool   `json:"synchronous"`
+		HitscanGuardProbe                  bool   `json:"hitscan_guard_probe"`
+		CombatAdvice                       bool   `json:"combat_advice"`
+		TeacherVertical                    bool   `json:"teacher_vertical"`
+		Light                              *int   `json:"light"`
+		WeaponSwitchFixture                string `json:"weapon_switch_fixture"`
+		Invulnerable                       bool   `json:"invulnerable"`
+		InitialHealth                      int    `json:"initial_health"`
+		ChangeEntry                        string `json:"change_entry"`
+		Session                            string `json:"session"`
+		SessionRole                        string `json:"session_role"`
+		ScenarioResult                     string `json:"scenario_result"`
+		ScenarioTailFrames                 int    `json:"scenario_tail_frames"`
+		Scenario                           string `json:"scenario"`
+		DisableSearch                      bool   `json:"disable_search"`
+		DisableProbe                       bool   `json:"disable_probe"`
+		SetupHoldFrames                    int    `json:"setup_hold_frames"`
+		HideHealthFrames                   []int  `json:"hide_health_frames"`
+		ScenarioFrameOrigin                int    `json:"scenario_frame_origin"`
+		WalkTarget                         string `json:"walk_target"`
+		WalkRoute                          bool   `json:"walk_route"`
+		WalkRunIn                          bool   `json:"walk_run_in"`
+		WalkThenPlan                       bool   `json:"walk_then_plan"`
+		WalkAfterFrames                    int    `json:"walk_after_frames"`
+		WalkFrames                         int    `json:"walk_frames"`
+		RunInSpeed                         int    `json:"run_in_speed"`
+		Idle                               bool   `json:"idle"`
+		ExitOnReconnect                    bool   `json:"exit_on_reconnect"`
+		ChangeMap                          string `json:"change_map"`
+		ChangeAfterFrames                  int    `json:"change_after_frames"`
+		TeleportMap                        string `json:"teleport_map"`
+		Teleport                           string `json:"teleport"`
+		CampaignGoal                       string `json:"campaign_goal"`
+		TeleportAfter                      string `json:"teleport_after"`
+		TeleportAfterFrames                int    `json:"teleport_after_frames"`
+		TeleportReturn                     string `json:"teleport_return"`
+		TeleportReturnAfterFrames          int    `json:"teleport_return_after_frames"`
+		JumpAfterTeleportFrames            int    `json:"jump_after_teleport_frames"`
+		JumpAgainAfterTeleportFrames       int    `json:"jump_again_after_teleport_frames"`
+		SpawnMap                           string `json:"spawn_map"`
+		SpawnSoldier                       string `json:"spawn_soldier"`
+		SpawnClass                         string `json:"spawn_class"`
+		ObservationGapStart                int    `json:"observation_gap_start"`
+		ObservationGapFrames               int    `json:"observation_gap_frames"`
+		LineCross                          bool   `json:"line_cross"`
+		HoldPosition                       bool   `json:"hold_position"`
+		HoldPositionMap                    string `json:"hold_position_map"`
+		GroundEdgeProbe                    bool   `json:"ground_edge_probe"`
+		NoAAS                              bool   `json:"no_aas"`
+		DoorProbe                          bool   `json:"door_probe"`
+		DoorPassProbe                      bool   `json:"door_pass_probe"`
+		DoorPassSpeed                      int    `json:"door_pass_speed"`
+		ButtonProbe                        bool   `json:"button_probe"`
+		ButtonAutoGoal                     bool   `json:"button_auto_goal"`
+		NoBSP                              bool   `json:"no_bsp"`
+		PartialBSP                         bool   `json:"partial_bsp"`
+		HideDoor53                         bool   `json:"hide_door_53"`
 	} `json:"test"`
 }
 
@@ -231,6 +236,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.CombatMode, cfg.CombatProviderFile = file.Combat.Mode, resolve(file.Combat.ProviderFile)
 	cfg.CombatActionQualityGuard = file.Combat.ActionQualityGuard
 	cfg.CombatCheckedWallSlide = file.Combat.CheckedWallSlide
+	cfg.CombatExecutionContract = file.Combat.ExecutionContract
 	cfg.CombatDiagnosticNominalAim = file.Combat.DiagnosticNominalAim
 	cfg.CombatLiveCompanion = file.Combat.LiveCompanion
 	cfg.TestCampaignCombatEvaluation = file.Test.CampaignCombatEvaluation
@@ -256,6 +262,10 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestCombatBarrier = file.Test.CombatBarrier
 	cfg.TestSynchronous = file.Test.Synchronous
 	cfg.TestCombatOnly = file.Test.CombatOnly
+	cfg.TestStoppedCrouchProbeFrame = file.Test.StoppedCrouchProbeFrame
+	cfg.TestCheckedGroundRequestProbeFrame = file.Test.CheckedGroundRequestProbeFrame
+	cfg.TestCheckedGroundRequestProbeAllFrames = file.Test.CheckedGroundRequestProbeAllFrames
+	cfg.TestStoppedCrouchProbeAllFrames = file.Test.StoppedCrouchProbeAllFrames
 	cfg.TestTeacherVertical = file.Test.TeacherVertical
 	cfg.TestCombatAdvice = file.Test.CombatAdvice
 	cfg.TestLight = file.Test.Light

@@ -1,0 +1,57 @@
+{
+  "version": "combat_categorical_decision_probe_v1",
+  "source": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-curriculum-balance-v1-20261024\\balanced\\initializer",
+  "source_weights_sha256": "4e31f0c160175fc316de7281c2a81a9d36b4b16aca296e6829f95983498a06d7",
+  "corpus": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-curriculum-balance-v1-20261024\\balanced\\corpus",
+  "control_update": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-curriculum-balance-v1-20261024\\balanced\\update",
+  "control_weights_sha256": "b8e60f8b0843761cd611c996f68da639f5b239f88ecb718eb0c050da78f88cba",
+  "factor_audit": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-decision-factor-change-audit-v1-20261024",
+  "factor_audit_report_sha256": "30ec560e8ecd0f8f5d281812c3d255eceb612cffd1964fb4229c2b01257e0a3d",
+  "actor_steps": 30,
+  "group_lrs": [
+    3e-05,
+    3e-05,
+    0.0003,
+    0.0003
+  ],
+  "groups": [
+    "decision_rows_head",
+    "decision_rows_residual",
+    "weapon_state_branch",
+    "conditional_fire_branch"
+  ],
+  "full_sample_k3_max": 0.005,
+  "base_sample_k3_max": 0.0025,
+  "clip": 0.2,
+  "entropy": 0.001,
+  "gradient_norm": 0.5,
+  "frozen": [
+    "encoder",
+    "attention",
+    "movement_means",
+    "conditional_aim_means",
+    "std",
+    "geometry",
+    "motor_branch",
+    "aim_mode"
+  ],
+  "mechanical_gate": {
+    "selected_conditional_kl_ratio_to_control_at_least": 3,
+    "gaussian_means_exact": true,
+    "std_exact": true,
+    "source_checkpoint_exact": true,
+    "source_optimizers_exact": true,
+    "guard_passed": true
+  },
+  "source_scope_updates": 4,
+  "cases": 24,
+  "rows": 2889,
+  "rollout_device": "cuda",
+  "training_device": "cuda",
+  "new_games": 0,
+  "critic_fit": false,
+  "weights_written": false,
+  "checkpoint_written": false,
+  "promotion": false,
+  "scope": "Disposable alternate actor fit from original source on its own still-unconsumed TRAIN corpus. Same joint PPO surrogate, optimizer moments, LR/clip/KL/cap as control; only motor trainability excluded. Mechanical evidence only, no battle-quality or optimal-action claim."
+}

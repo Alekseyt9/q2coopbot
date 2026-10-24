@@ -129,6 +129,8 @@ def advantages(rows,gamma,lam):
 def restore_checkpoint(path,model_path,config,actor,value,std,rollout_sha):
     """Load only our tensor/primitive checkpoint, and verify exported weights."""
     checkpoint=torch.load(path,map_location='cpu',weights_only=True)
+    from combat_checkpoint_scope import require_checkpoint_scope
+    require_checkpoint_scope(checkpoint)
     if checkpoint.get('version')=='combat_ppo_checkpoint_v2':
         assert checkpoint['weights_sha256']==sha(model_path), 'Checkpoint belongs to other weights'
         consumed=checkpoint['consumed_rollouts'];updates=checkpoint['updates_completed'];steps=checkpoint['total_actor_steps']
@@ -147,6 +149,9 @@ def restore_checkpoint(path,model_path,config,actor,value,std,rollout_sha):
     return checkpoint,consumed,updates,steps
 
 def validate_objective(config,meta):
+    assert not meta.get('diagnostic_only'), 'Diagnostic intervention trajectories cannot enter ordinary PPO fitting'
+    from combat_execution_contract import require_same
+    require_same(config.get('combat_execution_contract'),meta.get('combat_execution_contract'))
     expected=config.get('objective_reward_sha256')
     if meta.get('reward_version') in ('combat_reward_v10','combat_reward_v11'):
         assert expected, 'Navigation/coop objective must be pinned in training config'
@@ -154,8 +159,8 @@ def validate_objective(config,meta):
     if meta.get('reward_version') == 'combat_reward_v11':
         assert meta.get('paired_adapter_verified') and meta.get('paired_training_ready'), 'Coop objective requires finalized paired adapter'
         assert meta.get('numerical_verification') == 'cuda_verified_v1'
-    assert meta.get('reward_version') not in ('combat_reward_v2','combat_reward_v3','combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v12','combat_reward_v13') or expected, 'Kill objective must be pinned in training config'
-    if meta.get('reward_version') in ('combat_reward_v3','combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v12','combat_reward_v13'):
+    assert meta.get('reward_version') not in ('combat_reward_v2','combat_reward_v3','combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v12','combat_reward_v13','combat_reward_v14') or expected, 'Kill objective must be pinned in training config'
+    if meta.get('reward_version') in ('combat_reward_v3','combat_reward_v4','combat_reward_v5','combat_reward_v6','combat_reward_v7','combat_reward_v8','combat_reward_v9','combat_reward_v12','combat_reward_v13','combat_reward_v14'):
         assert meta.get('aim_gamma')==config['gamma'], 'Aim shaping discount differs from PPO gamma'
     if expected:
         assert expected.lower()==meta.get('reward_config_sha256','').lower(), 'Rollout reward differs from checkpoint objective'
@@ -176,6 +181,9 @@ def main():
         (out/'report.json').write_text(json.dumps({'scope':'BC initialized stochastic actor, zero value; no PPO update yet','bc_sha256':sha(pathlib.Path(a.init_bc)),'config_sha256':sha(pathlib.Path(a.config))},indent=2));return
     assert a.model and a.data
     model_path=pathlib.Path(a.model);root=pathlib.Path(a.data);model=json.loads(model_path.read_text());meta=json.loads((root/'report.json').read_text())
+    assert not model.get('memory_recovery'),'Memory recovery needs explicit PPO checkpoint/optimizer/retention migration before ordinary training'
+    assert not model.get('target_sampling'),'Target calibration requires explicit checkpoint and optimizer migration before training'
+    assert not model.get('movement_inertia'),'Movement inertia requires explicit PPO initializer/checkpoint/optimizer/retention migration'
     assert not model.get('execution_mode'), 'Inference-only execution modes cannot train PPO'
     assert not model.get('diagnostic_joint_aim_probe') and model.get('diagnostic_movement_probe') is None and model.get('diagnostic_continuation_probe') is None, 'Diagnostic acquisition cannot train ordinary PPO'
     assert not model.get('aim_candidate_head',{}).get('shared_scorer'), 'Shared scorer optimizer/resume is not integrated'

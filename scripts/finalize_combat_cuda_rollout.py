@@ -31,8 +31,8 @@ def finalize(model_path, data, out):
     if model.get('action_distribution'):
         from combat_joint_aim_policy import JointAim,base_model
         diagnostic_probe=bool(model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') or model.get('diagnostic_continuation_probe'))
-        core_model=base_model(model,allow_probe=diagnostic_probe,allow_shared=True)
-        joint=JointAim(model,allow_probe=diagnostic_probe,allow_shared=True)
+        core_model=base_model(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True)
+        joint=JointAim(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True)
     paired = meta.get('paired_adapter_version')
     if paired:
         assert paired == 'coop_primary_native_adapter_v1' and meta['paired_adapter_verified']
@@ -52,6 +52,7 @@ def finalize(model_path, data, out):
                         sha(pathlib.Path(__file__).with_name('combat_sequence_storage.py'))})
     weapon_helpers=[]
     if joint is not None:
+        weapon_helpers.append(pathlib.Path(__file__).with_name('combat_target_sampling.py').resolve())
         if model.get('diagnostic_continuation_probe'):
             weapon_helpers.append(pathlib.Path(__file__).with_name('combat_continuation_probe.py').resolve())
         if model.get('diagnostic_movement_probe'):
@@ -261,11 +262,26 @@ def finalize(model_path, data, out):
     if model.get('aim_candidate_head',{}).get('shared_scorer'):
         audit.update(shared_candidate_all_logits_max_error=shared_logit_error,shared_candidate_all_probabilities_max_error=shared_probability_error,
                      shared_candidate_frames=len(records),shared_candidate_precision='float64' if joint.geometry_head else 'float32',ordinary_training_eligible=False)
+    if model.get('memory_recovery'):
+        audit.update(memory_recovery_version=model['memory_recovery']['version'],memory_recovery_training_supported=False,ordinary_training_eligible=False)
+    if model.get('target_sampling'):
+        audit.update(target_sampling_version=model['target_sampling']['version'],target_temperature=model['target_sampling']['temperature'],target_sampling_training_supported=False,ordinary_training_eligible=False)
+    if model.get('movement_inertia'):
+        audit.update(movement_inertia_version=model['movement_inertia']['version'],movement_inertia_training_supported=False,ordinary_training_eligible=False)
+    if meta.get('diagnostic_stopped_crouch_frame',0) or meta.get('diagnostic_stopped_crouch_all_frames',False):
+        audit.update(diagnostic_stopped_crouch_frame=meta.get('diagnostic_stopped_crouch_frame',0),
+                     diagnostic_stopped_crouch_all_frames=meta.get('diagnostic_stopped_crouch_all_frames',False),ordinary_training_eligible=False)
+    if meta.get('diagnostic_checked_ground_request_frame',0) or meta.get('diagnostic_checked_ground_request_all_frames',False):
+        audit.update(diagnostic_checked_ground_request_frame=meta.get('diagnostic_checked_ground_request_frame',0),diagnostic_checked_ground_request_all_frames=meta.get('diagnostic_checked_ground_request_all_frames',False),ordinary_training_eligible=False)
     save(out / 'cuda-verification.json', audit)
     sources[str((out / 'cuda-verification.json').resolve())] = sha(out / 'cuda-verification.json')
     meta.update(version='combat_ppo_rollout_v1', numerical_verification='cuda_verified_v1',
                 rollout_sha256=sha(out / 'rollout.jsonl'), source_sha256=sources,
                 cuda_verification_sha256=sha(out / 'cuda-verification.json'))
+    if meta.get('diagnostic_stopped_crouch_frame',0) or meta.get('diagnostic_stopped_crouch_all_frames',False):
+        meta.update(version='combat_diagnostic_stopped_crouch_rollout_v1',diagnostic_only=True,ppo_training_ready=False)
+    if meta.get('diagnostic_checked_ground_request_frame',0) or meta.get('diagnostic_checked_ground_request_all_frames',False):
+        meta.update(version='combat_diagnostic_checked_ground_rollout_v1',diagnostic_only=True,ppo_training_ready=False)
     if model.get('diagnostic_joint_aim_probe'):
         meta.update(version='combat_diagnostic_joint_aim_probe_rollout_v1',diagnostic_only=True,ppo_training_ready=False,
                     diagnostic_probe_version=model['diagnostic_joint_aim_probe']['version'])
@@ -274,6 +290,12 @@ def finalize(model_path, data, out):
                     diagnostic_movement_version=model['diagnostic_movement_probe']['version'])
     if model.get('aim_candidate_head',{}).get('shared_scorer'):
         meta.update(shared_scorer_training_supported=False,ppo_training_ready=False)
+    if model.get('memory_recovery'):
+        meta.update(memory_recovery_version=model['memory_recovery']['version'],memory_recovery_training_supported=False,ppo_training_ready=False)
+    if model.get('target_sampling'):
+        meta.update(target_sampling_version=model['target_sampling']['version'],target_temperature=model['target_sampling']['temperature'],target_sampling_training_supported=False,ppo_training_ready=False,ordinary_training_eligible=False)
+    if model.get('movement_inertia'):
+        meta.update(movement_inertia_version=model['movement_inertia']['version'],movement_inertia_training_supported=False,ppo_training_ready=False,ordinary_training_eligible=False)
     if model.get('diagnostic_continuation_probe'):
         meta.update(version='combat_diagnostic_continuation_rollout_v1',diagnostic_only=True,ppo_training_ready=False,
                     diagnostic_continuation_version=model['diagnostic_continuation_probe']['version'])

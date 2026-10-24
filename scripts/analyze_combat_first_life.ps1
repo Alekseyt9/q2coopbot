@@ -1,9 +1,13 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$RunRoot)
+param([Parameter(Mandatory)][string]$RunRoot,[ValidateRange(0,2147483647)][int]$EndObservationFrame=0)
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot/read_damage_events.ps1"
 $root=(Resolve-Path -LiteralPath $RunRoot).Path
 $rows=@(Get-Content -LiteralPath (Join-Path $root 'bot.jsonl') | ForEach-Object {$_|ConvertFrom-Json})
+if($EndObservationFrame){
+    if(@($rows|Where-Object observation_frame -eq $EndObservationFrame).Count -ne 1){throw 'Requested first-life endpoint observation missing or duplicated'}
+    $rows=@($rows|Where-Object observation_frame -le $EndObservationFrame)
+}
 if(!$rows.Count -or $rows[0].self_entity -lt 1){throw 'Observed bot identity required'}
 $start=$rows[0];$actor=[int]$start.self_entity
 $life=@();$endReason='trace_end'
@@ -13,6 +17,10 @@ foreach($row in $rows){
     if($row.health -le 0){$endReason='first_observed_death';break}
 }
 $end=$life[-1]
+if($EndObservationFrame){
+    if($end.observation_frame -ne $EndObservationFrame -or $end.health -le 0){throw 'Goal boundary is not an alive first-life observation'}
+    $endReason='observed_goal_boundary'
+}
 $events=@(Read-DamageEvents (Join-Path $root 'server.log') | Where-Object {$_.map -eq $start.map -and $_.spawncount -eq $start.spawncount -and $_.frame -ge $start.frame -and $_.frame -le $end.frame})
 $incoming=@($events|Where-Object target -eq $actor)
 $aims=@(foreach($row in $life){

@@ -1,0 +1,32 @@
+{
+  "version": "combat_action_inertia_experiment_v1",
+  "source": "workspace/artifacts/combat-geometry-nonterminal-objective-v3-20261023/initializer",
+  "source_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "dataset": "workspace/artifacts/combat-memory-contact-refresh-lifecycle-v2-20261024",
+  "source_roles": "TRAIN only,24whole worlds; no development data in source statistics, projection checks, fitting or parameter selection",
+  "rho": 0.65,
+  "mean_clamp_epsilon": 0.000244140625,
+  "transform": "Only raw movement means0:2 AFTER existing motor. desired=tanh(source_mean), previous=features13:15 (actual previous sent forward/side /400). blended=(1-rho)*desired+rho*clamp(previous,-1,1). mean=atanh(clamp(blended,-1+eps,1-eps)). rho0 short-circuits to exact source output.",
+  "gaussian": "Movement log_std0:2 add0.5*log(1-rho*rho); angle std unchanged. This is a specified noise budget rule, not a claim of equal stationary variance in nonlinear game dynamics. Density is conditional on the observed previous executed command; no hidden noise state or temporal RNG correlation.",
+  "variants": [
+    "source",
+    "noise-only: same movement std change, source mean",
+    "inertia: rho0.65 mean transform plus same std change",
+    "rules"
+  ],
+  "hypotheses": "Persistent movement may reduce per-frame reversals; pure variance reduction is a separate alternative. Faster aim/target/fire policy remains source and retains its normal movement coupling. No hardcoded target/evade direction or gaze servo.",
+  "stages": [
+    "CUDA real-history source cache and descriptive TRAIN statistics",
+    "CUDA zero identity/nonzero scope/conditional Gaussian density and reload",
+    "Native zero/source compatibility on4maps, real CUDA replay",
+    "Fresh8-case per variant exploratory screen:32native/24CUDA,4maps,4ordinary+4recovery",
+    "Only if promising: fresh24-case source/winner/rules check; then explicit PPO initializer/checkpoint/optimizer/retention migration before training under the new transform"
+  ],
+  "admission": "No automatic promotion. Primary native alive-goal/death/received comparisons; actual shot and movement diagnostics secondary. Inertia must be compared to both source and noise-only to identify the effect of mean feedback. If gains come only from noise-only, prefer simpler candidate. Offline statistics never prove quality.",
+  "max_instances": 16,
+  "timescale": 2,
+  "neural_device": "cuda",
+  "training_performed": false,
+  "ordinary_training_eligible": false,
+  "promotion": false
+}

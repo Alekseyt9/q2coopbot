@@ -598,6 +598,11 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 			if e != nil {
 				return frames, e
 			}
+			if int(idx) == inventorySnapshotConfig && strings.HasPrefix(value, inventorySnapshotPrefix) {
+				if e := d.applyInventorySnapshot(value); e != nil {
+					return frames, e
+				}
+			}
 			d.Config[int(idx)] = value
 			if d.lastTeammateEntity > 0 && int(idx) == playerSkinsConfigBase+d.lastTeammateEntity-1 {
 				d.lastTeammate = nil

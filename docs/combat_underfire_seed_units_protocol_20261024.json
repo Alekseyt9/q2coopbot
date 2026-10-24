@@ -1,0 +1,20 @@
+{
+  "version":"combat_movement_underfire_seed_units_v1",
+  "source":"workspace/artifacts/combat-geometry-nonterminal-objective-v3-20261023/initializer",
+  "source_weights_sha256":"559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "corpus":"workspace/artifacts/combat-underfire-teacher-corpus-v1-20261024",
+  "dataset":"workspace/artifacts/combat-underfire-teacher-dataset-v1-20261024",
+  "registry":"workspace/artifacts/combat-enemy-fresh-preparation-v1-20261023/registry/index.json",
+  "maps":["base3","city1","jail1","ware2"],
+  "selection":"Lowest eligible auxiliary TRAIN seed per map, each world's earliest sealed observed past-HP-drop context. No development root, no future outcome selection or replacement.",
+  "variants":[
+    {"label":"control","mean_shift":[0,0],"duration":5},
+    {"label":"left","mean_shift":[0,-1.25],"duration":5},
+    {"label":"right","mean_shift":[0,1.25],"duration":5},
+    {"label":"forward","mean_shift":[1.25,0],"duration":5},
+    {"label":"backward","mean_shift":[-1.25,0],"duration":5}
+  ],
+  "purpose":"CUDA fixed-history, source neural identity, diagnostic movement and zero-shift preparation only. Native collection uses separately sealed continuation units and pilot protocol; no separate native runs of these base models.",
+  "training_performed":false,
+  "promotion":false
+}

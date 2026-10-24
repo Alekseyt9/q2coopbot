@@ -43,6 +43,22 @@ function Get-CombatEarliestGoalReceipt($Rows, $Events, $Release, [string[]]$Clas
     }
 }
 
+function Get-CombatVerifiedSavedGoalReceipt($Saved, $Rows, $Events, $Release, [string[]]$Classes, [string]$Map='base1') {
+    # Final process shutdown may append a later death. Verify the already
+    # selected earliest complete transition, rather than the last trace row.
+    if(!$Saved){return $null}
+    $verified=Get-CombatEarliestGoalReceipt $Rows $Events $Release $Classes $Map
+    if(!$verified){return $null}
+    foreach($key in @('version','reason','spawncount','actor','kill_frame','observed_frame','health')){
+        if($Saved.$key -ne $verified.$key){return $null}
+    }
+    if(($Saved.classes -join '|') -ne ($verified.classes -join '|')){return $null}
+    $savedKills=@($Saved.kills|Select-Object frame,target,target_class)|ConvertTo-Json -Depth 6 -Compress
+    $verifiedKills=@($verified.kills|Select-Object frame,target,target_class)|ConvertTo-Json -Depth 6 -Compress
+    if($savedKills -ne $verifiedKills){return $null}
+    return $verified
+}
+
 function Wait-CombatGoalOrExit($Bot, [string]$Root, [int]$TimeoutMilliseconds, [string[]]$Classes, [string]$Map='base1', [bool]$FirstDeath=$false) {
     . "$PSScriptRoot/read_damage_events.ps1"
     . "$PSScriptRoot/combat_trace_reader.ps1"

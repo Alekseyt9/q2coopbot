@@ -87,19 +87,24 @@ func run() error {
 		return trainingepisodes.MergeRollouts(strings.Split(*merge, ","), *out)
 	}
 	var manifest struct {
-		Provider          string                   `json:"provider"`
-		Kind              string                   `json:"provider_kind"`
-		Synchronous       bool                     `json:"synchronous"`
-		ObservationTiming string                   `json:"observation_timing_contract"`
-		RewardSHA         string                   `json:"reward_config_sha256"`
-		ExporterSHA       string                   `json:"exporter_sha256"`
-		ModelSHA          string                   `json:"model_weights_sha256"`
-		Reward            learningenv.RewardConfig `json:"reward_config"`
-		TrainingHealth    int                      `json:"training_monster_health"`
-		PostFrameRNG      bool                     `json:"post_frame_rng_reset"`
-		ReleaseFrame      int                      `json:"release_game_frame"`
-		Loadout           string                   `json:"loadout"`
-		StopOnGoal        bool                     `json:"stop_on_goal"`
+		ExecutionContract                  string                   `json:"combat_execution_contract"`
+		Provider                           string                   `json:"provider"`
+		Kind                               string                   `json:"provider_kind"`
+		Synchronous                        bool                     `json:"synchronous"`
+		ObservationTiming                  string                   `json:"observation_timing_contract"`
+		RewardSHA                          string                   `json:"reward_config_sha256"`
+		ExporterSHA                        string                   `json:"exporter_sha256"`
+		ModelSHA                           string                   `json:"model_weights_sha256"`
+		Reward                             learningenv.RewardConfig `json:"reward_config"`
+		TrainingHealth                     int                      `json:"training_monster_health"`
+		PostFrameRNG                       bool                     `json:"post_frame_rng_reset"`
+		ReleaseFrame                       int                      `json:"release_game_frame"`
+		Loadout                            string                   `json:"loadout"`
+		StopOnGoal                         bool                     `json:"stop_on_goal"`
+		StoppedCrouchProbeFrame            int                      `json:"diagnostic_stopped_crouch_frame"`
+		CheckedGroundRequestProbeFrame     int                      `json:"diagnostic_checked_ground_request_frame"`
+		CheckedGroundRequestProbeAllFrames bool                     `json:"diagnostic_checked_ground_request_all_frames"`
+		StoppedCrouchProbeAllFrames        bool                     `json:"diagnostic_stopped_crouch_all_frames"`
 	}
 	if e := read(filepath.Join(*batch, "manifest.json"), &manifest); e != nil {
 		return e
@@ -120,6 +125,13 @@ func run() error {
 	behavior, e := policy.LoadPPO(*model)
 	if e != nil {
 		return e
+	}
+	executionContract, e := policy.CombatExecutionContract(manifest.ExecutionContract)
+	if e != nil {
+		return e
+	}
+	if behavior.CombatExecutionContract() != executionContract {
+		return fmt.Errorf("model execution contract differs from manifest")
 	}
 	if !behavior.IsStochastic() && !(*cudaOnly && behavior.IsDiagnosticCombatProbe()) {
 		return fmt.Errorf("inference-only, deterministic or diagnostic rollout cannot train PPO")
@@ -210,11 +222,16 @@ func run() error {
 				TeleportMap string `json:"teleport_map"`
 			} `json:"test"`
 			Combat struct {
-				File string `json:"provider_file"`
+				File              string `json:"provider_file"`
+				ExecutionContract string `json:"execution_contract"`
 			} `json:"combat"`
 		}
 		if e = read(filepath.Join(r.Root, "bot-config.json"), &cfg); e != nil {
 			return e
+		}
+		actualContract, contractErr := policy.CombatExecutionContract(cfg.Combat.ExecutionContract)
+		if contractErr != nil || actualContract != executionContract {
+			return fmt.Errorf("episode execution contract differs from manifest")
 		}
 		h, e := sha(cfg.Combat.File)
 		if e != nil {
@@ -589,12 +606,25 @@ func run() error {
 	}
 	metadata := map[string]any{"version": "combat_ppo_rollout_v1", "feature_version": behavior.FeatureVersion(), "reward_config_sha256": strings.ToLower(manifest.RewardSHA), "reward_version": manifest.Reward.Version, "aim_gamma": manifest.Reward.AimGamma, "training_monster_health": manifest.TrainingHealth, "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE; v2 verified control handoff retains reward with zero segment bootstrap; full world reset equivalence unproven"}
 	metadata["observation_timing_contract"] = manifest.ObservationTiming
+	metadata["combat_execution_contract"] = executionContract
 	if manifest.ObservationTiming == "" {
 		metadata["observation_timing_contract"] = "legacy_wall_clock_v0"
 	}
 	if manifest.Reward.HandoffBootstrap != "" {
 		metadata["handoff_bootstrap"] = manifest.Reward.HandoffBootstrap
 		metadata["scope"] = "Explicit objective fork: verified goals/deaths close bootstrap; unfinished ownership handoffs retain exact observed next-state CUDA value."
+	}
+	if manifest.CheckedGroundRequestProbeFrame > 0 || manifest.CheckedGroundRequestProbeAllFrames {
+		metadata["diagnostic_only"] = true
+		metadata["ppo_training_ready"] = false
+		metadata["diagnostic_checked_ground_request_frame"] = manifest.CheckedGroundRequestProbeFrame
+		metadata["diagnostic_checked_ground_request_all_frames"] = manifest.CheckedGroundRequestProbeAllFrames
+	}
+	if manifest.StoppedCrouchProbeFrame > 0 || manifest.StoppedCrouchProbeAllFrames {
+		metadata["diagnostic_only"] = true
+		metadata["ppo_training_ready"] = false
+		metadata["diagnostic_stopped_crouch_frame"] = manifest.StoppedCrouchProbeFrame
+		metadata["diagnostic_stopped_crouch_all_frames"] = manifest.StoppedCrouchProbeAllFrames
 	}
 	if *cudaOnly {
 		if behavior.IsDiagnosticCombatProbe() {

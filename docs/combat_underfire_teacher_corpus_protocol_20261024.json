@@ -1,0 +1,23 @@
+{
+  "version":"combat_underfire_teacher_corpus_v1",
+  "source":"workspace/artifacts/combat-geometry-nonterminal-objective-v3-20261023/initializer",
+  "source_weights_sha256":"559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "registry":"workspace/artifacts/combat-enemy-fresh-preparation-v1-20261023/registry/index.json",
+  "episodes_source":"workspace/artifacts/combat-enemy-fresh-preparation-v1-20261023/report.json",
+  "maps":["base3","city1","jail1","ware2"],
+  "collection":"32 unchanged-source native cases, 8 existing site02 families times4 unused TRAIN-registry seeds, start offset204 and search unused range before freeze. Single dynamic pool16, timescale2. All neural work CUDA. No validation/confirmation catalogs used.",
+  "world_roles":{"train_slots":[0,1,2],"development_slots":[3]},
+  "excluded_dataset":"workspace/artifacts/combat-enemy-fresh-dataset-v1-20261023",
+  "excluded_world_seeds":[1164065144,1228065144,1174065146,1172065145],
+  "role":"24whole worlds auxiliary training,8whole worlds exploratory auxiliary development, split by within-family seed slot before outcomes. Native actor remains unchanged. No ordinary PPO fitting from diagnostic interventions. Prior fresh32audit worlds and previous4MC worlds excluded entirely.",
+  "observed_damage_context":"Same observable-only earliest eligible root as fresh coverage audit: first-life provider frame at least10after release, observed HP lower than immediately previous consecutive same-actor/spawn provider observation, alive/on_ground, visible enemy and eligible recorded aim candidate, vertical0. At most1root/world. No future damage or utility selection; no replacing missing contexts by outcome.",
+  "purpose":"Acquire independent source trajectories and observable contexts for an auxiliary H5/H10 movement teacher. Before a large branching corpus, run a three-continuation pilot on lowest eligible TRAIN seed per map. Development never participates in pilot selection or fitting; future model evaluation must respect these world roles.",
+  "native_cases":32,
+  "cuda_cases":32,
+  "max_instances":16,
+  "timescale":2,
+  "training_performed":false,
+  "actor_training":false,
+  "ordinary_training_eligible":false,
+  "promotion":false
+}

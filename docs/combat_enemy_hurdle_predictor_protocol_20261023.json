@@ -1,0 +1,18 @@
+{
+  "version":"combat_enemy_hurdle_predictor_experiment_v1",
+  "parent_protocol":"docs/combat_enemy_threat_predictor_protocol_20261023.json",
+  "parent_experiment":"workspace/artifacts/combat-enemy-threat-predictors-v1-20261023",
+  "dataset":"workspace/artifacts/combat-enemy-threat-dataset-v1-20261023",
+  "purpose":"Test a coherent two-part received-damage forecast after the fixed shared-node model improved event BCE but overpredicted mean damage. New parameterization and objective, not continuation/checkpoint tuning of that endpoint.",
+  "hypothesis":"Expected per-enemy damage=P(damage event)*E(HP|damage event). Learning a conditional positive amount ties zero-event regions to small expected damage instead of independent unconditional softplus leakage.",
+  "architecture":"Same shared185→32→16→2,6514parameters and full animation/action inputs. Head0is event logit, head1positive conditional damage softplus(/20). Separate model version prevents decoding as the previous independent-mean head.",
+  "loss":"Equal four terms: visible-node BCE, conditional-positive amount MSE(/20) on strictly positive node targets only, aggregate actor event BCE, aggregate expected amount MSE(/20). Root/world/frame weights unchanged; positives are not resampled. No native unknown attacker is reassigned.",
+  "training":{"device":"cuda","seed":2026102311,"steps":800,"batch_size":512,"learning_rate":0.001,"weight_decay":0.0001,"gradient_clip":1,"endpoint_selection":"fixed final step only"},
+  "baselines":"Frozen preceding shared phase/no-phase model reports, per-type TRAIN constants and frozen flat H1head, same dataset/splits. New model starts from fresh deterministic initialization, not saved fitted weights.",
+  "admission":"Exactly unchanged predictive admission thresholds from parent protocol. Development remains exploratory. No threshold lowering for preceding RMSEratio0.9547instead of0.95. No runtime action admission even on a predictive pass; fresh cases and nonzero counterfactual effects still required.",
+  "challenge":"Retain same known-zero H1counterfactual and exact same-root-action short/long invariance. Report false amount leakage and action deltas; not a test of successful evasion.",
+  "actor_training":false,
+  "ordinary_training_eligible":false,
+  "runtime_action_admitted":false,
+  "promotion":false
+}

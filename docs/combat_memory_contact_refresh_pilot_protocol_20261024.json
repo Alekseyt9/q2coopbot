@@ -1,0 +1,42 @@
+{
+  "version": "combat_movement_continuation_stability_v1",
+  "study": "combat_memory_contact_movement_refresh_v1",
+  "source_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "corpus": "workspace/artifacts/combat-memory-contact-refresh-corpus-v2-20261024",
+  "prepared_index": "workspace/artifacts/combat-memory-contact-refresh-units-v2-20261024",
+  "continuation_replicates": 3,
+  "continuation_seeds": [
+    2026102415,
+    2026102416,
+    2026102417
+  ],
+  "movement_duration_frames": 5,
+  "movement_labels": [
+    "control",
+    "left",
+    "right",
+    "forward",
+    "backward"
+  ],
+  "motivation": "Repeat causal contact-loss movement after the frozen-inventory nondeterminism and packet-capacity issues were repaired. Fresh source worlds and native bindings; source actor/critic/aim/fire frozen. No selecting from prior technically excluded branch data.",
+  "selection": "First2 future streams select by mean alive-goal, then mean kills, then observed full-task utility4*goal+.25*kills-received/100-death. Fixed label order for ties. Third stream excluded from selection. Alive unfinished is censored; no invented terminal outcome or post-limit survival reward.",
+  "controls": "Exact nofork/source replay, fork-prefix/root/category/draw and five-frame movement-window audits. Zero-fork/reference must agree; preserve original full-capture flags. The predeclared raw-window goal-tail supplement may admit only identical verified alive goals with exact common observations/commands/completion window and independently empty strictly post-goal tails. Never admit differing pre-goal inputs, changed goal signatures or unknown unverified tails. All five actions and ordinary reference in each stream, one nofork per world. No seed replacement.",
+  "signal": {
+    "minimum_strict_units": 12,
+    "minimum_complete_pairs": 4,
+    "minimum_net_gained_alive_goals": 1,
+    "maximum_lost_alive_goals": 1,
+    "minimum_worlds_positive_utility": 2,
+    "minimum_mean_utility_gain": 0.1
+  },
+  "interpretation": "4 dependent TRAIN-world conditional repeats, not policy superiority. Full capture controls required. Reacquisition timing descriptive only; full task outcomes govern scaling.",
+  "native_cases": 76,
+  "cuda_cases": 76,
+  "max_instances": 16,
+  "timescale": 2,
+  "training_performed": false,
+  "ordinary_training_eligible": false,
+  "promotion": false,
+  "goal_tail_protocol": "docs/combat_continuation_goal_tail_raw_supplement_20261023.json",
+  "control_scope_reason": "Objective ends on verified monster kills. Client recording may differ only after that boundary; use existing explicit task-equivalence proof, not numerical tolerance or missing-data zero-fill. This is frozen before any refreshed branch outcomes; old failed proofs stay unchanged."
+}

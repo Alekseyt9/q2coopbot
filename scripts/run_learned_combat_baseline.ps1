@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+    [ValidateSet('legacy_v1','checked_ground_crouch_v1')][string]$ExecutionContract='legacy_v1',
     [ValidateRange(1,4)][int]$Workers=4,
     [ValidateRange(1,20)][int]$EpisodesPerWorker=2,
     [ValidateSet(1,2)][int]$Timescale=2,
@@ -15,6 +16,11 @@ param(
     [ValidateSet('standard','remaining-far')][string]$SoloFixture='standard',
     [switch]$HealthKit,
     [switch]$Synchronous,
+    [ValidateRange(0,1000000)][int]$InventoryDropOnceFrame=0,
+    [ValidateRange(0,1000000)][int]$StoppedCrouchProbeFrame=0,
+    [ValidateRange(0,1000000)][int]$CheckedGroundRequestProbeFrame=0,
+    [switch]$CheckedGroundRequestProbeAllFrames,
+    [switch]$StoppedCrouchProbeAllFrames,
     [switch]$CheckedWallSlide,
     [switch]$DiagnosticNominalAim,
     [switch]$StopOnGoal,
@@ -32,8 +38,13 @@ param(
     [string]$OutputRoot=''
 )
 $ErrorActionPreference='Stop'
+if($ExecutionContract -ne 'legacy_v1' -and (!$Synchronous -or $CombatMode -ne 'learned' -or !$CheckedWallSlide -or $Feedback -or $StoppedCrouchProbeFrame -or $StoppedCrouchProbeAllFrames -or $CheckedGroundRequestProbeFrame -or $CheckedGroundRequestProbeAllFrames -or $DiagnosticNominalAim)){throw 'Execution contract requires exclusive checked synchronous learned capture'}
+if($InventoryDropOnceFrame -and !$Synchronous){throw 'Inventory packet-drop probe requires synchronous capture'}
 if($CombatAdvice -and (!$Synchronous -or $CombatMode -ne 'learned')){throw 'Combat advice requires synchronous learned capture'}
 if($DiagnosticNominalAim -and (!$Synchronous -or $CombatMode -ne 'learned')){throw 'Diagnostic aim requires synchronous learned evaluation'}
+if(($StoppedCrouchProbeFrame -or $StoppedCrouchProbeAllFrames) -and (!$Synchronous -or $CombatMode -ne 'learned' -or $Feedback -or $Workers -ne 1 -or $EpisodesPerWorker -ne 1)){throw 'Stopped crouch probe requires one synchronous learned episode without feedback'}
+if($StoppedCrouchProbeFrame -and $StoppedCrouchProbeAllFrames){throw 'Choose single-frame or all-frame stopped crouch probe'}
+if(($CheckedGroundRequestProbeFrame -or $CheckedGroundRequestProbeAllFrames) -and (!$Synchronous -or $CombatMode -ne 'learned' -or $Feedback -or $Workers -ne 1 -or $EpisodesPerWorker -ne 1 -or $StoppedCrouchProbeFrame -or $StoppedCrouchProbeAllFrames -or ($CheckedGroundRequestProbeFrame -and $CheckedGroundRequestProbeAllFrames))){throw 'Checked ground request requires one exclusive synchronous learned diagnostic episode'}
 if($Seed -lt 0 -or [long]$Seed+$Workers*$EpisodesPerWorker-1 -gt 2147483647){throw 'Each independent episode needs its own valid 31-bit game seed'}
 if([long]$Seed+$Workers*$EpisodesPerWorker-1+$PolicySamplingSeedOffset -gt 2147483647){throw 'Effective policy sampling seed exceeds 31-bit range'}
 if($Synchronous -and $Loadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery'){throw 'Unsupported synchronous loadout'}
@@ -154,11 +165,17 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
         $arguments+=@('-RecoverySkill',$using:Skill)
         $arguments+=@('-ParasiteFixture',$episodeFixture)
         if($samplePath){$arguments+=@('-GeneratedFixture',$samplePath)}
+        if($using:InventoryDropOnceFrame){$arguments+=@('-InventoryDropOnceFrame',$using:InventoryDropOnceFrame)}
         if($using:Synchronous){$arguments+='-Synchronous'};if($using:StopOnGoal){$arguments+='-StopOnGoal'};if($using:StopOnFirstDeath){$arguments+='-StopOnFirstDeath'}
         if($using:TeacherVertical){$arguments+='-TeacherVertical'}
         if($using:CombatAdvice){$arguments+='-CombatAdvice'}
         if($using:CheckedWallSlide){$arguments+='-CheckedWallSlide'}
         if($using:DiagnosticNominalAim){$arguments+='-DiagnosticNominalAim'}
+        if($using:StoppedCrouchProbeFrame){$arguments+=@('-StoppedCrouchProbeFrame',$using:StoppedCrouchProbeFrame)}
+        if($using:CheckedGroundRequestProbeFrame){$arguments+=@('-CheckedGroundRequestProbeFrame',$using:CheckedGroundRequestProbeFrame)}
+        if($using:CheckedGroundRequestProbeAllFrames){$arguments+=@('-CheckedGroundRequestProbeAllFrames')}
+        $arguments+=@('-ExecutionContract',$using:ExecutionContract)
+        if($using:StoppedCrouchProbeAllFrames){$arguments+=@('-StoppedCrouchProbeAllFrames')}
         if($episodeMixed){$arguments+=@('-ParasiteMixed','-ParasiteMixedClass','monster_gunner')}
         if($using:HealthKit){$arguments+='-ParasiteHealthKit'}
         $timer=[Diagnostics.Stopwatch]::StartNew()
@@ -206,8 +223,8 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 $release=@(Get-Content (Join-Path $out 'server.log') | Select-String '^sv_test_combat spawncount=(-?\d+) server_frame=(\d+) g_test_combat_start game_frame=\d+ ready=1 seed=\d+$')
                 if($release.Count -ne 1){throw 'Goal release proof missing'}
                 $classes=if($sample){@($sample.monsters.class)}else{@('monster_parasite')};if(!$sample -and $episodeMixed){$classes+='monster_gunner'}
-                $verified=Get-CombatGoalReceipt $rows[-1] @(Read-DamageEvents (Join-Path $out 'server.log')) @{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value} $classes $captureMap
-                $goalValid=$verified -and $goal.reason -eq 'combat_goal_complete' -and $goal.kill_frame -eq $verified.kill_frame -and $goal.observed_frame -ge $verified.kill_frame+1 -and $goal.observed_frame -le $rows[-1].observation_frame -and $goal.spawncount -eq $verified.spawncount -and $goal.actor -eq $verified.actor -and (Test-Path (Join-Path $out 'goal.stop'))
+                $verified=Get-CombatVerifiedSavedGoalReceipt $goal $rows @(Read-DamageEvents (Join-Path $out 'server.log')) @{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value} $classes $captureMap
+                $goalValid=$verified -and (Test-Path (Join-Path $out 'goal.stop')) -and (Get-Content (Join-Path $out 'goal.stop') -Raw).Trim() -eq 'combat_goal_complete'
                 if(!$goalValid){throw 'Unverified goal stop'}
             }
             $death=$null;$deathValid=$false
@@ -295,6 +312,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             $gunnerCount=[regex]::Matches($entities,'"classname"\s+"monster_gunner"').Count
             $expectedGunners=if($sample){@($sample.monsters|Where-Object class -eq 'monster_gunner').Count}else{[int]$episodeMixed}
             if($gunnerCount -ne $expectedGunners){throw 'Episode composition differs from declared pattern'}
+            if($goalValid){$null=& "$using:repo/scripts/analyze_combat_first_life.ps1" -RunRoot $out -EndObservationFrame $goal.observed_frame}
             $life=Get-Content -LiteralPath (Join-Path $out 'combat-first-life.json') -Raw | ConvertFrom-Json
             $files=@('q2ded.exe','baseq2/game.dll',"baseq2/maps/$captureMap.ent","baseq2/maps/$captureMap.aas") | ForEach-Object {
                 $path=Join-Path (Join-Path $out 'runtime') $_
@@ -349,12 +367,14 @@ $manifest=[ordered]@{
     post_frame_rng_reset=[bool]$Synchronous
     release_game_frame=$ReleaseGameFrame
     fixed_world_hold=[bool]$ReleaseGameFrame
+    inventory_transport_version=$(if($Synchronous){'native_frame_inventory_sparse_v2'}else{'stock_inventory_v1'})
+    inventory_drop_once_frame=$InventoryDropOnceFrame
     stop_on_goal=[bool]$StopOnGoal
     monster_no_infighting=[bool]$Synchronous
     standard_monster_spawn_height=24.125
     game_frame_budget=$(if($Synchronous){'Commands after combat barrier; preparation excluded'}else{'All commands; preparation included'})
     observation_version='combat_observation_v3';action_version='combat_action_v1';reward_version=$(if($RewardConfig){(Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json).version}else{$null});reward_config_sha256=$(if($RewardConfig){$rewardHash}else{$null});reward_config=$(if($RewardConfig){Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json}else{$null});server_outcome_version=$(if($Synchronous){'server_step_effects_v1'}else{'server_damage_window_v1'})
-    timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;skill=$Skill;mixed=[bool]$Mixed;episode_pattern=$EpisodePattern;solo_fixture=$SoloFixture;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous;observation_timing_contract=$(if($Synchronous){'frozen_world_v1'}else{'wall_clock_v1'});teacher_vertical=[bool]$TeacherVertical;combat_advice=[bool]$CombatAdvice;checked_wall_slide=[bool]$CheckedWallSlide;diagnostic_nominal_aim=[bool]$DiagnosticNominalAim
+    timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;skill=$Skill;mixed=[bool]$Mixed;episode_pattern=$EpisodePattern;solo_fixture=$SoloFixture;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous;observation_timing_contract=$(if($Synchronous){'frozen_world_v1'}else{'wall_clock_v1'});teacher_vertical=[bool]$TeacherVertical;combat_advice=[bool]$CombatAdvice;checked_wall_slide=[bool]$CheckedWallSlide;diagnostic_nominal_aim=[bool]$DiagnosticNominalAim;combat_execution_contract=$ExecutionContract;diagnostic_stopped_crouch_frame=$StoppedCrouchProbeFrame;diagnostic_checked_ground_request_frame=$CheckedGroundRequestProbeFrame;diagnostic_checked_ground_request_all_frames=[bool]$CheckedGroundRequestProbeAllFrames;diagnostic_stopped_crouch_all_frames=[bool]$StoppedCrouchProbeAllFrames
     reset=$(if($Synchronous){'Cold native server restart per episode; first usable fixture and fresh inventory verified; single-client barrier confirms independent episode RNG seed. Full-world/AI equivalence remains unconfirmed.'}else{'Cold native server restart per episode, verified first usable observed fixture fields. Inventory/RNG/AI/full-world equivalence remain unconfirmed.'})
     source_fingerprint=$fingerprint;provenance_valid=$valid;sources=$sources
     native_source_fingerprint=$nativeFingerprint;native_sources=$nativeSources
@@ -364,7 +384,7 @@ $manifest=[ordered]@{
     seeds=@($results.seed);physics=$(if($Synchronous){'Stock native PMove and tick; world pauses between synchronous actions, AI frozen during fixture preparation. Live params remain in worker config, without RCON.'}else{'Stock native physics; only timescale and loopback rate differ. Live params remain in worker config, without RCON.'})
     seed_assignments=@($results|Select-Object worker,episode,seed,port,fixture_mixed,solo_fixture)
     stop=$(if($StopOnGoal){'Verified native fixture kills in first life, followed by observed final effect; otherwise fixed game-frame maximum and wall watchdog.'}else{'Fixed game-frame limit per client; scenario wall watchdog; first-life diagnostics and per-life transitions remain separate.'})
-    dataset_scope=$(if($RewardConfig){'Separate observations, execution proof, native effects and explicit experimental first-life rewards. No positive demonstration labels or victory inference.'}else{'Separate observed steps, exact native command dispatch proof and damage effect windows; effects are not shot accuracy or delayed causal credit. No scalar reward or positive demonstration labels.'})
+    dataset_scope=$(if($CheckedGroundRequestProbeAllFrames -or $CheckedGroundRequestProbeFrame -or $StoppedCrouchProbeFrame -or $StoppedCrouchProbeAllFrames){'Diagnostic motion intervention; not eligible for ordinary PPO fitting or automatic promotion.'}elseif($RewardConfig){'Separate observations, execution proof, native effects and explicit experimental first-life rewards. No positive demonstration labels or victory inference.'}else{'Separate observed steps, exact native command dispatch proof and damage effect windows; effects are not shot accuracy or delayed causal credit. No scalar reward or positive demonstration labels.'})
 }
 if($BinaryBundle){$manifest.binary_bundle=$BinaryBundle;$manifest.binary_bundle_receipt_sha256=(Get-FileHash -LiteralPath (Join-Path $BinaryBundle 'receipt.json')).Hash.ToLowerInvariant()}
 $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $OutputRoot 'manifest.json') -Encoding utf8
@@ -377,6 +397,8 @@ $report=[ordered]@{
     gameplay_accepted=@($results | Where-Object harness_accepted).Count
     results=$results
 }
+$report.inventory_drop_once_frame=$InventoryDropOnceFrame
+if($InventoryDropOnceFrame){$report.ordinary_training_eligible=$false}
 $report | ConvertTo-Json -Depth 18 | Set-Content -LiteralPath (Join-Path $OutputRoot 'report.json') -Encoding utf8
 "Baseline: $OutputRoot"
 if(!$KeepRuntimeAssets){

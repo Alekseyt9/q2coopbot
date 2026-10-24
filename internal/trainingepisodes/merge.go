@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"q2coopbot/internal/policy"
 	"reflect"
 )
 
@@ -35,8 +36,18 @@ func MergeRollouts(dirs []string, out string) error {
 		if meta["version"] != "combat_ppo_rollout_v1" {
 			return fmt.Errorf("unsupported rollout")
 		}
+		contract, ok := meta["combat_execution_contract"].(string)
+		if meta["combat_execution_contract"] != nil && !ok {
+			return fmt.Errorf("invalid execution contract type")
+		}
+		contract, err = policy.CombatExecutionContract(contract)
+		if err != nil {
+			return err
+		}
+		meta["combat_execution_contract"] = contract
 		keys := []string{"version", "feature_version", "reward_config_sha256", "reward_version", "aim_gamma", "training_monster_health", "policy_version", "model_sha256", "recurrent_version", "numerical_verification", "paired_adapter_version", "paired_adapter_verified", "paired_training_ready"}
 		keys = append(keys, "action_distribution", "handoff_bootstrap", "observation_timing_contract")
+		keys = append(keys, "combat_execution_contract")
 		if meta["paired_adapter_version"] != nil && (meta["paired_adapter_verified"] != true || meta["paired_training_ready"] != true || meta["numerical_verification"] != "cuda_verified_v1") {
 			return fmt.Errorf("paired rollout is not CUDA finalized")
 		}

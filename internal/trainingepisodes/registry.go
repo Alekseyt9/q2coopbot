@@ -215,7 +215,8 @@ func (e Episode) validate() error {
 			"scripts/scenarios/combat-reward-selected-aim-v8.json", "scripts/scenarios/combat-reward-native-waste-v9.json",
 			"scripts/scenarios/combat-reward-target-commitment-cost-v12.json", "scripts/scenarios/combat-reward-target-commitment-bonus-v12.json",
 			"scripts/scenarios/combat-reward-sequence-hitscan-control-v13.json", "scripts/scenarios/combat-reward-sequence-hitscan-cost-v13.json",
-			"scripts/scenarios/combat-reward-nonterminal-handoff-v13.json":
+			"scripts/scenarios/combat-reward-nonterminal-handoff-v13.json",
+			"scripts/scenarios/combat-reward-blocked-ground-control-v14.json", "scripts/scenarios/combat-reward-blocked-ground-cost-v14.json":
 		default:
 			return fmt.Errorf("unsupported reward recipe")
 		}
@@ -247,18 +248,21 @@ type Task struct {
 	RewardSHA256  string     `json:"reward_sha256,omitempty"`
 }
 type Plan struct {
-	Version                  int    `json:"version"`
-	RegistryPath             string `json:"registry_path"`
-	RegistrySHA256           string `json:"registry_sha256"`
-	ModelPath                string `json:"model_path,omitempty"`
-	ModelSHA256              string `json:"model_sha256,omitempty"`
-	Tasks                    []Task `json:"tasks"`
-	Workers                  int    `json:"workers"`
-	OutputRoot               string `json:"output_root"`
-	PolicySamplingSeedOffset int64  `json:"policy_sampling_seed_offset,omitempty"`
-	CheckedWallSlide         bool   `json:"checked_wall_slide,omitempty"`
-	RecordCombatAdvice       bool   `json:"record_combat_advice,omitempty"`
-	DiagnosticNominalAim     bool   `json:"diagnostic_nominal_aim,omitempty"`
+	Version                        int    `json:"version"`
+	RegistryPath                   string `json:"registry_path"`
+	RegistrySHA256                 string `json:"registry_sha256"`
+	ModelPath                      string `json:"model_path,omitempty"`
+	ModelSHA256                    string `json:"model_sha256,omitempty"`
+	Tasks                          []Task `json:"tasks"`
+	Workers                        int    `json:"workers"`
+	OutputRoot                     string `json:"output_root"`
+	PolicySamplingSeedOffset       int64  `json:"policy_sampling_seed_offset,omitempty"`
+	CheckedWallSlide               bool   `json:"checked_wall_slide,omitempty"`
+	ExecutionContract              string `json:"combat_execution_contract,omitempty"`
+	RecordCombatAdvice             bool   `json:"record_combat_advice,omitempty"`
+	DiagnosticNominalAim           bool   `json:"diagnostic_nominal_aim,omitempty"`
+	DiagnosticStoppedCrouch        bool   `json:"diagnostic_stopped_crouch,omitempty"`
+	DiagnosticCheckedGroundRequest bool   `json:"diagnostic_checked_ground_request,omitempty"`
 }
 
 func Build(r *Registry, root string, ids []string, split, mode, model, out string, count, offset int) (*Plan, error) {

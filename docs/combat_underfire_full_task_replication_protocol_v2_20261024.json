@@ -1,0 +1,47 @@
+{
+  "version": "combat_movement_continuation_stability_v1",
+  "study": "combat_underfire_full_task_replication_v1",
+  "source_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "corpus": "workspace/artifacts/combat-underfire-teacher-corpus-v1-20261024",
+  "prepared_index": "workspace/artifacts/combat-underfire-seed-units-v1-20261024",
+  "parent_pilot": "workspace/artifacts/combat-underfire-horizon-pilot-v1-20261024",
+  "selection_out": "workspace/artifacts/combat-underfire-full-task-selection-v2-20261024",
+  "continuation_replicates": 3,
+  "continuation_seeds": [
+    2026102406,
+    2026102407,
+    2026102408
+  ],
+  "selection_streams": [
+    2026102401,
+    2026102402,
+    2026102403
+  ],
+  "movement_duration_frames": 5,
+  "movement_labels": [
+    "control",
+    "left",
+    "right",
+    "forward",
+    "backward"
+  ],
+  "motivation": "Short H10damage guards failed unchanged. New inspected full outcomes showed right onware2wins both held4/5streams versus two control deaths despite lower H10outgoingdamage. Thus the local proxy cannot veto useful cover. Preserve both local-proxy failures. Select on complete task outcomes and test on three new future streams, not on already inspected third/fourth/fifth.",
+  "selection": "All three balanced old streams from the original five-action pilot. Candidate must pass strict native controls and finish in a verified alive-goal or death in all three streams; alive unfinished/censored cases excluded, not rewarded as survival. Lexicographic highest mean alive-goal, then highest mean monster kills, then highest historical full utility4*alive_goal+0.25*kills-receivedHP/100-death, then fixed movement_labels order. No short-window damage guard and no future stream in action selection.",
+  "controls": "Full strict nofork/source, zero-fork/reference, fork-prefix/root/category/draw and intervention-window audits. One nofork per world, fork-only reference plus control each stream, plus only the frozen selected action if noncontrol. No tail supplement, seed replacement or further action search.",
+  "signal": {
+    "minimum_terminal_known_world_stream_pairs": 12,
+    "minimum_net_gained_alive_goals": 2,
+    "maximum_lost_alive_goals": 1,
+    "minimum_worlds_mean_utility_gain_at_least_0_05": 2,
+    "minimum_mean_utility_gain": 0.25
+  },
+  "interpretation": "Success only supports collecting independent auxiliary whole-world TRAIN/development action branches. These are12dependent conditional future repeats in4TRAINworlds, not12new worlds or a trained model quality screen. Local aim/wallshot metrics remain diagnostics and cannot replace full task success. Old third stream is now discovery, never counted as new confirmation; new6/7/8remain unseen before freezing.",
+  "native_cases": 37,
+  "cuda_cases": 37,
+  "max_instances": 16,
+  "timescale": 2,
+  "training_performed": false,
+  "ordinary_training_eligible": false,
+  "promotion": false,
+  "replaces_preparation_only": "combat-underfire-full-task-preparation-v1-20261024; no native games launched from it. Use all three balanced old streams for discovery instead of arbitrary first2. Already inspected old streams4/5 have incomplete action coverage and do not enter balanced selection."
+}

@@ -1,0 +1,11 @@
+{
+  "version": "combat_memory_contact_movement_protocol_erratum_v1",
+  "inherits": "F:\\src\\quake2\\q2coopbot-src\\docs\\combat_memory_contact_movement_pilot_protocol_20261024.json",
+  "inherits_sha256": "c1eb8925c8cf72579ac91e7549da5367a973e6ddde207c7589966ca585c406a0",
+  "field": "controls",
+  "reason": "Inherited prose from the previous selected-action replication was not rewritten. The new study, movement_labels, selection and 76-case budget already specify all five actions in all three streams. Clarify before observing any new native outcomes; do not change cases, selection, gates, seeds or technical proofs.",
+  "controls": "Full strict nofork/source, zero-fork/reference, fork-prefix/root/category/draw and five-frame intervention-window audits. One nofork per world; fork-only reference plus control and ALL FOUR directions in EACH of three streams. Selection uses only first2 streams; third-stream alternatives cannot enter action selection. No tail supplement or seed replacement.",
+  "gates_changed": false,
+  "cases_changed": false,
+  "native_outcomes_inspected": 0
+}

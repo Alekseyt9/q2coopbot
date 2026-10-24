@@ -1,0 +1,60 @@
+{
+  "version": "combat_memory_contact_movement_units_v1",
+  "source": "workspace/artifacts/combat-geometry-nonterminal-objective-v3-20261023/initializer",
+  "source_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "corpus": "workspace/artifacts/combat-underfire-teacher-corpus-v1-20261024",
+  "dataset": "workspace/artifacts/combat-target-lifecycle-dataset-v1-20261024",
+  "registry": "workspace/artifacts/combat-enemy-fresh-preparation-v1-20261023/registry/index.json",
+  "maps": [
+    "base3",
+    "city1",
+    "jail1",
+    "ware2"
+  ],
+  "selection": "TRAIN only. Lowest eligible world seed per map; earliest accepted grounded no-visible state with fresh memory age1..10. No future duration/outcome or development selection.",
+  "variants": [
+    {
+      "label": "control",
+      "mean_shift": [
+        0,
+        0
+      ],
+      "duration": 5
+    },
+    {
+      "label": "left",
+      "mean_shift": [
+        0,
+        -1.25
+      ],
+      "duration": 5
+    },
+    {
+      "label": "right",
+      "mean_shift": [
+        0,
+        1.25
+      ],
+      "duration": 5
+    },
+    {
+      "label": "forward",
+      "mean_shift": [
+        1.25,
+        0
+      ],
+      "duration": 5
+    },
+    {
+      "label": "backward",
+      "mean_shift": [
+        -1.25,
+        0
+      ],
+      "duration": 5
+    }
+  ],
+  "purpose": "Causal movement pilot after contact loss; source aim/fire unchanged, no fit.",
+  "training_performed": false,
+  "promotion": false
+}

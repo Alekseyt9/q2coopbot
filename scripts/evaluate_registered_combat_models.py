@@ -86,10 +86,19 @@ def main():
         for variant in variants:
             label = variant['label']; model = None
             if variant['mode'] == 'learned':
-                update = pathlib.Path(variant['update']); seal = read(update/'complete.json')
-                for filename, key in [('weights.json', 'weights_sha256'), ('checkpoint.pt', 'checkpoint_sha256'), ('report.json', 'report_sha256')]:
+                weights_only = 'policy_artifact' in variant
+                assert weights_only != ('update' in variant), 'Exactly one update or explicit policy_artifact required'
+                update = pathlib.Path(variant['policy_artifact'] if weights_only else variant['update']); seal = read(update/'complete.json')
+                members = [('weights.json', 'weights_sha256'), ('report.json', 'report_sha256')]
+                if not weights_only: members.append(('checkpoint.pt', 'checkpoint_sha256'))
+                for filename, key in members:
                     assert sha(update/filename) == seal[key], filename
                 report = read(update/'report.json'); assert report['device'] == 'cuda'
+                if weights_only:
+                    assert report['version']=='combat_experimental_policy_weights_v1' and report['evaluation_only'] and not report['ppo_checkpoint_written']
+                    compatibility=pathlib.Path(report['native_compatibility_report'])
+                    assert sha(compatibility)==report['native_compatibility_sha256']
+                    compatible=read(compatibility); assert compatible['gate_passed'] and compatible['native_cases']>0
                 model = update/'weights.json'; original = read(model)
                 assert not original.get('diagnostic_joint_aim_probe') and original.get('diagnostic_movement_probe') is None and original.get('diagnostic_continuation_probe') is None, 'Diagnostic acquisition models cannot enter quality evaluation'
                 assert original['kind'] == 'combat_ppo_v1' and not original.get('deterministic', False)
@@ -102,7 +111,8 @@ def main():
                     assert not variant['deterministic'], 'Deterministic actions are not stochastic PPO replay'
                     assert not original.get('execution_mode'), 'Inference-only execution cannot replay standard PPO'
                 bindings.append(dict(label=label, update=str(update), update_seal_sha256=sha(update/'complete.json'),
-                                     model=str(model), model_sha256=sha(model), cuda_replay=variant['cuda_replay']))
+                                     model=str(model), model_sha256=sha(model), cuda_replay=variant['cuda_replay'],
+                                     artifact_kind='evaluation_policy_weights_only' if weights_only else 'resumable_update'))
             else:
                 assert variant['mode'] == 'rules' and not variant.get('cuda_replay')
             plan = root/(label+'-plan.json')
@@ -111,6 +121,8 @@ def main():
                        '--count', spec['count'], '--seed-offset', spec['seed_offset'], '--out', plan,
                        '--root', repo, '--artifacts', root/('captures-'+label)]
             if model: command += ['--model', model]
+            if variant.get('combat_execution_contract'):
+                command += ['--execution-contract', variant['combat_execution_contract']]
             if variant.get('record_combat_advice', False):
                 assert variant['mode'] == 'learned' and variant['record_combat_advice'] is True
                 command += ['--record-combat-advice']
@@ -120,6 +132,12 @@ def main():
             if variant.get('diagnostic_nominal_aim', False):
                 assert variant['mode'] == 'learned' and variant['diagnostic_nominal_aim'] is True
                 command += ['--diagnostic-nominal-aim']
+            if variant.get('diagnostic_stopped_crouch', False):
+                assert variant['mode'] == 'learned' and variant['diagnostic_stopped_crouch'] is True
+                command += ['--diagnostic-stopped-crouch']
+            if variant.get('diagnostic_checked_ground_request', False):
+                assert variant['mode'] == 'learned' and variant['diagnostic_checked_ground_request'] is True and not variant.get('diagnostic_stopped_crouch')
+                command += ['--diagnostic-checked-ground-request']
             run('plan-'+label, command); plans.append(plan)
         frozen = [read(p) for p in plans]; tasks = frozen[0]['tasks']
         assert len(tasks) == len(files)

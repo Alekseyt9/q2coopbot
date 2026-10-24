@@ -1,0 +1,14 @@
+{
+  "version": "combat_target_sampling_zero_compatibility_v1",
+  "source_weights_sha256": "4b1097038137bff824149836e951f3c6126bde234047a07bc0d1e1e03149d479",
+  "models": "workspace/artifacts/combat-target-sampling-cuda-preparation-v1-20261024",
+  "corpus": "workspace/artifacts/combat-movement-variance-training-corpus-v1-20261024",
+  "registry": "workspace/artifacts/combat-enemy-fresh-preparation-v1-20261023/registry/index.json",
+  "selection": "Lowest original TRAIN seed per map; source repeat versus exact archived first life and unit-temperature header versus fresh source. No outcomes used to choose contexts.",
+  "native_cases": 8,
+  "cuda_cases": 8,
+  "max_instances": 16,
+  "timescale": 2,
+  "training_performed": false,
+  "promotion": false
+}

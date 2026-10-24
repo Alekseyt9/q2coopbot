@@ -1,0 +1,74 @@
+{
+  "version": "combat_geometry_delta_ppo_v1",
+  "initializer_weights_sha256": "4b1097038137bff824149836e951f3c6126bde234047a07bc0d1e1e03149d479",
+  "arms": [
+    "G"
+  ],
+  "arm_meanings": {
+    "G": "Full learned actor/critic/geometry continuation from the fixed movement-variance fork"
+  },
+  "rounds": 2,
+  "actor_steps": 30,
+  "critic_steps": 40,
+  "actor_group_lrs": [
+    3e-05,
+    0.0003,
+    0.0003,
+    0.0003
+  ],
+  "head_lr": 0.0003,
+  "value_lr": 0.001,
+  "target_full_kl": 0.005,
+  "target_factor_kl": 0.0025,
+  "gamma": 0.99,
+  "lambda": 0.95,
+  "clip": 0.2,
+  "entropy": 0.001,
+  "max_grad_norm": 0.5,
+  "actor_guard": "Same full KL and base/category factor KL guards for both arms; bounded Adam backtracking",
+  "native_training_cases": 64,
+  "cases_per_update": 32,
+  "first_corpus_shared": false,
+  "later_corpora": "Two32-case fresh own-policy TRAIN corpora on4maps/8recipes, no development/validation labels in optimization.",
+  "max_instances": 16,
+  "timescale": 2,
+  "training_device": "cuda",
+  "maps": [
+    "base3",
+    "city1",
+    "jail1",
+    "ware2"
+  ],
+  "conditions": [
+    "ordinary",
+    "weapon_recovery"
+  ],
+  "reward_sha256": "6b77081d0d9621100fc503debe89b560d0a2f466e93eef89c9d6b9305bbd5c0d",
+  "evaluation": {
+    "checkpoint": "Final second update only; do not select between intermediate updates using quality outcomes",
+    "cases_per_variant": 8,
+    "variants": [
+      "source",
+      "noise-only",
+      "trained",
+      "rules"
+    ],
+    "native_cases": 32,
+    "cuda_cases": 24,
+    "primary": "Paired completed goals, deaths, received damage vs fixed noise-only and rules; source retained for context",
+    "secondary": [
+      "native MG live-monster damage contacts",
+      "solid contacts",
+      "standing visible",
+      "large yaw"
+    ],
+    "expansion_gate": "trained goals>=noise-only+2 and >=rules; deaths<=noise-only; received<=1.1*noise-only. This is a development screen, not a production promotion."
+  },
+  "provenance": "Fixed two-update continuation after independent noise-only evaluation. Existing geometry PPO guards and reward unchanged. Exact evaluated starting weights, movement std moments reset explicitly, all other checkpoint state retained. No automatic production promotion.",
+  "handoff_bootstrap": "nonterminal_v1",
+  "objective_fork": "combat_nonterminal_handoff_objective_v1",
+  "parent_protocol_sha256": "87dc2c658f6c7003b03ab08132d2f487735d4f45d8774cb86db676ada5f24a20",
+  "initializer": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-movement-variance-checkpoint-v1-20261024",
+  "movement_variance_checkpoint_version": "combat_movement_variance_checkpoint_fork_v1",
+  "parent_initializer_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6"
+}

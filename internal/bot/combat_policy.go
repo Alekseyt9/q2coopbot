@@ -10,21 +10,26 @@ import (
 )
 
 type combatControl struct {
-	weaponRequests       weaponRequestHistory
-	actionQualityGuard   bool
-	checkedWallSlide     bool
-	diagnosticNominalAim bool
-	campaignEvaluation   bool
-	engagement           combatEngagement
-	history              policy.History
-	threatMemory         policy.ThreatMemory
-	mode                 string
-	provider             policy.Provider
-	last                 policy.Identity
-	lastHealth           int16
-	life                 int
-	previousTarget       *policy.TargetIntent
-	observation          *policy.Observation
+	executionContract                  string
+	weaponRequests                     weaponRequestHistory
+	actionQualityGuard                 bool
+	checkedWallSlide                   bool
+	diagnosticNominalAim               bool
+	stoppedCrouchProbeFrame            int
+	checkedGroundRequestProbeFrame     int
+	checkedGroundRequestProbeAllFrames bool
+	stoppedCrouchProbeAllFrames        bool
+	campaignEvaluation                 bool
+	engagement                         combatEngagement
+	history                            policy.History
+	threatMemory                       policy.ThreatMemory
+	mode                               string
+	provider                           policy.Provider
+	last                               policy.Identity
+	lastHealth                         int16
+	life                               int
+	previousTarget                     *policy.TargetIntent
+	observation                        *policy.Observation
 }
 
 // In the released synchronous harness the server is paused at this observed
@@ -151,6 +156,16 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 	}
 	guarded, safetyChanges := c.planner.guardDirectCombatMotion(c.planner.World.Snapshot, limited, b.checkedWallSlide)
 	changes = append(changes, safetyChanges...)
+	if (b.executionContract == policy.CheckedGroundCombatExecution || b.checkedGroundRequestProbeAllFrames || b.checkedGroundRequestProbeFrame > 0 && o.Identity.Frame == b.checkedGroundRequestProbeFrame) && c.testSynchronous && c.testCombatGo && b.life == 1 {
+		var probeChanges []policy.Intervention
+		guarded, probeChanges = c.planner.diagnosticCheckedGroundRequest(c.planner.World.Snapshot, limited, guarded, safetyChanges)
+		changes = append(changes, probeChanges...)
+	}
+	if (b.executionContract == policy.CheckedGroundCombatExecution || b.checkedGroundRequestProbeAllFrames || b.stoppedCrouchProbeAllFrames || b.stoppedCrouchProbeFrame > 0 && o.Identity.Frame == b.stoppedCrouchProbeFrame) && c.testSynchronous && c.testCombatGo && b.life == 1 {
+		var probeChanges []policy.Intervention
+		guarded, probeChanges = c.planner.diagnosticStoppedCrouch(c.planner.World.Snapshot, limited, guarded)
+		changes = append(changes, probeChanges...)
+	}
 	converted := policy.FromCommand(o, proposed, c.planner.World.Snapshot.DeltaAngles, "")
 	if math.Abs(converted.PitchDelta-a.PitchDelta) > .01 {
 		changes = append(changes, policy.Intervention{Component: "pitch", Reason: "protocol_pitch_limit"})

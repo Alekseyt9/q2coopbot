@@ -1,0 +1,17 @@
+{
+  "version": "combat_action_inertia_zero_compatibility_v1",
+  "source_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "models": "workspace/artifacts/combat-action-inertia-native-models-v1-20261024",
+  "source_cache": "workspace/artifacts/combat-action-inertia-source-cache-v1-20261024",
+  "corpus": "workspace/artifacts/combat-memory-contact-refresh-corpus-v2-20261024",
+  "registry": "workspace/artifacts/combat-enemy-fresh-preparation-v1-20261023/registry/index.json",
+  "selection": "Lowest TRAIN world seed per map from actual CUDA source cache, four maps. Source/zero technical replay only, not quality.",
+  "controls": "Four fresh source cases must repeat archived full first-life source; zero rho repeats fresh source exactly in exposed state, samples except model version, commands, features and effects. No goal-tail supplement or source replacement.",
+  "neural": "All model numerical checks CUDA; Go NN only actual games. Real full-actor source/zero projection proof required before native runs.",
+  "native_cases": 8,
+  "cuda_cases": 8,
+  "max_instances": 16,
+  "timescale": 2,
+  "training_performed": false,
+  "promotion": false
+}

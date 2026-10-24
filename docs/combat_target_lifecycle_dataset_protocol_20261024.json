@@ -1,0 +1,19 @@
+{
+  "version":"combat_target_lifecycle_dataset_v1",
+  "source_corpus":"workspace/artifacts/combat-underfire-teacher-corpus-v1-20261024",
+  "world_roles_dataset":"workspace/artifacts/combat-underfire-teacher-dataset-v1-20261024",
+  "source_weights_sha256":"559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "splits":"Retain all24whole TRAIN and8development worlds from the sealed source-role dataset. Do not add four previously inspected movement worlds or any diagnostic branch. All original source trajectories, no fitting in this preparation.",
+  "roots":"Every alive first-life source provider row after exact native release and before verified goal/death, with exact exclusive accepted H1native window and next observation. Include visible, fresh-memory-only, stale-memory-only and empty states; no filtering on future outcomes or native shot success.",
+  "fresh_memory_max_age_frames":10,
+  "phases":["visible","fresh_memory_only","stale_memory_only","empty"],
+  "horizons_frames":[1,5,10],
+  "targets":"Cumulative native incoming/outgoing/self/friendly HP damage and monster kills/deaths; actual eligible MG shot/monster-damage/solid/corpse counts; endpoint any-enemy visibility, selected-or-most-recent-remembered reference visibility, HP and displacement. Require every consecutive same-life provider window matched/exclusive/available with correct next frame. Horizons crossing verified task end, handoff or missing data are masked; no fabricated terminal zeros. Endpoint visibility is separately masked when endpoint dead.",
+  "reference":"Current explicit target if present, otherwise most recent remembered threat by age/ID. Never substitute nearest enemy as declared intent. Reference identity is grouping/label metadata, not a new policy input.",
+  "observable_recovery_direction":"Only no-visible-enemy, target0, coarse-mode roots with memory age<=10 and past observed valid bbox of the same ID/class. Desired yaw/pitch points to remembered last observed relative position plus body-point height from that past observed bbox, relative to current view and ducked eye height. No future/native pose, native HP, extrapolated enemy motion or exact aim optimality claim. This is an auxiliary observable direction label, not a runtime servo or proof of the best search action.",
+  "sequences":"Detect accepted consecutive visible→fresh-memory-only roots; follow first-life raw observations until provider visible again, rules handoff, verified goal/death or missing trace. Distinguish reacquisition, failure and unknown endings. Record native shots during lost frames. Whole sequences stay in their world's frozen role.",
+  "storage":"Per-case compressed NPZ plus small provenance/sequence JSON. Client features unchanged1147, actual source/final actions and categories. Native effects/poses only labels. No generated binaries, assets, uncompressed trajectory duplicates or model weights added to Git.",
+  "training_performed":false,
+  "ordinary_training_eligible":false,
+  "promotion":false
+}

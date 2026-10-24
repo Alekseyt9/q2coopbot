@@ -1,0 +1,32 @@
+{
+  "version": "combat_target_temperature_calibration_v1",
+  "source": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-movement-variance-checkpoint-v1-20261024",
+  "source_weights_sha256": "4b1097038137bff824149836e951f3c6126bde234047a07bc0d1e1e03149d479",
+  "temperature": 0.5,
+  "unit_temperature": 1.0,
+  "contract": "Apply temperature only to the masked categorical target distribution used by sampling and log probability. Keep original raw actor logits for every movement/aim/fire/weapon conditioning branch. No hardcoded preferred enemy, holding rule, hidden HP, new RNG draws or raw-network/log_std changes. Unit/absent header must preserve source exactly.",
+  "motivation": "Head-only screen gained only1/8, below frozen+2 gate, so no24-case expansion. Native ledger found near-finished enemies and switching while prior target remained visible. Such switches can be justified; test a learned-distribution calibration instead of assuming a new penalty is correct.",
+  "train_diagnostic": {
+    "report": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-target-sampling-train-audit-v1-20261024\\report.json",
+    "sha256": "2749421c5b91274df11dd762ba852615c7ec81ab50ecb8b71d439cbfa70440fd",
+    "rows": 3245,
+    "eligible_multi_enemy_previous_visible_rows": 1741,
+    "original_expected_switch_probability": 0.12263446857454974,
+    "temperature_half_expected_switch_probability": 0.08235436718099731,
+    "previous_target_is_distribution_mode_fraction": 0.919586444572085
+  },
+  "stages": [
+    "CUDA actual full-actor and target-density/RNG scope checks on TRAIN histories; no CPU neural execution",
+    "Go metadata contract checks and CLI builds; optional header with exact unit short-circuit",
+    "Four-map native source/unit compatibility, fresh source repeat versus archive and unit versus source, full first-life observations/samples/commands;8native/8CUDA",
+    "Only after technical gates: fresh eight-condition source/temperature/rules screen,24native/16CUDA, max16instances timescale2"
+  ],
+  "evaluation": "Freeze fresh seeds/spec before new outcomes. Report goals/deaths/received, actual MG hits, visible-prior-target switches and movement; no automatic promotion. An optional later24-case stage requires a separately frozen positive screen gate.",
+  "max_instances": 16,
+  "timescale": 2,
+  "training_device": "cuda",
+  "training_performed": false,
+  "runtime_implemented": false,
+  "ordinary_training_supported": false,
+  "promotion": false
+}

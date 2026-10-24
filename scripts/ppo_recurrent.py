@@ -157,6 +157,9 @@ def main():
     torch.backends.cudnn.allow_tf32=False;torch.backends.cuda.matmul.allow_tf32=False
     torch.backends.cuda.enable_flash_sdp(False);torch.backends.cuda.enable_mem_efficient_sdp(False);torch.backends.cuda.enable_math_sdp(True)
     model=read(args.model);assert model['kind']=='combat_ppo_v1' and not model['deterministic']
+    assert not model.get('memory_recovery'),'Memory recovery needs explicit PPO checkpoint/optimizer/retention migration before ordinary training'
+    assert not model.get('target_sampling'),'Target calibration requires explicit checkpoint and optimizer migration before training'
+    assert not model.get('movement_inertia'),'Movement inertia requires explicit PPO initializer/checkpoint/optimizer/retention migration'
     assert not model.get('execution_mode'), 'Inference-only execution modes cannot train PPO'
     assert not model.get('diagnostic_joint_aim_probe') and model.get('diagnostic_movement_probe') is None and model.get('diagnostic_continuation_probe') is None, 'Diagnostic acquisition cannot train ordinary PPO'
     assert not model.get('aim_candidate_head',{}).get('shared_scorer'), 'Shared scorer optimizer/resume is not integrated'
@@ -320,6 +323,8 @@ def main():
     policy_update_forks=[]
     if args.resume:
         cp=torch.load(args.resume,map_location='cpu',weights_only=True)
+        from combat_checkpoint_scope import require_checkpoint_scope
+        require_checkpoint_scope(cp)
         migrations=cp.get('model_migrations',[])
         config_forks=cp.get('training_config_forks',[])
         assert cp['version']=='combat_architecture_checkpoint_v1' and cp['architecture']==expected_version and cp['weights_sha256']==sha(args.model) and cp['config']==config

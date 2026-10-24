@@ -1,0 +1,18 @@
+{
+  "version": "combat_movement_variance_checkpoint_v1",
+  "source_weights_sha256": "559ff0ad4297047cdc4a9ad531fa9159668b045b7f41bf8e32a6df975278bea6",
+  "policy_artifact": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-action-inertia-evaluation-policies-v1-20261024\\noise-only",
+  "source_cache": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-action-inertia-source-cache-v1-20261024",
+  "technical_data": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-memory-contact-refresh-corpus-v2-20261024\\processing-train\\case-0000\\cuda",
+  "variants": {
+    "noise-only": [
+      0.7599342076785331,
+      0.7599342076785331,
+      1.0,
+      1.0
+    ]
+  },
+  "contract": "Export weights bytes must match previously evaluated noise-only exactly. Preserve actor/value/JointAim/geometry, all optimizer states except moments for movement std coordinates, Adam clocks, RNG, consumed history, config and retention. Reset only changed std coordinate moments. New checkpoint is explicit exploration fork, not PPO update or permission to reuse source rollout for fitting. Fresh own-policy TRAIN required.",
+  "promotion": false,
+  "training_performed": false
+}

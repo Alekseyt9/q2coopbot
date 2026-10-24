@@ -28,7 +28,10 @@ func run() error {
 	count := flag.Int("count", 4, "episodes per descriptor, 1..80 (cohort scheduler requires multiples of four)")
 	recordCombatAdvice := flag.Bool("record-combat-advice", false, "record hypothetical reactive expert recommendations on learner states; never applied")
 	checkedWallSlide := flag.Bool("checked-wall-slide", false, "experimental checked wall-slide combat guard")
+	executionContract := flag.String("execution-contract", "", "model-matched combat execution contract; historical default legacy_v1")
 	diagnosticNominalAim := flag.Bool("diagnostic-nominal-aim", false, "evaluation-only observed-target aiming intervention, not a learned controller")
+	diagnosticStoppedCrouch := flag.Bool("diagnostic-stopped-crouch", false, "evaluation-only preservation of checked model-selected stopped crouch throughout first life")
+	diagnosticCheckedGroundRequest := flag.Bool("diagnostic-checked-ground-request", false, "evaluation-only checked ground request with stopped-crouch fallback throughout first life")
 	offset := flag.Int("seed-offset", 0, "offset inside the registered split")
 	root := flag.String("root", ".", "repository root")
 	out := flag.String("out", "", "fresh execution plan JSON")
@@ -98,9 +101,21 @@ func run() error {
 		return fmt.Errorf("combat advice requires learned plans")
 	}
 	p.CheckedWallSlide = *checkedWallSlide
+	p.ExecutionContract = *executionContract
+	p.DiagnosticStoppedCrouch = *diagnosticStoppedCrouch
+	p.DiagnosticCheckedGroundRequest = *diagnosticCheckedGroundRequest
+	if p.DiagnosticCheckedGroundRequest && (p.DiagnosticStoppedCrouch || *split == "train" || *mode != "learned") {
+		return fmt.Errorf("diagnostic checked ground request requires exclusive learned evaluation plan")
+	}
+	if p.DiagnosticStoppedCrouch && (*split == "train" || *mode != "learned") {
+		return fmt.Errorf("diagnostic stopped crouch requires learned evaluation split")
+	}
 	p.DiagnosticNominalAim = *diagnosticNominalAim
 	if p.DiagnosticNominalAim && (*split == "train" || *mode != "learned") {
 		return fmt.Errorf("diagnostic nominal aim requires learned evaluation split")
+	}
+	if err := trainingepisodes.ValidatePlanExecutionContract(p); err != nil {
+		return err
 	}
 	f, err := os.OpenFile(*out, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {

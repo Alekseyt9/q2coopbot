@@ -289,7 +289,16 @@ func VerifyPlan(path, root string) error {
 		}
 	}
 	seen := map[string]bool{}
+	if err := ValidatePlanExecutionContract(&p); err != nil {
+		return err
+	}
 	for _, t := range p.Tasks {
+		if p.DiagnosticCheckedGroundRequest && (p.DiagnosticStoppedCrouch || t.Split == "train" || len(t.Modes) != 1 || t.Modes[0] != "learned") {
+			return fmt.Errorf("diagnostic checked ground request is exclusive and evaluation-only for learned plans")
+		}
+		if p.DiagnosticStoppedCrouch && (t.Split == "train" || len(t.Modes) != 1 || t.Modes[0] != "learned") {
+			return fmt.Errorf("diagnostic stopped crouch is evaluation-only for learned plans")
+		}
 		if p.RecordCombatAdvice && (len(t.Modes) != 1 || t.Modes[0] != "learned") {
 			return fmt.Errorf("combat advice requires learned-only plans")
 		}

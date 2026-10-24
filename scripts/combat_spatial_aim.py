@@ -74,6 +74,14 @@ class SpatialActor(nn.Module):
         self.motor_branch=build_motor(model) if model is not None else None
         from combat_conditional_fire import build as build_fire
         self.conditional_fire_branch=build_fire(model) if model is not None else None
+        from combat_memory_recovery_runtime import build as build_recovery
+        self.memory_recovery_branch=build_recovery(model) if model is not None else None
+        self.movement_inertia=copy.deepcopy(model.get('movement_inertia')) if model is not None else None
+        if self.movement_inertia is not None:
+            from combat_action_inertia import validate as validate_inertia
+            validate_inertia(self.movement_inertia)
+            assert model['feature_version']=='combat_features_v10' and not model.get('memory_recovery') and not model.get('entity_attention')
+            assert not model.get('diagnostic_movement_probe') and not model.get('diagnostic_continuation_probe') and not model.get('execution_mode')
         if self.sampled_motion_aim_branch is not None:
             self.sampled_motion_aim_branch.requires_motor_reference=self.motor_branch is not None
             self.sampled_motion_aim_branch.requires_conditional_fire=self.conditional_fire_branch is not None
@@ -93,6 +101,12 @@ class SpatialActor(nn.Module):
         if self.motor_branch is not None:
             from combat_motor_residual import apply as apply_motor
             result=apply_motor(self.motor_branch,x,result)
+        if self.memory_recovery_branch is not None:
+            from combat_memory_recovery_runtime import apply as apply_recovery
+            result=apply_recovery(self.memory_recovery_branch,x,result)
+        if self.movement_inertia is not None:
+            from combat_action_inertia import apply as apply_inertia
+            result=apply_inertia(x,result,self.movement_inertia)
         return (result,*output[1:]) if isinstance(output,tuple) else result
     def single(self,x):
         output=self(x[:,None,:]);raw=output[0] if isinstance(output,tuple) else output
@@ -101,6 +115,8 @@ class SpatialActor(nn.Module):
     def __iter__(self):return iter(self.base)
 
 def wrap(base,model):
+    from combat_memory_recovery_runtime import validate as validate_recovery
+    validate_recovery(model)
     from combat_conditional_fire import validate as validate_fire
     validate_fire(model)
     from combat_weapon_state_residual import validate as validate_weapon
@@ -123,3 +139,6 @@ def export(model,actor):
         export_motor(model,actor.motor_branch)
         from combat_conditional_fire import export as export_fire
         export_fire(model,actor.conditional_fire_branch)
+        from combat_memory_recovery_runtime import export as export_recovery
+        export_recovery(model,actor.memory_recovery_branch)
+        if actor.movement_inertia is not None:model['movement_inertia']=copy.deepcopy(actor.movement_inertia)

@@ -54,6 +54,14 @@ def main():
     assert args.plan_index is None or 0 <= args.plan_index < len(plans), 'Invalid plan index'
     selected_jobs=select_learned_jobs(report,args.plan_index)
     selected_plans = plans if args.plan_index is None else [plans[args.plan_index]]
+    diagnostic_flags = [bool(p.get('diagnostic_stopped_crouch') or p.get('diagnostic_checked_ground_request')) for p in selected_plans]
+    diagnostic_only = any(diagnostic_flags)
+    if diagnostic_only:
+        assert all(diagnostic_flags) and args.config is None, 'Diagnostic guard data cannot mix with or train ordinary PPO'
+        diagnostic_kinds = {(bool(p.get('diagnostic_stopped_crouch')), bool(p.get('diagnostic_checked_ground_request'))) for p in selected_plans}
+        assert len(diagnostic_kinds)==1 and (True,True) not in diagnostic_kinds, 'Mixed diagnostic contracts rejected'
+        ground_diagnostic = next(iter(diagnostic_kinds))[1]
+        assert all(t['split'] != 'train' for p in selected_plans for t in p['tasks'])
     models = {str(pathlib.Path(p['model_path']).resolve()) for p in selected_plans}
     assert len(models) == 1
     model = pathlib.Path(models.pop())
@@ -122,14 +130,24 @@ def main():
             request_sha256=sha(request),tasks=closed,chunks=chunk_receipts,
             scope='Independent unchanged per-case CUDA finalize, bounded fresh process lifetime. No fitting or state carried across cases.'))
         save(out/'cuda-batch/progress.json',dict(stage='complete',report_sha256=sha(out/'cuda-batch/report.json')))
-        run([exporter, '--merge', ','.join(str(d/'cuda') for _, _, d in cases),
-             '--out', out/'merged'], out/'merge.log', repo)
-        compact_closed_exports(out/'merged')
-        merged = read(out/'merged/report.json')
+        if diagnostic_only:
+            finalized = [read(d/'cuda/report.json') for _, _, d in cases]
+            flag = 'diagnostic_checked_ground_request_all_frames' if ground_diagnostic else 'diagnostic_stopped_crouch_all_frames'
+            version = 'combat_diagnostic_checked_ground_rollout_v1' if ground_diagnostic else 'combat_diagnostic_stopped_crouch_rollout_v1'
+            assert all(m.get('diagnostic_only') and m.get(flag)
+                       and not m.get('ppo_training_ready') and m['version']==version for m in finalized)
+            merged = dict(rows=sum(m['rows'] for m in finalized))
+        else:
+            run([exporter, '--merge', ','.join(str(d/'cuda') for _, _, d in cases),
+                 '--out', out/'merged'], out/'merge.log', repo)
+            compact_closed_exports(out/'merged')
+            merged = read(out/'merged/report.json')
         result = dict(state='complete', device='cuda', pool_sha256=pool_sha,
                       selected_plan_index=args.plan_index,
                       model_sha256=sha(model), cases=native_cases, rows=merged['rows'],
                       training_performed=False, promotion='Not evaluated')
+        if diagnostic_only:
+            result.update(diagnostic_only=True, ordinary_training_eligible=False, merged_corpus_written=False)
         if args.config:
             save(out/'progress.json', dict(stage='gpu-training', rows=merged['rows']))
             training_command=[sys.executable, repo/'scripts/ppo_recurrent.py', '--model', model,

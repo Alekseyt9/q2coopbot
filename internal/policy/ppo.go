@@ -15,6 +15,7 @@ import (
 const PPOKind = "combat_ppo_v1"
 
 type PPOFile struct {
+	CombatExecution         string                       `json:"combat_execution_contract,omitempty"`
 	Kind                    string                       `json:"kind"`
 	Features                string                       `json:"feature_version"`
 	Actor                   []DenseLayer                 `json:"actor"`
@@ -35,6 +36,9 @@ type PPOFile struct {
 	SampledMotionAim        *SpatialAimFile              `json:"sampled_motion_aim,omitempty"`
 	MotorResidual           *SpatialAimFile              `json:"motor_residual,omitempty"`
 	ConditionalFire         *SpatialAimFile              `json:"conditional_fire,omitempty"`
+	MemoryRecovery          *SpatialAimFile              `json:"memory_recovery,omitempty"`
+	TargetSampling          *TargetSamplingFile          `json:"target_sampling,omitempty"`
+	MovementInertia         *MovementInertiaFile         `json:"movement_inertia,omitempty"`
 	ExecutionMode           string                       `json:"execution_mode,omitempty"`
 	GeometryAimRanker       *GeometryAimRankerFile       `json:"geometry_aim_ranker,omitempty"`
 	GeometryAimExplore      *GeometryAimExploreFile      `json:"geometry_aim_exploration,omitempty"`
@@ -99,6 +103,9 @@ func LoadPPO(path string) (*PPO, error) {
 	if e = validateExecutionMode(f); e != nil {
 		return nil, e
 	}
+	if _, e = CombatExecutionContract(f.CombatExecution); e != nil {
+		return nil, e
+	}
 	if e = validateAimCandidates(f); e != nil {
 		return nil, e
 	}
@@ -154,6 +161,15 @@ func LoadPPO(path string) (*PPO, error) {
 		return nil, e
 	}
 	if e = validateConditionalFire(f); e != nil {
+		return nil, e
+	}
+	if e = validateMemoryRecovery(f); e != nil {
+		return nil, e
+	}
+	if e = validateTargetSampling(f); e != nil {
+		return nil, e
+	}
+	if e = validateMovementInertia(f); e != nil {
 		return nil, e
 	}
 	if e = validateFeatureLayers(f.Value, 1, f.Features); e != nil {
@@ -264,10 +280,18 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	if e != nil {
 		return Action{}, 0, 0, e
 	}
+	x, e = p.memoryRecoveryRaw(o, x)
+	if e != nil {
+		return Action{}, 0, 0, e
+	}
+	x, e = p.movementInertiaRaw(o, x)
+	if e != nil {
+		return Action{}, 0, 0, e
+	}
 	lp := 0.0
 	means := [4]float64{x[0], x[1], x[2], x[3]}
 	if p.file.TargetHead != "" {
-		probs, err := targetLogProbabilities(o, x[TargetLogitOffset:TargetAimOffset])
+		probs, err := p.targetSamplingLogProbabilities(o, x[TargetLogitOffset:TargetAimOffset])
 		if err != nil {
 			return Action{}, 0, 0, err
 		}
@@ -381,10 +405,18 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 	if e != nil {
 		return Action{}, e
 	}
+	x, e = p.memoryRecoveryRaw(o, x)
+	if e != nil {
+		return Action{}, e
+	}
+	x, e = p.movementInertiaRaw(o, x)
+	if e != nil {
+		return Action{}, e
+	}
 	s := Sample{Version: p.version, SamplingSeed: p.file.SamplingSeed, Memory: before}
 	means := [4]float64{x[0], x[1], x[2], x[3]}
 	if p.file.TargetHead != "" {
-		probs, err := targetLogProbabilities(o, x[TargetLogitOffset:TargetAimOffset])
+		probs, err := p.targetSamplingLogProbabilities(o, x[TargetLogitOffset:TargetAimOffset])
 		if err != nil {
 			return Action{}, err
 		}

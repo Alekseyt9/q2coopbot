@@ -24,12 +24,17 @@ def main():
     out, corpus, protocol_path = a.out.resolve(), a.corpus.resolve(), a.protocol.resolve()
     assert not out.exists() and shutil.disk_usage('F:/').free >= 32 * 1024**3
     protocol = read(protocol_path)
-    assert protocol['version'] in ('combat_movement_pair_collection_v1','combat_movement_continuation_stability_v1')
+    assert protocol['version'] in ('combat_movement_pair_collection_v1','combat_movement_continuation_stability_v1','combat_movement_underfire_pairs_v1','combat_memory_recovery_zero_compatibility_v1','combat_action_inertia_zero_compatibility_v1')
     continuation=protocol['version']=='combat_movement_continuation_stability_v1'
-    assert continuation==(a.prepared_index is not None)
-    capture_version='combat_native_continuation_pairs_v1' if continuation else 'combat_native_movement_pairs_v1'
+    underfire=protocol['version']=='combat_movement_underfire_pairs_v1'
+    zero_compat=protocol['version'] in ('combat_memory_recovery_zero_compatibility_v1','combat_action_inertia_zero_compatibility_v1')
+    inertia_zero=protocol['version']=='combat_action_inertia_zero_compatibility_v1'
+    prepared_units=continuation or underfire or zero_compat
+    assert prepared_units==(a.prepared_index is not None)
+    capture_version='combat_native_action_inertia_zero_v1' if inertia_zero else 'combat_native_memory_recovery_zero_v1' if zero_compat else 'combat_native_continuation_pairs_v1' if continuation else 'combat_native_movement_pairs_v1'
     assert protocol['max_instances'] == 16 and protocol['timescale'] == 2
-    if not continuation:assert protocol['maximum_variants_per_context'] == 6 and protocol['maximum_probe_cases'] == 144
+    if not prepared_units:assert protocol['maximum_variants_per_context'] == 6 and protocol['maximum_probe_cases'] == 144
+    if underfire:assert protocol['native_cases']==protocol['cuda_cases']==36
     closed = read(corpus/'complete.json')
     assert closed['state'] == 'complete' and closed['native_cases'] == closed['cuda_cases'] == 32
     out.mkdir(parents=True)
@@ -60,10 +65,10 @@ def main():
 
     try:
         stage('selecting-contexts')
-        if continuation:
+        if prepared_units:
             is_=read(pin(a.prepared_index/'complete.json'))
             index=read(pin(a.prepared_index/'report.json',is_['report_sha256']))
-            assert index['version']=='combat_continuation_units_preparation_v1' and index['device']=='cuda'
+            assert index['version']==(('combat_action_inertia_units_preparation_v1' if inertia_zero else 'combat_memory_recovery_units_preparation_v1') if zero_compat else 'combat_movement_units_preparation_v1' if underfire else 'combat_continuation_units_preparation_v1') and index['device']=='cuda'
             assert index['protocol_sha256']==sha(protocol_path)
             chosen=[unit['context'] for unit in index['units']]
         else:
@@ -75,14 +80,14 @@ def main():
             assert len({c['seed'] for c in chosen}) == len(chosen)
         assert chosen and len(chosen) <= 24
         assert all(c['instance']['split'] == 'train' for c in chosen)
-        if not continuation:
+        if not prepared_units:
             assert len([c for c in chosen if c['split'] == 'train']) >= protocol['dataset_admission']['minimum_train_contexts'], 'Insufficient observable TRAIN coverage before games'
             assert len([c for c in chosen if c['split'] == 'development']) >= protocol['dataset_admission']['minimum_development_contexts'], 'Insufficient observable development coverage before games'
-        else:assert len(chosen)==4*protocol['continuation_replicates'] and all(c['split']=='train' for c in chosen)
+        else:assert len(chosen)==(4 if underfire or zero_compat else 4*protocol['continuation_replicates']) and all(c['split']=='train' for c in chosen)
         contexts, variants = [], []
         for ci, context in enumerate(chosen):
             stage('cuda-preparing', context=ci, contexts=len(chosen))
-            if continuation:
+            if prepared_units:
                 target=Path(index['units'][ci]['prepared'])
             else:
                 target = out/'preparations'/context['context_id']
@@ -91,9 +96,12 @@ def main():
             p = read(pin(target/'report.json', seal['report_sha256']))
             assert p['context'] == context and p['device'] == 'cuda'
             assert p['neural_parameters_exact']
-            if not continuation:assert p['collection_protocol'] and p['ordinary_outside_frame_exact'] and p['zero_control_exact']
+            if not prepared_units:assert p['collection_protocol'] and p['ordinary_outside_frame_exact'] and p['zero_control_exact']
+            if underfire:assert p['window_smoke'] and p['ordinary_outside_window_exact'] and p['zero_control_exact'] and Path(p['baseline']).resolve()==corpus
+            if zero_compat:assert p['zero_source_raw_exact'] and Path(p['baseline']).resolve()==corpus
             assert p['source_weights_sha256'] == protocol['source_weights_sha256']
-            assert p['variants'][0]['label'] == 'control' and 5 <= len(p['variants']) <= (8 if continuation else 6)
+            minimum_variants=2 if zero_compat or protocol.get('study') in ('combat_underfire_constrained_confirmation_v1','combat_underfire_full_task_replication_v1') else 5
+            assert p['variants'][0]['label'] == 'control' and minimum_variants <= len(p['variants']) <= (9 if underfire else 8 if continuation else 6)
             for path, h in p['inputs'].items():
                 pin(path, h)
             local = copy.deepcopy(p['variants'])
@@ -103,9 +111,9 @@ def main():
                 pin(v['model'], v['model_sha256'])
                 variants.append(v)
             contexts.append(dict(prepared=str(target), prepared_report_sha256=seal['report_sha256'],
-                context=context, variants=local,unit_id=index['units'][ci]['unit_id'] if continuation else context['context_id']))
-        assert len(variants) <= (protocol.get('native_cases',96) if continuation else protocol['maximum_probe_cases'])
-        if continuation and protocol.get('native_cases'):assert len(variants)==protocol['native_cases']
+                context=context, variants=local,unit_id=index['units'][ci]['unit_id'] if prepared_units else context['context_id']))
+        assert len(variants) <= (protocol.get('native_cases',96) if prepared_units else protocol['maximum_probe_cases'])
+        if prepared_units and protocol.get('native_cases'):assert len(variants)==protocol['native_cases']
         registry = pin(p['registry'])
         planner = out/'q2episode.exe'
         run('build-planner', ['go', 'build', '-o', planner, './cmd/q2episode'])
@@ -126,7 +134,7 @@ def main():
             corpus=str(corpus), protocol=str(protocol_path), protocol_sha256=sha(protocol_path), inputs=pins,
             diagnostic_only=True, ordinary_training_eligible=False, training_performed=False,
             quality_confirmation=False, max_instances=16, timescale=2, seed_reuse_intentional=True,
-            split_scope='TRAIN-only repeats of future policy randomness in fixed worlds.' if continuation else 'Internal development uses separate whole TRAIN-registry seeds and never enters fitting.', promotion=False))
+            split_scope='TRAIN source/zero technical compatibility only, no quality or fitting.' if zero_compat else 'Held-out fresh audit worlds, observed past-damage roots; no fitting.' if underfire else 'TRAIN-only repeats of future policy randomness in fixed worlds.' if continuation else 'Internal development uses separate whole TRAIN-registry seeds and never enters fitting.', promotion=False))
         shell = shutil.which('pwsh')
         assert shell
         quote = lambda p: "'" + str(p).replace("'", "''") + "'"
@@ -180,13 +188,18 @@ def main():
             scope='Capture/CUDA completion only; admission and dataset gate are separate.'))
         stage('native-proof', contexts=len(contexts))
         for ci, item in enumerate(contexts):
-            script='audit_combat_continuation_probe.py' if continuation else 'audit_combat_movement_probe.py'
+            script='audit_combat_action_inertia_zero.py' if inertia_zero else 'audit_combat_memory_recovery_zero.py' if zero_compat else 'audit_combat_continuation_probe.py' if continuation else 'audit_combat_movement_probe.py'
             audit_args=[sys.executable, repo/'scripts'/script,'--probe',out,'--context-index',ci,'--out',out/'proofs'/item['unit_id']]
             if continuation and protocol.get('goal_tail_protocol'):audit_args+=['--goal-tail-protocol',repo/protocol['goal_tail_protocol']]
             run(f'proof-{ci:02d}',audit_args)
-        continuation_reporters={'combat_movement_mc_budget8_v1':'report_combat_continuation_budget8.py',
+        continuation_reporters={'combat_memory_contact_movement_refresh_v1':'report_combat_memory_contact_refresh.py',
+            'combat_memory_contact_movement_pilot_v1':'report_combat_memory_contact_movement.py',
+            'combat_movement_mc_budget8_v1':'report_combat_continuation_budget8.py',
+            'combat_underfire_horizon_pilot_v1':'report_combat_underfire_continuations.py',
+            'combat_underfire_constrained_confirmation_v1':'report_combat_underfire_constrained_confirmation.py',
+            'combat_underfire_full_task_replication_v1':'report_combat_underfire_full_task_replication.py',
             'combat_movement_window_comparison_v1':'report_combat_movement_window_comparison.py'}
-        builder=continuation_reporters.get(protocol.get('study'),'report_combat_continuation_stability.py') if continuation else 'build_combat_movement_pair_dataset.py'
+        builder='report_combat_action_inertia_zero.py' if inertia_zero else 'report_combat_memory_recovery_zero.py' if zero_compat else 'report_combat_underfire_pairs.py' if underfire else continuation_reporters.get(protocol.get('study'),'report_combat_continuation_stability.py') if continuation else 'build_combat_movement_pair_dataset.py'
         run('dataset', [sys.executable, repo/'scripts'/builder, '--collection', out, '--out', out/'dataset'])
         dataset = read(out/'dataset/report.json')
         stage('complete', native_cases=len(variants), cuda_cases=len(variants), contexts=len(contexts),

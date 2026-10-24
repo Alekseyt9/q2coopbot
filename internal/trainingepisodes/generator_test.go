@@ -100,6 +100,18 @@ func TestGeneratedConditionsArePairedAndPlanCannotBeModified(t *testing.T) {
 		}
 	}
 	p.PolicySamplingSeedOffset = 0
+	p.DiagnosticStoppedCrouch = true
+	write(t, path, p)
+	if err := VerifyPlan(path, root); err == nil || !strings.Contains(err.Error(), "diagnostic stopped crouch") {
+		t.Fatalf("rules plan accepted learned-only diagnostic guard: %v", err)
+	}
+	p.DiagnosticStoppedCrouch = false
+	p.DiagnosticCheckedGroundRequest = true
+	write(t, path, p)
+	if err := VerifyPlan(path, root); err == nil || !strings.Contains(err.Error(), "diagnostic checked ground request") {
+		t.Fatalf("rules plan accepted learned-only ground request: %v", err)
+	}
+	p.DiagnosticCheckedGroundRequest = false
 	p.Tasks[0].Instances[0].Player[0] += 100
 	write(t, path, p)
 	if err := VerifyPlan(path, root); err == nil {

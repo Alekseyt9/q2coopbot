@@ -22,85 +22,90 @@ import (
 
 // Config contains runtime settings for one UDP companion session.
 type Config struct {
-	ConnectReadyFile                    string
-	ConnectReleaseFile                  string
-	CombatMode, CombatProviderFile      string
-	CombatActionQualityGuard            bool
-	CombatCheckedWallSlide              bool
-	CombatDiagnosticNominalAim          bool
-	CombatLiveCompanion                 bool
-	CombatCapture                       bool
-	TestCampaignCombatEvaluation        bool
-	Campaign                            bool
-	CampaignNextMap                     string
-	CampaignLeader                      bool
-	CampaignRoute                       []string
-	CampaignUnitMaps                    []string
-	CheckpointControl                   string
-	CheckpointRestore                   string
-	CheckpointMode                      string
-	MemoryFile                          string
-	MemorySession                       string
-	TestWeaponSwitchFixture             string
-	TestDisableProjectileLead           bool
-	TestProjectileComparison            bool
-	TestCombatBarrier                   bool
-	TestSynchronous                     bool
-	TestHitscanGuardProbe               bool
-	TestCombatOnly                      bool
-	TestCombatAdvice                    bool
-	TestTeacherVertical                 bool
-	TestLight                           *int
-	TestInvulnerable                    bool
-	TestInitialHealth                   int
-	TestChangeEntry                     string
-	TestSession                         string
-	TestSessionRole                     string
-	TestScenarioResult                  string
-	TestScenarioTailFrames              int
-	TestScenario                        string
-	TestDisableProbe                    bool
-	TestScenarioFrameOrigin             int
-	TestSetupHoldFrames                 int
-	TestHideHealthFrames                []int
-	TestDisableSearch                   bool
-	TestWalkTarget                      string
-	TestWalkRoute                       bool
-	TestWalkRunIn                       bool
-	TestWalkThenPlan                    bool
-	TestWalkAfterFrames, TestWalkFrames int
-	TestRunInSpeed                      int
-	Host, Name, GameDir, AASDir         string
-	WorldFile, TracePath, StopFile      string
-	DemoPath                            string
-	System1Model, System2Model          string
-	TestChangeMap, TestRCONPassword     string
-	TestTeleportMap, TestTeleport       string
-	TestCampaignGoal                    string
-	TestTeleportAfter                   string
-	TestTeleportAfterFrames             int
-	TestTeleportReturn                  string
-	TestTeleportReturnAfterFrames       int
-	TestJumpAfterTeleportFrames         int
-	TestJumpAgainAfterTeleportFrames    int
-	TestSpawnMap, TestSpawnSoldier      string
-	TestSpawnClass                      string
-	Port, GameFrames, TestChangeAfter   int
-	TestGapStart, TestGapFrames         int
-	Duration                            time.Duration
-	FramePaced, Idle, ExitOnReconnect   bool
-	TestLineCross                       bool
-	TestHoldPosition                    bool
-	TestHoldPositionMap                 string
-	TestGroundEdgeProbe                 bool
-	TestNoAAS                           bool
-	TestDoorProbe                       bool
-	TestDoorPassProbe                   bool
-	TestDoorPassSpeed                   int
-	TestButtonProbe                     bool
-	TestButtonAutoGoal                  bool
-	TestNoBSP, TestPartialBSP           bool
-	TestHideDoor53                      bool
+	CombatExecutionContract                string
+	ConnectReadyFile                       string
+	ConnectReleaseFile                     string
+	CombatMode, CombatProviderFile         string
+	CombatActionQualityGuard               bool
+	CombatCheckedWallSlide                 bool
+	CombatDiagnosticNominalAim             bool
+	CombatLiveCompanion                    bool
+	CombatCapture                          bool
+	TestCampaignCombatEvaluation           bool
+	Campaign                               bool
+	CampaignNextMap                        string
+	CampaignLeader                         bool
+	CampaignRoute                          []string
+	CampaignUnitMaps                       []string
+	CheckpointControl                      string
+	CheckpointRestore                      string
+	CheckpointMode                         string
+	MemoryFile                             string
+	MemorySession                          string
+	TestWeaponSwitchFixture                string
+	TestDisableProjectileLead              bool
+	TestProjectileComparison               bool
+	TestCombatBarrier                      bool
+	TestSynchronous                        bool
+	TestHitscanGuardProbe                  bool
+	TestCombatOnly                         bool
+	TestStoppedCrouchProbeFrame            int
+	TestCheckedGroundRequestProbeFrame     int
+	TestCheckedGroundRequestProbeAllFrames bool
+	TestStoppedCrouchProbeAllFrames        bool
+	TestCombatAdvice                       bool
+	TestTeacherVertical                    bool
+	TestLight                              *int
+	TestInvulnerable                       bool
+	TestInitialHealth                      int
+	TestChangeEntry                        string
+	TestSession                            string
+	TestSessionRole                        string
+	TestScenarioResult                     string
+	TestScenarioTailFrames                 int
+	TestScenario                           string
+	TestDisableProbe                       bool
+	TestScenarioFrameOrigin                int
+	TestSetupHoldFrames                    int
+	TestHideHealthFrames                   []int
+	TestDisableSearch                      bool
+	TestWalkTarget                         string
+	TestWalkRoute                          bool
+	TestWalkRunIn                          bool
+	TestWalkThenPlan                       bool
+	TestWalkAfterFrames, TestWalkFrames    int
+	TestRunInSpeed                         int
+	Host, Name, GameDir, AASDir            string
+	WorldFile, TracePath, StopFile         string
+	DemoPath                               string
+	System1Model, System2Model             string
+	TestChangeMap, TestRCONPassword        string
+	TestTeleportMap, TestTeleport          string
+	TestCampaignGoal                       string
+	TestTeleportAfter                      string
+	TestTeleportAfterFrames                int
+	TestTeleportReturn                     string
+	TestTeleportReturnAfterFrames          int
+	TestJumpAfterTeleportFrames            int
+	TestJumpAgainAfterTeleportFrames       int
+	TestSpawnMap, TestSpawnSoldier         string
+	TestSpawnClass                         string
+	Port, GameFrames, TestChangeAfter      int
+	TestGapStart, TestGapFrames            int
+	Duration                               time.Duration
+	FramePaced, Idle, ExitOnReconnect      bool
+	TestLineCross                          bool
+	TestHoldPosition                       bool
+	TestHoldPositionMap                    string
+	TestGroundEdgeProbe                    bool
+	TestNoAAS                              bool
+	TestDoorProbe                          bool
+	TestDoorPassProbe                      bool
+	TestDoorPassSpeed                      int
+	TestButtonProbe                        bool
+	TestButtonAutoGoal                     bool
+	TestNoBSP, TestPartialBSP              bool
+	TestHideDoor53                         bool
 }
 
 func parseTestTeleport(value string) (quake.Vec3, error) {
@@ -148,8 +153,26 @@ func parseTestCampaignGoals(value string) ([]quake.Vec3, error) {
 }
 
 func Run(ctx context.Context, cfg Config) (runErr error) {
+	contract, contractErr := policy.CombatExecutionContract(cfg.CombatExecutionContract)
+	if contractErr != nil {
+		return contractErr
+	}
+	cfg.CombatExecutionContract = contract
+	if contract == policy.CheckedGroundCombatExecution && (!cfg.TestSynchronous || !cfg.TestCombatOnly || cfg.CombatMode != "learned" ||
+		!cfg.CombatCapture || cfg.Host != "127.0.0.1" || !cfg.CombatCheckedWallSlide || cfg.CombatActionQualityGuard || cfg.CombatDiagnosticNominalAim ||
+		cfg.TestStoppedCrouchProbeFrame != 0 || cfg.TestStoppedCrouchProbeAllFrames || cfg.TestCheckedGroundRequestProbeFrame != 0 || cfg.TestCheckedGroundRequestProbeAllFrames) {
+		return fmt.Errorf("checked combat execution contract requires exclusive captured local synchronous learned fixture")
+	}
+	if cfg.TestCheckedGroundRequestProbeFrame < 0 || cfg.TestCheckedGroundRequestProbeFrame > 1000000 || cfg.TestCheckedGroundRequestProbeAllFrames && cfg.TestCheckedGroundRequestProbeFrame != 0 || (cfg.TestCheckedGroundRequestProbeFrame > 0 || cfg.TestCheckedGroundRequestProbeAllFrames) &&
+		(!cfg.TestSynchronous || !cfg.TestCombatOnly || cfg.CombatMode != "learned" || !cfg.CombatCapture || cfg.Host != "127.0.0.1" || cfg.TestStoppedCrouchProbeFrame != 0 || cfg.TestStoppedCrouchProbeAllFrames) {
+		return fmt.Errorf("checked ground request probe requires an exclusive captured local synchronous learned combat fixture")
+	}
 	if cfg.CombatDiagnosticNominalAim && (!cfg.TestSynchronous || cfg.CombatMode != "learned" || !cfg.CombatCapture) {
 		return fmt.Errorf("diagnostic nominal aim requires captured synchronous learned fixture")
+	}
+	if cfg.TestStoppedCrouchProbeFrame < 0 || cfg.TestStoppedCrouchProbeFrame > 1000000 || cfg.TestStoppedCrouchProbeAllFrames && cfg.TestStoppedCrouchProbeFrame != 0 || (cfg.TestStoppedCrouchProbeFrame > 0 || cfg.TestStoppedCrouchProbeAllFrames) &&
+		(!cfg.TestSynchronous || !cfg.TestCombatOnly || cfg.CombatMode != "learned" || !cfg.CombatCapture || cfg.Host != "127.0.0.1") {
+		return fmt.Errorf("stopped crouch probe requires a captured local synchronous learned combat fixture")
 	}
 	if cfg.CampaignLeader && !cfg.Campaign {
 		return fmt.Errorf("campaign leader requires campaign mode")
@@ -194,6 +217,13 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		}
 		if err != nil {
 			return fmt.Errorf("combat provider: %w", err)
+		}
+		if p, ok := combatProvider.(*policy.PPO); ok {
+			if p.CombatExecutionContract() != contract {
+				return fmt.Errorf("model combat execution contract differs from runtime")
+			}
+		} else if contract != policy.LegacyCombatExecution {
+			return fmt.Errorf("combat execution contract requires a local PPO")
 		}
 		if cfg.TestHitscanGuardProbe {
 			if _, ok := combatProvider.(*policy.Probe); !ok {
@@ -462,7 +492,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	defer conn.Close()
 	client := &Client{
-		combatControl:      combatControl{mode: cfg.CombatMode, provider: combatProvider, campaignEvaluation: naturalCombat, actionQualityGuard: cfg.CombatActionQualityGuard, checkedWallSlide: cfg.CombatCheckedWallSlide, diagnosticNominalAim: cfg.CombatDiagnosticNominalAim},
+		combatControl:      combatControl{executionContract: contract, mode: cfg.CombatMode, provider: combatProvider, campaignEvaluation: naturalCombat, actionQualityGuard: cfg.CombatActionQualityGuard, checkedWallSlide: cfg.CombatCheckedWallSlide, diagnosticNominalAim: cfg.CombatDiagnosticNominalAim, stoppedCrouchProbeFrame: cfg.TestStoppedCrouchProbeFrame, checkedGroundRequestProbeFrame: cfg.TestCheckedGroundRequestProbeFrame, checkedGroundRequestProbeAllFrames: cfg.TestCheckedGroundRequestProbeAllFrames, stoppedCrouchProbeAllFrames: cfg.TestStoppedCrouchProbeAllFrames},
 		combatCapture:      cfg.CombatCapture,
 		scenarioResultPath: cfg.TestScenarioResult, scenarioTailFrames: cfg.TestScenarioTailFrames,
 		scenario:                scenario,

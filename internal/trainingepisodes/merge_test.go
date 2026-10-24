@@ -65,6 +65,29 @@ func TestMergeRejectsMixedPolicyAndDuplicateEpisodes(t *testing.T) {
 	}
 }
 
+func TestMergeExecutionContracts(t *testing.T) {
+	a, b := rolloutFixture(t, 1, "same-model"), rolloutFixture(t, 2, "same-model")
+	var meta map[string]any
+	if err := read(filepath.Join(b, "report.json"), &meta); err != nil {
+		t.Fatal(err)
+	}
+	meta["combat_execution_contract"] = "checked_ground_crouch_v1"
+	write(t, filepath.Join(b, "report.json"), meta)
+	if err := MergeRollouts([]string{a, b}, filepath.Join(t.TempDir(), "mixed")); err == nil {
+		t.Fatal("mixed execution contracts accepted")
+	}
+	meta["combat_execution_contract"] = "legacy_v1"
+	write(t, filepath.Join(b, "report.json"), meta)
+	if err := MergeRollouts([]string{a, b}, filepath.Join(t.TempDir(), "legacy")); err != nil {
+		t.Fatal("historical and explicit legacy differ", err)
+	}
+	meta["combat_execution_contract"] = "unknown"
+	write(t, filepath.Join(b, "report.json"), meta)
+	if err := MergeRollouts([]string{b}, filepath.Join(t.TempDir(), "unknown")); err == nil {
+		t.Fatal("unknown execution contract accepted")
+	}
+}
+
 func TestMergePairedRequiresFinalizationAndKeepsMemberOutcomes(t *testing.T) {
 	a, b := rolloutFixture(t, 1, "model"), rolloutFixture(t, 2, "model")
 	set := func(dir, end string, ready bool) {
