@@ -35,6 +35,24 @@ def raw_windows(path,events):
     return windows
 
 
+def goal_learning_boundary(goal,ordered,steps):
+    if not goal:
+        return None
+    # A verified goal handoff can close the task at the kill frame, before
+    # the supervisor's later living observation confirms it. Do not attach
+    # subsequent flying-projectile effects to that already closed command.
+    if ordered:
+        row=ordered[-1];step=steps[row['index']]
+        confirmed=(step.get('reason')=='combat_goal_complete' and step['terminal'] or
+                   step.get('reason')=='control_handoff' and step.get('goal_handoff_verified',False))
+        if row['bootstrap_zero'] and confirmed:
+            boundary=step['native_step']['end_frame']
+            assert boundary==row['next_frame'] and step['next_observation']['health']>0
+            assert goal['kill_frame']<=boundary<=goal['observed_frame']
+            return boundary
+    return goal['observed_frame']
+
+
 def spacing(o,c):
     distances=[math.hypot(*e['relative'][:2]) for e in o.get('enemies') or [] if e['class']=='monster_parasite' and e.get('clear_shot')]
     return -c['spacing_potential']*max(0.,1-min(distances,default=math.inf)/c['parasite_range'])
@@ -165,9 +183,10 @@ def main():
         # The same independently verified supervisor boundary used by the
         # exporter closes the finite training task. Keep stop-latency effects
         # visible, but never attach them to an earlier on-policy command.
-        tail=[k for k in first_life_events if goal and raw[k]['frame']>goal['observed_frame']]
+        boundary=goal_learning_boundary(goal,ordered,steps)
+        tail=[k for k in first_life_events if goal and raw[k]['frame']>boundary]
         assert not used.intersection(tail),'Exported learning window extends beyond verified goal'
-        for k in tail:post_goal_tail.append(dict(job=job['job'],seed=job['seed'],goal_observed_frame=goal['observed_frame'],event=raw[k]))
+        for k in tail:post_goal_tail.append(dict(job=job['job'],seed=job['seed'],goal_observed_frame=goal['observed_frame'],learning_boundary_frame=boundary,event=raw[k]))
         eligible=[k for k in first_life_events if k not in set(tail)]
         outside=[k for k in eligible if k not in used]
         for k in outside:

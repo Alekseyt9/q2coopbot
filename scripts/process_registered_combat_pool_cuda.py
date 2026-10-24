@@ -37,6 +37,7 @@ def main():
     parser.add_argument('--decision-head-lr', type=float, default=.003)
     parser.add_argument('--fork-head-scope', action='store_true')
     parser.add_argument('--plan-index', type=int, help='Process one frozen plan from a multi-model evaluation pool')
+    parser.add_argument('--replay-exporter', type=pathlib.Path, help='Explicit corrected offline exporter; original captured exporter still checked')
     parser.add_argument('--cuda-batch-size',type=int,default=8,help='Bound cases per fresh CUDA process')
     args = parser.parse_args()
     assert 1<=args.cuda_batch_size<=32
@@ -93,8 +94,10 @@ def main():
 
         def native(case_info):
             job, case, directory = case_info
-            run([exporter, '--batch', case, '--model', model, '--cuda-only',
-                 '--out', directory/'native'], directory/'native.log', repo)
+            command=[exporter, '--batch', case, '--model', model, '--cuda-only', '--out', directory/'native']
+            if args.replay_exporter:
+                command += ['--replay-exporter', args.replay_exporter.resolve(), '--replay-exporter-sha256', replay_exporter_sha]
+            run(command, directory/'native.log', repo)
             original = read(case/'report.json')
             for i, result in enumerate(original['results']):
                 verify_memory_export(pathlib.Path(result['root'])/'bot.jsonl',
@@ -102,6 +105,7 @@ def main():
             compact_closed_exports(directory/'native')
             return dict(job=job['job'], seed=job['seed'], split=plans[job['plan_index']]['tasks'][job['task_index']]['split'])
 
+        replay_exporter_sha=sha(args.replay_exporter) if args.replay_exporter else None
         save(out/'progress.json', dict(stage='native', cases=len(cases)))
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as workers:
             native_cases = list(workers.map(native, cases))

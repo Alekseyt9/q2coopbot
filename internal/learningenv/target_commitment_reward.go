@@ -90,7 +90,11 @@ func (q *SequenceReward) commitmentReward(s *Step, o ServerOutcome, r Reward) Re
 		damage := min(max(e.HealthBefore, 0), e.Take)
 		total += damage
 		if e.Target == key.entity {
-			if enemy.Class != e.TargetClass {
+			// The client model decoder exposes all soldier skins as soldier.
+			// Keep native identity/window checks; only reconcile this known alias.
+			sameClass := enemy.Class == e.TargetClass || enemy.Class == "monster_soldier" &&
+				(e.TargetClass == "monster_soldier_light" || e.TargetClass == "monster_soldier_ss")
+			if !sameClass {
 				r.Available, r.Score, r.Components, r.Reason = false, nil, nil, "commitment_target_class_mismatch"
 				state.frames = 0
 				state.next = policy.Identity{}

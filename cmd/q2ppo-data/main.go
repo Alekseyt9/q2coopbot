@@ -82,7 +82,12 @@ func run() error {
 	out := flag.String("out", "", "fresh directory")
 	model := flag.String("model", "", "frozen original PPO model")
 	cudaOnly := flag.Bool("cuda-only", false, "native/features only; require CUDA finalization before merge or training")
+	replayExporter := flag.String("replay-exporter", "", "explicit offline replay exporter; original capture exporter remains verified")
+	replayExporterSHA := flag.String("replay-exporter-sha256", "", "required SHA256 of explicit offline replay exporter")
 	flag.Parse()
+	if (*replayExporter == "") != (*replayExporterSHA == "") || *replayExporter != "" && (!*cudaOnly || *merge != "") {
+		return fmt.Errorf("explicit replay exporter requires its SHA and CUDA-only batch export")
+	}
 	if *merge != "" {
 		return trainingepisodes.MergeRollouts(strings.Split(*merge, ","), *out)
 	}
@@ -207,10 +212,24 @@ func run() error {
 		return fmt.Errorf("exporter binary changed")
 	}
 	receipts[exporter] = h
+	capturedExporterSHA := h
+	if *replayExporter != "" {
+		candidate, err := filepath.Abs(*replayExporter)
+		if err != nil {
+			return err
+		}
+		candidateSHA, err := sha(candidate)
+		if err != nil || !strings.EqualFold(candidateSHA, *replayExporterSHA) {
+			return fmt.Errorf("explicit replay exporter SHA mismatch")
+		}
+		receipts[candidate] = candidateSHA
+		exporter = candidate
+	}
 	seen := map[int]bool{}
 	count := 0
 	skipped := 0
 	terminals := 0
+	reconciledRewardRows := 0
 	for i, r := range report.Results {
 		if !r.Valid || !r.Dispatch || seen[r.Seed] {
 			return fmt.Errorf("invalid episode")
@@ -401,7 +420,7 @@ func run() error {
 				return fmt.Errorf("offline replay differs: death-stop-verification.json")
 			}
 		}
-		for _, name := range []string{"steps.jsonl", "rewards.jsonl", "server_outcomes.jsonl"} {
+		for _, name := range []string{"steps.jsonl", "server_outcomes.jsonl", "rewards.jsonl"} {
 			a, e := sha(filepath.Join(replay, name))
 			if e != nil {
 				return e
@@ -414,7 +433,14 @@ func run() error {
 				if name != "rewards.jsonl" {
 					return fmt.Errorf("offline replay differs: %s", name)
 				}
-				if e = verifyRewardReplay(filepath.Join(replay, name), filepath.Join(r.Root, "dataset", name)); e != nil {
+				if *replayExporter != "" {
+					var repaired int
+					repaired, e = verifyCanonicalClassRewardReplay(replay, filepath.Join(r.Root, "dataset"), rewardConfig)
+					reconciledRewardRows += repaired
+				} else {
+					e = verifyRewardReplay(filepath.Join(replay, name), filepath.Join(r.Root, "dataset", name))
+				}
+				if e != nil {
 					return fmt.Errorf("offline replay differs: %s: %w", name, e)
 				}
 				if e = remember(filepath.Join(r.Root, "dataset", name)); e != nil {
@@ -606,6 +632,12 @@ func run() error {
 	}
 	metadata := map[string]any{"version": "combat_ppo_rollout_v1", "feature_version": behavior.FeatureVersion(), "reward_config_sha256": strings.ToLower(manifest.RewardSHA), "reward_version": manifest.Reward.Version, "aim_gamma": manifest.Reward.AimGamma, "training_monster_health": manifest.TrainingHealth, "rows": count, "skipped": skipped, "terminals": terminals, "policy_version": behavior.Version(), "model_sha256": modelSHA, "rollout_sha256": rolloutSHA, "source_sha256": receipts, "scope": "Fresh stochastic provider transitions, first life only; guards retained as environment execution; gaps cut in GAE; v2 verified control handoff retains reward with zero segment bootstrap; full world reset equivalence unproven"}
 	metadata["observation_timing_contract"] = manifest.ObservationTiming
+	if *replayExporter != "" {
+		metadata["captured_exporter_sha256"] = capturedExporterSHA
+		metadata["offline_replay_exporter"] = exporter
+		metadata["offline_replay_exporter_sha256"] = strings.ToLower(*replayExporterSHA)
+		metadata["reconciled_soldier_reward_rows"] = reconciledRewardRows
+	}
 	metadata["combat_execution_contract"] = executionContract
 	if manifest.ObservationTiming == "" {
 		metadata["observation_timing_contract"] = "legacy_wall_clock_v0"

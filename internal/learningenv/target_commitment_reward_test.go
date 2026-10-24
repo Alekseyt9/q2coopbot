@@ -55,6 +55,41 @@ func TestTargetCommitmentRewardProductiveHoldAndBudget(t *testing.T) {
 	}
 }
 
+func TestTargetCommitmentObservedSoldierAliases(t *testing.T) {
+	for _, nativeClass := range []string{"monster_soldier", "monster_soldier_light", "monster_soldier_ss"} {
+		t.Run(nativeClass, func(t *testing.T) {
+			var q SequenceReward
+			for i := 0; i < 3; i++ {
+				c, s, o := commitmentFixture(i, 7, 10)
+				q.Config = c
+				for j := range s.Observation.Enemies {
+					s.Observation.Enemies[j].Class = "monster_soldier"
+				}
+				o.Events[0].TargetClass = nativeClass
+				o.Events[0].HealthBefore, o.Events[0].HealthAfter = 20, 10
+				r := q.Evaluate(&s, o)
+				if !r.Available || r.TargetCommitment.SelectedHealthDamage != 10 {
+					t.Fatal("known observable alias dropped real damage", r)
+				}
+				if i == 2 && r.Components["target_commitment"] != .02 {
+					t.Fatal("productive hold bonus changed", r)
+				}
+			}
+		})
+	}
+	for _, nativeClass := range []string{"monster_gunner", "monster_soldier_light_unknown"} {
+		c, s, o := commitmentFixture(0, 7, 10)
+		for j := range s.Observation.Enemies {
+			s.Observation.Enemies[j].Class = "monster_soldier"
+		}
+		o.Events[0].TargetClass = nativeClass
+		q := SequenceReward{Config: c}
+		if r := q.Evaluate(&s, o); r.Available || r.Reason != "commitment_target_class_mismatch" {
+			t.Fatal("unrelated native class accepted", nativeClass, r)
+		}
+	}
+}
+
 func TestTargetCommitmentRewardNoIdleOrOtherTargetBonus(t *testing.T) {
 	for _, mode := range []string{"idle", "other", "corpse", "gap", "track"} {
 		t.Run(mode, func(t *testing.T) {

@@ -13,6 +13,7 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__)
     for name in ('corpus','pool'):ap.add_argument('--'+name,type=Path,required=True)
     ap.add_argument('--plan-index',type=int,required=True)
+    ap.add_argument('--replay-exporter',type=Path)
     a=ap.parse_args();repo=Path(__file__).resolve().parents[1]
     prepared=read(a.corpus/'prepared.json');assert prepared['state']=='prepared'
     assert prepared['protocol_sha256']==sha(a.corpus/'protocol.json') and not (a.corpus/'complete.json').exists()
@@ -34,8 +35,10 @@ def main():
     shutil.copy2(a.pool/'report.json',mirror/'report.json')
     target=a.corpus/'processing-train'
     with (a.corpus/'processing-train.log').open('w',encoding='utf-8') as log:
-        result=subprocess.run([sys.executable,str(repo/'scripts/process_registered_combat_pool_cuda.py'),
-            '--pool',str(a.pool.resolve()),'--plan-index',str(a.plan_index),'--out',str(target.resolve())],
+        command=[sys.executable,str(repo/'scripts/process_registered_combat_pool_cuda.py'),
+            '--pool',str(a.pool.resolve()),'--plan-index',str(a.plan_index),'--out',str(target.resolve())]
+        if a.replay_exporter:command+=['--replay-exporter',str(a.replay_exporter.resolve())]
+        result=subprocess.run(command,
             cwd=repo,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     assert result.returncode==0,str(a.corpus/'processing-train.log')
     report=read(target/'report.json');meta=read(target/'merged/report.json')
