@@ -1,6 +1,7 @@
 """Explicit one-frame/window Gaussian mean interventions; CUDA helpers."""
 import math
 from train_combat_bc import torch
+from combat_body_features import VERSIONS as EQUIPPED_PREFIX_VERSIONS
 
 VERSION='combat_one_frame_movement_mean_shift_v1'
 WINDOW_VERSION='combat_window_movement_mean_shift_v1'
@@ -25,7 +26,7 @@ def validate(model):
     assert type(probe['frame']) is int and 0<probe['frame']<=2**31-1
     assert probe['frame']+duration(probe)-1<=2**31-1
     assert len(probe['mean_shift'])==2 and all(type(v) in (int,float) and math.isfinite(v) and abs(v)<=2 for v in probe['mean_shift'])
-    assert model['feature_version']=='combat_features_v10' and model['action_distribution']=='combat_joint_aim_candidates_v1'
+    assert model['feature_version'] in EQUIPPED_PREFIX_VERSIONS and model['action_distribution']=='combat_joint_aim_candidates_v1'
     assert model.get('aim_candidate_head') and not model.get('deterministic')
     assert not any(model.get(k) for k in ('diagnostic_joint_aim_probe','execution_mode','geometry_aim_ranker','geometry_aim_exploration'))
 

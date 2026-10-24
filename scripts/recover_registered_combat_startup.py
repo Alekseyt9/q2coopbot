@@ -9,8 +9,13 @@ def classify(job):
     result=capture['results'][0];worker=pathlib.Path(result['root'])
     assert worker.resolve().is_relative_to(folder.resolve())
     report=read(worker/'report.json')
-    assert report['reason']=='Server startup failed' and not report['accepted']
-    assert not (worker/'bot.jsonl').exists(),'Partial or actual gameplay cannot be retried'
+    reason=report['reason']
+    paging=reason=='This command cannot be run due to the error: The paging file is too small for this operation to complete.'
+    bot_error=(worker/'bot.err').read_text(errors='replace') if (worker/'bot.err').exists() else ''
+    bot_oom=(reason=='Bot failed' and (bot_error.startswith('fatal error: runtime: cannot allocate memory')
+        or ('VirtualAlloc' in bot_error and 'errno=1455' in bot_error)))
+    assert (reason=='Server startup failed' or paging or bot_oom) and not report['accepted']
+    assert not any(worker.glob('bot.jsonl*')),'Partial or actual gameplay cannot be retried'
     assert 'g_test_combat_start' not in (worker/'server.log').read_text(errors='replace')
     return read(folder/'manifest.json')
 

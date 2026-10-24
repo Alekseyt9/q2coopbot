@@ -11,7 +11,7 @@ from evaluate_registered_combat_models import read, save, sha
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--workflow', type=Path, required=True)
-    ap.add_argument('--arm', choices=('ablated', 'observed'), required=True)
+    ap.add_argument('--arm', choices=('ablated', 'observed', 'typed', 'neutral'), required=True)
     ap.add_argument('--out', type=Path, required=True)
     a = ap.parse_args()
     assert not a.out.exists()
@@ -55,6 +55,7 @@ def main():
         assert protocol['train_only'] and all(item['split'] == 'train' for item in protocol['assignments'])
         pool = read(pin(receipt['source_pool_report'], receipt['pool_sha256']))
         assert pool['state'] == 'complete' and pool['source_unchanged']
+        plans = {index: read(pin(item['path'], item['sha256'])) for index, item in enumerate(pool['plans'])}
         jobs = {job['job']: job for job in pool['jobs']}
         processing = corpus / 'processing-train'
         processed = read(pin(processing / 'report.json', receipt['processed'][0]['sha256']))
@@ -68,6 +69,11 @@ def main():
         for case in processed['cases']:
             job = jobs[case['job']]
             assert case['split'] == 'train' and job['seed'] == case['seed'] and not job['error']
+            task = plans[job['plan_index']]['tasks'][job['task_index']]
+            assert job['seed'] in task['seeds']
+            episode = task['episode']
+            loadout = episode['recipe']['loadout']
+            monster_count = len(episode['monsters'])
             assert job['seed'] not in used_seeds
             used_seeds.add(job['seed'])
             path = processing / f"case-{job['job']:04d}"
@@ -106,7 +112,9 @@ def main():
                     deaths=outcome['deaths'], incoming_events=len(incoming), damage_rows=int(received > 0),
                     attack_frames=int(proposed['attack']), requested_nonzero=int(requested >= .25),
                     applied_nonzero=int(executed >= .25), displacement_units=travel)
+                assert identity['map'] == episode['map']
                 keys = ['all', f'round:{number}', 'map:' + identity['map'],
+                    'loadout:' + loadout, 'monster_count:' + str(monster_count),
                     'stationary_le10' if speed <= 10 else 'moving_gt10',
                     'visible_enemy' if visible else 'no_visible_enemy',
                     'has_target' if proposed.get('target_entity', 0) else 'no_target']
@@ -131,7 +139,9 @@ def main():
                     kind = event['attacker_class']
                     state = 'visible' if known else 'not_currently_visible'
                     band = ('below128' if known['distance'] < 128 else '128to256' if known['distance'] < 256 else '256plus') if known else 'unknown_current_range'
-                    for key in ('all', 'class:' + kind, 'class:' + kind + '/' + state, 'range:' + band):
+                    for key in ('all', 'class:' + kind, 'class:' + kind + '/' + state, 'range:' + band,
+                            'class:' + kind + '/mod:' + str(event['mod']),
+                            'loadout:' + loadout + '/class:' + kind + '/mod:' + str(event['mod'])):
                         sources[key].update(events=1, received_health_damage=damage,
                             stationary_events=int(speed <= 10), standing_visible_events=int(bool(o['on_ground'] and visible and speed < 40)),
                             observed_attacker_events=int(known is not None),
@@ -139,16 +149,21 @@ def main():
             assert count['rows'] == verified[job['job']]['rows']
             for key in ('received_health_damage', 'monster_health_damage', 'monster_kills', 'deaths'):
                 assert count[key] == verified[job['job']]['counts'].get(key, 0), key
-            cases.append(dict(round=number, job=job['job'], seed=job['seed'], counts=dict(count),
+            cases.append(dict(round=number, job=job['job'], seed=job['seed'], episode=episode['id'],
+                loadout=loadout, monster_count=monster_count, counts=dict(count),
                 goal=verified[job['job']]['goal'], death=verified[job['job']]['death']))
         print(dict(round=number, accepted_rows=credit['totals']['rows']), flush=True)
     assert len(cases) == len(used_seeds) == 96
     for key, value in expected_total.items():
         assert groups['all'][key] == value, key
     assert sources['all']['received_health_damage'] == groups['all']['received_health_damage']
+    for prefix in ('map:', 'loadout:', 'monster_count:'):
+        partition = [values for name, values in groups.items() if name.startswith(prefix)]
+        for key in ('rows', 'received_health_damage', 'monster_health_damage', 'monster_kills', 'deaths'):
+            assert sum(values[key] for values in partition) == groups['all'][key], (prefix, key)
     assert all(sha(path) == digest for path, digest in pins.items())
     a.out.mkdir(parents=True)
-    report = dict(state='complete', version='combat_train_incoming_risk_v1', arm=a.arm, cases=cases,
+    report = dict(state='complete', version='combat_train_incoming_risk_v2', arm=a.arm, cases=cases,
         groups={key: dict(value) for key, value in sorted(groups.items())},
         incoming_sources={key: dict(value) for key, value in sorted(sources.items())}, rounds=rounds, inputs=pins,
         neural_execution=False, training_performed=False, new_games=False,
@@ -156,7 +171,8 @@ def main():
               'States precede commands; HP events occur within the exclusive execution window. '
               'Same-window movement need not cause or prevent an already launched attack. '
               'Groups overlap and exposures differ; no causal action ranking or new reward/model claim. '
-              'Native attacker class is diagnostic only, never a new privileged policy input. No held-out data or fitting.')
+              'Native attacker class/mod and fixed loadout/composition strata are diagnostic only, never new privileged policy inputs. '
+              'The map/loadout/monster-count partitions reconcile all integer totals. No held-out data or fitting.')
     save(a.out / 'report.json', report)
     save(a.out / 'complete.json', dict(state='complete', report_sha256=sha(a.out / 'report.json')))
     print(dict(arm=a.arm, cases=len(cases), totals=dict(groups['all']), sources={k: dict(v) for k, v in sources.items() if k.startswith('class:') and '/' not in k}))

@@ -11,6 +11,31 @@ func movementMetadata() PPOFile {
 			Version: DiagnosticMovementProbeVersion, Frame: 110, MeanShift: []float64{0, 1}}}
 }
 
+// The intervention changes output movement means, not the appended input schema.
+// These are admission checks only; no network is constructed or evaluated.
+func TestDiagnosticMovementEquippedPrefixSchemas(t *testing.T) {
+	for _, version := range []string{EquippedWeaponFeatureVersion, BodyFeatureVersion, BodyAblatedFeatureVersion,
+		ProjectileTypeFeatureVersion, ProjectileTypeNeutralFeatureVersion, ProjectileTypeAblatedFeatureVersion} {
+		f := movementMetadata()
+		f.Features = version
+		if err := validateDiagnosticMovementProbe(f); err != nil {
+			t.Fatalf("%s one frame: %v", version, err)
+		}
+		f.DiagnosticMovementProbe.Version = DiagnosticMovementWindowVersion
+		f.DiagnosticMovementProbe.Duration = 3
+		if err := validateDiagnosticMovementProbe(f); err != nil {
+			t.Fatalf("%s window: %v", version, err)
+		}
+	}
+	for _, version := range []string{FeatureVersion, ThreatFeatureVersion, "combat_features_v999"} {
+		f := movementMetadata()
+		f.Features = version
+		if validateDiagnosticMovementProbe(f) == nil {
+			t.Fatalf("unsupported feature schema admitted: %s", version)
+		}
+	}
+}
+
 // Metadata and scalar means only; no network is constructed or evaluated.
 func TestDiagnosticMovementProbeMetadata(t *testing.T) {
 	f := movementMetadata()

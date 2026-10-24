@@ -1,0 +1,200 @@
+{
+  "version": "combat_checked_ground_underfire_probe_v1",
+  "model": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\enemy-projectile-ppo-v1-20261024\\round-02\\neutral\\update\\weights.json",
+  "model_sha256": "5dcf0d640d28394817bc105a58b379e4e6723eee747867d16a0cfbd87535ea0c",
+  "max_instances": 16,
+  "repeats": 2,
+  "port": 41400,
+  "new_native_games": 4,
+  "new_cuda_checks": 4,
+  "neural_training": false,
+  "promotion": false,
+  "prerequisite_report": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\enemy-projectile-grenade-motion-geometry-v1-20261024\\report.json",
+  "prerequisite_report_sha256": "9f955bacc1cd9d4ba8ec561cd8d0d19601a551e3a639cbeb76390bf6a2be9964",
+  "source_files": {
+    "F:\\src\\quake2\\q2coopbot-src\\scripts\\run_combat_checked_ground_probe.ps1": "630b8eb9b9a6113bc0bcd886476c049b0128b06957759f842870795054dafa71",
+    "F:\\src\\quake2\\q2coopbot-src\\scripts\\audit_combat_checked_ground_native_probe.py": "abeb639875ad7070456463b9b54360987e61f8006f3457f1ca8739552a403e55",
+    "F:\\src\\quake2\\q2coopbot-src\\scripts\\run_learned_combat_baseline.ps1": "55f0d356af3ae52745abef9cf1432db087afd55d42d5154b4f5844d4408193c1",
+    "F:\\src\\quake2\\q2coopbot-src\\scripts\\run_solo_tactical_retreat.ps1": "95d56ac0a5774d3ee686f33855eec510f2f56763e5ec4c378da91eac41fe0d6b",
+    "F:\\src\\quake2\\q2coopbot-src\\scripts\\combat_harness_bundle.ps1": "927eaef08a0c61c53ccf1f3d21e5efd3dbffc0b2ecad384a9eeff41a04eface1",
+    "F:\\src\\quake2\\q2coopbot-src\\scripts\\generated_combat_fixture.ps1": "93325815d508c333db6776b4f1425d9adb28e05f697d12a465e9f2671f2390cc",
+    "F:\\src\\quake2\\q2coopbot-src\\scripts\\finalize_combat_cuda_batch.py": "1250173866317cc1362ec28ff18d9b16caf6600684d7dcd82dea6b5a35258ddf",
+    "F:\\src\\quake2\\q2coopbot-src\\scripts\\combat_body_features.py": "47a83126bb8efa22289b59d362b94a5131fe6d3bb69fc60175478a56bc7c2b84",
+    "F:\\src\\quake2\\q2coopbot-src\\scripts\\combat_projectile_type_features.py": "9a8605844682d0f035c1682ffa1f25e9b4d27af89619acbced091fe7f0866892",
+    "F:\\src\\quake2\\q2coopbot-src\\scripts\\ppo_combat.py": "ec66d3649b91aa6be8ef3512516b5d7babba46ce8d99e32583f022b2be8d2938"
+  },
+  "cases": [
+    {
+      "name": "city1-grenade",
+      "seed": 1468045009,
+      "frame": 134,
+      "episode": "campaign-city1-site-01-group-parasite-soldier-light-gunner-blaster",
+      "fixture": {
+        "map": "city1",
+        "version": 1,
+        "episode_id": "campaign-city1-site-01-group-parasite-soldier-light-gunner-blaster",
+        "split": "train",
+        "engine_seed": 1468045009,
+        "generation_seed": 1579100298,
+        "attempts": 1,
+        "rejections": {},
+        "player": [
+          -2810.25,
+          -96.5,
+          -279.875
+        ],
+        "health": 100,
+        "monsters": [
+          {
+            "class": "monster_parasite",
+            "position": [
+              -2639.125,
+              -166.5,
+              -279.875
+            ]
+          },
+          {
+            "class": "monster_soldier_light",
+            "position": [
+              -2575.75,
+              -168.75,
+              -279.875
+            ]
+          },
+          {
+            "class": "monster_gunner",
+            "position": [
+              -2593.5,
+              -121.875,
+              -279.875
+            ]
+          }
+        ],
+        "loadout": "blaster",
+        "skill": 1,
+        "geometry_source": "F:\\src\\quake2\\q2coopbot-src\\workspace\\runtime\\q2go\\baseq2\\pak0.pak:maps/city1.bsp",
+        "geometry_sha256": "459f5312a2346d2e62fc25c0f87d0237844fd2d981c3b0de8efc525907f2c014"
+      },
+      "original_trace": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\enemy-projectile-ppo-v1-20261024\\round-03\\neutral\\corpus\\captures-train\\case-5-learned\\s-1468045009\\worker-0-episode-0\\bot.jsonl",
+      "original_trace_sha256": "be0500772461aa6395ad2eba7ba7cf77b00d1aea77de8cafd7c7c5cb95c05ce2",
+      "reward_config": "F:\\src\\quake2\\q2coopbot-src\\scripts\\scenarios\\combat-reward-blocked-ground-cost-v14.json",
+      "reward_sha256": "e72591c6d24a330f2183cf48771ac62fed9e3a3f0b0014d94e0e549e69bb1867",
+      "game_frames": 300,
+      "skill": 1,
+      "loadout": "blaster",
+      "expected_candidate_command": {
+        "Pitch": 1556,
+        "Yaw": -29678,
+        "Roll": 0,
+        "Forward": 156,
+        "Side": 289,
+        "Up": 0,
+        "Buttons": 1,
+        "Impulse": 0,
+        "Msec": 100,
+        "Light": 0
+      },
+      "candidate_prediction": {
+        "position": [
+          -2874.094505746817,
+          -199.76088434958336,
+          -279.875
+        ],
+        "velocity": [
+          175.30494253182806,
+          2.2255315041663835,
+          0
+        ],
+        "segments": [
+          [
+            [
+              -2891.625,
+              -198.5,
+              -279.875
+            ],
+            [
+              -2890.46806677366,
+              -199.96875,
+              -279.875
+            ]
+          ],
+          [
+            [
+              -2890.46806677366,
+              -199.96875,
+              -279.875
+            ],
+            [
+              -2874.094505746817,
+              -199.76088434958336,
+              -279.875
+            ]
+          ]
+        ],
+        "contacts": [
+          [
+            0,
+            1,
+            0
+          ]
+        ],
+        "model": "baseq2_dry_ground_step_slide_observed_entities_diagnostic_v4",
+        "initial_grounded": true,
+        "support_ambiguous": false
+      },
+      "control_prediction": {
+        "position": [
+          -2895.42,
+          -199.655,
+          -279.875
+        ],
+        "velocity": [
+          -37.949999999999996,
+          -11.549999999999999,
+          0
+        ],
+        "segments": [
+          [
+            [
+              -2891.625,
+              -198.5,
+              -279.875
+            ],
+            [
+              -2895.42,
+              -199.655,
+              -279.875
+            ]
+          ]
+        ],
+        "contacts": null,
+        "model": "baseq2_dry_ground_step_slide_observed_entities_diagnostic_v4",
+        "initial_grounded": true,
+        "support_ambiguous": false
+      },
+      "expected_control_ducked": false,
+      "expected_request_ducked": false,
+      "candidate_id": "neutral/city1/1468045009/37"
+    }
+  ],
+  "outcome_horizons": [
+    1,
+    3,
+    5,
+    10
+  ],
+  "mechanical_gate": {
+    "prefix_exact_through_root_observation": true,
+    "control_original_prefix_exact": true,
+    "repeat_next_observation_exact": true,
+    "only_direct_override_requested_movement": true,
+    "no_aim_fire_weapon_override": true,
+    "next_on_ground": true,
+    "next_pose_matches": true,
+    "position_tolerance": 0.25,
+    "velocity_tolerance": 1.0,
+    "no_test_tick_health_armor_change": false,
+    "prefix_float_tolerance": 1e-09
+  },
+  "scope": "One fixed own-TRAIN city1 grenade context. Four native/CUDA captures are two paired cold repeats, not four independent quality trials. Restore only model-selected Forward/Side/Up at frame134 via existing detailed checked-ground diagnostic. Aim/fire/weapon/light preserved. Under-fire HP changes are recorded, not forbidden; position .25 and velocity 1.0 gates stay strict despite possible unmodelled knockback. A failed velocity check remains failed. Outcomes over1/3/5/10networkframes and first-life are descriptive, separate from mechanical gate. No new safety bypass, fitting, default change or general superiority claim. Whole probe including controls is diagnostic and must not be merged into TRAIN."
+}

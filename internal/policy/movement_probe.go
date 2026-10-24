@@ -70,7 +70,7 @@ func validateDiagnosticMovementProbe(f PPOFile) error {
 	validVersion := p.Version == DiagnosticMovementProbeVersion && p.Duration == 0 ||
 		p.Version == DiagnosticMovementWindowVersion && p.Duration >= 2 && p.Duration <= 10 && p.Frame <= math.MaxInt32-p.Duration+1
 	if !validVersion || p.Frame <= 0 || p.Frame > math.MaxInt32 || len(p.MeanShift) != 2 ||
-		f.Deterministic || f.Features != EquippedWeaponFeatureVersion || f.ActionDistribution != JointAimCandidateVersion ||
+		f.Deterministic || !equippedPrefixFeatures(f.Features) || f.ActionDistribution != JointAimCandidateVersion ||
 		f.AimCandidateHead == nil || f.DiagnosticAimProbe != nil || f.ExecutionMode != "" || f.GeometryAimRanker != nil || f.GeometryAimExplore != nil {
 		return fmt.Errorf("invalid diagnostic movement probe contract")
 	}

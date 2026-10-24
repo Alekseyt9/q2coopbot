@@ -5,7 +5,11 @@ $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 $protocolPath=(Resolve-Path -LiteralPath $Protocol).Path
 $spec=Get-Content -LiteralPath $protocolPath -Raw|ConvertFrom-Json
-if($spec.version -ne 'combat_checked_ground_native_probe_v1' -or $spec.max_instances -ne 16 -or $spec.repeats -ne 2 -or $spec.cases.Count -ne 3){throw 'Unexpected fixed probe budget'}
+$underfire=$spec.version -eq 'combat_checked_ground_underfire_probe_v1'
+$caseCount=$(if($underfire){1}else{3})
+$budget=4*$caseCount
+if(($spec.version -ne 'combat_checked_ground_native_probe_v1' -and !$underfire) -or $spec.max_instances -ne 16 -or $spec.repeats -ne 2 -or $spec.cases.Count -ne $caseCount -or $spec.new_native_games -ne $budget -or $spec.new_cuda_checks -ne $budget){throw 'Unexpected fixed probe budget'}
+if($underfire){foreach($item in $spec.source_files.PSObject.Properties){if((Get-FileHash -LiteralPath $item.Name).Hash.ToLowerInvariant() -ne $item.Value){throw 'Probe source changed'}}}
 if((Get-FileHash -LiteralPath $spec.model).Hash.ToLowerInvariant() -ne $spec.model_sha256){throw 'Frozen weights changed'}
 if((Get-FileHash -LiteralPath $spec.prerequisite_report).Hash.ToLowerInvariant() -ne $spec.prerequisite_report_sha256){throw 'Prerequisite changed'}
 $root=[IO.Path]::GetFullPath($OutputRoot)
@@ -16,7 +20,7 @@ $null=New-Item -ItemType Directory -Path $root
 . "$PSScriptRoot/combat_harness_bundle.ps1"
 $sourceFingerprint=Get-HarnessFingerprint (Get-HarnessSourceRecords $repo)
 $protocolHash=(Get-FileHash -LiteralPath $protocolPath).Hash.ToLowerInvariant()
-@{stage='building';runner_pid=$PID;new_native_games=12;training_performed=$false}|ConvertTo-Json|Set-Content "$root/progress.json" -Encoding utf8NoBOM
+@{stage='building';runner_pid=$PID;new_native_games=$budget;training_performed=$false}|ConvertTo-Json|Set-Content "$root/progress.json" -Encoding utf8NoBOM
 $bundle=New-HarnessBinaryBundle $repo
 $jobs=@();$index=0
 foreach($case in $spec.cases){
@@ -31,7 +35,7 @@ foreach($case in $spec.cases){
     }}
 }
 try{
-    @{stage='native-probe';runner_pid=$PID;cases=12}|ConvertTo-Json|Set-Content "$root/progress.json" -Encoding utf8NoBOM
+    @{stage='native-probe';runner_pid=$PID;cases=$budget}|ConvertTo-Json|Set-Content "$root/progress.json" -Encoding utf8NoBOM
     $results=@($jobs|ForEach-Object -Parallel {
         $ErrorActionPreference='Stop';$job=$_;$errorText=''
         try{
@@ -49,7 +53,7 @@ try{
             root=$job.root;frame=$job.frame;port=$job.port;error=$errorText}
     } -ThrottleLimit 16)
     $unchanged=$sourceFingerprint -eq (Get-HarnessFingerprint (Get-HarnessSourceRecords $repo))
-    $valid=$unchanged -and $results.Count -eq 12 -and !@($results|Where-Object error).Count
+    $valid=$unchanged -and $results.Count -eq $budget -and !@($results|Where-Object error).Count
     @{state=$(if($valid){'complete'}else{'failed'});version=$spec.version;source_unchanged=$unchanged;jobs=$results;
         protocol_sha256=$protocolHash;source_fingerprint=$sourceFingerprint;max_instances=16;timescale=2;
         training_performed=$false;promotion=$false;scope=$spec.scope}|ConvertTo-Json -Depth 12|Set-Content "$root/report.json" -Encoding utf8NoBOM
@@ -58,6 +62,7 @@ try{
     @{stage='auditing';runner_pid=$PID}|ConvertTo-Json|Set-Content "$root/progress.json" -Encoding utf8NoBOM
     & $Python "$PSScriptRoot/audit_combat_checked_ground_native_probe.py" --protocol $protocolPath --root $root --out "$root/analysis" *> "$root/analysis.log"
     if($LASTEXITCODE){throw 'Native/GPU probe audit failed; inspect analysis log'}
+    if($underfire){foreach($item in $spec.source_files.PSObject.Properties){if((Get-FileHash -LiteralPath $item.Name).Hash.ToLowerInvariant() -ne $item.Value){throw 'Probe source changed'}}}
     @{stage='complete';runner_pid=$PID;analysis_complete_sha256=(Get-FileHash "$root/analysis/complete.json").Hash.ToLowerInvariant()}|
         ConvertTo-Json|Set-Content "$root/progress.json" -Encoding utf8NoBOM
 }catch{

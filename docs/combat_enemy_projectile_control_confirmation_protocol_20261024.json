@@ -1,0 +1,38 @@
+{
+  "version": "combat_enemy_projectile_control_confirmation_v1",
+  "selection": "Post-hoc neutral final selected after failed typed screen: equal goals to typed with less received damage. Failed typed hypothesis remains failed. Fixed final endpoint, no refitting or checkpoint selection.",
+  "prerequisite_report": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\enemy-projectile-ppo-v1-20261024\\result\\report.json",
+  "prerequisite_report_sha256": "f9ca1c3cfa672aa21f84703fa74b86d6137eeb374bab64898534f8279611d648",
+  "prerequisite_workflow_sha256": "e686b681fdb04ac51f7d9fe79078a81938c4fa9202958e0e24c5d94dd5015bee",
+  "endpoints": {
+    "initial": {
+      "path": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-type-initial-v1-20261024\\neutral",
+      "seal_sha256": "1af227098023a847ad23213177d23e904ea6114b9ace5011b3e8e0069bcf83d3",
+      "weights_sha256": "f99f49f28d2d6b0b566d259484fb58f15a4b181e5477f9d32e9a2a9aed961d77"
+    },
+    "candidate": {
+      "path": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\enemy-projectile-ppo-v1-20261024\\round-04\\neutral\\update",
+      "seal_sha256": "cdb6ac4a2e7135eb7c05cf146cc7d2bfa6181ed93621e318706a426b6cc359d8",
+      "weights_sha256": "1b96f67cbe5f4d1d89ac3d79f3c425ee8178b942b7e9b8a8c11aaf2d903cf6a7"
+    }
+  },
+  "native_cases": 72,
+  "cuda_cases": 48,
+  "gate": {
+    "additional_goals_over_rules": 3,
+    "additional_goals_over_initial": 1,
+    "deaths_no_more_than": [
+      "initial",
+      "rules"
+    ],
+    "received_compare_to": [
+      "initial",
+      "rules"
+    ],
+    "received_numerator": 11,
+    "received_denominator": 10,
+    "automatic_promotion": false
+  },
+  "training_performed": false,
+  "scope": "Independent confirmation of fixed neutral weights on 24 balanced recipes, four maps, two BSP sites, twelve duos/twelve trios and eight each blaster/machinegun/weapons. One fresh confirmation seed per recipe. Passing is not campaign, human-coop or general-superiority acceptance."
+}

@@ -48,9 +48,18 @@ def main():
 
     pin(__file__)
     spec = read(pin(args.protocol))
+    underfire = spec['version'] == 'combat_checked_ground_underfire_probe_v1'
+    assert spec['version'] == 'combat_checked_ground_native_probe_v1' or underfire
+    expected_cases = 4 if underfire else 12
+    assert len(spec['cases']) == (1 if underfire else 3)
+    if underfire:
+        assert spec['mechanical_gate']['no_test_tick_health_armor_change'] is False
+        assert spec['outcome_horizons'] == [1, 3, 5, 10]
+        for path, digest in spec['source_files'].items():
+            pin(path, digest)
     native = read(pin(args.root / 'report.json'))
-    assert native['state'] == 'complete' and native['source_unchanged'] and len(native['jobs']) == 12
-    assert native['protocol_sha256'] == sha(args.protocol) and spec['new_native_games'] == spec['new_cuda_checks'] == 12
+    assert native['state'] == 'complete' and native['source_unchanged'] and len(native['jobs']) == expected_cases
+    assert native['protocol_sha256'] == sha(args.protocol) and spec['new_native_games'] == spec['new_cuda_checks'] == expected_cases
     model = pin(spec['model'], spec['model_sha256'])
     args.out.mkdir(parents=True)
     env = dict(os.environ, GOCACHE=str(repo / 'workspace/build/gocache'), GOTOOLCHAIN='auto')
@@ -62,7 +71,7 @@ def main():
 
     exporter = args.out / 'q2ppo-data.exe'
     command('build', ['go', 'build', '-o', exporter.resolve(), './cmd/q2ppo-data'])
-    traces, jobs, tasks = {}, {}, []
+    traces, jobs, tasks, followups = {}, {}, [], []
 
     def trace(path, last):
         values = {}
@@ -97,6 +106,30 @@ def main():
             '--cuda-only', '--out', (folder / 'native').resolve()])
         metadata = read(pin(folder / 'native/report.json'))
         assert bool(metadata.get('diagnostic_only')) == bool(expected_frame)
+        if underfire:
+            step_files = list((folder / 'native').glob('replay-*/steps.jsonl'))
+            assert len(step_files) == 1
+            native_steps = [json.loads(line) for line in pin(step_files[0]).open(encoding='utf-8-sig')]
+            effects_path = step_files[0].with_name('server_outcomes.jsonl')
+            effects = [json.loads(line) for line in pin(effects_path).open(encoding='utf-8-sig')]
+            accepted = {s['index']: s for s in native_steps if s['observation']['identity']['life'] == 1}
+            actor = traces[key][case['frame']]['combat_policy']['observation']['identity']['actor']
+            last = max((s.get('native_step') or {}).get('end_frame', 0) for s in accepted.values())
+            damage = [event for effect in effects if effect['step'] in accepted and effect['available']
+                for event in effect['events'] if event['target'] == actor
+                and max(event['health_before'], 0) > max(event['health_after'], 0)]
+            windows = []
+            for lead in spec['outcome_horizons']:
+                end = case['frame']+lead
+                events = [e for e in damage if case['frame'] < e['frame'] <= end]
+                windows.append(dict(lead=lead, observed_through_frame=last, entire_frame_window_observed=last >= end,
+                    received_hp=sum(max(e['health_before'], 0)-max(e['health_after'], 0) for e in events),
+                    grenade_hp=sum(max(e['health_before'], 0)-max(e['health_after'], 0) for e in events
+                        if e['attacker_class'] == 'monster_gunner' and e['mod'] in (6, 7)),
+                    lethal_events=sum(e['health_before'] > 0 >= e['health_after'] for e in events), events=events))
+            followups.append(dict(case=job['case_name'], label=job['label'], repeat=job['repeat'],
+                windows=windows, goal_stop=result.get('goal_stop'), death_stop=result.get('death_stop'),
+                first_life=result.get('first_life'), scope='Available exported first-life native windows; truncated windows stay marked. No fitting or general survival claim.'))
         tasks.append(dict(model=str(model), model_sha256=sha(model), data=str((folder / 'native').resolve()),
             out=str((folder / 'cuda').resolve()), native_report_sha256=sha(folder / 'native/report.json')))
     gate = spec['mechanical_gate']
@@ -139,12 +172,13 @@ def main():
                 velocity_error = math.dist(nxt['velocity'], prediction['velocity'])
                 applied_ok = cmd == expected and len(interventions) == (1 if label == 'request' else 0)
                 checks[f'{name}/{label}/{repeat}/actuation'] = applied_ok
-                expected_ducked = True if label == 'request' else case['expected_control_ducked']
+                expected_ducked = (case['expected_request_ducked'] if underfire else True) if label == 'request' else case['expected_control_ducked']
+                health_ok = (nxt['health'] == o['health'] and nxt['armor'] == o['armor'])
                 checks[f'{name}/{label}/{repeat}/native_state'] = bool(nxt['on_ground'] and nxt['ducked'] == expected_ducked
-                    and nxt['health'] == o['health'] and nxt['armor'] == o['armor'] and error <= gate['position_tolerance'] and velocity_error <= gate['velocity_tolerance'])
+                    and (health_ok or underfire) and error <= gate['position_tolerance'] and velocity_error <= gate['velocity_tolerance'])
                 details.append(dict(case=name, label=label, repeat=repeat, prefix=prefix, applied_ok=applied_ok,
                     next_ducked=nxt['ducked'], position_error=error, velocity_error=velocity_error,
-                    before_health=o['health'], next_health=nxt['health'], command=cmd))
+                    before_health=o['health'], next_health=nxt['health'], health_armor_unchanged=health_ok, command=cmd))
             a, b = traces[name, label, 0], traces[name, label, 1]
             checks[f'{name}/{label}/cold_repeat'] = all(f in a and f in b and same(signature(a[f], True), signature(b[f], True), tolerance) for f in range(98, frame + 2))
     request = args.out / 'cuda-request.json'
@@ -161,10 +195,10 @@ def main():
         if original_meta.get('diagnostic_only'):
             assert metadata['version']=='combat_diagnostic_checked_ground_rollout_v1' and not metadata['ppo_training_ready']
             assert metadata['diagnostic_checked_ground_request_frame']==original_meta['diagnostic_checked_ground_request_frame']
-    checks['cuda_replay_twelve_cases'] = len(tasks) == 12
+    checks['cuda_replay_cases' if underfire else 'cuda_replay_twelve_cases'] = len(tasks) == expected_cases
     assert all(sha(path) == digest for path, digest in pins.items())
-    save(args.out / 'report.json', dict(state='complete', version='combat_checked_ground_native_probe_result_v1',
-        mechanical_gate_passed=all(checks.values()), checks=checks, details=details, inputs=pins, cuda_cases=12,
+    save(args.out / 'report.json', dict(state='complete', version='combat_checked_ground_underfire_probe_result_v1' if underfire else 'combat_checked_ground_native_probe_result_v1',
+        mechanical_gate_passed=all(checks.values()), checks=checks, details=details, followups=followups, inputs=pins, cuda_cases=expected_cases,
         training_performed=False, guard_default_changed=False, promotion=False,
         scope=spec['scope'] + ' Float prefix tolerance1e-9; command integers and categorical choices exact. '
               'Only spawncount namespace normalized. Diagnostic trajectories excluded from ordinary PPO fitting/merge.'))

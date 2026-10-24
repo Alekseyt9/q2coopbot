@@ -1,6 +1,38 @@
 # Обучение на реальных вражеских снарядах — 24.10.2026
 
-## Текущий статус на 20:32 МСК
+## Итог на 21:03 МСК
+
+Workflow закрыт: 192 TRAIN native / 192 CUDA, 20258 переходов; 40 evaluation native / 32 CUDA. Итоговый report SHA `f9ca1c3cfa672aa21f84703fa74b86d6137eeb374bab64898534f8279611d648`. Объявленный pre-fit source revision сохранён: source_unchanged=true, original_source_unchanged=false, recovery SHA `d97e263307b192acdd2db9fd3e2c4005fe14128d12c7061b983a9182a9d70260`.
+
+| Вариант | Цели / 8 | Смерти | Убийства | Получено HP |
+|---|---:|---:|---:|---:|
+| Neutral initial | 4 | 3 | 13 | 434 |
+| Neutral trained | 5 | 2 | 14 | 328 |
+| Typed initial | 4 | 3 | 13 | 434 |
+| Typed trained | 5 | 2 | 15 | 386 |
+| Rules | 2 | 5 | 9 | 468 |
+
+Типизация снарядов не прошла gate: нет +2 целей относительно обученного neutral, а 386 получено HP больше допустимых 110% от 328. Наличие реальных enemy bolts доказано, но польза их типизации в этой схеме обучения не установлена. Promotion=false, default прежний.
+
+Лишние действия не устранены. Initial → neutral-trained / typed-trained: native MG live damage fraction 55.02% → 56.54% / 56.46%; solid contacts 124/289 → 115/283 / 109/271; standing среди grounded-visible кадров 44.87% → 39.20% / 39.46%; yaw >=30 градусов 86/968 → 79/864 / 107/976. Траектории и число кадров различаются, это описательная диагностика, не причинная оценка манёвров.
+
+Следующая отдельная гипотеза — независимо подтвердить neutral final против своего initial и rules на всех 24 balanced рецептах, без fitting. Выбор neutral выполнен после просмотра этого малого screen; это не успех исходной typed гипотезы. Кандидат не меняется по промежуточным результатам, пороги фиксируются до новых игр.
+
+### Завершение обучения, 20:55 МСК
+
+Все четыре TRAIN раунда завершены: 192 native / 192 CUDA, 20258 принятых переходов, по четыре настоящих обновления каждой ветки. Round04 typed: 2564 rows, 9 actor / 40 critic steps; neutral: 2380 rows, 5 actor / 40 critic steps. Все проверки checkpoint roundtrip и disposable actor/critic Adam continuation прошли.
+
+Final typed weights SHA `194b9a376b5cc7d49ba70851b3fba4cd4f8a2cbaa787b91940959f2ad1c18e89`, neutral `1b96f67cbe5f4d1d89ac3d79f3c425ee8178b942b7e9b8a8c11aaf2d903cf6a7`. Последние exposure gates прошли: typed 38 enemy bolt slots / 25 known velocities в 5 случаях, max L2 1.5720007; neutral 27 / 14 в 7 случаях, max L2 1.6347269. Live infighting=0.
+
+Supervisor PID7476 перешёл к фиксированной оценке, child21932. Подготовлены пять планов для 40 native / 32 CUDA evaluation случаев; исходные и final endpoints заданы заранее. Качество ещё не установлено, default не заменён. Сравнение не использует промежуточные checkpoint для выбора победителя.
+
+### Третий раунд, 20:43 МСК
+
+Третий раунд также завершён, 48 native / 48 CUDA, 4719 переходов. Typed: 2369 rows, 7 actor / 40 critic steps; neutral: 2350 rows, 18 actor / 40 critic steps. Обе ветки scope_updates=3, checkpoint roundtrip и disposable actor/critic Adam continuation=true. SHA typed `952bc73c00ecb71c5e710638d6fc80e96cc7ce4511b8d8a7337b45ae2cbcf248`, neutral `db9d19892f10b7444aa3720cca8ecd5066461a82a4a67c28f7b73715548a7032`.
+
+Pre-fit exposure третьего раунда прошёл у обеих веток: typed 34 enemy bolt slots / 20 known velocities в 6 случаях, L2 max 1.4910168; neutral 22 / 14 в 4 случаях, L2 max 1.1950925. Live infighting=0. Всего за три раунда 144 native / 144 CUDA и 15314 переходов. Supervisor PID7476 жив, началась подготовка четвёртого раунда; stderr пуст. Новых оценочных результатов ещё нет, default не менялся.
+
+### Второй раунд, 20:32 МСК
 
 Второй раунд завершён: ещё 48 native / 48 CUDA случаев, 5625 принятых переходов. Typed: 2717 переходов, 10 actor / 40 critic steps; neutral: 2908 переходов, 30 actor / 40 critic steps. У каждой ветки scope_updates=2; checkpoint roundtrip и реальные disposable продолжения actor/critic Adam прошли. SHA весов typed `8dfe2927d029034d596731c1456adbb1b0ae492acc9ef15a767b181ca55fe45b`, neutral `5dcf0d640d28394817bc105a58b379e4e6723eee747867d16a0cfbd87535ea0c`.
 
