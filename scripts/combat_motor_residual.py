@@ -1,4 +1,5 @@
 """Observed motor residual and explicit stable reference; CUDA neural work only."""
+from combat_body_features import VERSIONS as BODY_FEATURE_VERSIONS, WIDTH as BODY_FEATURE_WIDTH, legacy as body_legacy
 import copy
 import math
 from train_combat_bc import torch,nn
@@ -10,7 +11,7 @@ INPUT_WIDTH=756
 def validate(model):
     spec=model.get('motor_residual')
     if spec is None:return
-    assert model['feature_version']=='combat_features_v10' and model.get('aim_mode_head')=='combat_target_coarse_fine_aim_v1'
+    assert model['feature_version'] in BODY_FEATURE_VERSIONS and model.get('aim_mode_head')=='combat_target_coarse_fine_aim_v1'
     assert model.get('spatial_aim') and model.get('sampled_motion_aim') and not model.get('entity_attention')
     assert spec['version']==VERSION and len(spec['layers'])==3
     width=INPUT_WIDTH
@@ -22,6 +23,7 @@ def validate(model):
 
 
 def inputs(features):
+    features = body_legacy(features)
     assert features.is_cuda and features.shape[-1]==1147
     return torch.cat((features[...,:169],features[...,466:786],features[...,854:1121]),-1)
 

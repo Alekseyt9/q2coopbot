@@ -30,6 +30,13 @@ func TestDynamicBodyObservationMasksAndClientMembership(t *testing.T) {
 	if s.Defeated[0] != corpse || s.CollisionBodies[0] != corpse {
 		t.Fatal("observation aliases snapshot state")
 	}
+	legacy := corpse
+	legacy.Solid, legacy.ModelPath, legacy.Angles, legacy.Skin = 0, "", quake.Vec3{}, 0
+	s.Defeated[0] = legacy
+	merged := observedDynamicBodies(1, s, func(at quake.Vec3) bool { return at[2] >= 0 }).Bodies[0]
+	if !merged.ProtocolBoundsKnown || merged.Solid != solid || merged.ModelPath != corpse.ModelPath || merged.Angles != corpse.Angles || merged.Skin != corpse.Skin {
+		t.Fatal("discarded available client collision metadata", merged)
+	}
 	var unavailable Observation
 	EnrichEnvironment(&unavailable, s, nil)
 	if unavailable.DynamicBodies != nil {

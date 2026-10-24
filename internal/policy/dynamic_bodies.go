@@ -57,6 +57,14 @@ func observedDynamicBodies(actor int, snapshot quake.Snapshot, visible func(quak
 	for _, object := range snapshot.Defeated {
 		// Defeated also includes network solid0 death animations omitted by
 		// CollisionBodies. Never fill their bounds from a native/server label.
+		if collision, ok := objects[object.ID]; ok {
+			// Older traces omitted solid/appearance from Defeated while the
+			// current collision set retained protocol bounds for the same ID.
+			object.Solid = collision.Solid
+			if object.ModelPath == "" {
+				object.ModelPath, object.Angles, object.Skin = collision.ModelPath, collision.Angles, collision.Skin
+			}
+		}
 		objects[object.ID], dead[object.ID], classes[object.ID] = object, true, object.Class
 	}
 	for id, object := range objects {

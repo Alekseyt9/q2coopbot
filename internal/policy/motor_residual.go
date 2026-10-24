@@ -13,7 +13,7 @@ func validateMotorResidual(f PPOFile) error {
 		return nil
 	}
 	spec := f.MotorResidual
-	if f.Features != EquippedWeaponFeatureVersion || f.AimModeHead != PrecisionHeadVersion || f.SpatialAim == nil || f.SampledMotionAim == nil || f.EntityAttention != nil || spec.Version != MotorResidualVersion || len(spec.Layers) != 3 {
+	if !equippedPrefixFeatures(f.Features) || f.AimModeHead != PrecisionHeadVersion || f.SpatialAim == nil || f.SampledMotionAim == nil || f.EntityAttention != nil || spec.Version != MotorResidualVersion || len(spec.Layers) != 3 {
 		return fmt.Errorf("invalid motor residual contract")
 	}
 	width := MotorResidualInputWidth

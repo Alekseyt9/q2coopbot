@@ -145,7 +145,7 @@ func validateAimCandidates(f PPOFile) error {
 	}
 	if h == nil || f.ActionDistribution != JointAimCandidateVersion || h.Version != JointAimCandidateVersion ||
 		f.Deterministic || f.ExecutionMode != "" || f.GeometryAimExplore != nil || f.GeometryAimRanker != nil ||
-		f.Features != EquippedWeaponFeatureVersion || f.TargetHead != TargetHeadVersion || f.AimModeHead != PrecisionHeadVersion ||
+		!equippedPrefixFeatures(f.Features) || f.TargetHead != TargetHeadVersion || f.AimModeHead != PrecisionHeadVersion ||
 		h.Sampler != expectedSampler || !reflect.DeepEqual(h.Offsets, []float64{0, -5, -2.5, 2.5, 5}) ||
 		h.Predictor.GeometryVersion != ActionEffectGeometryVersion || len(h.Layers) != 2 {
 		return fmt.Errorf("invalid joint aim candidate contract")

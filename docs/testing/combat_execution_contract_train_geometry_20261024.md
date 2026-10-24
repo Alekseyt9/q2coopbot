@@ -45,3 +45,20 @@
 4. Для ошибок луча мимо bbox отдельно проверить путь уже обученного sampled-motion/geometry scorer: в текущем source `sampled_motion_aim` всё ещёv1, а не принятый vertical-v2. Предыдущие отрицательные center/vertical/near-identity опыты сохраняются; новое обучение требует конкретного отличия механизма и заранее заданного контроля.
 
 Общее превосходство над rules и устранение лишних действий не достигнуты. Ни этот отчёт, ни корректная физическая реконструкция не являются основанием promotion.
+
+## Проверка доступности тел завершена
+
+`combat-execution-contract-body-visibility-v1-20261024` связывает все260 TRAIN corpse contacts с точным клиентским trace по spawncount/frame/actor/client_sequence, до команды. Report SHA `5466c00e8d1bfb223d440aa8127be7237bd3b9e417f5cf57994f885f5db34222`.
+
+| Наличие blocker ID до команды | Контактов из260 |
+|---|---:|
+| Client Defeated |260|
+| Client CollisionBodies / Obstacles |227|
+| Client ненулевой protocol solid |227|
+| Policy текущие enemies / props |0|
+| Policy remembered threats |0|
+| Blocker совпадает с выбранной целью |0|
+
+Это подтверждает конкретный пробел передачи текущих тел в боевое наблюдение. PVS-позиция сама по себе ещё не доказывает прямую видимость из камеры; для нового поля используется существующая BSP/door visibility проверка. Для33 контактов нельзя считать точный hitbox известным по клиентскому protocol solid.
+
+Добавлено optional `observed_dynamic_bodies_v1`, проверено в четырёх живых сценах и на501 CUDA-verified переходе. В новых записях1235 body records,271 наблюдаемая death animation,211 records с неизвестными protocol bounds, без подстановки server bbox. Старые v10 признаки поле пока игнорируют. Подробности и граница готовности: `combat_dynamic_body_observations_20261024.md`. Следующий этап — явно версионированное подключение поля к сети, CUDA перенос/обучение и отдельная оценка, а не утверждение, что старый actor уже начал его использовать.

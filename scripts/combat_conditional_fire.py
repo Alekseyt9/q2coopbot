@@ -3,6 +3,7 @@
 Recorded action context is detached: this helper must not create extra pathwise
 gradients into movement or sampled aim.
 """
+from combat_body_features import VERSIONS as BODY_FEATURE_VERSIONS, WIDTH as BODY_FEATURE_WIDTH, legacy as body_legacy
 import copy
 import math
 from train_combat_bc import torch, nn
@@ -15,7 +16,7 @@ def validate(model):
     spec = model.get('conditional_fire')
     if spec is None:
         return
-    assert model['feature_version'] == 'combat_features_v10'
+    assert model['feature_version'] in BODY_FEATURE_VERSIONS
     assert model.get('aim_mode_head') == 'combat_target_coarse_fine_aim_v1'
     assert model.get('spatial_aim') and model.get('sampled_motion_aim') and not model.get('entity_attention')
     assert spec['version'] == VERSION and len(spec['layers']) == 3
@@ -28,6 +29,7 @@ def validate(model):
 
 
 def inputs(features, target, mode, latent, vertical, weapon):
+    features = body_legacy(features)
     assert isinstance(features, torch.Tensor) and features.is_cuda
     assert features.ndim == 2 and features.shape[1] == 1147
     n = len(features)

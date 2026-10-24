@@ -3,6 +3,7 @@
 Direct observed state + soft selected-target context -> weapon-only residual.
 No prescribed optimal weapon, availability changes or native hidden state.
 """
+from combat_body_features import VERSIONS as BODY_FEATURE_VERSIONS, WIDTH as BODY_FEATURE_WIDTH, legacy as body_legacy
 import math
 from train_combat_bc import torch,nn
 from combat_target_head import availability
@@ -15,7 +16,7 @@ INPUT_WIDTH=154
 def validate(model):
     spec=model.get('weapon_state_residual')
     if spec is None:return
-    if (model.get('feature_version')!='combat_features_v10' or
+    if (model.get('feature_version') not in BODY_FEATURE_VERSIONS or
         model.get('aim_mode_head')!='combat_target_coarse_fine_aim_v1' or
         model.get('weapon_head')!='combat_masked_weapon_v1' or
         model.get('target_head')!='combat_target_conditioned_aim_v1' or
@@ -71,6 +72,7 @@ def optimizer(actor,std,actor_lr,weapon_lr,motor_lr=.0003,fire_lr=.0003):
 
 
 def inputs(features,raw):
+    features = body_legacy(features)
     if not features.is_cuda or not raw.is_cuda:
         raise ValueError('CUDA required for weapon residual prototype')
     if features.shape[:-1]!=raw.shape[:-1] or features.shape[-1]!=1147 or raw.shape[-1]!=81:

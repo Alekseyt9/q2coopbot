@@ -33,3 +33,22 @@ func TestSnapshotCollisionBodiesExcludeSelfAndBrushModels(t *testing.T) {
 		t.Fatal("incorrect collision set", s.CollisionBodies)
 	}
 }
+
+func TestSnapshotBodyAppearanceAndDeathSolidComeFromPacket(t *testing.T) {
+	const path = "models/monsters/parasite/tris.md2"
+	d := Decoder{Config: map[int]string{33: path}}
+	for _, solid := range []uint16{0, 7266} {
+		entity := Entity{Number: 7, Model: 1, Frame: 38, Solid: solid, Skin: 2, Angles: Vec3{0, 90, 0}}
+		s := d.Snapshot(Frame{Number: 100, Entities: map[int]Entity{7: entity}})
+		if len(s.Defeated) != 1 {
+			t.Fatal("missing observed death animation", s.Defeated)
+		}
+		body := s.Defeated[0]
+		if body.Solid != solid || body.ModelPath != path || body.Frame != 38 || body.Skin != 2 || body.Angles != entity.Angles {
+			t.Fatal("lost packet appearance/solid", body)
+		}
+		if solid != 0 && (len(s.CollisionBodies) != 1 || s.CollisionBodies[0].ModelPath != path || s.CollisionBodies[0].Frame != 38 || s.CollisionBodies[0].Angles != entity.Angles) {
+			t.Fatal("lost collision-body appearance", s.CollisionBodies)
+		}
+	}
+}

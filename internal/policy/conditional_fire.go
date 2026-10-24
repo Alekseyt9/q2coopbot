@@ -14,7 +14,7 @@ func validateConditionalFire(f PPOFile) error {
 	if f.ConditionalFire == nil {
 		return nil
 	}
-	if f.Features != EquippedWeaponFeatureVersion || f.AimModeHead != PrecisionHeadVersion || f.SpatialAim == nil || f.SampledMotionAim == nil || f.EntityAttention != nil {
+	if !equippedPrefixFeatures(f.Features) || f.AimModeHead != PrecisionHeadVersion || f.SpatialAim == nil || f.SampledMotionAim == nil || f.EntityAttention != nil {
 		return fmt.Errorf("invalid conditional fire contract")
 	}
 	return validateConditionalFireSpec(f.ConditionalFire)

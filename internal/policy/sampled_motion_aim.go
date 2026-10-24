@@ -15,7 +15,7 @@ func validateSampledMotionAim(f PPOFile) error {
 	if spec == nil {
 		return nil
 	}
-	if (spec.Version != SampledMotionAimVersion && spec.Version != SampledVerticalAimVersion && spec.Version != SampledVerticalControlVersion) || f.Features != EquippedWeaponFeatureVersion || f.SpatialAim == nil || f.AimModeHead != PrecisionHeadVersion || len(spec.Layers) != 3 {
+	if (spec.Version != SampledMotionAimVersion && spec.Version != SampledVerticalAimVersion && spec.Version != SampledVerticalControlVersion) || !equippedPrefixFeatures(f.Features) || f.SpatialAim == nil || f.AimModeHead != PrecisionHeadVersion || len(spec.Layers) != 3 {
 		return fmt.Errorf("invalid sampled motion aim contract")
 	}
 	width := SampledMotionAimInputWidth

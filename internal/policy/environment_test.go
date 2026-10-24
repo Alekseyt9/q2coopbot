@@ -28,7 +28,10 @@ func TestEnvironmentProbesAndObjectsUseActualBSPVisibility(t *testing.T) {
 		Projectiles: []quake.Object{{ID: 1, Class: "blaster_bolt", Origin: quake.Vec3{64, -224, 32}}, {ID: 2, Class: "grenade", Origin: quake.Vec3{32, -224, -100}}},
 		Pickups:     []quake.Object{{ID: 3, Class: "item_health", HealthAmount: 25, Origin: quake.Vec3{100, -224, 24.125}}, {ID: 4, Class: "item_health", Origin: quake.Vec3{32, -224, -100}}},
 		Barrels:     []quake.Object{{ID: 5, Class: "misc_explobox", Origin: quake.Vec3{64, -224, 24.125}, Solid: 7266}},
-		Beams:       []quake.BeamObservation{{ID: 6, Frame: 10, Origin: quake.Vec3{64, -224, 32}, End: quake.Vec3{80, -224, 32}}}}
+		CollisionBodies: []quake.Object{{ID: 7, Origin: quake.Vec3{64, -224, 24.125}, Solid: 7266},
+			{ID: 8, Origin: quake.Vec3{64, -224, -100}, Solid: 7266}},
+		Defeated: []quake.Object{{ID: 9, Class: "monster_infantry", Origin: quake.Vec3{80, -224, 24.125}, Frame: 178}},
+		Beams:    []quake.BeamObservation{{ID: 6, Frame: 10, Origin: quake.Vec3{64, -224, 32}, End: quake.Vec3{80, -224, 32}}}}
 	o := Observe(s, Identity{Frame: 10}, quake.UserCmd{})
 	EnrichEnvironment(&o, s, &g)
 	if o.Geometry == nil || len(o.Geometry.Probes) != 8 || o.Geometry.GroundDrop == nil {
@@ -36,6 +39,9 @@ func TestEnvironmentProbesAndObjectsUseActualBSPVisibility(t *testing.T) {
 	}
 	if o.Projectiles == nil || len(*o.Projectiles) != 1 || (*o.Projectiles)[0].ID != 1 || o.Pickups == nil || len(*o.Pickups) != 1 || *(*o.Pickups)[0].HealthAmount != 25 || o.Props == nil || len(*o.Props) != 1 {
 		t.Fatal("hidden or unavailable objects exported", o)
+	}
+	if o.DynamicBodies == nil || len(o.DynamicBodies.Bodies) != 2 || o.DynamicBodies.Bodies[0].ID != 7 || !o.DynamicBodies.Bodies[0].ProtocolBoundsKnown || o.DynamicBodies.Bodies[1].ID != 9 || o.DynamicBodies.Bodies[1].ProtocolBoundsKnown {
+		t.Fatal("hidden body exposed or unknown corpse bounds invented", o.DynamicBodies)
 	}
 	blocked := false
 	for _, p := range o.Geometry.Probes {

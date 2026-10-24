@@ -3,6 +3,7 @@
 Frozen motor/hit predictions are hints, never native outcomes or a firing mask.
 Legacy precision scorers continue to reject the augmented policy header.
 """
+from combat_body_features import VERSIONS as BODY_FEATURE_VERSIONS, WIDTH as BODY_FEATURE_WIDTH, legacy as body_legacy
 import copy
 import math
 from train_combat_bc import torch,nn
@@ -24,7 +25,7 @@ def base_model(model,*,allow_probe=False,allow_shared=False,allow_target_samplin
     assert model.get('action_distribution')==candidates.VERSION
     assert model.get('aim_candidate_head',{}).get('version')==candidates.VERSION
     assert not model.get('execution_mode') and not model.get('geometry_aim_ranker') and not model.get('geometry_aim_exploration')
-    assert not model.get('deterministic') and model['feature_version']=='combat_features_v10'
+    assert not model.get('deterministic') and model['feature_version'] in BODY_FEATURE_VERSIONS
     assert allow_probe or not (model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') is not None or model.get('diagnostic_continuation_probe') is not None),'Diagnostic acquisition cannot enter ordinary training/scoring'
     if model.get('diagnostic_movement_probe') is not None:
         from combat_movement_probe import validate as validate_movement

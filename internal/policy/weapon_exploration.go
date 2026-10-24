@@ -17,7 +17,7 @@ func validateWeaponExploration(f PPOFile) error {
 		return nil
 	}
 	spec := f.WeaponExploration
-	if spec.Version != WeaponExplorationVersion || f.Features != EquippedWeaponFeatureVersion || f.WeaponHead != WeaponHeadVersion || f.AimModeHead != PrecisionHeadVersion || f.SpatialAim == nil || f.EntityAttention != nil || math.IsNaN(spec.Temperature) || math.IsInf(spec.Temperature, 0) || spec.Temperature < 1 || spec.Temperature > 4 {
+	if spec.Version != WeaponExplorationVersion || !equippedPrefixFeatures(f.Features) || f.WeaponHead != WeaponHeadVersion || f.AimModeHead != PrecisionHeadVersion || f.SpatialAim == nil || f.EntityAttention != nil || math.IsNaN(spec.Temperature) || math.IsInf(spec.Temperature, 0) || spec.Temperature < 1 || spec.Temperature > 4 {
 		return fmt.Errorf("invalid observed weapon exploration contract")
 	}
 	return nil

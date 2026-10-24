@@ -49,6 +49,20 @@ func ObservedAimDirection(o Observation, e Enemy) (quake.Vec3, bool, error) {
 // slots: valid mask, sin/cos yaw error, sin/cos pitch error to the observed
 // enemy origin from the current eye. This is geometry, not an action or teacher.
 func FeaturesForVersion(o Observation, version string) ([]float64, error) {
+	if version == BodyFeatureVersion || version == BodyAblatedFeatureVersion {
+		base, err := FeaturesForVersion(o, EquippedWeaponFeatureVersion)
+		if err != nil {
+			return nil, err
+		}
+		tail, err := bodyFeatures(o)
+		if err != nil {
+			return nil, err
+		}
+		if version == BodyAblatedFeatureVersion {
+			clear(tail)
+		}
+		return append(base, tail...), nil
+	}
 	if version == EquippedWeaponFeatureVersion {
 		base, err := FeaturesForVersion(o, ThreatFeatureVersion)
 		if err != nil {

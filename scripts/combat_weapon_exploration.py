@@ -1,4 +1,5 @@
 """Observed-state weapon temperature; differentiable CUDA PPO contract."""
+from combat_body_features import VERSIONS as BODY_FEATURE_VERSIONS, WIDTH as BODY_FEATURE_WIDTH, legacy as body_legacy
 import math
 from train_combat_bc import torch
 
@@ -12,7 +13,7 @@ def validate(model):
     if (set(spec)!= {'version','temperature'} or spec.get('version')!=VERSION or
         isinstance(temperature,bool) or not isinstance(temperature,(int,float)) or
         not math.isfinite(temperature) or not 1<=temperature<=4 or
-        model.get('feature_version')!='combat_features_v10' or
+        model.get('feature_version') not in BODY_FEATURE_VERSIONS or
         model.get('weapon_head')!='combat_masked_weapon_v1' or
         model.get('aim_mode_head')!='combat_target_coarse_fine_aim_v1' or
         not model.get('spatial_aim') or model.get('entity_attention')):
@@ -21,6 +22,7 @@ def validate(model):
 
 def apply(spec,features,raw):
     if spec is None or spec['temperature']==1:return raw
+    features = body_legacy(features)
     if not features.is_cuda or not raw.is_cuda:
         raise ValueError('CUDA required for weapon exploration')
     if features.shape[:-1]!=raw.shape[:-1] or features.shape[-1]!=1147 or raw.shape[-1]!=81:

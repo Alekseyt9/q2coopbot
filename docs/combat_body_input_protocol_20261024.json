@@ -1,0 +1,38 @@
+{
+  "version": "combat_body_input_ppo_v1",
+  "initial_source_weights_sha256": "88b22f6d9f5b339dfcbb682ca43736e58a3481718fd9f516630eb87de922a0eb",
+  "initial_source_checkpoint_sha256": "3718ad9b2b06bbc443f822464800c06c08d7ae3f181871dc58ede7e6fc1517d9",
+  "source_execution_contract": "legacy_v1",
+  "legacy_width": 1147,
+  "input_width": 1469,
+  "body_tail_width": 322,
+  "feature_versions": [
+    "combat_features_v11",
+    "combat_features_v11_body_ablated"
+  ],
+  "active_critic_optimizer": "new_matched_adam_source_optimizer_retained_as_anchor",
+  "actor_group_lrs": [
+    3E-05,
+    3E-05,
+    0.0003,
+    0.0003,
+    0.0003,
+    3E-05
+  ],
+  "rounds": 4,
+  "cases_per_update": 24,
+  "actor_steps": 30,
+  "critic_steps": 40,
+  "target_full_kl": 0.005,
+  "target_base_kl": 0.0025,
+  "reward_sha256": "e72591c6d24a330f2183cf48771ac62fed9e3a3f0b0014d94e0e549e69bb1867",
+  "max_instances": 16,
+  "timescale": 2,
+  "training_device": "cuda",
+  "parity_source": "combat-dynamic-bodies-smoke-v1-20261024",
+  "parity_source_use": "TRAIN-only disposable gradient and CUDA parity; not a consumed on-policy update",
+  "initialization": "old first-layer columns and other learned tensors exact; new columns zero; original actor and critic optimizer states retained as anchors; active decision groups inherited; new body group and matched critic Adam start cold",
+  "promotion": false,
+  "quality_status": "not_started",
+  "scope": "Separate body-input hypothesis; four final-endpoint updates per arm, no intermediate checkpoint selection. Evaluation spec must be frozen before fitting."
+}

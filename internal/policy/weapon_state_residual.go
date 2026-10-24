@@ -13,7 +13,7 @@ func validateWeaponStateResidual(f PPOFile) error {
 		return nil
 	}
 	spec := f.WeaponStateResidual
-	if f.Features != EquippedWeaponFeatureVersion || f.AimModeHead != PrecisionHeadVersion || f.WeaponHead != WeaponHeadVersion || f.TargetHead != TargetHeadVersion || f.SpatialAim == nil || f.EntityAttention != nil || spec.Version != WeaponStateResidualVersion || len(spec.Layers) != 3 {
+	if !equippedPrefixFeatures(f.Features) || f.AimModeHead != PrecisionHeadVersion || f.WeaponHead != WeaponHeadVersion || f.TargetHead != TargetHeadVersion || f.SpatialAim == nil || f.EntityAttention != nil || spec.Version != WeaponStateResidualVersion || len(spec.Layers) != 3 {
 		return fmt.Errorf("invalid observed weapon residual contract")
 	}
 	width := WeaponStateResidualInputWidth

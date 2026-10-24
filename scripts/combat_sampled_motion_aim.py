@@ -1,4 +1,5 @@
 """Autoregressive yaw/pitch residual conditioned on sampled movement (CUDA)."""
+from combat_body_features import VERSIONS as BODY_FEATURE_VERSIONS, WIDTH as BODY_FEATURE_WIDTH, legacy as body_legacy
 import copy
 import math
 from train_combat_bc import torch, nn
@@ -12,7 +13,7 @@ INPUT_WIDTH = 125
 def validate(model):
     spec = model.get('sampled_motion_aim')
     if spec is None: return
-    assert spec['version'] in (VERSION, VERTICAL_VERSION, VERTICAL_CONTROL_VERSION) and model['feature_version'] == 'combat_features_v10'
+    assert spec['version'] in (VERSION, VERTICAL_VERSION, VERTICAL_CONTROL_VERSION) and model['feature_version'] in BODY_FEATURE_VERSIONS
     assert model.get('spatial_aim') and model.get('aim_mode_head') == 'combat_target_coarse_fine_aim_v1'
     width = INPUT_WIDTH if spec['version'] == VERSION else INPUT_WIDTH + 3
     assert len(spec['layers']) == 3
@@ -52,6 +53,7 @@ def export(model, module):
 
 
 def inputs(features, raw, movement, target, mode):
+    features = body_legacy(features)
     from combat_spatial_aim import inputs as spatial_inputs
     assert features.is_cuda and raw.is_cuda and movement.is_cuda
     assert raw.ndim == 2 and raw.shape[1] == 81 and features.shape == (len(raw), 1147)
