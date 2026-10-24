@@ -1,0 +1,121 @@
+{
+  "version": "combat_one_frame_weapon_choice_probe_protocol_v1",
+  "state": "prepared_not_executed",
+  "selection_sha256": "07cd1c0a209d9a6abaf99b2b3dbf69e3cdca1fc748ef21c173804ad4528dbabf",
+  "source_weights_sha256": "7b47e0a5dcf8158704f2b8a9cd8023ef193c510dc54a9182761fee197568b0f3",
+  "cases": [
+    {
+      "map": "base3",
+      "episode": "campaign-base3-site-01-group-parasite-soldier-light-gunner-blaster",
+      "seed": 1404045020,
+      "frame": 98,
+      "index": 1,
+      "source_sample_weapon": 0,
+      "counterfactual_weapon": 2,
+      "source_sample_target": 1,
+      "features_sha256": "c9bb2ea28fcc43fd75629510132898ec0746a2a19dbbaf5ac47576d59a458f63"
+    },
+    {
+      "map": "city1",
+      "episode": "campaign-city1-site-01-group-parasite-soldier-light-gunner-blaster",
+      "seed": 1468045020,
+      "frame": 98,
+      "index": 1,
+      "source_sample_weapon": 0,
+      "counterfactual_weapon": 2,
+      "source_sample_target": 1,
+      "features_sha256": "503eedad915c991946b44ef69eaa8827adad545e0666ee3b4d8177b410a4b6a2"
+    },
+    {
+      "map": "jail1",
+      "episode": "campaign-jail1-site-01-group-parasite-soldier-light-gunner-blaster",
+      "seed": 1414045020,
+      "frame": 98,
+      "index": 1,
+      "source_sample_weapon": 0,
+      "counterfactual_weapon": 2,
+      "source_sample_target": 1,
+      "features_sha256": "fff6e18d821c39eaccbd0aca33001cb2d1ae54ed88a50a7cf03e9b034125318a"
+    },
+    {
+      "map": "ware2",
+      "episode": "campaign-ware2-site-01-group-parasite-soldier-light-gunner-blaster",
+      "seed": 1412045020,
+      "frame": 98,
+      "index": 1,
+      "source_sample_weapon": 0,
+      "counterfactual_weapon": 2,
+      "source_sample_target": 1,
+      "features_sha256": "f7f0e14ddc84a01b584153de97f68a98c1a34635cd15f3f8f4de51544b9946fc"
+    }
+  ],
+  "branches": [
+    "source_without_metadata",
+    "identity_distribution_control",
+    "forced_shotgun_category_2"
+  ],
+  "cold_repeats_per_case_branch": 2,
+  "native_budget": 24,
+  "cuda_verification_budget": 24,
+  "pool": 8,
+  "timescale": 2,
+  "intervention_contract": {
+    "version": "combat_one_frame_weapon_choice_v1",
+    "frame": 98,
+    "identity_changes_distribution": false,
+    "force_distribution": "one-hot on legal category2, applied before categorical sampling",
+    "guards": [
+      "first life",
+      "expected observed equipped Blaster",
+      "fresh observed inventory",
+      "Shotgun legal mask",
+      "selected visible target",
+      "no other diagnostic modifiers",
+      "frame reached exactly once"
+    ],
+    "preserve": [
+      "all tensors",
+      "nonweapon raw outputs on identical input",
+      "Gaussian draws",
+      "target/mode/vertical/aim draw order",
+      "weapon categorical draw count",
+      "conditional-fire uniform draw"
+    ],
+    "conditional_fire": "Recompute using selected weapon and same uniform; attack need not be identical.",
+    "receipt": [
+      "frame",
+      "mode",
+      "weapon_uniform",
+      "source_probabilities",
+      "applied_probabilities",
+      "sampled_weapon",
+      "observed_equipped",
+      "legal_mask",
+      "selected_target",
+      "fire_uniform"
+    ]
+  },
+  "acceptance": [
+    "source reference prefix exact",
+    "identity/source complete repeat exact excluding declared receipt/version",
+    "native prefix before intervention identical",
+    "matching identity and clock receipts",
+    "root observation feature hash matches selected case",
+    "cold-repeat outcomes reproducible",
+    "actual native weapon command and observed equip acknowledged",
+    "CUDA sampling/logprob/conditional-fire receipt verified",
+    "no ordinary PPO or quality-eval acceptance of diagnostic models"
+  ],
+  "outcomes": [
+    "first-life goal",
+    "death_frame",
+    "kills",
+    "damage_dealt",
+    "damage_received",
+    "weapon_ready_frame",
+    "first_physical_shot_frame"
+  ],
+  "interpretation": "Root-specific causal probe only, not general quality confirmation, not implemented MCTS, not ordinary on-policy training.",
+  "native_games_run": 0,
+  "training_performed": false
+}

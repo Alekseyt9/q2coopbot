@@ -32,7 +32,7 @@ def finalize(model_path, data, out):
     joint,core_model=None,model
     if model.get('action_distribution'):
         from combat_joint_aim_policy import JointAim,base_model
-        diagnostic_probe=bool(model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') or model.get('diagnostic_continuation_probe'))
+        diagnostic_probe=bool(model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') or model.get('diagnostic_continuation_probe') or model.get('diagnostic_weapon_probe'))
         core_model=base_model(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True)
         joint=JointAim(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True)
     paired = meta.get('paired_adapter_version')
@@ -54,6 +54,8 @@ def finalize(model_path, data, out):
                         sha(pathlib.Path(__file__).with_name('combat_sequence_storage.py'))})
     weapon_helpers=[pathlib.Path(__file__).with_name(name).resolve() for name in ('combat_body_features.py','combat_projectile_type_features.py')]
     if joint is not None:
+        if model.get('diagnostic_weapon_probe'):
+            weapon_helpers.append(pathlib.Path(__file__).with_name('combat_weapon_probe.py').resolve())
         weapon_helpers.append(pathlib.Path(__file__).with_name('combat_target_sampling.py').resolve())
         if model.get('diagnostic_continuation_probe'):
             weapon_helpers.append(pathlib.Path(__file__).with_name('combat_continuation_probe.py').resolve())
@@ -129,7 +131,7 @@ def finalize(model_path, data, out):
     with torch.no_grad():
         raw, actor_memory_error = evaluate(actor, 'actor')
         predicted, critic_memory_error = evaluate(value, 'value')
-        candidate_error=None; movement_draw_error=None;continuation_audit=None
+        candidate_error=None; movement_draw_error=None;continuation_audit=None;weapon_probe_audit=None
         if joint is not None:
             from combat_joint_aim_policy import events,probabilities
             from combat_aim_candidates import log_probability,frame_uniforms,choose
@@ -153,6 +155,10 @@ def finalize(model_path, data, out):
                 getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None),getattr(actor,'conditional_fire_branch',None),
                 frames=frame_tensor,score_inputs=score_inputs,movement_shift=movement_shift)
             assert torch.equal(active,score_active)
+            if model.get('diagnostic_weapon_probe'):
+                from combat_weapon_probe import adjust_log_probability,verify_draw_receipts as verify_weapon_receipts
+                lp=adjust_log_probability(model,frame_tensor,raw,x,weapon,lp)
+                weapon_probe_audit=verify_weapon_receipts(model,rows,raw,std,source,z,x,target,mode,vertical,weapon,actor)
             if model.get('diagnostic_movement_probe'):
                 from combat_movement_probe import verify_draw_receipts
                 movement_draw_error=verify_draw_receipts(model,rows,raw,std,source,z,x,target,mode,vertical,weapon,actor)
@@ -256,6 +262,8 @@ def finalize(model_path, data, out):
     if model.get('diagnostic_continuation_probe'):
         audit.update(diagnostic_continuation_version=model['diagnostic_continuation_probe']['version'],
                      diagnostic_continuation=continuation_audit,ordinary_training_eligible=False)
+    if model.get('diagnostic_weapon_probe'):
+        audit.update(diagnostic_weapon_probe=weapon_probe_audit,ordinary_training_eligible=False)
     if model.get('diagnostic_movement_probe'):
         audit.update(diagnostic_movement_version=model['diagnostic_movement_probe']['version'],
                      diagnostic_movement_frame=model['diagnostic_movement_probe']['frame'],
@@ -303,6 +311,9 @@ def finalize(model_path, data, out):
     if model.get('diagnostic_continuation_probe'):
         meta.update(version='combat_diagnostic_continuation_rollout_v1',diagnostic_only=True,ppo_training_ready=False,
                     diagnostic_continuation_version=model['diagnostic_continuation_probe']['version'])
+    if model.get('diagnostic_weapon_probe'):
+        meta.update(version='combat_diagnostic_weapon_probe_rollout_v1',diagnostic_only=True,ppo_training_ready=False,
+                    ordinary_training_eligible=False,diagnostic_weapon_version=model['diagnostic_weapon_probe']['version'])
     if paired:
         meta['paired_training_ready'] = True
         meta['paired_training_scope'] = 'Experimental verified primary learner pilot; scripted peer excluded. Registry-wide eligibility unproven.'

@@ -8,7 +8,7 @@ TRAINING_VERSION='combat_geometry_delta_ppo_v1'
 
 class GeometryJoint(JointAim):
     def __init__(self,model):
-        assert not model.get('diagnostic_joint_aim_probe') and model.get('diagnostic_movement_probe') is None and model.get('diagnostic_continuation_probe') is None
+        assert not model.get('diagnostic_joint_aim_probe') and model.get('diagnostic_movement_probe') is None and model.get('diagnostic_continuation_probe') is None and model.get('diagnostic_weapon_probe') is None
         assert model['aim_candidate_head']['shared_scorer']['kind']==GEOMETRY_KIND
         assert model['aim_candidate_head']['sampler']==GEOMETRY_SAMPLER
         super().__init__(model,allow_shared=True)

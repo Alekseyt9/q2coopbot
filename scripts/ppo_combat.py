@@ -185,7 +185,7 @@ def main():
     assert not model.get('target_sampling'),'Target calibration requires explicit checkpoint and optimizer migration before training'
     assert not model.get('movement_inertia'),'Movement inertia requires explicit PPO initializer/checkpoint/optimizer/retention migration'
     assert not model.get('execution_mode'), 'Inference-only execution modes cannot train PPO'
-    assert not model.get('diagnostic_joint_aim_probe') and model.get('diagnostic_movement_probe') is None and model.get('diagnostic_continuation_probe') is None, 'Diagnostic acquisition cannot train ordinary PPO'
+    assert not model.get('diagnostic_joint_aim_probe') and model.get('diagnostic_movement_probe') is None and model.get('diagnostic_continuation_probe') is None and model.get('diagnostic_weapon_probe') is None, 'Diagnostic acquisition cannot train ordinary PPO'
     assert not model.get('aim_candidate_head',{}).get('shared_scorer'), 'Shared scorer optimizer/resume is not integrated'
     assert not model.get('conditional_fire'), 'Conditional fire optimizer/checkpoint integration is not verified yet'
     assert not any(model.get(k) for k in ('memory','attention','entity_attention')), 'Architecture models require ppo_recurrent.py'

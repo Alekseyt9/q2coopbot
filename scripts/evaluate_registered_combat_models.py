@@ -109,7 +109,7 @@ def main():
                     assert sha(compatibility)==report['native_compatibility_sha256']
                     compatible=read(compatibility); assert compatible['gate_passed'] and compatible['native_cases']>0
                 model = update/'weights.json'; original = read(model)
-                assert not original.get('diagnostic_joint_aim_probe') and original.get('diagnostic_movement_probe') is None and original.get('diagnostic_continuation_probe') is None, 'Diagnostic acquisition models cannot enter quality evaluation'
+                assert not original.get('diagnostic_joint_aim_probe') and original.get('diagnostic_movement_probe') is None and original.get('diagnostic_continuation_probe') is None and original.get('diagnostic_weapon_probe') is None, 'Diagnostic acquisition models cannot enter quality evaluation'
                 assert original['kind'] == 'combat_ppo_v1' and not original.get('deterministic', False)
                 if variant['deterministic']:
                     original['deterministic'] = True; model = root/(label+'-weights.json'); save(model, original)

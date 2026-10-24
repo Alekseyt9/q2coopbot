@@ -26,7 +26,10 @@ def base_model(model,*,allow_probe=False,allow_shared=False,allow_target_samplin
     assert model.get('aim_candidate_head',{}).get('version')==candidates.VERSION
     assert not model.get('execution_mode') and not model.get('geometry_aim_ranker') and not model.get('geometry_aim_exploration')
     assert not model.get('deterministic') and model['feature_version'] in BODY_FEATURE_VERSIONS
-    assert allow_probe or not (model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') is not None or model.get('diagnostic_continuation_probe') is not None),'Diagnostic acquisition cannot enter ordinary training/scoring'
+    assert allow_probe or not (model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') is not None or model.get('diagnostic_continuation_probe') is not None or model.get('diagnostic_weapon_probe') is not None),'Diagnostic acquisition cannot enter ordinary training/scoring'
+    if model.get('diagnostic_weapon_probe') is not None:
+        from combat_weapon_probe import validate as validate_weapon_probe
+        validate_weapon_probe(model)
     if model.get('diagnostic_movement_probe') is not None:
         from combat_movement_probe import validate as validate_movement
         validate_movement(model)
@@ -39,6 +42,7 @@ def base_model(model,*,allow_probe=False,allow_shared=False,allow_target_samplin
     result.pop('diagnostic_joint_aim_probe',None)
     result.pop('diagnostic_movement_probe',None)
     result.pop('diagnostic_continuation_probe',None)
+    result.pop('diagnostic_weapon_probe',None)
     from combat_precision_head import validate_precision_model
     validate_precision_model(result)
     return result

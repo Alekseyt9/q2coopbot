@@ -47,6 +47,7 @@ type PPOFile struct {
 	DiagnosticAimProbe      *DiagnosticAimProbeFile      `json:"diagnostic_joint_aim_probe,omitempty"`
 	DiagnosticMovementProbe *DiagnosticMovementProbeFile `json:"diagnostic_movement_probe,omitempty"`
 	DiagnosticContinuation  *DiagnosticContinuationFile  `json:"diagnostic_continuation_probe,omitempty"`
+	DiagnosticWeaponProbe   *DiagnosticWeaponProbeFile   `json:"diagnostic_weapon_probe,omitempty"`
 }
 
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
@@ -68,6 +69,7 @@ type Sample struct {
 	AimCandidate      *AimCandidateSample           `json:"aim_candidate,omitempty"`
 	MovementProbe     *DiagnosticMovementSample     `json:"movement_probe,omitempty"`
 	ContinuationProbe *DiagnosticContinuationSample `json:"continuation_probe,omitempty"`
+	WeaponProbe       *DiagnosticWeaponSample       `json:"weapon_probe,omitempty"`
 }
 type PPO struct {
 	file                PPOFile
@@ -110,6 +112,9 @@ func LoadPPO(path string) (*PPO, error) {
 		return nil, e
 	}
 	if e = validateDiagnosticMovementProbe(f); e != nil {
+		return nil, e
+	}
+	if e = validateDiagnosticWeaponProbe(f); e != nil {
 		return nil, e
 	}
 	if e = validateDiagnosticContinuation(f); e != nil {
@@ -209,7 +214,7 @@ func (p *PPO) SamplingSeed() int64        { return p.file.SamplingSeed }
 func (p *PPO) ActionDistribution() string { return p.file.ActionDistribution }
 func (p *PPO) IsDiagnosticAimProbe() bool { return p.file.DiagnosticAimProbe != nil }
 func (p *PPO) IsDiagnosticCombatProbe() bool {
-	return p.IsDiagnosticAimProbe() || p.file.DiagnosticMovementProbe != nil || p.file.DiagnosticContinuation != nil
+	return p.IsDiagnosticAimProbe() || p.file.DiagnosticMovementProbe != nil || p.file.DiagnosticContinuation != nil || p.file.DiagnosticWeaponProbe != nil
 }
 
 // IsStochastic reports eligibility for the standard full-head PPO sampler.
@@ -250,6 +255,9 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	}
 	if err := p.validateMovementSample(o.Identity.Frame, s); err != nil {
 		return Action{}, 0, 0, err
+	}
+	if !p.file.DiagnosticWeaponProbe.active(o.Identity.Frame) && s.WeaponProbe != nil {
+		return Action{}, 0, 0, fmt.Errorf("unexpected weapon probe receipt")
 	}
 	if s.Version != p.version || s.Vertical < 0 || s.Vertical > 2 {
 		return Action{}, 0, 0, fmt.Errorf("PPO sample version/category")
@@ -341,6 +349,10 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	if e != nil {
 		return Action{}, 0, 0, e
 	}
+	if p.file.DiagnosticWeaponProbe.active(o.Identity.Frame) && (s.WeaponProbe == nil ||
+		(s.WeaponProbe.FireUniform < math.Exp(-softplus(-fireLogit))) != s.Attack) {
+		return Action{}, 0, 0, fmt.Errorf("weapon probe conditional fire receipt differs")
+	}
 	if s.Attack {
 		lp -= softplus(-fireLogit)
 	} else {
@@ -367,6 +379,10 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	}
 	if p.file.WeaponHead != "" {
 		probs, err := weaponLogProbabilities(o, x[8:20])
+		if err != nil {
+			return Action{}, 0, 0, err
+		}
+		probs, err = p.reviewWeaponProbe(o, s, probs)
 		if err != nil {
 			return Action{}, 0, 0, err
 		}
@@ -483,11 +499,21 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 			}
 		}
 	}
+	var weaponSource, weaponApplied []float64
+	weaponUniform := 0.0
 	if p.file.WeaponHead != "" {
 		probs, err := weaponProbabilities(o, x[8:20])
 		if err != nil {
 			return Action{}, err
 		}
+		if p.file.DiagnosticWeaponProbe.active(o.Identity.Frame) {
+			weaponSource = append([]float64(nil), probs...)
+		}
+		probs, err = p.weaponProbeProbabilities(o, s.Target, probs)
+		if err != nil {
+			return Action{}, err
+		}
+		weaponApplied = probs
 		if p.file.Deterministic {
 			for i, probability := range probs {
 				if probability > probs[s.Weapon] {
@@ -495,7 +521,8 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 				}
 			}
 		} else {
-			u := p.rng.Float64()
+			weaponUniform = p.rng.Float64()
+			u := weaponUniform
 			for i, probability := range probs {
 				if probability == 0 {
 					continue
@@ -539,6 +566,11 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 	if probe := p.file.DiagnosticMovementProbe; probe.active(o.Identity.Frame) {
 		s.MovementProbe = &DiagnosticMovementSample{Version: probe.Version, Frame: o.Identity.Frame,
 			MeanShift: append([]float64(nil), probe.MeanShift...), GaussianNoise: append([]float64(nil), noise[:]...), FireUniform: fireUniform}
+	}
+	if probe := p.file.DiagnosticWeaponProbe; probe.active(o.Identity.Frame) {
+		s.WeaponProbe = &DiagnosticWeaponSample{Version: probe.Version, Frame: probe.Frame, Mode: probe.Mode,
+			SourceProbabilities: weaponSource, AppliedProbabilities: append([]float64(nil), weaponApplied...),
+			WeaponUniform: weaponUniform, FireUniform: fireUniform, GaussianNoise: append([]float64(nil), noise[:]...)}
 	}
 	if probe := p.file.DiagnosticContinuation; probe != nil && o.Identity.Frame >= probe.Frame {
 		s.ContinuationProbe = &DiagnosticContinuationSample{Version: DiagnosticContinuationVersion, Frame: probe.Frame,
