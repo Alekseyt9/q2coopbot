@@ -6,6 +6,16 @@ from evaluate_registered_combat_models import read,save,sha
 from audit_combat_joint_aim_grid import physical_equal_with_entity_bijection
 
 
+def same_aim_timing(before, after):
+    a, b = before.get('aim_candidate'), after.get('aim_candidate')
+    return (a is None) == (b is None) and (a is None or a['timing'] == b['timing'])
+
+
+def movement_latent(sample):
+    candidate = sample.get('aim_candidate')
+    return (candidate['source_latent'] if candidate is not None else sample['latent'])[:2]
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     for name in ('probe','out'):ap.add_argument('--'+name,type=Path,required=True)
@@ -16,6 +26,7 @@ def main():
         path=Path(path).resolve();h=sha(path);assert expected is None or expected==h,str(path)
         pins[str(path)]=h;return path
 
+    pin(__file__)
     seal=read(pin(root/'complete.json'));assert seal['version'] in ('combat_native_movement_probe_v1','combat_native_movement_pairs_v1')
     whole_spec=read(pin(root/'spec.json',seal['spec_sha256']))
     multi=seal['version']=='combat_native_movement_pairs_v1'
@@ -95,7 +106,7 @@ def main():
         current=next(s for s in d['steps'] if s['observation']['identity']['frame']==frame)
         state_exact=(physical_equal_with_entity_bijection(current['observation'],control_at['observation'],forward,reverse)
             and d['rows'][frame]['features']==control['rows'][frame]['features']
-            and current['sample']['aim_candidate']['timing']==control_at['sample']['aim_candidate']['timing'])
+            and same_aim_timing(current['sample'],control_at['sample']))
         receipt=current['sample']['movement_probe'];same_noise=receipt['gaussian_noise']==draw['gaussian_noise'] and receipt['fire_uniform']==draw['fire_uniform']
         window_draws_exact=True;window_receipts=0
         if window_smoke:
@@ -113,7 +124,7 @@ def main():
                     c=controls[f]['sample']['movement_probe']
                     window_draws_exact &= r['gaussian_noise']==c['gaussian_noise'] and r['fire_uniform']==c['fire_uniform']
         same_categories=all(current['sample'].get(k,0)==control_at['sample'].get(k,0) for k in ('target','aim_mode','vertical','weapon','memory'))
-        source_move=lambda s:s['sample']['aim_candidate']['source_latent'][:2]
+        source_move=lambda s:movement_latent(s['sample'])
         a_move,b_move=source_move(current),source_move(control_at)
         shift_error=max(abs((x-y)-delta) for x,y,delta in zip(a_move,b_move,v['mean_shift']))
         assert shift_error<1e-10,shift_error

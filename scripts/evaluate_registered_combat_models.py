@@ -25,6 +25,12 @@ def save(path, value):
     path.write_text(json.dumps(value, indent=2, allow_nan=False), encoding='utf-8')
 
 
+def pool_command(repo, plans, max_instances, port, output):
+    assert type(max_instances) is int and max_instances in (4, 8, 16), 'Invalid evaluation pool limit'
+    literal = lambda p: "'"+str(p).replace("'", "''")+"'"
+    return '& '+literal(repo/'scripts/run_registered_combat_pool.ps1')+' -Plans @('+','.join(map(literal, plans))+') -MaxInstances '+str(max_instances)+' -Port '+str(port)+' -OutputRoot '+literal(output)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--spec', type=pathlib.Path, required=True)
@@ -40,7 +46,8 @@ def main():
     variants = spec['variants']; labels = [v['label'] for v in variants]
     assert variants and len(set(labels)) == len(labels)
     assert all(label and all(c.isalnum() or c in '-_' for c in label) for label in labels)
-    assert spec['max_instances'] == 16 and type(spec['count']) is int and 1 <= spec['count'] <= 80
+    assert type(spec['max_instances']) is int and spec['max_instances'] in (4, 8, 16)
+    assert type(spec['count']) is int and 1 <= spec['count'] <= 80
     assert len(spec['comparisons']) == len({v['name'] for v in spec['comparisons']})
     assert all(v['name'] and all(c.isalnum() or c in '-_' for c in v['name']) for v in spec['comparisons'])
     assert all(v['before'] in labels and v['after'] in labels and v['before'] != v['after'] for v in spec['comparisons'])
@@ -177,9 +184,8 @@ def main():
             return
         save(root/'progress.json', dict(stage='native-evaluation', cases=total, training_performed=False))
         shell = shutil.which('pwsh'); assert shell
-        literal = lambda p: "'" + str(p).replace("'", "''") + "'"
         pool = root/'pool'
-        command = '& '+literal(repo/'scripts/run_registered_combat_pool.ps1')+' -Plans @('+','.join(map(literal, plans))+') -MaxInstances 16 -Port '+str(spec['port'])+' -OutputRoot '+literal(pool)
+        command = pool_command(repo, plans, spec['max_instances'], spec['port'], pool)
         run('native-pool', [shell, '-NoProfile', '-Command', command])
         report = read(pool/'report.json'); digest = sha(pool/'report.json')
         assert report['state'] == 'complete' and report['source_unchanged'] and report['usable_captures'] == len(report['jobs']) == total

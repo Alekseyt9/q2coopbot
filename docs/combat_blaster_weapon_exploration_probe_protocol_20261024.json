@@ -1,0 +1,82 @@
+{
+  "version": "combat_blaster_exploration_probe_v1",
+  "source": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\enemy-projectile-ppo-v1-20261024\\round-02\\neutral\\update",
+  "source_weights_sha256": "5dcf0d640d28394817bc105a58b379e4e6723eee747867d16a0cfbd87535ea0c",
+  "profiles": {
+    "zero": 1,
+    "blaster4": 4
+  },
+  "context": {
+    "episode": "campaign-city1-site-01-group-parasite-soldier-light-gunner-blaster",
+    "seed": 1468045009,
+    "offset": 9,
+    "instance": {
+      "map": "city1",
+      "version": 1,
+      "episode_id": "campaign-city1-site-01-group-parasite-soldier-light-gunner-blaster",
+      "split": "train",
+      "engine_seed": 1468045009,
+      "generation_seed": 1579100298,
+      "attempts": 1,
+      "rejections": {},
+      "player": [
+        -2810.25,
+        -96.5,
+        -279.875
+      ],
+      "health": 100,
+      "monsters": [
+        {
+          "class": "monster_parasite",
+          "position": [
+            -2639.125,
+            -166.5,
+            -279.875
+          ]
+        },
+        {
+          "class": "monster_soldier_light",
+          "position": [
+            -2575.75,
+            -168.75,
+            -279.875
+          ]
+        },
+        {
+          "class": "monster_gunner",
+          "position": [
+            -2593.5,
+            -121.875,
+            -279.875
+          ]
+        }
+      ],
+      "loadout": "blaster",
+      "skill": 1,
+      "geometry_source": "F:\\src\\quake2\\q2coopbot-src\\workspace\\runtime\\q2go\\baseq2\\pak0.pak:maps/city1.bsp",
+      "geometry_sha256": "459f5312a2346d2e62fc25c0f87d0237844fd2d981c3b0de8efc525907f2c014"
+    },
+    "original_capture": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\enemy-projectile-ppo-v1-20261024\\round-03\\neutral\\corpus\\captures-train\\case-5-learned\\s-1468045009\\report.json",
+    "original_trace": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\enemy-projectile-ppo-v1-20261024\\round-03\\neutral\\corpus\\captures-train\\case-5-learned\\s-1468045009\\worker-0-episode-0\\bot.jsonl",
+    "original_trace_sha256": "be0500772461aa6395ad2eba7ba7cf77b00d1aea77de8cafd7c7c5cb95c05ce2"
+  },
+  "repeats": 2,
+  "native_cases": 6,
+  "cuda_cases": 6,
+  "max_instances": 16,
+  "timescale": 2,
+  "port": 41400,
+  "minimum_free_gib": 32,
+  "training_performed": false,
+  "promotion": false,
+  "prerequisite_report": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-grenade-city1-weapon-distribution-v1-20261024\\report.json",
+  "prerequisite_report_sha256": "41130c4c53a51d5a8cb543a48dcdfe9fea9a408290eb3aae2a1085e680b28699",
+  "technical_gate": {
+    "zero_source_full_behavior_exact": true,
+    "cold_repeats_exact": true,
+    "candidate_prefix_before_first_changed_action_exact": true,
+    "entity_ids_unchanged": true,
+    "visible_combat_owned_by_model": true
+  },
+  "scope": "One deliberately selected own-TRAIN blaster failure with a fresh observed Shotgun and20Shells. Source/metadata-zero/blaster-temperature4, two cold repeats each. No independent quality claim, no forced weapon, same legality mask and unchanged grenade-temperature2 profile. Metadata-only inference exports, source checkpoint untouched. No fitting, ordinary TRAIN merge, default change or promotion."
+}

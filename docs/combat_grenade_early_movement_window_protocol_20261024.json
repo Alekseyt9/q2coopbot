@@ -1,0 +1,54 @@
+{
+  "version": "combat_movement_window_smoke_v1",
+  "context_id": "grenade-city1-1468045009-132",
+  "source_weights_sha256": "5dcf0d640d28394817bc105a58b379e4e6723eee747867d16a0cfbd87535ea0c",
+  "variants": [
+    {
+      "label": "control",
+      "duration": 3,
+      "mean_shift": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "label": "forward",
+      "duration": 3,
+      "mean_shift": [
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "label": "backward",
+      "duration": 3,
+      "mean_shift": [
+        -1.0,
+        0.0
+      ]
+    },
+    {
+      "label": "right",
+      "duration": 3,
+      "mean_shift": [
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "label": "left",
+      "duration": 3,
+      "mean_shift": [
+        0.0,
+        -1.0
+      ]
+    }
+  ],
+  "native_cases": 6,
+  "cuda_cases": 6,
+  "fresh_ordinary_reference": true,
+  "max_instances": 16,
+  "timescale": 2,
+  "selection": "Earlier frame132 of the already diagnosed own-TRAIN failure, with observed past HP drop. This is deliberate failure-case diagnosis, not observation-only root sampling or independent quality evidence. No held-out or fitting use.",
+  "scope": "Five diagnostic movement-mean windows at network132..134 plus a fresh ordinary reference; same fixture/seed/model tensors/draw order, guards unchanged. Coupled aim/fire may respond to changed motion, not a pure integer-command override. Technical prefix/common-draw/native-CUDA acceptance first. One context, no general quality or fitting claim."
+}

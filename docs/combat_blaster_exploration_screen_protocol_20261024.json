@@ -1,0 +1,23 @@
+{
+  "version": "combat_blaster_exploration_fresh_screen_v1",
+  "selection": "Fixed BT4 after own-TRAIN mechanism diagnosis; no tuning on fresh outcomes. Screen only blaster recipes before any broader confirmation.",
+  "model_sha256": {
+    "source": "5dcf0d640d28394817bc105a58b379e4e6723eee747867d16a0cfbd87535ea0c",
+    "candidate": "d697fb2d59ed4def744171ab4959fb9e4864f62156d45f97130aff0badc2fa30"
+  },
+  "gate": {
+    "additional_goals_over_source": 2,
+    "goals_at_least_rules": true,
+    "deaths_no_more_than": [
+      "source",
+      "rules"
+    ],
+    "received_numerator": 11,
+    "received_denominator": 10,
+    "automatic_promotion": false
+  },
+  "native_cases": 24,
+  "cuda_cases": 16,
+  "training_performed": false,
+  "scope": "Eight fresh paired validation recipes, four maps/two sites, four duos/four trios, all initial blaster. Source versus fixed weights-only BT4 versus rules. One seed per recipe; GPU replay, no fitting or checkpoint selection. Expansion gate is not general/campaign/coop acceptance and never automatic promotion. Pool capped at8 temporarily for known Windows commit pressure; intended maximum16 unchanged."
+}
