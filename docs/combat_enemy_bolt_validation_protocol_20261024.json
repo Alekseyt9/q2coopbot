@@ -1,0 +1,24 @@
+{
+  "version": "combat_enemy_bolt_validation_v1",
+  "source": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-type-initial-v1-20261024\\typed",
+  "config": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\proj-type-ppo-v1-20261024\\round-01\\typed\\corpus\\training-config.json",
+  "reward": "F:\\src\\quake2\\q2coopbot-src\\scripts\\scenarios\\combat-reward-blocked-ground-cost-v14.json",
+  "reference_plan": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-enemy-pilot-v1-20261024\\corpus\\train-plan.json",
+  "reference_registry": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-enemy-pilot-v1-20261024\\registry\\index.json",
+  "reference_pool": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-enemy-pilot-v1-20261024\\corpus\\pool\\report.json",
+  "reference_processing": "F:\\src\\quake2\\q2coopbot-src\\workspace\\artifacts\\combat-projectile-enemy-pilot-v1-20261024\\recovery-v1\\processing",
+  "native_binaries": [
+    "F:\\src\\quake2\\yquake2\\build\\codex-speed-test\\release\\q2ded.exe",
+    "F:\\src\\quake2\\yquake2\\build\\codex-speed-test\\release\\baseq2\\game.dll"
+  ],
+  "native_budget": 20,
+  "cuda_budget": 20,
+  "technical_repeat_cases": 4,
+  "fresh_train_cases": 16,
+  "port": 41300,
+  "max_instances": 16,
+  "timescale": 2,
+  "fitting": false,
+  "promotion": false,
+  "purpose": "Four same-world repeats verify diagnostic native journal preserves commands/worlds; sixteen fresh TRAIN worlds validate enemy bolt lifetimes and observed velocities. Scalar ownership labels never enter policy."
+}

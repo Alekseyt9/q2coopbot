@@ -59,7 +59,7 @@ func TestNativeGoalStopEvidence(t *testing.T) {
 }
 
 func TestGoalStopUsesFrozenFixtureClass(t *testing.T) {
-	for _, class := range []string{"monster_soldier", "monster_infantry"} {
+	for _, class := range []string{"monster_soldier", "monster_soldier_light", "monster_infantry"} {
 		var goal GoalStop
 		text := `{"version":"combat_goal_stop_v1","reason":"combat_goal_complete","spawncount":42,"actor":1,"classes":["` + class + `"],"kill_frame":15,"observed_frame":16,"health":80,"kills":[{"frame":15,"target":352,"target_class":"` + class + `"}]}`
 		if err := json.Unmarshal([]byte(text), &goal); err != nil {

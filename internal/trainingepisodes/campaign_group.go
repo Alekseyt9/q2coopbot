@@ -8,6 +8,27 @@ import (
 	"q2coopbot/internal/quake"
 )
 
+const projectileGroupKind = "campaign-ground-projectile-group-v1"
+
+func isCampaignGroupKind(kind string) bool {
+	return kind == "campaign-ground-group-v1" || kind == projectileGroupKind
+}
+
+func campaignGroupSeeds(mapIndex, siteIndex, mask, loadoutIndex, splitIndex int) Seeds {
+	if mask&16 != 0 {
+		// Exact light-soldier groups have their own family. The four legacy
+		// class bits and every pre-existing recipe/seed remain unchanged.
+		if loadoutIndex < 0 {
+			loadoutIndex = 4 // Historical SSG inventory gets a distinct slot too.
+		}
+		return Seeds{Start: 1400000000 + loadoutIndex*80000000 + mapIndex*2000000 + siteIndex*100000 + (mask&15)*5000 + splitIndex*1000, Count: 512}
+	}
+	if loadoutIndex >= 0 {
+		return Seeds{Start: 1000000000 + loadoutIndex*80000000 + mapIndex*2000000 + siteIndex*100000 + mask*5000 + splitIndex*1000, Count: 512}
+	}
+	return Seeds{Start: 200000000 + mapIndex*16000000 + siteIndex*1000000 + mask*40000 + splitIndex*10000, Count: 4096}
+}
+
 // CampaignGroupRecipes prepares distinct-class groups around checked campaign sites.
 // Native startup and infighting evidence must still be checked by the harness.
 func CampaignGroupRecipes(root string, perMap int, maps, classes []string) ([]Episode, error) {
@@ -26,7 +47,10 @@ func CampaignGroupRecipesForLoadout(root string, perMap int, maps, classes []str
 	if loadout != "weapons-ssg" && loadoutIndex < 0 {
 		return nil, fmt.Errorf("unsupported group loadout")
 	}
-	order := []string{"monster_parasite", "monster_soldier", "monster_infantry", "monster_gunner"}
+	order := []struct {
+		class string
+		bit   int
+	}{{"monster_parasite", 1}, {"monster_soldier", 2}, {"monster_infantry", 4}, {"monster_soldier_light", 16}, {"monster_gunner", 8}}
 	selected := map[string]bool{}
 	for _, class := range classes {
 		if selected[class] {
@@ -36,10 +60,11 @@ func CampaignGroupRecipesForLoadout(root string, perMap int, maps, classes []str
 	}
 	var canonical []string
 	mask := 0
-	for i, class := range order {
+	for _, entry := range order {
+		class := entry.class
 		if selected[class] {
 			canonical = append(canonical, class)
-			mask |= 1 << i
+			mask |= entry.bit
 			delete(selected, class)
 		}
 	}
@@ -97,7 +122,7 @@ func CampaignGroupRecipesForLoadout(root string, perMap int, maps, classes []str
 		}
 		labels := []string{}
 		for _, class := range canonical {
-			labels = append(labels, strings.TrimPrefix(class, "monster_"))
+			labels = append(labels, strings.ReplaceAll(strings.TrimPrefix(class, "monster_"), "_", "-"))
 		}
 		parent.ID = strings.TrimSuffix(parent.ID, "-blaster") + "-group-" + strings.Join(labels, "-") + "-" + loadout
 		parent.Monsters = append([]string(nil), canonical...)
@@ -106,6 +131,9 @@ func CampaignGroupRecipesForLoadout(root string, perMap int, maps, classes []str
 		parent.Recipe.RewardConfig = "scripts/scenarios/combat-reward-selected-aim-v8.json"
 		parent.Modes = []string{"rules", "learned"}
 		parent.Generator.Kind = "campaign-ground-group-v1"
+		if mask&16 != 0 {
+			parent.Generator.Kind = projectileGroupKind
+		}
 		parent.InitialState = "Isolated stock-health distinct-class ground group; Super Shotgun initial, MG/Shotgun/Blaster owned; native no-infighting fixture"
 		if loadout != "weapons-ssg" {
 			parent.InitialState = "Isolated stock-health distinct-class ground group; " + loadout + " inventory; native no-infighting fixture"
@@ -120,10 +148,7 @@ func CampaignGroupRecipesForLoadout(root string, perMap int, maps, classes []str
 			distribution := parent.Generator.Distributions[split]
 			distribution.Additional = append([]PositionRange(nil), boxes...)
 			parent.Generator.Distributions[split] = distribution
-			parent.Splits[split] = Seeds{Start: 200000000 + mapIndex*16000000 + (index%perMap)*1000000 + mask*40000 + splitIndex*10000, Count: 4096}
-			if loadoutIndex >= 0 {
-				parent.Splits[split] = Seeds{Start: 1000000000 + loadoutIndex*80000000 + mapIndex*2000000 + (index%perMap)*100000 + mask*5000 + splitIndex*1000, Count: 512}
-			}
+			parent.Splits[split] = campaignGroupSeeds(mapIndex, index%perMap, mask, loadoutIndex, splitIndex)
 		}
 		if err := parent.validate(); err != nil {
 			return nil, err

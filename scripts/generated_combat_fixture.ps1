@@ -4,7 +4,7 @@ function Read-GeneratedCombatFixture([string]$Path,[int]$Seed,[string]$Loadout,[
     if($v.map -and $v.map -notmatch '^[a-z][a-z0-9_]{0,31}$'){throw 'Invalid generated map name'}
     if($v.version -ne 1 -or $v.engine_seed -ne $Seed -or $v.loadout -ne $Loadout -or $v.health -lt 1 -or $v.health -gt 100 -or (!$Mixed -and $v.monsters.Count -ne 1) -or ($Mixed -and ($v.monsters.Count -lt 2 -or $v.monsters.Count -gt 4))){throw 'Invalid sampled combat fixture'}
     $classes=@($v.monsters.class)
-    if(@($classes|Sort-Object -Unique).Count -ne $classes.Count -or @($classes|Where-Object {$_ -notin @('monster_parasite','monster_soldier','monster_infantry','monster_gunner')}).Count){throw 'Unsupported or duplicate sampled class'}
+    if(@($classes|Sort-Object -Unique).Count -ne $classes.Count -or @($classes|Where-Object {$_ -notin @('monster_parasite','monster_soldier','monster_soldier_light','monster_infantry','monster_gunner')}).Count){throw 'Unsupported or duplicate sampled class'}
     foreach($position in @(@{p=$v.player})+@($v.monsters|ForEach-Object {@{p=$_.position}})){
         if($position.p.Count -ne 3){throw 'Invalid position dimension'}
         foreach($x in $position.p){$n=[double]$x;if([double]::IsNaN($n) -or [double]::IsInfinity($n) -or [math]::Abs($n) -gt 8192){throw 'Invalid sampled coordinate'}}
@@ -19,7 +19,7 @@ function Confirm-GeneratedCombatStart($Fixture,[string]$ServerLog){
         $g=$_.Matches[0].Groups
         @{frame=[int]$g[1].Value;id=[int]$g[2].Value;class=$g[3].Value;position=@([double]::Parse($g[4].Value,[Globalization.CultureInfo]::InvariantCulture),[double]::Parse($g[5].Value,[Globalization.CultureInfo]::InvariantCulture),[double]::Parse($g[6].Value,[Globalization.CultureInfo]::InvariantCulture));solid=[int]$g[7].Value;health=[int]$g[8].Value}
     })
-    $expected=@(@{class='player';position=$Fixture.player;health=$Fixture.health})+@($Fixture.monsters|ForEach-Object {@{class=$_.class;position=$_.position;health=$(switch($_.class){monster_soldier{30};monster_infantry{100};monster_parasite{175};monster_gunner{175};default{throw 'Unknown stock monster health'}})}})
+    $expected=@(@{class='player';position=$Fixture.player;health=$Fixture.health})+@($Fixture.monsters|ForEach-Object {@{class=$_.class;position=$_.position;health=$(switch($_.class){monster_soldier_light{20};monster_soldier{30};monster_infantry{100};monster_parasite{175};monster_gunner{175};default{throw 'Unknown stock monster health'}})}})
     $proof=@()
     foreach($e in $expected){
         $matching=@($entities|Where-Object {$_.class -eq $e.class -and $_.solid -eq 2 -and $_.health -eq $e.health -and [math]::Abs($_.position[0]-$e.position[0]) -le 1 -and [math]::Abs($_.position[1]-$e.position[1]) -le 1 -and [math]::Abs($_.position[2]-$e.position[2]) -le 1})

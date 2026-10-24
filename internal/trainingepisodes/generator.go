@@ -55,7 +55,7 @@ func (g *Generator) validate(ep Episode) error {
 	if g.SeedRevision != nil && (*g.SeedRevision < 1 || *g.SeedRevision > ep.Revision) {
 		return fmt.Errorf("invalid generator seed revision")
 	}
-	group := g.Kind == "campaign-ground-group-v1"
+	group := isCampaignGroupKind(g.Kind)
 	if g.Version != 1 || (g.Kind != "base1-ground-combat-v1" && g.Kind != "campaign-ground-combat-v1" && !group) || (g.Kind == "base1-ground-combat-v1" && ep.Map != "base1") || ep.Recipe.Runner != "combat-baseline" || len(g.Distributions) != 4 {
 		return fmt.Errorf("unsupported generator binding")
 	}
@@ -68,16 +68,23 @@ func (g *Generator) validate(ep Episode) error {
 		}
 		seen := map[string]bool{}
 		for _, class := range ep.Monsters {
-			if (class != "monster_parasite" && class != "monster_soldier" && class != "monster_infantry" && class != "monster_gunner") || seen[class] {
+			if (class != "monster_parasite" && class != "monster_soldier" && class != "monster_infantry" && class != "monster_gunner" && !(class == "monster_soldier_light" && g.Kind == projectileGroupKind)) || seen[class] {
 				return fmt.Errorf("unsupported or duplicate group class")
 			}
 			seen[class] = true
+		}
+		if g.Kind == projectileGroupKind && !seen["monster_soldier_light"] {
+			return fmt.Errorf("projectile group requires exact light soldier")
 		}
 	} else if len(ep.Monsters) == 0 || (!ep.Recipe.Mixed && len(ep.Monsters) != 1) || (ep.Recipe.Mixed && !reflect.DeepEqual(ep.Monsters, []string{"monster_parasite", "monster_gunner"})) {
 		return fmt.Errorf("generator composition differs from recipe")
 	}
 	switch ep.Monsters[0] {
 	case "monster_parasite", "monster_soldier", "monster_infantry":
+	case "monster_soldier_light":
+		if g.Kind != projectileGroupKind {
+			return fmt.Errorf("exact light soldier requires projectile group generator")
+		}
 	case "monster_gunner":
 		if !group {
 			return fmt.Errorf("unsupported primary monster")
@@ -151,7 +158,7 @@ func generate(ep Episode, split string, seed int, world *quake.MapInfo) (Instanc
 	r := rand.New(rand.NewSource(int64(gs)))
 	d := ep.Generator.Distributions[split]
 	v := Instance{Version: 1, EpisodeID: ep.ID, Split: split, EngineSeed: seed, GenerationSeed: gs, Loadout: ep.Recipe.Loadout, Skill: ep.Skill, GeometrySource: world.BSPSource, GeometrySHA256: world.BSPSHA256, Rejections: map[string]int{}}
-	if ep.Generator.Kind == "campaign-ground-combat-v1" || ep.Generator.Kind == "campaign-ground-group-v1" {
+	if ep.Generator.Kind == "campaign-ground-combat-v1" || isCampaignGroupKind(ep.Generator.Kind) {
 		v.Map = ep.Map
 	}
 	for attempt := 1; attempt <= 128; attempt++ {

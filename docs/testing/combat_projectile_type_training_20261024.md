@@ -35,3 +35,131 @@ Workflow `scripts/run_combat_projectile_type_experiment.py`, output `workspace/a
 Исходный `run.json` не переписан. Предыдущие trainer/driver и failure progress/log сохранены в `pre-fit-revision-v1`. Driver получил отдельный `--source-revision` admission для этого доказанного pre-fit сбоя: разрешены ровно два объявленных файла с old/new SHA и сохранёнными исходниками, при первом применении запрещены любые update directories, проверяются завершённые 48 native captures. Остальные исходники и оба JSON по-прежнему заморожены. Итоговый workflow seal отдельно укажет исходную ревизию и SHA ремонта, не выдавая её за неизменность первоначального source fence.
 
 Revision receipt SHA `54a28652b18f6767ad4c87601b126b8ed36d5c7ffcb5bf8f4ffaeb6c18f7b39f`. Возобновление использует прежний output root и готовые этапы, без новых боёв и без пересэмплирования. Первое реальное обновление ещё требует подтверждения.
+
+## Первое реальное обновление
+
+Около 17:57 typed round 01 завершён на CUDA: 24 собственных TRAIN боя, 2755 переходов, 21 принятый actor step и 40 critic steps. Weights SHA `5d562180850df5fec6aeefd24535e4fc39eb9e8d64a98f8bfb5022190e9be299`. Новые projectile-колонки и общий bias изменились; старые body-колонки сохранены точно. Checkpoint roundtrip и настоящие пробные продолжения actor/critic Adam после загрузки прошли. Начальная норма градиента новых колонок 0.183774, bias 0.336758. Это техническое подтверждение обновления, не результат качества боя.
+
+Projectile presence есть на 94 из 2755 строк; class-slot counts `[171, 0, 0, 0, 0]`: встретились только grenade. Это существенное ограничение: на одном классе typed и neutral отличаются перестановкой активной колонки, а не возможностью различать виды опасности. Даже положительный итог такого корпуса нельзя объявить доказательством пользы type discrimination. Нужно суммировать разнообразие всех раундов и оценочных состояний; будущая отдельная проверка гипотезы потребует свежих рецептов с несколькими реально наблюдаемыми классами. В текущем опыте состав сцен и бюджет не меняются после начала fitting.
+
+Parent возобновления PID 5172 жив; началась CUDA обработка neutral round 01 из тех же сохранённых native outputs.
+
+## Ограничение следующего опыта с несколькими типами
+
+Read-only проверка исходников: текущий group generator допускает parasite/soldier/infantry/gunner, а `CampaignRecipesForMaps` нормализует soldier_light и soldier_ss в soldier. В штатном `yquake2/src/game/monster/soldier/soldier.c` обычный soldier имеет skin 2 и дробовик; blaster использует soldier_light, skin 0. Простое добавление текущего soldier-рецепта не создаёт второго projectile класса.
+
+Если весь текущий бюджет останется одноклассовым, для отдельной содержательной проверки типов сначала нужны versioned рецепты с точным сохранением soldier_light, отдельными seed domains и native setup receipt фактического класса/оружия. Малый TRAIN pilot до fitting должен подтвердить реальные наблюдения как минимум grenade и blaster_bolt, оценённые скорости, отсутствие infighting и корректную геометрию. Только затем фиксировать новый равный TRAIN бюджет и свежий screen. Текущие frozen sources во время живого опыта не меняются; этот шаг пока не реализован.
+
+## Первый полный раунд — около 17:59 МСК
+
+Neutral тоже закрыт: 24 TRAIN боя, 2579 переходов, 10 принятых actor steps, 40 critic steps. Weights SHA `139998a1193d2268960f24eae4dc10bd389a3d6436cc9f928f16f5ef667bdd81`. Projectile-колонки изменились, старые body-колонки сохранены. Checkpoint и actor/critic Adam continuation проверки прошли.
+
+В neutral presence есть на 125 строках, диагностические raw class-slot counts `[74, 0, 0, 66, 0]`: grenade и blaster_bolt. В сам neutral вход по-прежнему поступает только other/presence; диагностический разбор классов не используется для формирования его action input. Следовательно, вывод об одном классе относится к typed round 01, а не ко всему эксперименту. Нет основания по одной метке объявить болты вражескими; их происхождение и угроза требуют отдельной диагностики. Наличие двух классов в одной контрольной траектории также ещё не доказывает, что typed обучается их различать.
+
+Итого 48 native / 48 CUDA TRAIN, 5334 перехода, по одному настоящему обновлению каждой ветки. На 17:59:45 parent PID 5172 жив, стадия `r02-prepare-typed`, child PID 30076. Свежая оценка ещё не запускалась, преимущества в боях не установлены.
+
+## Read-only разбор разнообразия первого раунда
+
+Артефакт `round-01/projectile-diversity.json`, скрипт с зафиксированным SHA сохранён внутри output root, не меняет frozen training sources. Все строки сопоставлены по seed/index с уже принятыми CUDA rollout rows; native steps сверены с source SHA в CUDA report. Новых нейронных вычислений и fitting в разборе нет.
+
+| Ветка | Строки со снарядом | Grenade slots / строки / бои | Blaster-bolt slots / строки / бои | Строки с двумя классами |
+|---|---:|---:|---:|---:|
+| typed |94|171 / 94 / 5|0 / 0 / 0|0|
+| neutral |125|74 / 59 / 5|66 / 66 / 2|0|
+
+Оценка скорости доступна на 136 из 171 grenade slots typed; у neutral — на 57 из 74 grenade и 46 из 66 bolt slots. Все 66 bolt slots neutral наблюдались при оружии игрока Blaster. Это совместная встречаемость, а не native доказательство владельца болта. Нельзя объявлять наличие нескольких вражеских projectile видов или их одновременной угрозы на основании этого отчёта. У typed первого раунда полезность различения классов пока не идентифицируется.
+
+## Native подтверждение владельца болтов
+
+Около 18:06 закрыт отдельный read-only `round-01/bolt-ownership.json`. У всех 66 bolt slots neutral найден ровно один активный native lifetime, attacker совпал с observation identity.actor: **66/66 self, unresolved 0**. У typed bolt slots нет. Это уточняет предыдущую неопределённость: вторым наблюдаемым классом первого раунда были собственные болты бота, а не подтверждённые вражеские выстрелы.
+
+Сопоставлены spawncount, entity ID и интервал spawn/end каждого shot. Используется внешний `sv_test_projectile server_frame`, совпадающий с observation identity.frame; внутренний game frame имеет другой сдвиг и не используется. Конец интервала исключён, повторно использованные entity ID без подходящего lifetime не признаются владельцем. Native server.log сверены с их SHA из CUDA source binding, строки ограничены принятым TRAIN rollout. Сами native attacker/shot IDs не поданы в модель и не меняют обучение. Скрипт и полный список witnesses сохранены внутри output root.
+
+Около 18:06 второй native пул закрыт; parent PID 5172 жив, стадия `r02-finalize-typed`, child PID 20276. Вторые обновления ещё не подтверждены.
+
+## Второй раунд — промежуточное подтверждение
+
+Второй native pool: 48/48 usable, source unchanged относительно объявленной pre-fit ревизии, 175.79 секунды. Около 18:09 закрыто typed update 2: 2822 перехода, 11 actor steps, 40 critic steps, CUDA. Weights SHA `062cd4a04884307c26a471541187f3dd96dd88da47aa4ebb32d3ce8a4797bfda`. Checkpoint/actor/critic Adam continuation прошли уже от обновлённого source с training binding, а не только от initializer.
+
+Presence на 98 строках, class-slot counts `[208, 0, 0, 1, 0]`: впервые в typed TRAIN появился один bolt slot. Его владелец здесь ещё не проверен; один пример не устанавливает достаточность разнообразия для обучения различению угроз. На 18:09 parent PID 5172 жив, `r02-finalize-neutral`, child PID 30688. Всего закрыты 96 native TRAIN и 72 CUDA TRAIN; второе neutral обновление ещё в работе.
+
+## Второй раунд завершён — около 18:11 МСК
+
+Neutral update 2: 2899 переходов, 17 actor steps, 40 critic steps, CUDA. Weights SHA `09db0b6a07e44c8e534a4ac4761c009d221c0465e8d098263dd88bdaef171602`. Checkpoint roundtrip и настоящие пробные actor/critic Adam продолжения прошли. У обеих веток scope_updates=2.
+
+Всего закрыты 96 native / 96 CUDA TRAIN, 11055 переходов; подготовка третьего раунда началась в том же workflow, parent PID 5172. Новых ошибок нет, качество боёв ещё не оценивалось.
+
+Оба read-only диагностических скрипта повторно исполнены на втором раунде с новыми output receipts, прежние результаты не перезаписаны. Typed: grenade 208 slots / 97 строк / 5 боёв; bolt 1 slot / 1 строка / 1 бой. Neutral: grenade 352 / 166 / 7, bolt 52 / 49 / 2. Строк с двумя классами одновременно нет. Скорости известны на 181 grenade slots typed и 289 grenade / 34 bolt slots neutral; у единственного typed bolt скорость ещё не определена.
+
+Native lifetime audit подтверждает собственные болты: typed 1/1, neutral 52/52, unresolved 0. За два раунда оба корпуса в сумме содержат 119 наблюдаемых bolt slots, все с native self ownership. У typed лишь один такой пример за 5577 переходов; ни одного чужого болта не подтверждено. Это серьёзное ограничение интерпретации типового входа. Уменьшение собственной стрельбы бластером не заменяет обучение уклонению от нескольких видов вражеских снарядов. Артефакты `round-02/projectile-diversity.json` и `round-02/bolt-ownership.json`.
+
+## Третий раунд — промежуточное подтверждение
+
+Третий native pool завершён 48/48. Около 18:21 typed update 3 закрыт на CUDA: 2712 переходов, 12 actor steps, 40 critic steps. Weights SHA `2a82b61dd7733f065bbc6933eede0a2897f48464b419f07fe51e246db6fe5b92`. Checkpoint roundtrip и следующие пробные Adam шаги actor/critic прошли. Presence на 68 строках, class-slot counts `[83, 0, 0, 0, 0]`.
+
+За три typed корпуса 8289 переходов и лишь один bolt slot против 462 grenade slots. Это не достаточное основание считать различение разных снарядов обученным, независимо от будущего малого quality gate. Оригинальная гипотеза не переименовывается в успех presence-only: neutral уже видит присутствие. На 18:21:33 parent PID 5172 жив, `r03-finalize-neutral`, child PID 14188; третий neutral update ещё не подтверждён.
+
+## Третий раунд завершён — около 18:24 МСК
+
+Neutral update 3: 2822 перехода, 11 actor steps, 40 critic steps, CUDA. Weights SHA `44e5371441880035a6765c7e3fd553dace718cdf83f0855f22e0be9339f944ba`. Scope_updates=3, checkpoint roundtrip и реальные пробные продолжения actor/critic Adam прошли. Presence на 105 строках, class-slot counts `[138, 0, 0, 28, 0]`.
+
+Суммарно закрыты 144 native / 144 CUDA TRAIN и 16589 переходов. Parent PID 5172 жив, стадия `r04-prepare-typed`, child PID 31768. Четвёртый раунд и fresh evaluation ещё не завершены; качество и превосходство над rules не установлены.
+
+Read-only разбор третьего раунда закрыт: typed 83 grenade slots, 68 строк, 6 боёв; neutral 138 grenade slots, 77 строк, 6 боёв и 28 bolt slots, 28 строк, 3 боя. Mixed-class rows=0 у обеих веток. Все 28 bolt slots neutral сопоставлены с собственными native shot lifetimes, unresolved=0. За первые три раунда всего 147 bolt slots, все self; у typed по-прежнему один bolt slot. Артефакты `round-03/projectile-diversity.json` и `round-03/bolt-ownership.json`, inputs проверены по SHA, новых NN вычислений/fitting в диагностике нет.
+
+## Все четыре раунда завершены — около 18:36 МСК
+
+| Последний update | TRAIN бои | Переходы | Actor steps | Critic steps | Projectile class-slot counts |
+|---|---:|---:|---:|---:|---|
+| typed |24|2681|8|40|233 grenade, 46 blaster_bolt|
+| neutral |24|2873|9|40|82 grenade, 5 blaster_bolt|
+
+Финальные typed weights SHA `5b0b768f9a67bd61bf9cada2a07dab3ba324d86b6824d536d817a0fb72a43776`, neutral `3b64cc72dc16e4970c33e525361e5d72aea5def2ad8ae918caa480642268a8cf`. Оба checkpoint прошли roundtrip и настоящие пробные следующие Adam шаги actor/critic. У обеих веток scope_updates=4.
+
+Полный TRAIN бюджет закрыт: 192 native / 192 CUDA, 22143 перехода (typed 10970, neutral 11173). Ни награда, ни budget, ни endpoint selection после начала fitting не менялись. Предварительный ремонт до первого fitting описан отдельно выше.
+
+На 18:35:59 parent PID 5172 жив, стадия `evaluation`, child PID 17112. Запущена свежая оценка 40 native / 32 CUDA, без fitting. Результатов качества ещё нет, основные игровые веса не заменены.
+
+## Полный состав TRAIN снарядов
+
+Все четыре read-only отчёта разнообразия и native lifetime ownership закрыты. Каждый bolt slot сопоставлен с собственным attacker по активному shot lifetime, unresolved=0. Скрытый attacker используется только для этого диагноза.
+
+| Ветка | Переходы | Строки со снарядом | Grenade slots | Bolt slots | Из bolt slots — собственные | Mixed-class rows |
+|---|---:|---:|---:|---:|---:|---:|
+| typed |10970|426|695|47|47|0|
+| neutral |11173|504|646|151|151|0|
+
+Других projectile классов в этих принятых строках нет. Всего 198 bolt slots, все self. В последнем раунде typed получил 46 собственных bolt slots, neutral 5; результаты предыдущих раундов не перезаписывались.
+
+Вывод ограничен до просмотра quality исходов: этот опыт не проверяет научение избегать нескольких видов вражеских снарядов. Положительный малый screen, если он будет, означал бы лишь перспективный итоговый checkpoint на данном наборе и потребовал бы независимого подтверждения. Польза именно классификации угроз остаётся неидентифицированной; следующему отдельному опыту нужны реально разные вражеские projectile классы и достаточная экспозиция typed TRAIN. Нельзя подменять основной neutral presence контроль all-zero или менять текущий gate после этих наблюдений.
+
+## Закрытая оценка — около 18:43 МСК
+
+Workflow завершён: 192 native / 192 CUDA TRAIN и 40 native / 32 CUDA evaluation. Итоговый report SHA `e7aac9b9315171229c8a2b4313f9dcee281920d19bf9b0af5ae863ffb5919ca5`. Проверены result seal, все 48 inputs итогового report, все 232 inputs native action quality, исходный source fence с двумя явно объявленными pre-fit replacements и оба неизменных JSON. Parent завершён, promotion=false. `original_source_unchanged=false` и source revision SHA сохранены в workflow seal; финальная неизменность относится к объявленной ревизии, не скрывает ремонт до fitting.
+
+| Вариант | Цели / 8 | Смерти | Убийства | Нанесено HP | Получено HP |
+|---|---:|---:|---:|---:|---:|
+| neutral-initial |5|3|13|2305|490|
+| neutral-trained |5|3|14|2484|499|
+| typed-initial |5|3|13|2305|490|
+| typed-trained |6|2|16|2707|408|
+| rules |4|3|13|2230|478|
+
+**Expansion gate=false.** Typed-trained проходит ограничения по смертям и урону, добавил одну цель к собственному старту и две к rules, но лишь одну к neutral-trained вместо заранее требуемых двух. Против neutral-trained одна новая и ноль потерянных побед; против собственного старта две новые и одна потерянная; против rules две новые и ноль потерянных. Всего восемь условий недостаточно для заявления об общем превосходстве. Стандартные веса не заменены, расширение по этому gate не запускается. Нельзя пересматривать порог после результата.
+
+## Лишние действия после обучения
+
+| Метрика | typed-initial | typed-trained | neutral-trained |
+|---|---:|---:|---:|
+| MG shots с уроном живому монстру / все MG shots |207/281 (73.67%)|228/320 (71.25%)|246/309 (79.61%)|
+| MG solid contacts |51/281 (18.15%)|72/320 (22.50%)|53/309 (17.15%)|
+| MG corpse contacts |23|20|10|
+| Стояние grounded-visible |207/716 (28.91%)|274/868 (31.57%)|178/725 (24.55%)|
+| Yaw >=30 градусов / provider frames |35/767 (4.56%)|33/937 (3.52%)|38/791 (4.80%)|
+| Запрос атаки без цели / provider frames |11/767|19/937|32/791|
+
+Траектории и длительности разные, поэтому эти доли не устанавливают причинность. У typed меньше доля больших поворотов, но больше стояния и MG контактов со стеной, ниже доля MG выстрелов с уроном живому монстру. Улучшение целей на малом screen не означает устранения лишних действий. Native action audit не содержит сопоставимых rules метрик действий, поэтому качество стрельбы rules из этой таблицы не выводится.
+
+## Следующая содержательная проверка
+
+Текущий опыт закрыт с непройденным gate. Следующий шаг — точные versioned TRAIN рецепты с реально вражескими болтами и гранатами, а не новый повтор того же малого screen или увеличение сложности сети без новых данных. Сначала поддержка exact soldier_light без прежней нормализации в shotgun soldier, с отдельными seed domains, проверкой фактического setup и отсутствия infighting. Затем малый TRAIN pilot до fitting должен показать разные вражеские projectile классы в наблюдениях модели, их скорости и достаточную частоту. Только после этого фиксировать отдельный matched training protocol и свежую оценку. Этот новый опыт ещё не реализован и не запущен; превосходство на кампании и human coop остаётся открытым.

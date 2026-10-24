@@ -79,7 +79,7 @@ func VerifyGoalStopForClasses(g GoalStop, release *CombatRelease, events []Damag
 	expected := map[string]bool{}
 	for _, class := range expectedClasses {
 		switch class {
-		case "monster_parasite", "monster_gunner", "monster_soldier", "monster_infantry":
+		case "monster_parasite", "monster_gunner", "monster_soldier", "monster_soldier_light", "monster_infantry":
 		default:
 			return fail()
 		}
