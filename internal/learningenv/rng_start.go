@@ -10,7 +10,11 @@ import (
 )
 
 var rngStartPattern = regexp.MustCompile(`^g_test_rng_start game_frame=(\d+) phase=post_frame seed=(\d+) cursor_before=(\d+) cursor_after=256$`)
-var weaponStartPattern = regexp.MustCompile(`^g_test_weapon_start game_frame=(\d+) actor=1 weapon=(Blaster|Shotgun|Machinegun|Super Shotgun|Grenades) gunframe_before=(\d+) gunframe_after=(\d+)$`)
+var weaponStartPattern = regexp.MustCompile(`^g_test_weapon_start game_frame=(\d+) actor=1 weapon=(Blaster|Shotgun|Machinegun|Super Shotgun|Grenades|Chaingun|Grenade Launcher|Rocket Launcher|HyperBlaster|Railgun|BFG10K) gunframe_before=(\d+) gunframe_after=(\d+)$`)
+
+var stockWeaponIdleRanges = map[string][2]int{"Blaster": {9, 52}, "Shotgun": {19, 36}, "Super Shotgun": {18, 57}, "Machinegun": {6, 45}, "Chaingun": {32, 61}, "Grenade Launcher": {17, 59}, "Rocket Launcher": {13, 50}, "HyperBlaster": {21, 49}, "Railgun": {19, 56}, "BFG10K": {33, 55}, "Grenades": {16, 48}}
+
+func StockWeaponIdleFrame(weapon string) int { return stockWeaponIdleRanges[weapon][0] }
 
 // VerifyPostFrameRNG verifies the native post-frame seeding receipt. The cursor
 // is a diagnostic, not proof of complete RNG/world snapshot equivalence.
@@ -22,18 +26,11 @@ func VerifyPostFrameRNG(r io.Reader, seed, expectedFrame int, expectedWeapon ...
 	if len(expectedWeapon) == 1 {
 		weapon = expectedWeapon[0]
 	}
-	minFrame, maxFrame := 9, 52
-	if weapon == "Machinegun" {
-		minFrame, maxFrame = 6, 45
-	} else if weapon == "Shotgun" {
-		minFrame, maxFrame = 19, 36
-	} else if weapon == "Super Shotgun" {
-		minFrame, maxFrame = 18, 57
-	} else if weapon == "Grenades" {
-		minFrame, maxFrame = 16, 48
-	} else if weapon != "Blaster" {
+	idle, known := stockWeaponIdleRanges[weapon]
+	if !known {
 		return fmt.Errorf("unsupported fixed weapon")
 	}
+	minFrame, maxFrame := idle[0], idle[1]
 	s := bufio.NewScanner(r)
 	count, releases, frame, releaseFrame := 0, 0, 0, 0
 	weapons := 0

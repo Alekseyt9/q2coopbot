@@ -34,6 +34,15 @@ func MarkGoalHandoff(s *Step, killFrame, observedFrame int) error {
 	return MarkGoalBoundary(s)
 }
 
+// A native objective may close long after the original kills (revival/boss phase).
+// An earlier control handoff must not receive the eventual goal label.
+func MarkGoalHandoffAtNativeObjective(s *Step, killFrame, observedFrame, nativeFrame int) error {
+	if nativeFrame != observedFrame || s.Next == nil || s.Next.Identity.Frame != nativeFrame {
+		return fmt.Errorf("handoff precedes verified native objective")
+	}
+	return MarkGoalHandoff(s, killFrame, observedFrame)
+}
+
 // GoalStop is supervisor evidence for an offline episode boundary, never a policy input.
 type GoalStop struct {
 	NativeObjective *CombatObjective `json:"native_objective,omitempty"`

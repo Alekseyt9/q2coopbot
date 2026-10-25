@@ -33,6 +33,7 @@ func run() error {
 	endReason := flag.String("end-reason", "trace_end", "Reason for truncating the final command")
 	goalFrame := flag.Int("goal-observed-frame", 0, "Supervisor-verified goal boundary; offline terminal label only")
 	goalKillFrame := flag.Int("goal-kill-frame", 0, "Independently verified goal kill frame; explicit nonterminal handoff objective only")
+	goalObjectiveFrame := flag.Int("goal-native-objective-frame", 0, "Verified native zero-alive/zero-pending frame; forbids earlier goal handoff labels")
 	deathFile := flag.String("death-stop", "", "Supervisor first-life death receipt; requires a complete native death terminal and reward")
 	serverLog := flag.String("server-log", "", "Optional native log for separate server damage windows")
 	clientName := flag.String("client-name", "GoCoopMate", "Name selected by native sv_test_trace_client")
@@ -45,6 +46,9 @@ func run() error {
 	pairedStop := flag.Bool("paired-stop-on-death", false, "Close both actor datasets at first verified participant death; experimental v11 reward allowed, PPO eligibility false")
 	rewardFile := flag.String("reward-config", "", "Optional explicit experimental reward JSON; requires synchronous proof")
 	flag.Parse()
+	if *goalObjectiveFrame != 0 && (*goalObjectiveFrame < 1 || *goalObjectiveFrame != *goalFrame) {
+		return fmt.Errorf("native goal objective frame differs from observed goal")
+	}
 	if *pairedStop && (*pairedPeer == "" || *goalFrame != 0 || *deathFile != "") {
 		return fmt.Errorf("paired death boundary requires both traces without other terminal modes")
 	}
@@ -334,8 +338,14 @@ func run() error {
 		}
 		if *goalFrame > 0 {
 			if *goalKillFrame > 0 && s.Truncated && s.Reason == "control_handoff" && s.Next != nil &&
-				s.Next.Identity.Frame >= *goalKillFrame && s.Next.Identity.Frame <= *goalFrame {
-				if err := learningenv.MarkGoalHandoff(s, *goalKillFrame, *goalFrame); err != nil {
+				s.Next.Identity.Frame >= *goalKillFrame && s.Next.Identity.Frame <= *goalFrame && (*goalObjectiveFrame == 0 || s.Next.Identity.Frame == *goalObjectiveFrame) {
+				var err error
+				if *goalObjectiveFrame > 0 {
+					err = learningenv.MarkGoalHandoffAtNativeObjective(s, *goalKillFrame, *goalFrame, *goalObjectiveFrame)
+				} else {
+					err = learningenv.MarkGoalHandoff(s, *goalKillFrame, *goalFrame)
+				}
+				if err != nil {
 					return err
 				}
 			}

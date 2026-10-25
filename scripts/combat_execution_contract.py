@@ -1,13 +1,14 @@
 """Metadata admission for training and inference environment execution semantics."""
 LEGACY = 'legacy_v1'
 CHECKED_GROUND = 'checked_ground_crouch_v1'
+STOCK_WEAPONS_FIRE = 'stock_weapons_fire_v1'
 SCOPE = 'combat_execution_contract_ppo_v1'
 
 
 def normalize(value):
     if value is None or value == '':
         return LEGACY
-    if value not in (LEGACY, CHECKED_GROUND):
+    if value not in (LEGACY, CHECKED_GROUND, STOCK_WEAPONS_FIRE):
         raise ValueError('Unknown combat execution contract: '+repr(value))
     return value
 

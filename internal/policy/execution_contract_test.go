@@ -3,7 +3,7 @@ package policy
 import "testing"
 
 func TestCombatExecutionContractMetadata(t *testing.T) {
-	for _, value := range []string{"", LegacyCombatExecution, CheckedGroundCombatExecution} {
+	for _, value := range []string{"", LegacyCombatExecution, CheckedGroundCombatExecution, StockWeaponsFireCombatExecution} {
 		got, err := CombatExecutionContract(value)
 		if err != nil || got == "" {
 			t.Fatal(value, got, err)

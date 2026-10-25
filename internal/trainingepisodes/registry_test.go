@@ -8,6 +8,26 @@ import (
 	"testing"
 )
 
+func TestNativeHabitatRegistryKeepsContinuationObjective(t *testing.T) {
+	r, err := Load(filepath.Join("..", "..", "scripts", "scenarios", "combat-training", "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, ep := range r.Episodes {
+		if ep.Generator == nil || ep.Generator.Kind != nativeHabitatRosterKind {
+			continue
+		}
+		count++
+		if ep.Revision < 2 || !ep.Recipe.RequireNativeObjective || ep.Recipe.RewardConfig != "scripts/scenarios/combat-reward-native-goal-v1.json" {
+			t.Fatalf("%s must bind the native goal and unfinished control-transfer objective", ep.ID)
+		}
+	}
+	if count == 0 {
+		t.Fatal("Missing native habitat campaign recipes")
+	}
+}
+
 func fixture(t *testing.T) (string, Episode) {
 	t.Helper()
 	r, err := Load(filepath.Join("..", "..", "scripts", "scenarios", "combat-training", "index.json"))

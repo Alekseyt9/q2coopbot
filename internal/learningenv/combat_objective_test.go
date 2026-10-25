@@ -55,3 +55,39 @@ func TestReadNativeObjectiveRejectsUnboundAndDuplicateState(t *testing.T) {
 		}
 	}
 }
+
+func TestBossPhaseDoesNotMoveGoalBackToFirstControlHandoff(t *testing.T) {
+	s := damageStep(100)
+	s.Observation.Health = 80
+	s.Next.Health = 80
+	s.Truncated = true
+	s.Reason = "control_handoff"
+	if err := MarkGoalHandoffAtNativeObjective(s, 100, 201, 201); err == nil || s.GoalHandoff {
+		t.Fatal("Jorg first-death handoff labeled as completed successor", err)
+	}
+	s.Observation.Identity.Frame = 200
+	s.Next.Identity.Frame = 201
+	if err := MarkGoalHandoffAtNativeObjective(s, 100, 201, 201); err != nil || !s.GoalHandoff {
+		t.Fatal("actual native closure handoff rejected", err)
+	}
+}
+
+func TestGoalHandoffAdmissionUsesExactNativeFrame(t *testing.T) {
+	s := damageStep(100)
+	s.Native = &NativeStep{EndFrame: 101}
+	s.Next.Health = 80
+	g := &GoalStop{Version: "combat_goal_stop_v2", KillFrame: 101, ObservedFrame: 102,
+		NativeObjective: &CombatObjective{Frame: 102, Map: s.Next.Identity.Map, Spawncount: s.Next.Identity.Spawncount}}
+	if MatchesVerifiedGoalHandoff(s, g) {
+		t.Fatal("Earlier handoff treated as the later native goal")
+	}
+	s.Native.EndFrame = 102
+	s.Next.Identity.Frame = 102
+	if !MatchesVerifiedGoalHandoff(s, g) {
+		t.Fatal("Exact native goal frame rejected")
+	}
+	g.NativeObjective.Pending = 1
+	if MatchesVerifiedGoalHandoff(s, g) {
+		t.Fatal("Pending boss phase treated as completed")
+	}
+}

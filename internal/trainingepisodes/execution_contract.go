@@ -32,7 +32,7 @@ func ValidatePlanExecutionContract(p *Plan) error {
 			return fmt.Errorf("model execution contract differs from plan")
 		}
 	}
-	if contract == policy.CheckedGroundCombatExecution {
+	if contract != policy.LegacyCombatExecution {
 		if p.ModelPath == "" || !p.CheckedWallSlide || p.DiagnosticStoppedCrouch || p.DiagnosticCheckedGroundRequest || p.DiagnosticNominalAim {
 			return fmt.Errorf("checked execution contract requires exclusive learned plan with checked wall slide")
 		}

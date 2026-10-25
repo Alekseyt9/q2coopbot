@@ -159,7 +159,10 @@ func campaignRecipe(world quake.MapInfo, source quake.MapEntity, entityIndex int
 			base := 1000000 + mapIndex*600000 + sceneIndex*40000
 			if profiled {
 				ep.Generator.Kind = nativeProfileKind
+				ep.Revision = 2
 				ep.Recipe.RequireNativeObjective = true
+				ep.Recipe.RewardConfig = "scripts/scenarios/combat-reward-native-goal-v1.json"
+				ep.Goal = "alive_zero_native_combat_actors_and_pending_phases_after_native_kills"
 				ep.ID = fmt.Sprintf("campaign-%s-native-profile-%s-site-%03d", world.Name, strings.ReplaceAll(strings.TrimPrefix(class, "monster_"), "_", "-"), sceneIndex+1)
 				ep.InitialState = "Exact map-native stock profile and habitat; partial stock inventory; isolated original encounter"
 				ep.Recipe.Loadout = "weapons"

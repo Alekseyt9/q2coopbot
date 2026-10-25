@@ -211,7 +211,7 @@ func (e Episode) validate() error {
 			return fmt.Errorf("unsupported synchronous recipe")
 		}
 		switch e.Recipe.RewardConfig {
-		case "scripts/scenarios/combat-reward-recoil-v5.json", "scripts/scenarios/combat-reward-blaster-miss-v1.json",
+		case "scripts/scenarios/combat-reward-native-goal-v1.json", "scripts/scenarios/combat-reward-recoil-v5.json", "scripts/scenarios/combat-reward-blaster-miss-v1.json",
 			"scripts/scenarios/combat-reward-action-quality-v6.json", "scripts/scenarios/combat-reward-target-sequence-v7.json",
 			"scripts/scenarios/combat-reward-selected-aim-v8.json", "scripts/scenarios/combat-reward-native-waste-v9.json",
 			"scripts/scenarios/combat-reward-target-commitment-cost-v12.json", "scripts/scenarios/combat-reward-target-commitment-bonus-v12.json",

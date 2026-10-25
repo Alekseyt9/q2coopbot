@@ -90,3 +90,18 @@ func VerifyGoalStopWithObjectiveForClasses(g GoalStop, release *CombatRelease, e
 	legacy.NativeObjective = nil
 	return VerifyGoalStopForClasses(legacy, release, events, observed, classes, mapName)
 }
+
+// The supervisor receipt is verified independently before this predicate runs.
+// A later native completion must not relabel an earlier control transfer.
+func MatchesVerifiedGoalHandoff(s *Step, g *GoalStop) bool {
+	if g == nil || s == nil || s.Next == nil || s.Native == nil || s.Next.Health <= 0 ||
+		g.KillFrame > s.Native.EndFrame || s.Native.EndFrame > g.ObservedFrame {
+		return false
+	}
+	if g.Version == "combat_goal_stop_v2" {
+		n := g.NativeObjective
+		return n != nil && n.Alive == 0 && n.Pending == 0 && n.Frame == g.ObservedFrame &&
+			s.Next.Identity.Frame == n.Frame && s.Next.Identity.Map == n.Map && s.Next.Identity.Spawncount == n.Spawncount
+	}
+	return g.Version == "combat_goal_stop_v1"
+}

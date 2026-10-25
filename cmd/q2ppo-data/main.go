@@ -242,8 +242,9 @@ func run() error {
 		seen[r.Seed] = true
 		var cfg struct {
 			Test struct {
-				SpawnClass  string `json:"spawn_class"`
-				TeleportMap string `json:"teleport_map"`
+				SpawnClass    string `json:"spawn_class"`
+				TeleportMap   string `json:"teleport_map"`
+				InitialWeapon string `json:"initial_weapon"`
 			} `json:"test"`
 			Combat struct {
 				File              string `json:"provider_file"`
@@ -378,6 +379,9 @@ func run() error {
 			args = append(args, "--goal-observed-frame", fmt.Sprint(goal.ObservedFrame))
 			if manifest.Reward.HandoffBootstrap == "nonterminal_v1" {
 				args = append(args, "--goal-kill-frame", fmt.Sprint(goal.KillFrame))
+				if goal.Version == "combat_goal_stop_v2" {
+					args = append(args, "--goal-native-objective-frame", fmt.Sprint(goal.NativeObjective.Frame))
+				}
 			}
 		}
 		if r.Death != nil {
@@ -499,24 +503,21 @@ func run() error {
 			if manifest.Loadout == "weapons-grenades-recovery" {
 				weapon = "Grenades"
 			}
+			if r.Fixture != nil && r.Fixture.Inventory != nil {
+				if r.Fixture.Inventory.Version != 1 || r.Fixture.Inventory.Seed != r.Seed || r.Fixture.Inventory.InitialWeapon != cfg.Test.InitialWeapon {
+					return fmt.Errorf("sampled initial weapon differs from frozen config")
+				}
+				weapon = r.Fixture.Inventory.InitialWeapon
+			}
 			proofErr = learningenv.VerifyPostFrameRNG(logFile, r.Seed, manifest.ReleaseFrame, weapon)
 			logFile.Close()
 			if proofErr != nil {
 				return proofErr
 			}
 			if manifest.ReleaseFrame > 0 {
-				idleFrame := 9
-				if weapon == "Shotgun" {
-					idleFrame = 19
-				}
-				if weapon == "Machinegun" {
-					idleFrame = 6
-				}
-				if weapon == "Super Shotgun" {
-					idleFrame = 18
-				}
-				if weapon == "Grenades" {
-					idleFrame = 16
+				idleFrame := learningenv.StockWeaponIdleFrame(weapon)
+				if idleFrame == 0 {
+					return fmt.Errorf("unknown sampled weapon phase")
 				}
 				for _, step := range steps {
 					if step.Owner == "provider" {
@@ -603,8 +604,7 @@ func run() error {
 			}
 			nv := 0.0
 			if manifest.Reward.HasKillReward() && s.Truncated && s.Reason == "control_handoff" {
-				confirmedGoal := r.Goal != nil && s.Native != nil && s.Next.Health > 0 &&
-					r.Goal.KillFrame <= s.Native.EndFrame && s.Native.EndFrame <= r.Goal.ObservedFrame
+				confirmedGoal := learningenv.MatchesVerifiedGoalHandoff(&s, r.Goal)
 				if manifest.Reward.HandoffBootstrap == "" && !confirmedGoal {
 					return fmt.Errorf("unfinished control handoff requires explicit nonterminal_v1 objective: seed %d frame %d", r.Seed, s.Next.Identity.Frame)
 				}

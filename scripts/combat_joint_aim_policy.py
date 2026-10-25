@@ -189,6 +189,9 @@ class JointAim(nn.Module):
             else:
                 normalized=((candidate_context-self.hints.shot_mean[:185].to(features.dtype))/self.hints.shot_std[:185].to(features.dtype)).clamp(-20,20)
                 shared_inputs=torch.cat((normalized,deltas,p[:,:,None],p[:,:1,None].expand(-1,25,-1),(p-p[:,:1])[:,:,None],(ids==0).to(features.dtype)[:,:,None]),-1)
+            # Geometry can retain float64 source coordinates while the learned
+            # scorer uses exportable float32 parameters during PPO fitting.
+            shared_inputs=shared_inputs.to(next(self.shared.parameters()).dtype)
             logits=self.shared(shared_inputs).squeeze(-1).clamp(-20,20)+self.shared_beta*(ids==0).to(features.dtype)
         else:logits=self.head(candidates.inputs(features,c,hints,timing.to(features.dtype)))
         if self.probe_version==POLICY_PROBE_VERSION:

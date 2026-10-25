@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
 	[switch]$RequireNativeObjective,
-    [ValidateSet('legacy_v1','checked_ground_crouch_v1')][string]$ExecutionContract='legacy_v1',
+    [ValidateSet('legacy_v1','checked_ground_crouch_v1','stock_weapons_fire_v1')][string]$ExecutionContract='legacy_v1',
     [ValidateRange(1,4)][int]$Workers=4,
     [ValidateRange(1,20)][int]$EpisodesPerWorker=2,
     [ValidateSet(1,2)][int]$Timescale=2,
@@ -286,6 +286,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                     $goalReward=Get-Content -LiteralPath $using:RewardConfig -Raw|ConvertFrom-Json
                     if($goalReward.handoff_bootstrap -eq 'nonterminal_v1'){
                         $exportArguments+=@('--goal-kill-frame',"$($goal.kill_frame)")
+                        if($goal.version -eq 'combat_goal_stop_v2'){$exportArguments+=@('--goal-native-objective-frame',"$($goal.native_objective.frame)")}
                     }
                 }
             }
@@ -338,6 +339,11 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             # spawned by the client and verified by Confirm-GeneratedCombatStart.
             $captureMap=if($sample -and $sample.map){$sample.map}else{'base1'}
             $entities=Get-Content -LiteralPath (Join-Path $out "runtime/baseq2/maps/$captureMap.ent") -Raw
+            if($sample){
+                $boundary=$report.generated_world_boundary
+                $entityHash=(Get-FileHash -LiteralPath (Join-Path $out "runtime/baseq2/maps/$captureMap.ent")).Hash.ToLowerInvariant()
+                if($boundary.version -ne 'isolated_combat_no_changelevel_v2' -or $boundary.entities_sha256 -ne $entityHash -or $entities -match '"classname"\s+"(?:trigger|target)_changelevel"'){throw 'Generated encounter world boundary unconfirmed'}
+            }
             $gunnerCount=[regex]::Matches($entities,'"classname"\s+"monster_gunner"').Count
             $expectedGunners=if($sample){@($sample.monsters|Select-Object -Skip 1|Where-Object class -eq 'monster_gunner').Count}else{[int]$episodeMixed}
             if($gunnerCount -ne $expectedGunners){throw 'Episode composition differs from declared pattern'}
@@ -350,7 +356,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             [pscustomobject]@{
                 worker=$worker;episode=$episode;seed=($using:Seed+$index);port=($using:Port+$worker);seed_confirmed=$seedAck
                 curriculum_init=$curriculumProof;fixture_mixed=$episodeMixed;fixture_gunner_count=$gunnerCount;solo_fixture=$episodeFixture
-                generated_fixture=$sample;generated_start=$generatedProof
+                generated_fixture=$sample;generated_start=$generatedProof;generated_world_boundary=$report.generated_world_boundary
                 harness_accepted=[bool]$report.accepted;harness_reason=$report.reason;worker_exit_code=$process.ExitCode
                 capture_valid=($captures.Count -eq $rows.Count -and $mismatches -eq 0 -and $field.decode_errors -eq 0 -and $frameBudgetValid -and $seedAck -and $dispatchValid -and $datasetReport.command_proof.accepted -and $datasetReport.observed_reset_confirmed -and (!$episodeProvider -or $episodeProviderHash -eq (Get-FileHash -LiteralPath $episodeProvider).Hash))
                 native_objective_required=[bool]$using:RequireNativeObjective;goal_stop=$goal;death_stop=$death;actual_game_frames=$field.game_frames;frame_budget_valid=[bool]$frameBudgetValid

@@ -15,7 +15,7 @@ def main():
     for name in ('source', 'registry', 'out'):
         ap.add_argument('--' + name, type=pathlib.Path, required=True)
     ap.add_argument('--episodes', required=True)
-    ap.add_argument('--execution-contract',choices=('legacy_v1','checked_ground_crouch_v1'),default='legacy_v1')
+    ap.add_argument('--execution-contract',choices=('legacy_v1','checked_ground_crouch_v1','stock_weapons_fire_v1'),default='legacy_v1')
     ap.add_argument('--train-offset', type=int, default=600)
     ap.add_argument('--development-offset', type=int, default=64)
     ap.add_argument('--port', type=int, default=42400)

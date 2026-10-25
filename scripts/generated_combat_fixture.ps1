@@ -1,4 +1,14 @@
 # Shared validation and native receipt for a sampled, pre-game fixture.
+function Set-GeneratedCombatWorldBoundary([string]$EntityPath){
+    # This is an isolated encounter, not a campaign traversal. Leaving the map
+    # would replace its actors and invalidate the single-world native rollout.
+    # Only the private generated .ent is changed; ordinary campaign exits stay.
+    $text=[IO.File]::ReadAllText($EntityPath)
+    $exits=@([regex]::Matches($text,'(?s)\{[^{}]*\}')|Where-Object {$_.Value -match '"classname"\s+"(?:trigger|target)_changelevel"'})
+    foreach($exit in $exits){$text=$text.Replace($exit.Value,'')}
+    [IO.File]::WriteAllText($EntityPath,$text,[Text.Encoding]::ASCII)
+    return @{version='isolated_combat_no_changelevel_v2';removed_changelevels=$exits.Count;entities_sha256=(Get-FileHash -LiteralPath $EntityPath).Hash.ToLowerInvariant()}
+}
 function Read-GeneratedCombatFixture([string]$Path,[int]$Seed,[string]$Loadout,[bool]$Mixed){
     $v=Get-Content -LiteralPath $Path -Raw|ConvertFrom-Json
     if($v.map -and $v.map -notmatch '^[a-z][a-z0-9_]{0,31}$'){throw 'Invalid generated map name'}

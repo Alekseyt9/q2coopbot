@@ -119,13 +119,14 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 	}
 	supportedFixture := c.testWeaponSwitchFixture == "parasite_blaster" || c.testWeaponSwitchFixture == "parasite_machinegun" || c.testWeaponSwitchFixture == "parasite_shotgun" || multiWeaponFixture(c.testWeaponSwitchFixture)
 	fixtureWeapon := (c.testSynchronous || c.testHitscanGuardProbe) && supportedFixture && directHitscanWeapon(o.Weapon)
+	stockFixtureWeapon := b.executionContract == policy.StockWeaponsFireCombatExecution && c.testSynchronous && supportedFixture && directStockWeapon(o.Weapon)
 	weaponPolicy, choosesWeapons := b.provider.(interface{ WeaponHeadVersion() string })
 	// An equipped pickup must not prevent a weapon-enabled policy from
 	// requesting its own replacement. Unsupported firing remains blocked by
 	// guardDirectCombat; this does not choose a weapon or enable new projectiles.
 	weaponRecovery := (b.campaignEvaluation || (c.testSynchronous || c.testHitscanGuardProbe) && supportedFixture) &&
 		choosesWeapons && weaponPolicy.WeaponHeadVersion() == policy.WeaponHeadVersion
-	if o.Weapon != "Blaster" && !(b.campaignEvaluation && directHitscanWeapon(o.Weapon)) && !fixtureWeapon && !weaponRecovery {
+	if o.Weapon != "Blaster" && !(b.campaignEvaluation && directHitscanWeapon(o.Weapon)) && !fixtureWeapon && !stockFixtureWeapon && !weaponRecovery {
 		sel.Fallback = "pilot_equip_not_ready"
 		return rules()
 	}
@@ -158,7 +159,7 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		limited, diagnosticChanges = diagnosticNominalCombatAim(o, a, limited, c.planner.World.Snapshot.DeltaAngles)
 		changes = append(changes, diagnosticChanges...)
 	}
-	guarded, safetyChanges := c.planner.guardDirectCombatMotion(c.planner.World.Snapshot, limited, b.checkedWallSlide)
+	guarded, safetyChanges := c.planner.guardDirectCombatEnvironment(c.planner.World.Snapshot, limited, b.checkedWallSlide, b.executionContract == policy.StockWeaponsFireCombatExecution)
 	changes = append(changes, safetyChanges...)
 	if (b.executionContract == policy.CheckedGroundCombatExecution || b.checkedGroundRequestProbeAllFrames || b.checkedGroundRequestProbeFrame > 0 && o.Identity.Frame == b.checkedGroundRequestProbeFrame) && c.testSynchronous && c.testCombatGo && b.life == 1 {
 		var probeChanges []policy.Intervention
@@ -230,6 +231,10 @@ func (p *Planner) guardDirectCombat(s quake.Snapshot, cmd quake.UserCmd) (quake.
 }
 
 func (p *Planner) guardDirectCombatMotion(s quake.Snapshot, cmd quake.UserCmd, checkedWallSlide bool) (quake.UserCmd, []policy.Intervention) {
+	return p.guardDirectCombatEnvironment(s, cmd, checkedWallSlide, false)
+}
+
+func (p *Planner) guardDirectCombatEnvironment(s quake.Snapshot, cmd quake.UserCmd, checkedWallSlide, stockWeapons bool) (quake.UserCmd, []policy.Intervention) {
 	changes := []policy.Intervention{}
 	stopMove := func(reason string) {
 		cmd.Forward, cmd.Side, cmd.Up = 0, 0, 0
@@ -286,7 +291,11 @@ func (p *Planner) guardDirectCombatMotion(s quake.Snapshot, cmd quake.UserCmd, c
 		stopMove("unsupported_motion_guard")
 	}
 	if cmd.Buttons&1 != 0 {
-		if s.Weapon != "Blaster" && !directHitscanWeapon(s.Weapon) {
+		if stockWeapons && (s.Teammate != nil || s.LastTeammate != nil) {
+			// New projectile firing is admitted only in isolated solo training.
+			// This contract does not claim multiplayer blast/rail penetration safety.
+			stopFire("stock_weapons_solo_only")
+		} else if s.Weapon != "Blaster" && !directHitscanWeapon(s.Weapon) && !(stockWeapons && directStockWeapon(s.Weapon)) {
 			stopFire("pilot_fixed_weapon")
 		} else {
 			yaw := float64(int16(uint16(cmd.Yaw)+uint16(s.DeltaAngles[1]))) * 2 * math.Pi / 65536

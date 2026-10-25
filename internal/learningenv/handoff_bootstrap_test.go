@@ -1,9 +1,36 @@
 package learningenv
 
 import (
+	"encoding/json"
 	"math"
+	"os"
 	"testing"
 )
+
+func TestNativeCampaignObjectivePreservesUnfinishedHandoff(t *testing.T) {
+	b, err := os.ReadFile("../../scripts/scenarios/combat-reward-native-goal-v1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c RewardConfig
+	if err := json.Unmarshal(b, &c); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	_, s, _ := aimFixture()
+	s.Truncated, s.Reason = true, "control_handoff"
+	if c.HandoffBootstrap != "nonterminal_v1" || c.ZeroBootstrap(&s) {
+		t.Fatal("Unfinished native campaign fight must retain continuation value")
+	}
+	if err := MarkGoalHandoff(&s, s.Next.Identity.Frame-1, s.Next.Identity.Frame); err != nil {
+		t.Fatal(err)
+	}
+	if !c.ZeroBootstrap(&s) {
+		t.Fatal("Verified goal must close continuation")
+	}
+}
 
 // Scalar reward/boundary arithmetic only: no neural network is instantiated.
 func TestNonterminalHandoffBootstrap(t *testing.T) {

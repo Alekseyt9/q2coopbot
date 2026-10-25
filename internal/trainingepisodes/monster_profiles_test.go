@@ -62,3 +62,28 @@ func TestStockMonsterProfilesUseSpawnHullsAndHabitats(t *testing.T) {
 		t.Fatal("separate hulls collide")
 	}
 }
+
+func TestProfilePreflightReservesRaisedPlayerAgainstFlyingActor(t *testing.T) {
+	root, _ := filepath.Abs("../..")
+	world, err := loadGenerationWorld(root, "jail3")
+	if err != nil {
+		t.Skip(err)
+	}
+	v := Instance{Map: "jail3", MonsterGeometry: nativeProfileGeometry, Player: quake.Vec3{-473.125, 334.5, 600.125},
+		Monsters: []GeneratedMonster{
+			{Class: "monster_berserk", Position: quake.Vec3{-287.625, 336.375, 600.125}},
+			{Class: "monster_hover", Position: quake.Vec3{-478.625, 336.375, 664.125}},
+		}}
+	lo, hi := profileBounds(v.Player, MonsterProfile{Min: quake.Vec3{-16, -16, -24}, Max: quake.Vec3{16, 16, 32}})
+	a, b := profileBounds(v.Monsters[1].Position, monsterProfiles["monster_hover"])
+	if boundsOverlap(lo, hi, a, b, 8) {
+		t.Fatal("Regression fixture must clear the settled player")
+	}
+	hi[2] += 10
+	if !boundsOverlap(lo, hi, a, b, 0) {
+		t.Fatal("Regression fixture must intersect native teleport KillBox")
+	}
+	if reason := checkStart(v, &world); reason != "profile_player_teleport_overlap" {
+		t.Fatal("Known pre-release telefrag accepted", reason)
+	}
+}

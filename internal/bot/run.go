@@ -160,7 +160,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		return contractErr
 	}
 	cfg.CombatExecutionContract = contract
-	if contract == policy.CheckedGroundCombatExecution && (!cfg.TestSynchronous || !cfg.TestCombatOnly || cfg.CombatMode != "learned" ||
+	if contract != policy.LegacyCombatExecution && (!cfg.TestSynchronous || !cfg.TestCombatOnly || cfg.CombatMode != "learned" ||
 		!cfg.CombatCapture || cfg.Host != "127.0.0.1" || !cfg.CombatCheckedWallSlide || cfg.CombatActionQualityGuard || cfg.CombatDiagnosticNominalAim ||
 		cfg.TestStoppedCrouchProbeFrame != 0 || cfg.TestStoppedCrouchProbeAllFrames || cfg.TestCheckedGroundRequestProbeFrame != 0 || cfg.TestCheckedGroundRequestProbeAllFrames) {
 		return fmt.Errorf("checked combat execution contract requires exclusive captured local synchronous learned fixture")

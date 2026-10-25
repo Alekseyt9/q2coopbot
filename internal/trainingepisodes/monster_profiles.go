@@ -171,7 +171,16 @@ func checkProfileStart(v Instance, world *quake.MapInfo) string {
 		}
 		for j := 0; j < i; j++ {
 			a, b := profileBounds(points[j], profiles[j])
+			if j == 0 {
+				// Native test_teleport raises the player by ten units before
+				// KillBox and settling. Reserve that whole preparation hull,
+				// including against other actors, not just against static BSP.
+				b[2] += 10
+			}
 			if boundsOverlap(lo, hi, a, b, 8) {
+				if j == 0 {
+					return "profile_player_teleport_overlap"
+				}
 				return "profile_actor_overlap"
 			}
 		}
