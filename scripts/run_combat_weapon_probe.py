@@ -108,7 +108,7 @@ def main():
             cuda_receipt_sha256=sha(out/'cuda-batch/report.json'), diagnostic_only=True, training_performed=False,
             promotion=False, scope='Technical collection only; causal admission and outcomes are separate.'))
         stage('pair-acceptance')
-        run('pair-acceptance', [sys.executable, repo/'scripts/audit_combat_weapon_probe.py', '--probe', out, '--out', out/'acceptance'])
+        run('pair-acceptance', [sys.executable, repo/'scripts/audit_combat_weapon_probe_v2.py', '--probe', out, '--out', out/'acceptance'])
         stage('complete'); print(out/'acceptance/report.json')
     except BaseException as error:
         stage('failed', error=str(error), exception=type(error).__name__); raise

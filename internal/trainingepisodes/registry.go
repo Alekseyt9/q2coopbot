@@ -221,7 +221,7 @@ func (e Episode) validate() error {
 			return fmt.Errorf("unsupported reward recipe")
 		}
 		switch e.Recipe.Loadout {
-		case "blaster", "machinegun":
+		case "blaster", "machinegun", "shotgun":
 		case "weapons", "weapons-scarce", "weapons-ssg", "weapons-grenades-recovery":
 		default:
 			return fmt.Errorf("unsupported loadout")

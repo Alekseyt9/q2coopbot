@@ -204,7 +204,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		}
 	}
 	if cfg.CombatMode != "rules" {
-		if !naturalCombat && (cfg.Host != "127.0.0.1" || !cfg.FramePaced || !cfg.CombatCapture || cfg.CombatProviderFile == "" || cfg.TestTeleport == "" || cfg.Idle || cfg.TestScenario != "" || cfg.TestSession != "" || cfg.TestWalkTarget != "" || cfg.TestLineCross || cfg.TestCombatBarrier && !cfg.TestSynchronous || cfg.TestHoldPosition || cfg.TestHoldPositionMap != "" || cfg.TestWeaponSwitchFixture != "" && cfg.TestWeaponSwitchFixture != "parasite_blaster" && !cfg.TestHitscanGuardProbe && !(cfg.TestSynchronous && (cfg.TestWeaponSwitchFixture == "parasite_machinegun" || multiWeaponFixture(cfg.TestWeaponSwitchFixture)))) {
+		if !naturalCombat && (cfg.Host != "127.0.0.1" || !cfg.FramePaced || !cfg.CombatCapture || cfg.CombatProviderFile == "" || cfg.TestTeleport == "" || cfg.Idle || cfg.TestScenario != "" || cfg.TestSession != "" || cfg.TestWalkTarget != "" || cfg.TestLineCross || cfg.TestCombatBarrier && !cfg.TestSynchronous || cfg.TestHoldPosition || cfg.TestHoldPositionMap != "" || cfg.TestWeaponSwitchFixture != "" && cfg.TestWeaponSwitchFixture != "parasite_blaster" && !cfg.TestHitscanGuardProbe && !(cfg.TestSynchronous && (cfg.TestWeaponSwitchFixture == "parasite_machinegun" || cfg.TestWeaponSwitchFixture == "parasite_shotgun" || multiWeaponFixture(cfg.TestWeaponSwitchFixture)))) {
 			return fmt.Errorf("direct/shadow combat pilot requires isolated loopback placement, frame pacing, capture, probe and a supported fixed weapon without scripted command overrides")
 		}
 		var err error
@@ -286,8 +286,8 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	if cfg.TestSynchronous && (cfg.Host != "127.0.0.1" || !cfg.CombatCapture || !cfg.FramePaced || !cfg.TestCombatBarrier || cfg.TestWeaponSwitchFixture != "parasite_blaster" && cfg.TestWeaponSwitchFixture != "parasite_shotgun" && cfg.TestWeaponSwitchFixture != "parasite_machinegun" && !multiWeaponFixture(cfg.TestWeaponSwitchFixture)) {
 		return fmt.Errorf("synchronous learning fixture requires loopback, capture, frame pacing, barrier and supported equipment")
 	}
-	if cfg.TestWeaponSwitchFixture == "parasite_shotgun" && (!cfg.TestSynchronous || cfg.CombatMode != "rules") {
-		return fmt.Errorf("fixed Shotgun teacher requires synchronous rules capture")
+	if cfg.TestWeaponSwitchFixture == "parasite_shotgun" && !cfg.TestSynchronous {
+		return fmt.Errorf("fixed Shotgun fixture requires synchronous capture")
 	}
 	if cfg.TestTeacherVertical && (!cfg.TestSynchronous || cfg.CombatMode != "rules" || cfg.TestWeaponSwitchFixture != "parasite_shotgun") {
 		return fmt.Errorf("vertical teacher requires synchronous fixed Shotgun rules capture")

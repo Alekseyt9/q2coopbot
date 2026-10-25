@@ -10,6 +10,8 @@ FEATURE_VERSION = 'combat_features_v7'
 WIDTH = 854
 FEATURE_WIDTHS = {FEATURE_VERSION: WIDTH, 'combat_features_v8': 881, 'combat_features_v9': 1121, 'combat_features_v10': 1147, 'combat_features_v11': BODY_FEATURE_WIDTH, 'combat_features_v11_body_ablated': BODY_FEATURE_WIDTH}
 FEATURE_WIDTHS.update({version: PROJECTILE_FEATURE_WIDTH for version in PROJECTILE_VERSIONS})
+from combat_memory_route_features import VERSION as ROUTE_VERSION, WIDTH as ROUTE_WIDTH
+FEATURE_WIDTHS[ROUTE_VERSION] = ROUTE_WIDTH
 OUTPUTS = 45
 
 def validate_model(model):

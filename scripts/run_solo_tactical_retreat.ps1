@@ -38,7 +38,7 @@ if($RequireMixedDetour -and (!$ParasiteMixed -or $ParasiteMixedClass -ne 'monste
 if($Synchronous -and (!$Rules -or !$CombatCapture -or !$ParasiteWeapon -or $ParasiteLoadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery')){throw 'Unsupported synchronous equipment'}
 if($ParasiteLoadout -in 'weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery' -and (!$Synchronous -or $CombatMode -notin 'learned','rules' -or $TrainingMonsterHealth)){throw 'Weapon-choice fixture requires synchronous rules or direct learned control'}
 if($ParasiteLoadout -eq 'machinegun' -and ((!$Synchronous -and !$GuardTeammatePosition) -or $TrainingMonsterHealth)){throw 'Fixed Machinegun requires synchronous capture or the explicit real-time guard probe without health override'}
-if($ParasiteLoadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){throw 'Fixed Shotgun exercise requires synchronous rules'}
+if($ParasiteLoadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -notin 'rules','learned' -or $TrainingMonsterHealth)){throw 'Fixed Shotgun requires synchronous rules or direct learned capture without health override'}
 if($ParasiteFixture -ne 'standard' -and (!$Synchronous -or !$ParasiteWeapon -or $ParasiteMixed -or $ParasiteHealthKit -or $ParasiteHealth -ne 100 -or $TrainingMonsterHealth -or $ParasiteLoadout -ne 'blaster' -or $CombatMode -ne 'learned')){throw 'Remaining-Parasite fixture requires stock isolated direct synchronous Blaster'}
 if(!$Worker){
     . "$PSScriptRoot/harness_manifest.ps1"
@@ -217,6 +217,15 @@ try{
     }
     $report.barrel_safety=Measure-BarrelSafety $rows $events
     if($report.barrel_safety.suppressed_attack_violations){throw 'Barrel guard retained attack'}
+    if($generated -and $Synchronous){
+        # A generated fight is a measurement, including losses and non-Parasite
+        # compositions. Native reset/dispatch/goal proofs are checked by the
+        # batch exporter; historical teacher success assertions stay below.
+        if(!$rows.Count -or @($rows|Where-Object {!$_.combat_policy}).Count){throw 'Generated combat trace missing policy records'}
+        $report.accepted=$true;$report.reason='generated_native_capture'
+        $report.scope='Generated synchronous combat capture; controller owns its actions after release; outcomes do not gate data admission'
+        return
+    }
     $report.campaign_engagement=@{
         engage_frames=@($rows|Where-Object {$_.arbitration.combat_intent.action -eq 'engage'}).Count
         pending_hold_frames=@($rows|Where-Object {$_.arbitration.move_limit_reason -eq 'campaign_combat_hold'}).Count
@@ -312,7 +321,7 @@ try{
         $report.weapon_selection.selected_weapon_kills=@($selectedDamage|Where-Object killed).Count
         if($ParasiteLoadout -ne 'scarce' -and ($report.weapon_selection.selected_weapon_health_damage -le 0 -or $report.weapon_selection.selected_weapon_kills -ne 1)){throw 'Native selected-weapon damage and kill absent'}
     }
-    if($ParasiteWeapon -and $ParasiteLoadout -eq 'shotgun'){
+    if($ParasiteWeapon -and $ParasiteLoadout -eq 'shotgun' -and $CombatMode -eq 'rules'){
         $fire=@($rows|Where-Object {$_.weapon -like '*/v_shotg/*' -and $_.arbitration.aim_source -eq 'enemy' -and ($_.sent_command.Buttons -band 1)})
         $hits=@($events|Where-Object {$_.attacker -eq $rows[0].self_entity -and $_.inflictor -eq $_.attacker -and $_.target_class -eq 'monster_parasite' -and $_.mod -eq 2 -and $_.live_health_damage -gt 0})
         $report.teacher_exercise=@{weapon='Shotgun';fixed_weapon=$true;aim_fire_commands=$fire.Count;native_health_damage=[int](($hits|Measure-Object live_health_damage -Sum).Sum);scope='Test-only fixed equipment, rules aim/fire; no learned weapon choice or general combat acceptance'}
@@ -449,8 +458,9 @@ try{
     }
     if($Circle -and $report.circle_health_damage -le 0){throw 'Native damage from circle projectiles absent'}
     if($Cover -and $report.cover_window_health_damage -le 0){throw 'Native monster damage in cover firing window absent'};if($ParasiteWeapon){$report.scope="Prepared native Parasite and loaded Shotgun, automatic ranged-weapon selection from observed inventory, actual retreat/fire and native kill; no general group or campaign acceptance"}elseif($CornerEscape){$report.scope="Prepared native Parasite, skill $RecoverySkill at the recorded fatal corner, 65HP as after the used kit; Go bounded escape with actual movement/fire and native kill, no full recovery or general campaign acceptance"}elseif($Recovery){$report.scope="Prepared ${initialHealth}HP solo actor, skill $RecoverySkill vulnerable Parasite and native 25HP kit; Go recovery movement with attributed fire, item heal and resumed combat; no remembered hidden-item or general campaign acceptance"}elseif($GroupRetreat){$report.scope='Prepared two vulnerable infantry: close primary and rear flank, live retreat, actual spacing and attributed bolt damage; no mixed group or general campaign acceptance'}elseif(!$Cover -and !$Circle){$report.scope='Prepared single vulnerable native parasite, ordinary solo campaign commands; model-selected retreat plus shooting and observed movement, not general campaign acceptance'};$report.accepted=$true;$report.reason='accepted'
-    if($ParasiteWeapon -and $ParasiteLoadout -eq 'shotgun'){$report.scope='Prepared fixed Shotgun teacher exercise; observed rules aim/fire and native hitscan damage, no learned policy or weapon-choice acceptance'}
+    if($ParasiteWeapon -and $ParasiteLoadout -eq 'shotgun' -and $CombatMode -eq 'rules'){$report.scope='Prepared fixed Shotgun teacher exercise; observed rules aim/fire and native hitscan damage, no learned policy or weapon-choice acceptance'}
     if($ParasiteWeapon -and $ParasiteLoadout -eq 'machinegun'){$report.scope='Prepared fixed Machinegun with 100 bullets, stock recoil/spread and native ammo depletion; selected controller movement/aim/fire, no weapon-choice acceptance'}
+    if($ParasiteWeapon -and $ParasiteLoadout -eq 'shotgun' -and $CombatMode -eq 'learned'){$report.scope='Prepared starting-ready Shotgun; direct learned actions and native capture; weapon choice and combat quality unproven'}
     if($ParasiteWeapon -and $ParasiteLoadout -in 'weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery'){$report.scope='Prepared MG/Shotgun/Blaster inventory with declared ammo; synchronous learned control and native command proof, weapon-choice quality unproven'}
 }catch{
     $report.reason=$_.Exception.Message

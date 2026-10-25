@@ -470,6 +470,9 @@ func run() error {
 				return e
 			}
 			weapon := "Blaster"
+			if manifest.Loadout == "shotgun" {
+				weapon = "Shotgun"
+			}
 			if manifest.Loadout == "machinegun" || manifest.Loadout == "weapons" || manifest.Loadout == "weapons-scarce" {
 				weapon = "Machinegun"
 			}
@@ -486,6 +489,9 @@ func run() error {
 			}
 			if manifest.ReleaseFrame > 0 {
 				idleFrame := 9
+				if weapon == "Shotgun" {
+					idleFrame = 19
+				}
 				if weapon == "Machinegun" {
 					idleFrame = 6
 				}

@@ -53,6 +53,9 @@ def finalize(model_path, data, out):
                     str(pathlib.Path(__file__).with_name('combat_sequence_storage.py').resolve()):
                         sha(pathlib.Path(__file__).with_name('combat_sequence_storage.py'))})
     weapon_helpers=[pathlib.Path(__file__).with_name(name).resolve() for name in ('combat_body_features.py','combat_projectile_type_features.py')]
+    if model.get('memory_route_movement'):
+        weapon_helpers.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
+                              ('combat_memory_route_features.py','combat_memory_route_movement.py'))
     if joint is not None:
         if model.get('diagnostic_weapon_probe'):
             weapon_helpers.append(pathlib.Path(__file__).with_name('combat_weapon_probe.py').resolve())
@@ -231,6 +234,10 @@ def finalize(model_path, data, out):
     helper_paths=[pathlib.Path(__file__).resolve(), pathlib.Path(__file__).with_name('combat_cuda_bootstrap.py').resolve(),
                   pathlib.Path(__file__).with_name('combat_sequence_storage.py').resolve()]
     helper_paths.extend(weapon_helpers)
+    if model.get('memory_route_movement'):
+        helper_paths.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
+                            ('combat_memory_route_features.py','combat_memory_route_movement.py',
+                             'combat_body_features.py','combat_target_head.py','combat_spatial_aim.py'))
     if model.get('shared_target'):
         helper_paths.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
                             ('combat_shared_target.py','combat_spatial_aim.py'))
@@ -274,6 +281,8 @@ def finalize(model_path, data, out):
                      shared_candidate_frames=len(records),shared_candidate_precision='float64' if joint.geometry_head else 'float32',ordinary_training_eligible=False)
     if model.get('memory_recovery'):
         audit.update(memory_recovery_version=model['memory_recovery']['version'],memory_recovery_training_supported=False,ordinary_training_eligible=False)
+    if model.get('memory_route_movement'):
+        audit.update(memory_route_movement_version=model['memory_route_movement']['version'],memory_route_training_supported=False,ordinary_training_eligible=False)
     if model.get('target_sampling'):
         audit.update(target_sampling_version=model['target_sampling']['version'],target_temperature=model['target_sampling']['temperature'],target_sampling_training_supported=False,ordinary_training_eligible=False)
     if model.get('movement_inertia'):
@@ -304,6 +313,8 @@ def finalize(model_path, data, out):
         meta.update(shared_scorer_training_supported=False,ppo_training_ready=False)
     if model.get('memory_recovery'):
         meta.update(memory_recovery_version=model['memory_recovery']['version'],memory_recovery_training_supported=False,ppo_training_ready=False)
+    if model.get('memory_route_movement'):
+        meta.update(memory_route_movement_version=model['memory_route_movement']['version'],memory_route_training_supported=False,ordinary_training_eligible=False,ppo_training_ready=False)
     if model.get('target_sampling'):
         meta.update(target_sampling_version=model['target_sampling']['version'],target_temperature=model['target_sampling']['temperature'],target_sampling_training_supported=False,ppo_training_ready=False,ordinary_training_eligible=False)
     if model.get('movement_inertia'):
@@ -314,6 +325,8 @@ def finalize(model_path, data, out):
     if model.get('diagnostic_weapon_probe'):
         meta.update(version='combat_diagnostic_weapon_probe_rollout_v1',diagnostic_only=True,ppo_training_ready=False,
                     ordinary_training_eligible=False,diagnostic_weapon_version=model['diagnostic_weapon_probe']['version'])
+    if meta.get('diagnostic_only'):
+        meta['ordinary_training_eligible'] = False
     if paired:
         meta['paired_training_ready'] = True
         meta['paired_training_scope'] = 'Experimental verified primary learner pilot; scripted peer excluded. Registry-wide eligibility unproven.'

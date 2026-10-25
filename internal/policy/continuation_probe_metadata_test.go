@@ -109,6 +109,24 @@ func TestDiagnosticContinuationPRNG(t *testing.T) {
 	}
 }
 
+func TestDiagnosticContinuationNeutralV12Admission(t *testing.T) {
+	f := continuationMetadata()
+	f.Features = ProjectileTypeNeutralFeatureVersion
+	if err := validateDiagnosticContinuation(f); err != nil {
+		t.Fatal(err)
+	}
+	f.DiagnosticMovementProbe = nil
+	if err := validateDiagnosticContinuation(f); err != nil {
+		t.Fatal("fork-only reference rejected", err)
+	}
+	for _, version := range []string{ProjectileTypeFeatureVersion, ProjectileTypeAblatedFeatureVersion, "unknown"} {
+		f.Features = version
+		if validateDiagnosticContinuation(f) == nil {
+			t.Fatal("unverified feature variant admitted", version)
+		}
+	}
+}
+
 func TestDiagnosticContinuationReceipt(t *testing.T) {
 	p := PPO{file: continuationMetadata()}
 	o := Observation{Identity: Identity{Life: 1, Frame: 110}}

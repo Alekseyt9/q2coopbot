@@ -157,6 +157,7 @@ def main():
     torch.backends.cudnn.allow_tf32=False;torch.backends.cuda.matmul.allow_tf32=False
     torch.backends.cuda.enable_flash_sdp(False);torch.backends.cuda.enable_mem_efficient_sdp(False);torch.backends.cuda.enable_math_sdp(True)
     model=read(args.model);assert model['kind']=='combat_ppo_v1' and not model['deterministic']
+    assert not model.get('memory_route_movement'),'Memory route movement requires its dedicated PPO optimizer/checkpoint scope'
     assert not model.get('memory_recovery'),'Memory recovery needs explicit PPO checkpoint/optimizer/retention migration before ordinary training'
     assert not model.get('target_sampling'),'Target calibration requires explicit checkpoint and optimizer migration before training'
     assert not model.get('movement_inertia'),'Movement inertia requires explicit PPO initializer/checkpoint/optimizer/retention migration'

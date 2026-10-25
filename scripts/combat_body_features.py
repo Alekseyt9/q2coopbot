@@ -1,9 +1,10 @@
 """Versioned appended client-body channels; legacy helpers use only the v10 prefix."""
 from combat_projectile_type_features import VERSIONS as PROJECTILE_VERSIONS, WIDTH as PROJECTILE_WIDTH
+from combat_memory_route_features import VERSION as ROUTE_VERSION, WIDTH as ROUTE_WIDTH
 LEGACY_VERSION = 'combat_features_v10'
 VERSION = 'combat_features_v11'
 ABLATED_VERSION = 'combat_features_v11_body_ablated'
-VERSIONS = (LEGACY_VERSION, VERSION, ABLATED_VERSION, *PROJECTILE_VERSIONS)
+VERSIONS = (LEGACY_VERSION, VERSION, ABLATED_VERSION, *PROJECTILE_VERSIONS, ROUTE_VERSION)
 LEGACY_WIDTH = 1147
 TAIL_WIDTH = 322
 WIDTH = LEGACY_WIDTH + TAIL_WIDTH
@@ -11,7 +12,7 @@ SCOPE = 'combat_body_input_ppo_v1'
 
 
 def legacy(features):
-    assert features.is_cuda and features.shape[-1] in (LEGACY_WIDTH, WIDTH, PROJECTILE_WIDTH), 'Invalid equipped/body feature schema'
+    assert features.is_cuda and features.shape[-1] in (LEGACY_WIDTH, WIDTH, PROJECTILE_WIDTH, ROUTE_WIDTH), 'Invalid equipped/body feature schema'
     return features[..., :LEGACY_WIDTH]
 
 

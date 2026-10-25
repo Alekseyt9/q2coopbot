@@ -44,6 +44,7 @@ type Enemy struct {
 // Tracks describe uninterrupted visible observations, not server generations.
 // Client/BSP-derived features are separate from offline server reward telemetry.
 type Observation struct {
+	MemoryRoutes                   *MemoryRouteObservation `json:"remembered_static_routes,omitempty"`
 	DynamicBodies                  *DynamicBodyObservation `json:"observed_dynamic_bodies,omitempty"`
 	PreviousWeaponRequest          *string                 `json:"previous_weapon_request,omitempty"`
 	PreviousWeaponRequestAgeFrames *int                    `json:"previous_weapon_request_age_frames,omitempty"`

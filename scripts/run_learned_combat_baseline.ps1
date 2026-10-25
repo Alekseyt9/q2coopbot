@@ -50,11 +50,11 @@ if([long]$Seed+$Workers*$EpisodesPerWorker-1+$PolicySamplingSeedOffset -gt 21474
 if($Synchronous -and $Loadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery'){throw 'Unsupported synchronous loadout'}
 if($Loadout -in 'weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery' -and (!$Synchronous -or $CombatMode -notin 'learned','rules' -or $Feedback -or $TrainingMonsterHealth)){throw 'Weapon-choice fixture requires synchronous rules or direct learned control without overrides'}
 if($Loadout -eq 'machinegun' -and (!$Synchronous -or $Feedback -or $TrainingMonsterHealth)){throw 'Machinegun requires synchronous capture without health/feedback overrides'}
-if($Loadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -ne 'rules')){throw 'Shotgun exercise requires synchronous rules'}
+if($Loadout -eq 'shotgun' -and (!$Synchronous -or $CombatMode -notin 'rules','learned' -or $Feedback -or $TrainingMonsterHealth)){throw 'Shotgun requires synchronous rules or direct learned capture without health/feedback overrides'}
 if($TeacherVertical -and (!$Synchronous -or $CombatMode -ne 'rules' -or $Loadout -ne 'shotgun' -or $Feedback)){throw 'Vertical exercise requires synchronous fixed Shotgun rules without feedback'}
 if($RewardConfig -and !$Synchronous){throw 'Reward export requires -Synchronous'}
 if($TrainingMonsterHealth -and (!$Synchronous -or $Loadout -ne 'blaster' -or $Mixed -or $HealthKit -or $Feedback)){throw 'Curriculum requires isolated synchronous Blaster fixture'}
-if($ReleaseGameFrame -and (!$Synchronous -or $Loadout -notin 'blaster','machinegun','weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery' -or $HealthKit -or $GameFrames -lt 150)){throw 'Fixed release requires a supported synchronous fixture without health kit and >=150 game frames'}
+if($ReleaseGameFrame -and (!$Synchronous -or $Loadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery' -or $HealthKit -or $GameFrames -lt 150)){throw 'Fixed release requires a supported synchronous fixture without health kit and >=150 game frames'}
 if($EpisodePattern -ne 'uniform' -and (!$Mixed -or $EpisodesPerWorker -ne 3 -or !$Synchronous -or $Loadout -notin 'blaster','machinegun','weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery' -or $CombatMode -ne 'learned' -or $Feedback -or $HealthKit -or $TrainingMonsterHealth)){throw 'Unsupported Mixed/Solo pattern'}
 if($SoloFixture -ne 'standard' -and (!$Synchronous -or $Loadout -ne 'blaster' -or $CombatMode -ne 'learned' -or $Feedback -or $HealthKit -or $TrainingMonsterHealth -or ($Mixed -and $EpisodePattern -eq 'uniform'))){throw 'Remaining-Parasite fixture requires isolated direct synchronous Blaster Solo episodes without health overrides'}
 if($StopOnGoal -and (!$Synchronous -or $Feedback)){throw 'Goal stop requires synchronous capture without a live feedback relay'}
@@ -76,7 +76,7 @@ if(!$OutputRoot){$OutputRoot=Join-Path $repo ('workspace/artifacts/learned-comba
 if(Test-Path -LiteralPath $OutputRoot){throw 'Fresh output directory required'}
 New-Item -ItemType Directory -Path $OutputRoot | Out-Null
 $OutputRoot=(Resolve-Path -LiteralPath $OutputRoot).Path
-if($CombatMode -ne 'rules' -and $Loadout -notin 'blaster','machinegun','weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery'){throw 'Unsupported direct/shadow loadout'}
+if($CombatMode -ne 'rules' -and $Loadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery'){throw 'Unsupported direct/shadow loadout'}
 if($CombatMode -ne 'rules' -and !$ProviderFile){$ProviderFile=Join-Path $PSScriptRoot 'scenarios/combat-control-probe.json'}
 if($ProviderFile){$ProviderFile=(Resolve-Path -LiteralPath $ProviderFile).Path}
 $remoteProvider=$false
@@ -282,7 +282,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 if($using:ReleaseGameFrame){
                     $skillProof=@($rngLog|Select-String '^g_test_skill_start game_frame=(\d+) skill=(\d+)$')
                     if($skillProof.Count -ne 1 -or [int]$skillProof[0].Matches[0].Groups[1].Value -ne $using:ReleaseGameFrame -or [int]$skillProof[0].Matches[0].Groups[2].Value -ne $using:Skill){throw 'Native skill not confirmed at release'}
-                    $expectedWeaponPhase=if($using:Loadout -eq 'weapons-grenades-recovery'){'Grenades gunframe_before=\d+ gunframe_after=16'}elseif($using:Loadout -eq 'weapons-ssg'){'Super Shotgun gunframe_before=\d+ gunframe_after=18'}elseif($using:Loadout -in 'machinegun','weapons','weapons-scarce'){'Machinegun gunframe_before=\d+ gunframe_after=6'}else{'Blaster gunframe_before=\d+ gunframe_after=9'}
+                    $expectedWeaponPhase=if($using:Loadout -eq 'shotgun'){'Shotgun gunframe_before=\d+ gunframe_after=19'}elseif($using:Loadout -eq 'weapons-grenades-recovery'){'Grenades gunframe_before=\d+ gunframe_after=16'}elseif($using:Loadout -eq 'weapons-ssg'){'Super Shotgun gunframe_before=\d+ gunframe_after=18'}elseif($using:Loadout -in 'machinegun','weapons','weapons-scarce'){'Machinegun gunframe_before=\d+ gunframe_after=6'}else{'Blaster gunframe_before=\d+ gunframe_after=9'}
                     $weapon=@($rngLog|Select-String ("^g_test_weapon_start game_frame=(\d+) actor=1 weapon="+$expectedWeaponPhase+'$'))
                     if($weapon.Count -ne 1 -or [int]$weapon[0].Matches[0].Groups[1].Value -ne $using:ReleaseGameFrame){throw 'Fixed weapon phase differs'}
                     $world=@($rngLog|Select-String '^g_test_world_start frame=(\d+) phase=fixed_map_hold free_pool_reset=1$')

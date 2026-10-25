@@ -11,7 +11,7 @@ def validate(model):
     assert set(p)=={'version','fork_frame','seed'} and p['version']==VERSION
     assert type(p['fork_frame']) is int and 1<p['fork_frame']<=2**31-1
     assert type(p['seed']) is int and 0<=p['seed']<=2**31-1
-    assert model['feature_version']=='combat_features_v10' and model['action_distribution']=='combat_joint_aim_candidates_v1'
+    assert model['feature_version'] in ('combat_features_v10','combat_features_v12_projectile_types_neutral') and model['action_distribution']=='combat_joint_aim_candidates_v1'
     assert model.get('aim_candidate_head') and not model.get('deterministic')
     assert not any(model.get(k) for k in ('diagnostic_joint_aim_probe','execution_mode','geometry_aim_ranker','geometry_aim_exploration'))
     m=model.get('diagnostic_movement_probe')

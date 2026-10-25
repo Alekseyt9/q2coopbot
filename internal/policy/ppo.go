@@ -37,6 +37,7 @@ type PPOFile struct {
 	MotorResidual           *SpatialAimFile              `json:"motor_residual,omitempty"`
 	ConditionalFire         *SpatialAimFile              `json:"conditional_fire,omitempty"`
 	MemoryRecovery          *SpatialAimFile              `json:"memory_recovery,omitempty"`
+	MemoryRouteMovement     *SpatialAimFile              `json:"memory_route_movement,omitempty"`
 	TargetSampling          *TargetSamplingFile          `json:"target_sampling,omitempty"`
 	MovementInertia         *MovementInertiaFile         `json:"movement_inertia,omitempty"`
 	ExecutionMode           string                       `json:"execution_mode,omitempty"`
@@ -171,6 +172,9 @@ func LoadPPO(path string) (*PPO, error) {
 	if e = validateMemoryRecovery(f); e != nil {
 		return nil, e
 	}
+	if e = validateMemoryRouteMovement(f); e != nil {
+		return nil, e
+	}
 	if e = validateTargetSampling(f); e != nil {
 		return nil, e
 	}
@@ -206,6 +210,7 @@ func LoadPPO(path string) (*PPO, error) {
 }
 func (p *PPO) Version() string        { return p.version }
 func (p *PPO) FeatureVersion() string { return p.file.Features }
+func (p *PPO) UsesMemoryRoutes() bool { return p.file.Features == MemoryRouteFeatureVersion }
 func (p *PPO) UsesThreatMemory() bool {
 	return p.file.Features == ThreatFeatureVersion || equippedPrefixFeatures(p.file.Features)
 }
@@ -292,6 +297,10 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 		return Action{}, 0, 0, e
 	}
 	x, e = p.memoryRecoveryRaw(o, x)
+	if e != nil {
+		return Action{}, 0, 0, e
+	}
+	x, e = p.memoryRouteMovementRaw(o, x)
 	if e != nil {
 		return Action{}, 0, 0, e
 	}
@@ -425,6 +434,10 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		return Action{}, e
 	}
 	x, e = p.memoryRecoveryRaw(o, x)
+	if e != nil {
+		return Action{}, e
+	}
+	x, e = p.memoryRouteMovementRaw(o, x)
 	if e != nil {
 		return Action{}, e
 	}

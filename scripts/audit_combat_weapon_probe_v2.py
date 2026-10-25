@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 from combat_equipped_weapon_features import equipped_weapon_index
+from combat_native_shot_timing import physical_shots
 from evaluate_registered_combat_models import read, save, sha
 from audit_combat_joint_aim_grid import physical_equal_with_entity_bijection
 
@@ -98,21 +99,7 @@ def main():
                 # SG generic idle frames19..36, firing can still occupy19.
                 observed_ready = next((o['identity']['frame'] for j, o in enumerate(observed) if 20 <= o['gun_frame'] <= 36 or (j > 0 and o['gun_frame'] == 19 and observed[j-1]['gun_frame'] <= 7 and observed[j-1]['identity']['frame']+1 == o['identity']['frame'])), None)
             goal = d['result']['goal_stop']; end = goal['kill_frame'] if goal else d['result']['first_life']['end_frame']
-            wanted_mod = 2 if v['label'] == 'shotgun' else 1
-            shots = []
-            for event in re.finditer(r'g_test_(?:hitscan|projectile) version=1 event=(?:fire|spawn) ([^\r\n]+)', log):
-                f = dict(word.split('=', 1) for word in event.group(1).split())
-                if int(f.get('actor', f.get('attacker', '-1'))) != at['observation']['identity']['actor']:
-                    continue
-                if int(f['mod']) == wanted_mod and frame <= int(f['frame']) <= end:
-                    shots.append(int(f['frame']))
-            if v['label'] == 'shotgun':
-                # Native hitscan telemetry currently logs Machinegun only.
-                # Consecutive SG observations with a shell decrease witness a
-                # physical shot; do not confuse attack commands with firing.
-                for before, after in zip(observed, observed[1:]):
-                    if after['identity']['frame'] == before['identity']['frame']+1 and after['ammo'] < before['ammo'] and after['gun_frame'] == 9:
-                        shots.append(after['identity']['frame'])
+            shots = physical_shots(d['all_steps'], log, frame, end)
             rules_before_end = sum(s['owner'] == 'rules' and frame <= s['observation']['identity']['frame'] < end
                                    and s['observation']['health'] > 0 for s in d['all_steps'])
             admitted = exact_controls and prefix and same_state and selected_hash and cold_exact and unchanged_draws and rules_before_end == 0
@@ -121,17 +108,17 @@ def main():
                 admitted=bool(admitted), exact_controls=exact_controls, prefix_exact=prefix, root_state_exact=same_state,
                 selected_feature_hash_exact=selected_hash, cold_repeat_exact=cold_exact, draws_exact=unchanged_draws,
                 native_request_frame=native_request, observed_equipped_frame=equipped,
-                first_physical_shot_frame=min(shots) if shots else None,
-                first_shot_evidence='native_fire_event' if shots and v['label'] != 'shotgun' else 'observed_shell_consumption' if shots else None,
+                first_physical_shot=shots[0] if shots else None,
                 conservative_observed_ready_frame=observed_ready,
                 previous_weapon_request=at['observation'].get('previous_weapon_request'),
                 rules_commands_before_end=rules_before_end, **d['metrics']))
     a.out.mkdir(parents=True)
-    report = dict(state='complete', version='combat_weapon_choice_native_acceptance_v2', results=outcomes,
+    report = dict(state='complete', version='combat_weapon_choice_native_acceptance_v3_server_clock', results=outcomes,
         admitted=sum(r['admitted'] for r in outcomes), excluded=sum(not r['admitted'] for r in outcomes),
         training_performed=False, promotion=False, neural_execution=False,
         scope='Fixed TRAIN-root causal diagnostics only; excluded comparisons cannot support labels or weapon-effect claims.')
-    report.update(original_audit_sha256=sha(Path(__file__).with_name('audit_combat_weapon_probe.py')), original_acceptance_sha256=sha(root/'acceptance/report.json'), revision_reason='Normalize equipped weapon model paths; decoder PlayerNumber already uses native edict index; SG physical shots witnessed by consecutive shell consumption and gunframe9. No new games or model changes.')
+    previous = root/'acceptance/report.json'
+    report.update(original_audit_sha256=sha(Path(__file__).with_name('audit_combat_weapon_probe.py')), original_acceptance_sha256=sha(previous) if previous.exists() and previous.resolve() != (a.out/'report.json').resolve() else None, revision_reason='Normalize equipped weapon model paths; decoder PlayerNumber already uses native edict index; SG physical shots witnessed by consecutive shell consumption and gunframe9. Physical-shot timestamps now use explicit native command server frames; game frames and observation-after frames are separate. No new games or model changes.')
     save(a.out/'report.json', report); save(a.out/'complete.json', dict(state='complete', report_sha256=sha(a.out/'report.json')))
     print(dict(admitted=report['admitted'], excluded=report['excluded']))
 

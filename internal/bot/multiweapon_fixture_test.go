@@ -74,7 +74,7 @@ func TestShotgunDirectOwnershipRequiresSupportedFixture(t *testing.T) {
 	if direct || sel.Fallback != "pilot_equip_not_ready" {
 		t.Fatal("Shotgun escaped isolated fixture")
 	}
-	for _, fixture := range []string{"parasite_blaster", "parasite_machinegun", "parasite_weapons", "parasite_weapons-scarce"} {
+	for _, fixture := range []string{"parasite_blaster", "parasite_machinegun", "parasite_shotgun", "parasite_weapons", "parasite_weapons-scarce"} {
 		c.testWeaponSwitchFixture = fixture
 		_, _, sel, direct = c.combatCommand(c.combatObservation(time.Now()), time.Now())
 		if !direct || sel.Owner != "provider" || sel.Fallback != "" {

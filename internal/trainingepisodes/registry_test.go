@@ -56,6 +56,20 @@ func TestRegistryNonterminalHandoffRecipe(t *testing.T) {
 	}
 }
 
+func TestRegistryStartingShotgunRecipe(t *testing.T) {
+	d, ep := fixture(t)
+	ep.Recipe.Loadout = "shotgun"
+	write(t, filepath.Join(d, "scene.json"), ep)
+	if _, err := Load(filepath.Join(d, "index.json")); err != nil {
+		t.Fatal(err)
+	}
+	ep.Recipe.Loadout = "arbitrary-weapon"
+	write(t, filepath.Join(d, "scene.json"), ep)
+	if _, err := Load(filepath.Join(d, "index.json")); err == nil {
+		t.Fatal("unknown loadout admitted")
+	}
+}
+
 func TestRegistryBlockedGroundObjectiveRecipes(t *testing.T) {
 	_, ep := fixture(t)
 	for _, path := range []string{"scripts/scenarios/combat-reward-blocked-ground-control-v14.json", "scripts/scenarios/combat-reward-blocked-ground-cost-v14.json"} {

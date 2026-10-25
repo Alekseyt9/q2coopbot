@@ -3,7 +3,15 @@ package bot
 import "q2coopbot/internal/quake"
 
 // This is test-only equipment readiness, not a policy observation or learned
-// weapon selection. The Shotgun exercise disables automatic weapon switching.
+// weapon selection. The historical Shotgun teacher keeps fixed equipment;
+// generated combat captures allow ordinary rules weapon choice after release.
+
+func (c *Client) shotgunFixtureAllowsRulesWeaponChoice() bool {
+	return c.testWeaponSwitchFixture != "parasite_shotgun" ||
+		c.testSynchronous && c.testCombatGo && c.planner.testCombatOnly &&
+			c.combatControl.mode == "rules" && !c.testTeacherVertical
+}
+
 func synchronousFixtureWeaponReady(fixture string, s quake.Snapshot) bool {
 	if !s.InventoryKnown || s.InventoryAgeFrames < 0 || s.InventoryAgeFrames > 2 {
 		return false

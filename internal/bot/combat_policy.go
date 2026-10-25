@@ -23,6 +23,7 @@ type combatControl struct {
 	engagement                         combatEngagement
 	history                            policy.History
 	threatMemory                       policy.ThreatMemory
+	memoryRoutes                       MemoryRouteObserver
 	mode                               string
 	provider                           policy.Provider
 	last                               policy.Identity
@@ -70,6 +71,9 @@ func (c *Client) combatObservation(now time.Time) policy.Observation {
 	o.Navigation = c.planner.combatNavigationContext()
 	b.history.Enrich(&o)
 	b.threatMemory.Enrich(&o, s.Defeated)
+	if p, ok := b.provider.(interface{ UsesMemoryRoutes() bool }); ok && p.UsesMemoryRoutes() {
+		b.memoryRoutes.Enrich(&o, c.planner.Nav, c.planner.World.Geometry)
+	}
 	if b.previousTarget != nil && policy.SameLife(b.previousTarget.Identity, id) && b.previousTarget.Identity.Frame+1 == id.Frame {
 		o.PreviousTarget = b.previousTarget
 	}
@@ -113,7 +117,7 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		sel.Fallback = fallback
 		return rules()
 	}
-	supportedFixture := c.testWeaponSwitchFixture == "parasite_blaster" || c.testWeaponSwitchFixture == "parasite_machinegun" || multiWeaponFixture(c.testWeaponSwitchFixture)
+	supportedFixture := c.testWeaponSwitchFixture == "parasite_blaster" || c.testWeaponSwitchFixture == "parasite_machinegun" || c.testWeaponSwitchFixture == "parasite_shotgun" || multiWeaponFixture(c.testWeaponSwitchFixture)
 	fixtureWeapon := (c.testSynchronous || c.testHitscanGuardProbe) && supportedFixture && directHitscanWeapon(o.Weapon)
 	weaponPolicy, choosesWeapons := b.provider.(interface{ WeaponHeadVersion() string })
 	// An equipped pickup must not prevent a weapon-enabled policy from

@@ -15,7 +15,7 @@ const BodyFeatureWidth = EquippedWeaponFeatureWidth + BodyFeatureTailWidth
 
 func equippedPrefixFeatures(version string) bool {
 	return version == EquippedWeaponFeatureVersion || version == BodyFeatureVersion || version == BodyAblatedFeatureVersion ||
-		version == ProjectileTypeFeatureVersion || version == ProjectileTypeNeutralFeatureVersion || version == ProjectileTypeAblatedFeatureVersion
+		version == ProjectileTypeFeatureVersion || version == ProjectileTypeNeutralFeatureVersion || version == ProjectileTypeAblatedFeatureVersion || version == MemoryRouteFeatureVersion
 }
 
 // The old v10 prefix is untouched. Neither entity IDs nor native labels enter

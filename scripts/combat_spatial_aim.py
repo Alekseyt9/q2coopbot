@@ -1,6 +1,7 @@
 """Shared learned spatial fine/mode residual, independent of base encoder."""
 from combat_body_features import VERSIONS as BODY_FEATURE_VERSIONS, WIDTH as BODY_FEATURE_WIDTH, legacy as body_legacy
 from combat_projectile_type_features import WIDTH as PROJECTILE_FEATURE_WIDTH
+from combat_memory_route_features import WIDTH as ROUTE_FEATURE_WIDTH
 import copy
 from train_combat_bc import torch,nn
 from ppo_combat import network,layers
@@ -22,7 +23,7 @@ def validate(model):
     assert width==(6 if spec['version']==COARSE_VERSION else 4)
 
 def inputs(features,raw):
-    assert features.shape[:-1]==raw.shape[:-1] and features.shape[-1] in (854,881,1121,1147,BODY_FEATURE_WIDTH,PROJECTILE_FEATURE_WIDTH) and raw.shape[-1]==81
+    assert features.shape[:-1]==raw.shape[:-1] and features.shape[-1] in (854,881,1121,1147,BODY_FEATURE_WIDTH,PROJECTILE_FEATURE_WIDTH,ROUTE_FEATURE_WIDTH) and raw.shape[-1]==81
     shape=features.shape[:-1];x=features[...,:854].reshape(-1,854);r=raw.reshape(-1,81);n=len(x)
     e=x[:,73:169].reshape(n,8,12);typed=x[:,466:786].reshape(n,8,40);bbox=x[:,426:466].reshape(n,8,5)
     common=torch.cat((x[:,:20],x[:,810:845],r[:,:2].tanh()),-1)[:,None,:].expand(-1,8,-1)
@@ -78,6 +79,8 @@ class SpatialActor(nn.Module):
         self.conditional_fire_branch=build_fire(model) if model is not None else None
         from combat_memory_recovery_runtime import build as build_recovery
         self.memory_recovery_branch=build_recovery(model) if model is not None else None
+        from combat_memory_route_movement import build as build_routes
+        self.memory_route_branch=build_routes(model) if model is not None else None
         self.movement_inertia=copy.deepcopy(model.get('movement_inertia')) if model is not None else None
         if self.movement_inertia is not None:
             from combat_action_inertia import validate as validate_inertia
@@ -109,6 +112,9 @@ class SpatialActor(nn.Module):
         if self.movement_inertia is not None:
             from combat_action_inertia import apply as apply_inertia
             result=apply_inertia(x,result,self.movement_inertia)
+        if self.memory_route_branch is not None:
+            from combat_memory_route_movement import apply as apply_routes
+            result=apply_routes(self.memory_route_branch,x,result)
         return (result,*output[1:]) if isinstance(output,tuple) else result
     def single(self,x):
         output=self(x[:,None,:]);raw=output[0] if isinstance(output,tuple) else output
@@ -117,6 +123,8 @@ class SpatialActor(nn.Module):
     def __iter__(self):return iter(self.base)
 
 def wrap(base,model):
+    from combat_memory_route_movement import validate as validate_routes
+    validate_routes(model)
     from combat_memory_recovery_runtime import validate as validate_recovery
     validate_recovery(model)
     from combat_conditional_fire import validate as validate_fire
@@ -143,4 +151,6 @@ def export(model,actor):
         export_fire(model,actor.conditional_fire_branch)
         from combat_memory_recovery_runtime import export as export_recovery
         export_recovery(model,actor.memory_recovery_branch)
+        from combat_memory_route_movement import export as export_routes
+        export_routes(model,actor.memory_route_branch)
         if actor.movement_inertia is not None:model['movement_inertia']=copy.deepcopy(actor.movement_inertia)

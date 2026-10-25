@@ -30,7 +30,7 @@ func validateDiagnosticContinuation(f PPOFile) error {
 		return nil
 	}
 	if p.Version != DiagnosticContinuationVersion || p.Frame <= 1 || p.Frame > math.MaxInt32 || p.Seed < 0 || p.Seed > math.MaxInt32 ||
-		f.Deterministic || f.Features != EquippedWeaponFeatureVersion || f.ActionDistribution != JointAimCandidateVersion || f.AimCandidateHead == nil ||
+		f.Deterministic || (f.Features != EquippedWeaponFeatureVersion && f.Features != ProjectileTypeNeutralFeatureVersion) || f.ActionDistribution != JointAimCandidateVersion || f.AimCandidateHead == nil ||
 		f.DiagnosticAimProbe != nil || f.ExecutionMode != "" || f.GeometryAimRanker != nil || f.GeometryAimExplore != nil {
 		return fmt.Errorf("invalid diagnostic continuation contract")
 	}
