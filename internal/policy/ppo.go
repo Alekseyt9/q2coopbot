@@ -34,6 +34,7 @@ type PPOFile struct {
 	WeaponStateResidual     *SpatialAimFile              `json:"weapon_state_residual,omitempty"`
 	WeaponExploration       *WeaponExplorationFile       `json:"weapon_exploration,omitempty"`
 	SampledMotionAim        *SpatialAimFile              `json:"sampled_motion_aim,omitempty"`
+	FineWeaponAim           *SpatialAimFile              `json:"fine_weapon_aim,omitempty"`
 	MotorResidual           *SpatialAimFile              `json:"motor_residual,omitempty"`
 	ConditionalFire         *SpatialAimFile              `json:"conditional_fire,omitempty"`
 	MemoryRecovery          *SpatialAimFile              `json:"memory_recovery,omitempty"`
@@ -161,6 +162,9 @@ func LoadPPO(path string) (*PPO, error) {
 		return nil, e
 	}
 	if e = validateSampledMotionAim(f); e != nil {
+		return nil, e
+	}
+	if e = validateFineWeaponAim(f); e != nil {
 		return nil, e
 	}
 	if e = validateMotorResidual(f); e != nil {

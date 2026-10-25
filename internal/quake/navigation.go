@@ -209,11 +209,19 @@ func (n *Navigator) ExactAreaFor(p Vec3) int {
 	return -1
 }
 
-// GroundedNear only trusts areas that actually contain the point (allowing
-// small BSP/AAS rounding differences), unlike AreaFor's route fallback.
+// GroundedNear uses exact area membership when an AAS tree is available.
+// Only older bounds-only data allows small BSP/AAS rounding differences.
 func (n *Navigator) GroundedNear(p Vec3) bool {
 	if n == nil {
 		return false
+	}
+	if n.areaTree != nil {
+		area := n.areaTree.areaFor(p)
+		if area <= 0 || area >= len(n.Areas) {
+			return false
+		}
+		a := n.Areas[area]
+		return a.Flags&1 != 0 && p[2]-a.Min[2] <= 24
 	}
 	for i := 1; i < len(n.Areas); i++ {
 		a := n.Areas[i]

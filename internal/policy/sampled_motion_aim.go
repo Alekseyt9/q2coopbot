@@ -74,6 +74,7 @@ func (p *PPO) sampledMotionAimMeans(o Observation, raw []float64, means [4]float
 		}
 		x = append(x, extra[:]...)
 	}
+	motionInputs := x
 	for i, layer := range p.file.SampledMotionAim.Layers {
 		y := make([]float64, len(layer.Bias))
 		for r, weights := range layer.Weight {
@@ -92,5 +93,5 @@ func (p *PPO) sampledMotionAimMeans(o Observation, raw []float64, means [4]float
 	}
 	means[2] += x[0]
 	means[3] += x[1]
-	return means, nil
+	return p.fineWeaponAimMeans(features, motionInputs, means, target, mode)
 }

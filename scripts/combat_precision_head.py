@@ -60,6 +60,8 @@ def selected_means(raw,target,mode,features=None,movement=None,motion_branch=Non
     if motion_branch is not None:
         from combat_sampled_motion_aim import correction
         aim=aim+correction(motion_branch,features,raw,movement,target,mode,vertical,reference_branch)
+        from combat_fine_weapon_aim import apply as apply_fine_weapon
+        aim=apply_fine_weapon(getattr(motion_branch,'fine_weapon_aim_branch',None),features,raw,movement,target,mode,aim,reference_branch)
     return torch.cat((coarse[:,:2],aim),1)
 
 def probabilities(raw,std,z,attack,vertical,weapon,features,target,mode,motion_branch=None,reference_branch=None,fire_branch=None,*,movement_shift=None):

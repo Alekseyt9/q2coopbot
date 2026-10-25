@@ -73,6 +73,13 @@ class SpatialActor(nn.Module):
         self.weapon_exploration=model.get('weapon_exploration') if model is not None else None
         from combat_sampled_motion_aim import build as build_motion
         self.sampled_motion_aim_branch=build_motion(model) if model is not None else None
+        from combat_fine_weapon_aim import build as build_fine_weapon
+        self.fine_weapon_aim_branch=build_fine_weapon(model) if model is not None else None
+        if self.fine_weapon_aim_branch is not None:
+            assert self.sampled_motion_aim_branch is not None
+            # Non-owning reference: SpatialActor owns/registers these parameters.
+            # Registering on Sequential would also execute the head as its next layer.
+            object.__setattr__(self.sampled_motion_aim_branch, 'fine_weapon_aim_branch', self.fine_weapon_aim_branch)
         from combat_motor_residual import build as build_motor
         self.motor_branch=build_motor(model) if model is not None else None
         from combat_conditional_fire import build as build_fire
@@ -145,6 +152,8 @@ def export(model,actor):
         export_weapon(model,actor.weapon_state_branch)
         from combat_sampled_motion_aim import export as export_motion
         export_motion(model,actor.sampled_motion_aim_branch)
+        from combat_fine_weapon_aim import export as export_fine_weapon
+        export_fine_weapon(model,actor.fine_weapon_aim_branch)
         from combat_motor_residual import export as export_motor
         export_motor(model,actor.motor_branch)
         from combat_conditional_fire import export as export_fire

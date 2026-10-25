@@ -62,6 +62,30 @@ func TestAreaTreeRejectsMalformedData(t *testing.T) {
 	}
 }
 
+func TestGroundedNearUsesAuthoritativeArea(t *testing.T) {
+	planes, nodes := areaTreeBytes()
+	tree, err := parseAASAreaTree(planes, nodes, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := &Navigator{areaTree: tree, Areas: []Area{{},
+		{Min: Vec3{-20, -20, -20}, Max: Vec3{20, 20, 20}, Flags: 1},
+		{Min: Vec3{-20, -20, -20}, Max: Vec3{20, 20, 20}, Flags: 0}}}
+	if !n.GroundedNear(Vec3{1, 1, 0}) {
+		t.Fatal("actual grounded volume rejected")
+	}
+	if n.GroundedNear(Vec3{-1, -1, 0}) {
+		t.Fatal("air volume borrowed support from a nearby grounded bounding box")
+	}
+	if n.GroundedNear(Vec3{1, 1, 10}) {
+		t.Fatal("point too high above grounded area accepted")
+	}
+	tree.nodes[1].children[1] = 0
+	if n.GroundedNear(Vec3{-1, -1, 0}) {
+		t.Fatal("solid volume borrowed nearby grounded support")
+	}
+}
+
 func TestLoadAreaTreeVersions(t *testing.T) {
 	for _, version := range []uint32{2, 3, 4, 5} {
 		header := 120

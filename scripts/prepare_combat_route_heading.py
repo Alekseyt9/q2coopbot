@@ -34,6 +34,8 @@ def main():
     ap.add_argument('--diagnostic',required=True,type=Path,nargs='+');ap.add_argument('--out',required=True,type=Path)
     ap.add_argument('--diagnostic-exclude-seeds',type=int,nargs='*',default=[],
                     help='Explicit overlapping diagnostic worlds to exclude before labels are read')
+    ap.add_argument('--ground-walk-only',action='store_true',
+                    help='Current grounded actor and direct/walk static hints only; never a jump/ladder target')
     a=ap.parse_args();assert not a.out.exists();a.out.mkdir(parents=True);model_hash=sha(a.source_model)
     episodes=[];pins={str(a.source_model.resolve()):model_hash};worlds={s:set() for s in ('train','diagnostic')}
     for split,roots in [('train',a.train),('diagnostic',a.diagnostic)]:
@@ -51,6 +53,10 @@ def main():
                 for i,r in enumerate(rows):
                     step=native[r['frame']];o=step['observation'];label=heading(o)
                     if label is None:continue
+                    if a.ground_walk_only:
+                        hint=next(h for h in o['remembered_static_routes']['hints']
+                                  if h['observed_id']==label['observed_id'] and h['memory_age_frames']==label['memory_age'])
+                        if not o['on_ground'] or hint.get('static_travel_kind',0) not in (0,2):continue
                     assert step['owner']=='provider' and step['native_step'] and step['server_execution']['matched'] and step['server_execution']['window_exclusive']
                     assert o['identity']['life']==1
                     indices.append(i);targets.append(label['turn_radians']);labels.append(dict(frame=r['frame'],**label))
@@ -69,6 +75,7 @@ def main():
     save(a.out/'report.json',dict(version=LABEL,state='passed',episodes=episodes,inputs=pins,
         counts={s:dict(rows=sum(e['rows'] for e in episodes if e['split']==s),worlds=len(worlds[s])) for s in worlds},
         diagnostic_excluded_seeds=a.diagnostic_exclude_seeds,
+        ground_walk_only=a.ground_walk_only,
         ppo_eligible=False,executed_demonstration=False,neural_execution=False,
         selection='All matching fixed-policy TRAIN contexts, no outcome filter; nearest path within freshest matched observed memories, waypoint norm >=8.',
         scope='Geometric auxiliary target from current observation only; not an optimal action, executed teacher, future entity location or proven traversability.'))
