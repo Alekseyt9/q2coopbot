@@ -63,9 +63,12 @@ def logits(module, features, raw, target, mode, latent, vertical, weapon):
     assert raw.is_cuda and raw.ndim == 2 and raw.shape == (len(features), 81)
     if module is None:
         return raw[:, 4]
-    delta = module(inputs(features, target, mode, latent, vertical, weapon))
+    x = inputs(features, target, mode, latent, vertical, weapon)
+    delta = module(x)
     assert delta.shape == (len(raw), 1) and bool(torch.isfinite(delta).all())
     result = raw[:, 4] + delta[:, 0].to(raw.dtype)
+    from combat_weapon_fire_residual import apply as apply_weapon_fire
+    result = apply_weapon_fire(getattr(module, 'weapon_fire_residual_branch', None), features, x, result)
     assert bool(torch.isfinite(result).all())
     return result
 

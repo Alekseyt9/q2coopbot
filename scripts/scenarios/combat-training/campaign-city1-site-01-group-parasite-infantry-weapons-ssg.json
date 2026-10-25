@@ -206,7 +206,7 @@
   "id": "campaign-city1-site-01-group-parasite-infantry-weapons-ssg",
   "revision": 1,
   "title": "city1 encounter 6: monster_soldier / group parasite, infantry",
-  "status": "runnable",
+  "status": "planned",
   "map": "city1",
   "scope": "first_life_combat",
   "goal": "alive_native_kills_then_observed_effect",
@@ -222,7 +222,7 @@
   "modes": [
     "learned"
   ],
-  "ppo_trainable": true,
+  "ppo_trainable": false,
   "splits": {
     "confirmation": {
       "start": 744230000,
@@ -241,11 +241,8 @@
       "count": 4096
     }
   },
-  "recipe": {
-    "runner": "combat-baseline",
-    "loadout": "weapons-ssg",
-    "mixed": true,
-    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
-  },
-  "missing": []
+  "recipe": {},
+  "missing": [
+    "Map-native monster constraint: monster_parasite, monster_infantry absent from original city1 BSP. Historical recipe retired from active collection."
+  ]
 }

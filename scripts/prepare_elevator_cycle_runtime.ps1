@@ -1,7 +1,8 @@
 [CmdletBinding()]
-param([ValidatePattern('^[a-zA-Z0-9_]+$')][string]$Map='base3',[switch]$SideWalls,[switch]$KeepMonsters,[string]$RuntimeRoot='')
+param([ValidatePattern('^[a-zA-Z0-9_]+$')][string]$Map='base3',[switch]$SideWalls,[switch]$KeepMonsters,[switch]$AllowEmptyMonsters,[string]$RuntimeRoot='')
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
+if($AllowEmptyMonsters -and (!$RuntimeRoot -or $KeepMonsters)){throw 'Empty source allowance requires an explicit isolated runtime without KeepMonsters'}
 $runtime=Join-Path $repo ('workspace/runtime/q2go-elevator-cycle'+$(if($Map -eq 'base3'){''}else{'-'+$Map}))
 if($SideWalls){
     if($Map -ne 'base2'){throw 'Side walls fixture requires base2'}
@@ -29,7 +30,7 @@ try {
 $entities=[Text.Encoding]::ASCII.GetString($bsp,[BitConverter]::ToInt32($bsp,8),[BitConverter]::ToInt32($bsp,12)).Trim([char]0)
 # Remove combat actors only; keep world geometry, triggers and platform physics.
 $monsters=@([regex]::Matches($entities,'(?s)\{[^{}]*\}')|Where-Object {$_.Value -match '"classname"\s+"monster_'})
-if(!$monsters.Count){throw 'No monsters found in fixture source'}
+if(!$monsters.Count -and !$AllowEmptyMonsters){throw 'No monsters found in fixture source'}
 if(!$KeepMonsters){foreach($monster in $monsters){$entities=$entities.Replace($monster.Value,'')}}
 if($SideWalls){
     # Reuse solid BSP model1 as two visible walls. Translated bounds:

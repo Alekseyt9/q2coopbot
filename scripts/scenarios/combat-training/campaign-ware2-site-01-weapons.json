@@ -151,7 +151,7 @@
   "id": "campaign-ware2-site-01-weapons",
   "revision": 2,
   "title": "ware2 encounter 132: monster_soldier / weapons",
-  "status": "runnable",
+  "status": "planned",
   "map": "ware2",
   "scope": "first_life_combat",
   "goal": "alive_native_kills_then_observed_effect",
@@ -166,7 +166,7 @@
   "modes": [
     "learned"
   ],
-  "ppo_trainable": true,
+  "ppo_trainable": false,
   "splits": {
     "confirmation": {
       "start": 53110000,
@@ -185,10 +185,8 @@
       "count": 4096
     }
   },
-  "recipe": {
-    "runner": "combat-baseline",
-    "loadout": "weapons",
-    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
-  },
-  "missing": []
+  "recipe": {},
+  "missing": [
+    "Map-native monster constraint: monster_soldier absent from original ware2 BSP. Historical recipe retired from active collection."
+  ]
 }

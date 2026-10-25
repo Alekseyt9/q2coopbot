@@ -254,7 +254,7 @@
   "id": "campaign-jail1-site-02-group-parasite-infantry-gunner-weapons-grenades-recovery",
   "revision": 1,
   "title": "jail1 encounter 295: monster_infantry / group parasite, infantry, gunner",
-  "status": "runnable",
+  "status": "planned",
   "map": "jail1",
   "scope": "first_life_combat",
   "goal": "alive_native_kills_then_observed_effect",
@@ -272,7 +272,7 @@
     "rules",
     "learned"
   ],
-  "ppo_trainable": true,
+  "ppo_trainable": false,
   "splits": {
     "confirmation": {
       "start": 1254168000,
@@ -291,11 +291,8 @@
       "count": 512
     }
   },
-  "recipe": {
-    "runner": "combat-baseline",
-    "loadout": "weapons-grenades-recovery",
-    "mixed": true,
-    "reward_config": "scripts/scenarios/combat-reward-selected-aim-v8.json"
-  },
-  "missing": []
+  "recipe": {},
+  "missing": [
+    "Map-native monster constraint: monster_parasite absent from original jail1 BSP. Historical recipe retired from active collection."
+  ]
 }

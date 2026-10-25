@@ -150,7 +150,7 @@
   "id": "campaign-base2-site-03-blaster",
   "revision": 1,
   "title": "base2 encounter 12: monster_soldier",
-  "status": "runnable",
+  "status": "planned",
   "map": "base2",
   "scope": "first_life_combat",
   "goal": "alive_native_kills_then_observed_effect",
@@ -166,7 +166,7 @@
     "rules",
     "learned"
   ],
-  "ppo_trainable": true,
+  "ppo_trainable": false,
   "splits": {
     "confirmation": {
       "start": 1710000,
@@ -185,10 +185,8 @@
       "count": 4096
     }
   },
-  "recipe": {
-    "runner": "combat-baseline",
-    "loadout": "blaster",
-    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
-  },
-  "missing": []
+  "recipe": {},
+  "missing": [
+    "Map-native monster constraint: monster_soldier absent from original base2 BSP. Historical recipe retired from active collection."
+  ]
 }

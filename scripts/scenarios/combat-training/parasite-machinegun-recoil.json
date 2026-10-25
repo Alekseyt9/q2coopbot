@@ -4,7 +4,7 @@
     "learned"
   ],
   "goal": "alive_native_kills_then_observed_effect",
-  "ppo_trainable": true,
+  "ppo_trainable": false,
   "version": 1,
   "monsters": [
     "monster_parasite"
@@ -29,7 +29,7 @@
       "start": 820000
     }
   },
-  "title": "Machinegun: штатная отдача и удержание прицела",
+  "title": "Machinegun: \u0421\u20ac\u0421\u201a\u0420\u00b0\u0421\u201a\u0420\u0405\u0420\u00b0\u0421\u040f \u0420\u0455\u0421\u201a\u0420\u0491\u0420\u00b0\u0421\u2021\u0420\u00b0 \u0420\u0451 \u0421\u0453\u0420\u0491\u0420\u00b5\u0421\u0402\u0420\u00b6\u0420\u00b0\u0420\u0405\u0420\u0451\u0420\u00b5 \u0420\u0457\u0421\u0402\u0420\u0451\u0421\u2020\u0420\u00b5\u0420\u00bb\u0420\u00b0",
   "scope": "first_life_combat",
   "generator": {
     "kind": "base1-ground-combat-v1",
@@ -158,18 +158,15 @@
     },
     "seed_revision": 1
   },
-  "recipe": {
-    "mixed": false,
-    "runner": "combat-baseline",
-    "loadout": "machinegun",
-    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
-  },
+  "recipe": {},
   "game_frames": 300,
   "map": "base1",
   "skill": 1,
   "id": "parasite-machinegun-recoil",
-  "status": "runnable",
+  "status": "planned",
   "timescale": 2,
   "geometry": "Original base1 BSP arena; generated grounded positions; static hull and floor checks",
-  "missing": []
+  "missing": [
+    "Map-native monster constraint: monster_parasite absent from original base1 BSP. Historical recipe retired from active collection."
+  ]
 }

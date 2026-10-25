@@ -28,6 +28,11 @@ func CampaignRecipes(root string, perMap int) ([]Episode, error) {
 // The fixed order preserves seed ranges when a caller selects a different subset.
 var campaignMapOrder = []string{"base1", "base2", "base3", "train", "bunk1", "ware1", "ware2", "jail1", "jail2", "jail3", "jail4", "jail5", "security", "mintro", "mine1", "mine2", "mine3", "mine4", "fact1", "fact2", "fact3", "power1", "power2", "cool1", "waste1", "waste2", "waste3", "biggun", "hangar1", "hangar2", "lab", "command", "strike", "space", "city1", "city2", "city3", "boss1", "boss2"}
 
+// Campaign-only scope preserves every legacy map index and seed domain.
+func AllCombatMapNames() []string {
+	return append([]string(nil), campaignMapOrder...)
+}
+
 func CampaignRecipesForMaps(root string, perMap int, maps []string) ([]Episode, error) {
 	if perMap < 1 || perMap > 12 {
 		return nil, fmt.Errorf("campaign sites per map must be 1..12")
@@ -101,7 +106,7 @@ func grounded(world *quake.MapInfo, p quake.Vec3) (quake.Vec3, bool) {
 	return p, true
 }
 
-func campaignRecipe(world quake.MapInfo, source quake.MapEntity, entityIndex int, class string, mapIndex, sceneIndex int) (Episode, bool) {
+func campaignRecipe(world quake.MapInfo, source quake.MapEntity, entityIndex int, class string, mapIndex, sceneIndex int, kinds ...string) (Episode, bool) {
 	primary, ok := grounded(&world, source.Origin)
 	if !ok {
 		return Episode{}, false
@@ -135,6 +140,12 @@ func campaignRecipe(world quake.MapInfo, source quake.MapEntity, entityIndex int
 			}
 			ep.Generator.Site = site
 			base := 1000000 + mapIndex*600000 + sceneIndex*40000
+			if len(kinds) == 1 && kinds[0] == nativeGroundKind {
+				ep.Generator.Kind = nativeGroundKind
+				ep.ID = fmt.Sprintf("campaign-%s-native-site-%02d-blaster", world.Name, sceneIndex+1)
+				ep.InitialState = "Exact map-native monster class; isolated generated fight; player HP80/100"
+				base = 80000000 + mapIndex*600000 + sceneIndex*40000
+			}
 			for i, split := range splitNames {
 				ep.Splits[split] = Seeds{Start: base + i*10000, Count: 4096}
 				lo, hi := primary, primary

@@ -28,16 +28,11 @@
     "monster_parasite",
     "monster_gunner"
   ],
-  "recipe": {
-    "mixed": true,
-    "runner": "combat-baseline",
-    "loadout": "blaster",
-    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
-  },
-  "status": "runnable",
+  "recipe": {},
+  "status": "planned",
   "id": "parasite-gunner-blaster-generated",
   "scope": "first_life_combat",
-  "title": "Blaster: группа и манёвр",
+  "title": "Blaster: \u0420\u0456\u0421\u0402\u0421\u0453\u0420\u0457\u0420\u0457\u0420\u00b0 \u0420\u0451 \u0420\u0458\u0420\u00b0\u0420\u0405\u0421\u2018\u0420\u0406\u0421\u0402",
   "geometry": "Original base1 BSP arena; generated grounded positions; static hull and floor checks",
   "timescale": 2,
   "generator": {
@@ -216,8 +211,10 @@
   },
   "skill": 1,
   "revision": 2,
-  "missing": [],
+  "missing": [
+    "Map-native monster constraint: monster_parasite, monster_gunner absent from original base1 BSP. Historical recipe retired from active collection."
+  ],
   "game_frames": 300,
-  "ppo_trainable": true,
+  "ppo_trainable": false,
   "goal": "alive_native_kills_then_observed_effect"
 }

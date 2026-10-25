@@ -163,8 +163,8 @@ func (e Episode) validate() error {
 		return fmt.Errorf("unknown episode status")
 	}
 	mapSupported := e.Map == "base1" || e.Map == "base2"
-	if e.Generator != nil && (e.Generator.Kind == "campaign-ground-combat-v1" || isCampaignGroupKind(e.Generator.Kind)) {
-		for _, name := range campaignMapOrder {
+	if e.Generator != nil && (e.Generator.Kind == "campaign-ground-combat-v1" || e.Generator.Kind == nativeGroundKind || isCampaignGroupKind(e.Generator.Kind)) {
+		for _, name := range AllCombatMapNames() {
 			mapSupported = mapSupported || e.Map == name
 		}
 	}
@@ -325,6 +325,12 @@ func Build(r *Registry, root string, ids []string, split, mode, model, out strin
 			world, err := loadGenerationWorld(root, ep.Map)
 			if err != nil {
 				return nil, err
+			}
+			pool := nativeMonsterCounts(world)
+			for _, class := range ep.Monsters {
+				if pool[class] == 0 {
+					return nil, fmt.Errorf("episode %s requests non-native monster %s on map %s", ep.ID, class, ep.Map)
+				}
 			}
 			for _, seed := range t.Seeds {
 				v, err := generate(ep, split, seed, &world)

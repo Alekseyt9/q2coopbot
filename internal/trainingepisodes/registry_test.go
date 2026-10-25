@@ -15,7 +15,16 @@ func fixture(t *testing.T) (string, Episode) {
 		t.Fatal(err)
 	}
 	d := t.TempDir()
-	ep := r.Episodes[0]
+	var ep Episode
+	for _, candidate := range r.Episodes {
+		if candidate.Status == "runnable" && candidate.Recipe.Runner == "combat-baseline" {
+			ep = candidate
+			break
+		}
+	}
+	if ep.ID == "" {
+		t.Fatal("no runnable combat fixture")
+	}
 	write(t, filepath.Join(d, "index.json"), Manifest{Version: 1, Files: []string{"scene.json"}})
 	write(t, filepath.Join(d, "scene.json"), ep)
 	return d, ep
@@ -106,11 +115,11 @@ func TestPlanRejectsPlannedSceneAndInvalidSplitBudget(t *testing.T) {
 			t.Fatalf("invalid plan accepted: %+v", tc)
 		}
 	}
-	p, err := Build(r, root, []string{"parasite-blaster-solo", "parasite-gunner-blaster"}, "train", "rules", "", t.TempDir(), 4, 8)
+	p, err := Build(r, root, []string{"campaign-base1-native-site-01-blaster", "campaign-base1-native-site-02-blaster"}, "train", "rules", "", t.TempDir(), 4, 8)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.Tasks) != 2 || p.Workers != 4 || p.Tasks[0].Seeds[0] != 100008 || p.Tasks[1].Seeds[0] != 110008 {
+	if len(p.Tasks) != 2 || p.Workers != 4 || p.Tasks[0].Seeds[0] != 80000008 || p.Tasks[1].Seeds[0] != 80040008 {
 		t.Fatalf("wrong scene/seed schedule: %+v", p)
 	}
 }
@@ -144,7 +153,7 @@ func TestSmallEpisodeCohortsRemainVerifiable(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, count := range []int{1, 2, 3, 4} {
-		p, err := Build(r, root, []string{"parasite-blaster-solo"}, "validation", "rules", "", t.TempDir(), count, 8)
+		p, err := Build(r, root, []string{"campaign-base1-native-site-01-blaster"}, "validation", "rules", "", t.TempDir(), count, 8)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -158,7 +167,7 @@ func TestSmallEpisodeCohortsRemainVerifiable(t *testing.T) {
 		}
 	}
 	for _, count := range []int{0, -1, 81} {
-		if _, err := Build(r, root, []string{"parasite-blaster-solo"}, "validation", "rules", "", t.TempDir(), count, 8); err == nil {
+		if _, err := Build(r, root, []string{"campaign-base1-native-site-01-blaster"}, "validation", "rules", "", t.TempDir(), count, 8); err == nil {
 			t.Fatal("unbounded budget accepted", count)
 		}
 	}

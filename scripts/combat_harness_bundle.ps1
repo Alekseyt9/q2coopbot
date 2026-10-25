@@ -72,7 +72,20 @@ function New-HarnessBinaryBundle {
     foreach($path in @($pending,$bundle)){
         if(![IO.Path]::GetFullPath($path).StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase)){throw 'Bundle move outside intended root'}
     }
-    Move-Item -LiteralPath $pending -Destination $bundle -ErrorAction Stop
+    try {
+        # Directory.Move requires a missing destination; it cannot accidentally
+        # nest a staging directory inside a concurrently published bundle.
+        [IO.Directory]::Move($pending,$bundle)
+    } catch {
+        if(!(Test-Path -LiteralPath $bundle)){throw}
+        $winner=Assert-HarnessBinaryBundle $bundle $fingerprint
+        foreach($name in @('q2coopbot.exe','q2combat-export.exe')){
+            if($winner.binaries.$name.sha256 -ne $binaries[$name].sha256){throw 'Concurrent bundle publication produced different binaries'}
+        }
+        # Retain our private staging receipt; never delete or overwrite the
+        # immutable winner (or a path possibly used by another running pool).
+        return $bundle
+    }
     $null=Assert-HarnessBinaryBundle $bundle $fingerprint
     return $bundle
 }

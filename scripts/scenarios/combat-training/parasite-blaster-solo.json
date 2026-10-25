@@ -2,8 +2,8 @@
   "version": 1,
   "id": "parasite-blaster-solo",
   "revision": 1,
-  "title": "Одиночный Parasite: Blaster",
-  "status": "runnable",
+  "title": "\u0420\u045b\u0420\u0491\u0420\u0451\u0420\u0405\u0420\u0455\u0421\u2021\u0420\u0405\u0421\u2039\u0420\u2116 Parasite: Blaster",
+  "status": "planned",
   "map": "base1",
   "scope": "first_life_combat",
   "goal": "alive_native_kills_then_observed_effect",
@@ -19,7 +19,7 @@
     "rules",
     "learned"
   ],
-  "ppo_trainable": true,
+  "ppo_trainable": false,
   "splits": {
     "train": {
       "start": 100000,
@@ -38,11 +38,8 @@
       "count": 64
     }
   },
-  "recipe": {
-    "runner": "combat-baseline",
-    "loadout": "blaster",
-    "mixed": false,
-    "reward_config": "scripts/scenarios/combat-reward-recoil-v5.json"
-  },
-  "missing": []
+  "recipe": {},
+  "missing": [
+    "Map-native monster constraint: monster_parasite absent from original base1 BSP. Historical recipe retired from active collection."
+  ]
 }

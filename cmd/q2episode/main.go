@@ -37,10 +37,36 @@ func run() error {
 	out := flag.String("out", "", "fresh execution plan JSON")
 	artifacts := flag.String("artifacts", "", "fresh runtime output root")
 	campaign := flag.Int("campaign-sites", 0, "generate this many distinct original encounter sites per selected map into out")
+	allMapSites := flag.Int("all-map-sites", 0, "scan all 39 campaign maps only; generate up to this many checked ground sites per map")
 	campaignMaps := flag.String("campaign-maps", "base1,base2", "comma-separated stock campaign maps for site generation")
 	campaignGroup := flag.String("campaign-group", "", "comma-separated distinct ground monster classes; generate group recipes with Super Shotgun inventory")
 	campaignGroupLoadout := flag.String("campaign-group-loadout", "weapons-ssg", "group starting inventory: blaster, machinegun, weapons, weapons-ssg or weapons-grenades-recovery")
 	flag.Parse()
+	if *allMapSites != 0 {
+		if *campaign != 0 || *out == "" {
+			return fmt.Errorf("all-map-sites needs out and cannot combine with campaign-sites")
+		}
+		abs, err := filepath.Abs(*root)
+		if err != nil {
+			return err
+		}
+		episodes, coverage, err := trainingepisodes.AllMapRecipes(abs, *allMapSites)
+		if err != nil {
+			return err
+		}
+		file, err := os.OpenFile(*out, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		encoder := json.NewEncoder(file)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(struct {
+			Version  int                            `json:"version"`
+			Coverage []trainingepisodes.MapCoverage `json:"coverage"`
+			Episodes []trainingepisodes.Episode     `json:"episodes"`
+		}{1, coverage, episodes})
+	}
 	if *campaign != 0 {
 		abs, err := filepath.Abs(*root)
 		if err != nil {

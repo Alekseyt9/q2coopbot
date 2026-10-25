@@ -138,7 +138,28 @@ function Install-RuntimePak([string]$Source, [string]$Target, [string]$PoolRoot)
     }
     throw "Cannot link PAK from bounded shared pool: $Source"
 }
+function Resolve-HarnessDiagnosticEngine([string]$Root) {
+    $resolved = [IO.Path]::GetFullPath($Root)
+    $manifest = Join-Path $resolved 'engine.json'
+    $receipt = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+    if ($receipt.version -ne 'combat_diagnostic_engine_v1') { throw 'Unknown diagnostic engine manifest' }
+    foreach ($name in @('q2ded.exe', 'baseq2/game.dll')) {
+        $path = Join-Path $resolved $name
+        $expected = $receipt.binaries.$name
+        if (!$expected -or (Get-RuntimeImmutableHash $path) -ne $expected) { throw "Diagnostic engine binary changed: $name" }
+    }
+    return @{ServerExe=(Join-Path $resolved 'q2ded.exe');GameDll=(Join-Path $resolved 'baseq2/game.dll')}
+}
 if ($FunctionsOnly) { return }
+# This variable is scoped to the explicit --engine-root diagnostic runner and
+# inherited by its child workers. The runner pins the manifest and both files;
+# normal runs keep the standard binaries and no shared executable is replaced.
+if ($env:Q2COOPBOT_DIAGNOSTIC_ENGINE_ROOT) {
+    if ($PSBoundParameters.ContainsKey('ServerExe') -or $PSBoundParameters.ContainsKey('GameDll')) { throw 'Do not combine explicit binaries with diagnostic engine selection' }
+    $diagnosticEngine = Resolve-HarnessDiagnosticEngine $env:Q2COOPBOT_DIAGNOSTIC_ENGINE_ROOT
+    $ServerExe = $diagnosticEngine.ServerExe
+    $GameDll = $diagnosticEngine.GameDll
+}
 foreach ($path in @($AssetsRoot, $ServerExe, $GameDll)) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Required input is missing: $path" }
 }

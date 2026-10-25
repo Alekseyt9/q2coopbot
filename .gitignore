@@ -35,3 +35,4 @@ __pycache__/
 *.vsidx
 /workspace/cache
 /workspace/gocache
+/scripts/scenarios/combat-training

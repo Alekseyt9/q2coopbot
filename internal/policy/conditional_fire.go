@@ -11,6 +11,9 @@ const ConditionalFireVersion = "combat_action_conditioned_fire_v1"
 const ConditionalFireInputWidth = 181
 
 func validateConditionalFire(f PPOFile) error {
+	if err := validateWeaponFireResidual(f); err != nil {
+		return err
+	}
 	if f.ConditionalFire == nil {
 		return nil
 	}
@@ -49,6 +52,29 @@ func (p *PPO) conditionalFireLogit(o Observation, base float64, s Sample) (float
 		x = y
 	}
 	result := base + x[0]
+	if p.file.WeaponFireResidual != nil && weaponFireResidualActive(features) {
+		inputs, err := conditionalFireInputs(features, s)
+		if err != nil {
+			return 0, err
+		}
+		for i, layer := range p.file.WeaponFireResidual.Layers {
+			y := make([]float64, len(layer.Bias))
+			for r, row := range layer.Weight {
+				y[r] = layer.Bias[r]
+				for c, weight := range row {
+					y[r] += weight * inputs[c]
+				}
+				if i < 2 {
+					y[r] = math.Max(0, y[r])
+				}
+				if math.IsNaN(y[r]) || math.IsInf(y[r], 0) {
+					return 0, fmt.Errorf("nonfinite weapon fire residual")
+				}
+			}
+			inputs = y
+		}
+		result += inputs[0]
+	}
 	if math.IsNaN(result) || math.IsInf(result, 0) {
 		return 0, fmt.Errorf("nonfinite conditional fire logit")
 	}

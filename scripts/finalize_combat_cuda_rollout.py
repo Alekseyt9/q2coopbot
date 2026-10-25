@@ -68,6 +68,12 @@ def finalize(model_path, data, out):
             ('combat_joint_aim_policy.py','combat_aim_candidates.py','combat_action_effect.py','combat_action_geometry.py','combat_conditional_fire.py'))
     if model.get('conditional_fire'):
         weapon_helpers.append(pathlib.Path(__file__).with_name('combat_conditional_fire.py').resolve())
+    if model.get('weapon_fire_residual'):
+        weapon_helpers.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
+                              ('combat_weapon_fire_residual.py', 'combat_spatial_aim.py'))
+    if model.get('fine_weapon_aim'):
+        weapon_helpers.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
+                              ('combat_fine_weapon_aim.py', 'combat_precision_head.py', 'combat_spatial_aim.py'))
     if model.get('weapon_state_residual'):
         weapon_helpers.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
             ('combat_weapon_state_residual.py','combat_spatial_aim.py','ppo_recurrent.py','ppo_combat.py',
@@ -283,6 +289,10 @@ def finalize(model_path, data, out):
         audit.update(memory_recovery_version=model['memory_recovery']['version'],memory_recovery_training_supported=False,ordinary_training_eligible=False)
     if model.get('memory_route_movement'):
         audit.update(memory_route_movement_version=model['memory_route_movement']['version'],memory_route_training_supported=False,ordinary_training_eligible=False)
+    if model.get('fine_weapon_aim'):
+        audit.update(fine_weapon_aim_version=model['fine_weapon_aim']['version'],fine_weapon_aim_training_supported=False,ordinary_training_eligible=False)
+    if model.get('weapon_fire_residual'):
+        audit.update(weapon_fire_residual_version=model['weapon_fire_residual']['version'],ordinary_training_eligible=False)
     if model.get('target_sampling'):
         audit.update(target_sampling_version=model['target_sampling']['version'],target_temperature=model['target_sampling']['temperature'],target_sampling_training_supported=False,ordinary_training_eligible=False)
     if model.get('movement_inertia'):
@@ -315,6 +325,10 @@ def finalize(model_path, data, out):
         meta.update(memory_recovery_version=model['memory_recovery']['version'],memory_recovery_training_supported=False,ppo_training_ready=False)
     if model.get('memory_route_movement'):
         meta.update(memory_route_movement_version=model['memory_route_movement']['version'],memory_route_training_supported=False,ordinary_training_eligible=False,ppo_training_ready=False)
+    if model.get('fine_weapon_aim'):
+        meta.update(fine_weapon_aim_version=model['fine_weapon_aim']['version'],fine_weapon_aim_training_supported=False,ordinary_training_eligible=False,ppo_training_ready=False)
+    if model.get('weapon_fire_residual'):
+        meta.update(weapon_fire_residual_version=model['weapon_fire_residual']['version'],ordinary_training_eligible=False,ppo_training_ready=False)
     if model.get('target_sampling'):
         meta.update(target_sampling_version=model['target_sampling']['version'],target_temperature=model['target_sampling']['temperature'],target_sampling_training_supported=False,ppo_training_ready=False,ordinary_training_eligible=False)
     if model.get('movement_inertia'):

@@ -96,7 +96,7 @@ $resetClock=[Diagnostics.Stopwatch]::StartNew()
 $fixtureMap=if($generated -and $generated.map){$generated.map}else{'base1'}
 $combatOnly=[bool]$generated
 if($ClientStartupDelaySeconds -and (!$Synchronous -or $ReleaseGameFrame -ne 100)){throw 'Delayed startup probe requires fixed synchronous release100'}
-$runtime=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map $fixtureMap -RuntimeRoot (Join-Path $OutputRoot 'runtime')
+$runtime=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map $fixtureMap -RuntimeRoot (Join-Path $OutputRoot 'runtime') -AllowEmptyMonsters:([bool]$GeneratedFixture)
 if($Recovery){
     # A genuine native 25HP item, introduced before server startup only.
     [IO.File]::AppendAllText((Join-Path $runtime "baseq2/maps/$fixtureMap.ent"),"`n{`n`"classname`" `"item_health_large`"`n`"origin`" `"32 -352 24`"`n}`n",[Text.Encoding]::ASCII)

@@ -27,6 +27,7 @@ def main():
     ap.add_argument('--include-rules',action='store_true',help='Add ordinary rules under identical generated conditions')
     ap.add_argument('--fresh-seed-offsets', type=int, nargs='+', help='Declared fresh TRAIN offsets for contact-loss diagnostic')
     ap.add_argument('--health-100', action='store_true', help='Explicit matched diagnostic cohort with player HP100')
+    ap.add_argument('--engine-root', type=Path, help='Explicit immutable diagnostic engine.json plus q2ded.exe/baseq2/game.dll')
     a = ap.parse_args()
     repo = Path(__file__).resolve().parents[1]
     out = a.out.resolve()
@@ -54,6 +55,18 @@ def main():
     pins = {}
     def pin(p):
         p = Path(p).resolve(); pins[str(p)] = sha(p); return p
+    engine_receipt = None
+    assert not os.environ.get('Q2COOPBOT_DIAGNOSTIC_ENGINE_ROOT'), 'Unmanifested inherited engine override'
+    if a.engine_root:
+        engine_root = a.engine_root.resolve()
+        receipt_path = pin(engine_root/'engine.json')
+        engine_receipt = read(receipt_path)
+        assert engine_receipt['version'] == 'combat_diagnostic_engine_v1'
+        for name in ('q2ded.exe', 'baseq2/game.dll'):
+            assert sha(pin(engine_root/name)) == engine_receipt['binaries'][name]
+        if engine_receipt.get('source_manifest'):
+            assert sha(pin(engine_receipt['source_manifest'])) == engine_receipt['source_manifest_sha256']
+        os.environ['Q2COOPBOT_DIAGNOSTIC_ENGINE_ROOT'] = str(engine_root)
     for p in (source, zero, a.selection, a.prepared/'report.json'):
         pin(p)
     if a.reference_source:pin(original_source)
@@ -108,6 +121,8 @@ def main():
             control_role='explicit_control' if a.control else 'original_source',control_model=str(source),
             selection_kind=selected.get('selection_kind','source_selected_development'),
             selection_description=selected.get('selection',''),
+            diagnostic_engine_root=str(a.engine_root.resolve()) if a.engine_root else None,
+            diagnostic_engine=engine_receipt,
             intentional_paired_seed_reuse=True,training_performed=False,promotion=False))
         # Freeze implementation evidence without game assets or binary duplication.
         snap = out/'source-snapshot'

@@ -37,6 +37,7 @@ type PPOFile struct {
 	FineWeaponAim           *SpatialAimFile              `json:"fine_weapon_aim,omitempty"`
 	MotorResidual           *SpatialAimFile              `json:"motor_residual,omitempty"`
 	ConditionalFire         *SpatialAimFile              `json:"conditional_fire,omitempty"`
+	WeaponFireResidual      *SpatialAimFile              `json:"weapon_fire_residual,omitempty"`
 	MemoryRecovery          *SpatialAimFile              `json:"memory_recovery,omitempty"`
 	MemoryRouteMovement     *SpatialAimFile              `json:"memory_route_movement,omitempty"`
 	TargetSampling          *TargetSamplingFile          `json:"target_sampling,omitempty"`

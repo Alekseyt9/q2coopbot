@@ -84,6 +84,11 @@ class SpatialActor(nn.Module):
         self.motor_branch=build_motor(model) if model is not None else None
         from combat_conditional_fire import build as build_fire
         self.conditional_fire_branch=build_fire(model) if model is not None else None
+        from combat_weapon_fire_residual import build as build_weapon_fire
+        self.weapon_fire_residual_branch=build_weapon_fire(model) if model is not None else None
+        if self.weapon_fire_residual_branch is not None:
+            assert self.conditional_fire_branch is not None
+            object.__setattr__(self.conditional_fire_branch, 'weapon_fire_residual_branch', self.weapon_fire_residual_branch)
         from combat_memory_recovery_runtime import build as build_recovery
         self.memory_recovery_branch=build_recovery(model) if model is not None else None
         from combat_memory_route_movement import build as build_routes
@@ -158,6 +163,8 @@ def export(model,actor):
         export_motor(model,actor.motor_branch)
         from combat_conditional_fire import export as export_fire
         export_fire(model,actor.conditional_fire_branch)
+        from combat_weapon_fire_residual import export as export_weapon_fire
+        export_weapon_fire(model,actor.weapon_fire_residual_branch)
         from combat_memory_recovery_runtime import export as export_recovery
         export_recovery(model,actor.memory_recovery_branch)
         from combat_memory_route_movement import export as export_routes
