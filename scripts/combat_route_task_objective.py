@@ -16,19 +16,21 @@ def qualifies(row, evidence):
         and evidence['owner_before']=='provider' and evidence['owner_after']=='rules'
         and evidence['fallback']=='combat_visibility_timeout'
         and evidence['health_before']>0 and evidence['health_after']>0
+        and evidence['unfinished_native_fixture']
         and not evidence['goal_before_or_at_handoff'] and not evidence['death_before_or_at_handoff']
         and not evidence['episode_goal']
         and row['next_frame']==row['frame']+1 and row['truncated'] and not row['terminal']
         and not row['bootstrap_zero'] and not row['next_reset'])
 
 
-def collect_evidence(capture, rows):
+def collect_evidence(capture, rows, *, model_hash=None):
     spec,pool=read(capture/'spec.json'),read(capture/'pool/report.json')
     assert pool['state']=='complete' and pool['source_unchanged']
     jobs={j['plan_index']:j for j in pool['jobs']};proofs=[];pins={}
     for seed in sorted({r['seed'] for r in rows}):
         selected=[r for r in rows if r['seed']==seed];last=selected[-1]
-        variants=[v for v in spec['variants'] if v['label']=='zero' and v['context']['seed']==seed]
+        variants=[v for v in spec['variants'] if v['context']['seed']==seed
+                  and (v['model_sha256']==model_hash if model_hash else v['label']=='zero')]
         assert len(variants)==1
         variant=variants[0];member=Path(jobs[variant['index']]['root'])
         report=read(member/'report.json');r=report['results'][0]
@@ -41,12 +43,19 @@ def collect_evidence(capture, rows):
         bot_path=Path(r['root'])/'bot.jsonl'
         event=next((b for b in load_steps(bot_path) if b.get('frame')==last['next_frame']),None)
         goal,death=r['goal_stop'],r['death_stop']
+        assert r['generated_fixture']==variant['context']['instance']
+        expected=len(r['generated_fixture']['monsters'])
+        damage=r.get('first_life',{}).get('damage',{}).get('by_mod')
+        kills=(sum(m['monster_kills'] for m in damage) if isinstance(damage,list)
+            and all(isinstance(m.get('monster_kills'),int) and m['monster_kills']>=0 for m in damage) else None)
         evidence=dict(identity=[seed,last['index'],last['frame'],last['next_frame']],
             capture_verified=bool(report['capture_complete'] and report['provenance_valid'] and r['capture_valid'] and r['seed_confirmed']),
             dispatch_verified=bool(r['dispatch_valid']),owner_before=before['owner'] if before else None,
             owner_after=after['owner'] if after else None,
             fallback=(event or {}).get('combat_policy',{}).get('selection',{}).get('fallback'),
             health_before=before['observation']['health'] if before else 0,health_after=after['observation']['health'] if after else 0,
+            unfinished_native_fixture=kills is not None and expected>0 and kills<expected,
+            native_fixture_monsters=expected,native_first_life_kills=kills,
             same_life=bool(before and after and all(before['observation']['identity'][k]==after['observation']['identity'][k]
                 for k in ('life','map','connection','spawncount','actor'))),
             goal_before_or_at_handoff=bool(goal and goal['kill_frame']<=last['next_frame']),

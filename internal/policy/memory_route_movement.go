@@ -6,6 +6,7 @@ import (
 )
 
 const MemoryRouteMovementVersion = "combat_memory_route_movement_v1"
+const MemoryRouteMovementYawVersion = "combat_memory_route_movement_yaw_v2"
 const MemoryRouteMovementInputWidth = 13 + 240 + MemoryRouteTailWidth + 5
 
 func validateMemoryRouteMovement(f PPOFile) error {
@@ -16,11 +17,15 @@ func validateMemoryRouteMovement(f PPOFile) error {
 		}
 		return nil
 	}
-	if f.Features != MemoryRouteFeatureVersion || s.Version != MemoryRouteMovementVersion || f.SpatialAim == nil || f.MemoryRecovery != nil || f.MovementInertia != nil || f.EntityAttention != nil || len(s.Layers) != 3 {
+	if f.Features != MemoryRouteFeatureVersion || (s.Version != MemoryRouteMovementVersion && s.Version != MemoryRouteMovementYawVersion) || f.SpatialAim == nil || f.MemoryRecovery != nil || f.MovementInertia != nil || f.EntityAttention != nil || len(s.Layers) != 3 {
 		return fmt.Errorf("invalid memory route movement contract")
 	}
 	width := MemoryRouteMovementInputWidth
-	for i, out := range []int{32, 16, 2} {
+	outputs := 2
+	if s.Version == MemoryRouteMovementYawVersion {
+		outputs = 3
+	}
+	for i, out := range []int{32, 16, outputs} {
 		l := s.Layers[i]
 		if len(l.Weight) != out || len(l.Bias) != out {
 			return fmt.Errorf("invalid route layer output")
@@ -96,5 +101,8 @@ func (p *PPO) memoryRouteMovementRaw(o Observation, raw []float64) ([]float64, e
 	result := append([]float64{}, raw...)
 	result[0] += x[0]
 	result[1] += x[1]
+	if p.file.MemoryRouteMovement.Version == MemoryRouteMovementYawVersion {
+		result[2] += x[2]
+	}
 	return result, nil
 }

@@ -14,6 +14,7 @@ CHECKPOINT = 'combat_memory_route_scope_checkpoint_v1'
 class RouteScope:
     def __init__(self, model, *, actor_lr, value_lr):
         validate(model)
+        assert model['memory_route_movement']['version']=='combat_memory_route_movement_v1', 'Yaw v2 requires its own explicit training scope'
         assert model.get('memory_route_movement') and not any(k.startswith('diagnostic_') for k in model)
         assert model.get('attention') and not model.get('memory'), 'Only verified temporal attention migration is supported'
         assert torch.cuda.is_available() and 0 < actor_lr <= .01 and 0 < value_lr <= .01

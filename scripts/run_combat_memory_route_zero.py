@@ -22,6 +22,9 @@ def main():
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--port', type=int, default=49400)
     ap.add_argument('--candidate', type=Path, help='Explicit nonzero technical candidate; identity is not expected')
+    ap.add_argument('--control', type=Path, help='Explicit paired control instead of original source; requires candidate')
+    ap.add_argument('--reference-source',action='store_true',help='Add the original source reference to explicit control/candidate')
+    ap.add_argument('--include-rules',action='store_true',help='Add ordinary rules under identical generated conditions')
     ap.add_argument('--fresh-seed-offsets', type=int, nargs='+', help='Declared fresh TRAIN offsets for contact-loss diagnostic')
     ap.add_argument('--health-100', action='store_true', help='Explicit matched diagnostic cohort with player HP100')
     a = ap.parse_args()
@@ -33,18 +36,27 @@ def main():
         assert a.candidate and all(x>=0 and x!=21 for x in a.fresh_seed_offsets)
         assert len(set(a.fresh_seed_offsets))==len(a.fresh_seed_offsets)
         selected['cases']=[{**copy.deepcopy(c),'fresh_offset':offset} for c in selected['cases'] for offset in a.fresh_seed_offsets]
-    count=2*len(selected['cases'])
+    count=(2+int(a.reference_source)+int(a.include_rules))*len(selected['cases'])
+    cuda_count=count-int(a.include_rules)*len(selected['cases'])
     assert prep['state'] == 'passed' and not prep['training_performed']
     source, zero = Path(selected['source_model']).resolve(), Path(prep['weights']).resolve()
     assert sha(source) == selected['source_weights_sha256'] and sha(zero) == prep['weights_sha256']
     if a.candidate:
         zero = a.candidate.resolve()
         assert read(zero)['feature_version']=='combat_features_v13_memory_static_routes'
+    if a.control:
+        assert a.candidate
+        source=a.control.resolve()
+        assert read(source)['feature_version']=='combat_features_v13_memory_static_routes'
+    assert not a.reference_source or a.control
+    assert not a.include_rules or a.candidate
+    original_source=Path(selected['source_model']).resolve()
     pins = {}
     def pin(p):
         p = Path(p).resolve(); pins[str(p)] = sha(p); return p
     for p in (source, zero, a.selection, a.prepared/'report.json'):
         pin(p)
+    if a.reference_source:pin(original_source)
     for p in (repo/'scripts').glob('*.py'):
         pin(p)
     out.mkdir(parents=True)
@@ -73,20 +85,29 @@ def main():
                 name=ep['id']+'.json';save(folder/name,ep);pin(folder/name)
                 save(folder/'index.json',dict(version=1,files=[name]));registry=pin(folder/'index.json')
             case['seed']=ep['splits']['train']['start']+offset
-            for label, model in [('source',source),('zero',zero)]:
+            models=[('source',source),('zero',zero)]
+            if a.reference_source:models.append(('original',original_source))
+            if a.include_rules:models.append(('rules',None))
+            for label, model in models:
                 i = len(variants)
                 plan = out/f'plan-{i:02d}.json'
-                run(f'plan-{i:02d}', [planner,'--registry',registry,'--root',repo,'--episodes',case['episode'],
-                    '--split','train','--mode','learned','--model',model,'--count',1,'--seed-offset',offset,
-                    '--checked-wall-slide','--out',plan,'--artifacts',out/f'captures-{i:02d}'])
+                mode='rules' if label=='rules' else 'learned'
+                command=[planner,'--registry',registry,'--root',repo,'--episodes',case['episode'],
+                    '--split','train','--mode',mode,'--count',1,'--seed-offset',offset,
+                    '--checked-wall-slide','--out',plan,'--artifacts',out/f'captures-{i:02d}']
+                if model is not None:command+=['--model',model]
+                run(f'plan-{i:02d}',command)
                 generated=read(plan)['tasks'][0]['instances']
                 if label=='source' and (a.fresh_seed_offsets or a.health_100):case['instance']=generated[0]
                 assert generated == [case['instance']]
-                variants.append(dict(index=i,context_index=ci,label=label,model=str(model),model_sha256=sha(model),context=case))
+                variants.append(dict(index=i,context_index=ci,label=label,mode=mode,model=str(model) if model else None,model_sha256=sha(model) if model else None,context=case))
                 plans.append(pin(plan))
         save(out/'spec.json', dict(version='combat_memory_route_candidate_native_v1' if a.candidate else 'combat_memory_route_zero_native_v1',variants=variants,inputs=pins,
-            native_budget=count,cuda_budget=count,pool=16,timescale=2,independent_worlds=len(selected['cases']),
+            native_budget=count,cuda_budget=cuda_count,pool=16,timescale=2,independent_worlds=len(selected['cases']),
             fixed_health_100=a.health_100,fresh_seed_offsets=a.fresh_seed_offsets,
+            control_role='explicit_control' if a.control else 'original_source',control_model=str(source),
+            selection_kind=selected.get('selection_kind','source_selected_development'),
+            selection_description=selected.get('selection',''),
             intentional_paired_seed_reuse=True,training_performed=False,promotion=False))
         # Freeze implementation evidence without game assets or binary duplication.
         snap = out/'source-snapshot'
@@ -120,7 +141,8 @@ def main():
             return dict(model=v['model'],model_sha256=v['model_sha256'],data=str(d/'native'),out=str(d/'cuda'),native_report_sha256=sha(d/'native/report.json'))
         stage('native-export')
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as workers:
-            tasks=list(workers.map(export,sorted(pool['jobs'],key=lambda j:j['plan_index'])))
+            learned=[j for j in pool['jobs'] if variants[j['plan_index']]['mode']=='learned']
+            tasks=list(workers.map(export,sorted(learned,key=lambda j:j['plan_index'])))
         save(out/'cuda-request.json',dict(version='combat_cuda_finalize_batch_v1',compact_finalized_streams=True,tasks=tasks))
         stage('cuda-verification')
         run('cuda-batch',[sys.executable,repo/'scripts/finalize_combat_cuda_batch.py','--request',out/'cuda-request.json','--receipt-root',out/'cuda-batch'])
@@ -128,7 +150,7 @@ def main():
         stage('identity-audit')
         assert all(sha(p)==digest for p,digest in pins.items())
         if a.candidate:
-            save(out/'technical-parity.json',dict(state='passed',native_cases=count,cuda_cases=count,
+            save(out/'technical-parity.json',dict(state='passed',native_cases=count,cuda_cases=cuda_count,
                 candidate_sha256=sha(zero),training_performed=False,promotion=False,
                 scope='Explicit nonzero route candidate; native likelihood/context/bootstrap checked on CUDA. No identity or quality improvement claim.'))
         else:

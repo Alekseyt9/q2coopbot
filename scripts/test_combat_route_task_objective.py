@@ -39,7 +39,7 @@ def main():
     for field,value in [('capture_verified',False),('dispatch_verified',False),('same_life',False),
         ('owner_before','rules'),('owner_after','provider'),('fallback','system2_noncombat'),
         ('health_before',0),('health_after',0),('goal_before_or_at_handoff',True),
-        ('death_before_or_at_handoff',True),('episode_goal',True)]:
+        ('death_before_or_at_handoff',True),('episode_goal',True),('unfinished_native_fixture',False)]:
         invalid=copy.deepcopy(proof);invalid[field]=value
         assert not qualifies(row,invalid),field
         _,changed=overlay([row],[invalid],AUTONOMOUS);assert not changed;rejected+=1
