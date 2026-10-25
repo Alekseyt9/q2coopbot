@@ -36,15 +36,16 @@ func MarkGoalHandoff(s *Step, killFrame, observedFrame int) error {
 
 // GoalStop is supervisor evidence for an offline episode boundary, never a policy input.
 type GoalStop struct {
-	Version       string   `json:"version"`
-	Reason        string   `json:"reason"`
-	Spawncount    int      `json:"spawncount"`
-	Actor         int      `json:"actor"`
-	Classes       []string `json:"classes"`
-	KillFrame     int      `json:"kill_frame"`
-	ObservedFrame int      `json:"observed_frame"`
-	Health        int      `json:"health"`
-	Kills         []struct {
+	NativeObjective *CombatObjective `json:"native_objective,omitempty"`
+	Version         string           `json:"version"`
+	Reason          string           `json:"reason"`
+	Spawncount      int              `json:"spawncount"`
+	Actor           int              `json:"actor"`
+	Classes         []string         `json:"classes"`
+	KillFrame       int              `json:"kill_frame"`
+	ObservedFrame   int              `json:"observed_frame"`
+	Health          int              `json:"health"`
+	Kills           []struct {
 		Frame  int    `json:"frame"`
 		Target int    `json:"target"`
 		Class  string `json:"target_class"`
@@ -73,35 +74,32 @@ func VerifyGoalStopForClasses(g GoalStop, release *CombatRelease, events []Damag
 		return fail()
 	}
 	id := observed.Identity
-	if release == nil || g.Version != "combat_goal_stop_v1" || g.Reason != "combat_goal_complete" || id.Life != 1 || id.Connection != 1 || id.Map != expectedMap || id.Spawncount != release.Spawncount || g.Spawncount != id.Spawncount || g.Actor != id.Actor || g.ObservedFrame != id.Frame || g.Health != int(observed.Health) || g.Health <= 0 || g.KillFrame < release.Frame || g.ObservedFrame <= g.KillFrame {
+	if release == nil || g.Version != "combat_goal_stop_v1" || g.NativeObjective != nil || g.Reason != "combat_goal_complete" || id.Life != 1 || id.Connection != 1 || id.Map != expectedMap || id.Spawncount != release.Spawncount || g.Spawncount != id.Spawncount || g.Actor != id.Actor || g.ObservedFrame != id.Frame || g.Health != int(observed.Health) || g.Health <= 0 || g.KillFrame < release.Frame || g.ObservedFrame <= g.KillFrame {
 		return fail()
 	}
-	expected := map[string]bool{}
+	expected := map[string]int{}
 	for _, class := range expectedClasses {
 		switch class {
-		case "monster_parasite", "monster_gunner", "monster_soldier", "monster_soldier_light", "monster_infantry":
+		case "monster_parasite", "monster_gunner", "monster_soldier", "monster_soldier_light", "monster_soldier_ss", "monster_infantry", "monster_berserk", "monster_brain", "monster_chick", "monster_medic", "monster_mutant", "monster_gladiator", "monster_tank", "monster_tank_commander", "monster_supertank", "monster_jorg", "monster_makron", "monster_flyer", "monster_floater", "monster_hover", "monster_boss2", "monster_flipper":
 		default:
 			return fail()
 		}
-		if expected[class] {
-			return fail()
-		}
-		expected[class] = true
+		expected[class]++
 	}
-	if len(expected) == 0 || len(expected) > 4 {
+	if len(expectedClasses) == 0 || len(expectedClasses) > 4 {
 		return fail()
 	}
-	if len(g.Classes) != len(expected) || len(g.Kills) != len(expected) {
+	if len(g.Classes) != len(expectedClasses) || len(g.Kills) != len(expectedClasses) {
 		return fail()
 	}
-	classes := map[string]bool{}
+	classes := map[string]int{}
 	for _, c := range g.Classes {
-		if !expected[c] || classes[c] {
+		classes[c]++
+		if expected[c] == 0 || classes[c] > expected[c] {
 			return fail()
 		}
-		classes[c] = true
 	}
-	killed := map[string]DamageEvent{}
+	killed := map[int]DamageEvent{}
 	for _, e := range events {
 		if e.Spawncount != id.Spawncount || e.Map != id.Map || e.Frame < release.Frame || e.Frame > id.Frame || e.HealthBefore <= 0 || e.HealthAfter > 0 {
 			continue
@@ -109,24 +107,25 @@ func VerifyGoalStopForClasses(g GoalStop, release *CombatRelease, events []Damag
 		if e.Target == id.Actor && e.TargetClass == "player" {
 			return fail()
 		}
-		if e.Attacker == id.Actor && e.AttackerClass == "player" && e.Mod != 21 && expected[e.TargetClass] {
-			if _, found := killed[e.TargetClass]; !found {
-				killed[e.TargetClass] = e
+		if e.Attacker == id.Actor && e.AttackerClass == "player" && e.Mod != 21 && expected[e.TargetClass] > 0 {
+			if old, found := killed[e.Target]; !found || e.Frame < old.Frame {
+				killed[e.Target] = e
 			}
 		}
 	}
-	if len(killed) != len(expected) {
+	if len(killed) < len(expectedClasses) {
 		return fail()
 	}
 	last := 0
 	targets := map[int]bool{}
-	seen := map[string]bool{}
+	seen := map[string]int{}
 	for _, k := range g.Kills {
-		e, found := killed[k.Class]
-		if !found || seen[k.Class] || targets[k.Target] || e.Frame != k.Frame || e.Target != k.Target {
+		e, found := killed[k.Target]
+		seen[k.Class]++
+		if !found || seen[k.Class] > expected[k.Class] || targets[k.Target] || e.Frame != k.Frame || e.TargetClass != k.Class {
 			return fail()
 		}
-		seen[k.Class], targets[k.Target] = true, true
+		targets[k.Target] = true
 		if k.Frame > last {
 			last = k.Frame
 		}

@@ -112,6 +112,8 @@ type Client struct {
 	testChangeMap                           string
 	testChangeEntry                         string
 	testInitialHealth                       int
+	testInitialInventory                    []quake.InventoryItem
+	testInitialWeapon                       string
 	testInvulnerable                        bool
 	testChangeAfter                         int
 	testRconPassword                        string
@@ -659,6 +661,13 @@ func (c *Client) run(ctx context.Context) error {
 						setup = []string{"give Shotgun", "give Shells 20", "use Shotgun"}
 					}
 				}
+				if c.testInitialInventory != nil {
+					command, err := initialInventoryCommand(c.testInitialInventory, c.testInitialWeapon)
+					if err != nil {
+						return err
+					}
+					setup = []string{command}
+				}
 				for _, command := range setup {
 					payload = append(payload, 4)
 					payload = append(payload, command...)
@@ -802,6 +811,9 @@ func (c *Client) run(ctx context.Context) error {
 				weaponReady := !c.testProjectileComparison || projectileFixtureWeaponReady(c.testWeaponSwitchFixture, s.Weapon)
 				if c.testSynchronous {
 					weaponReady = synchronousFixtureWeaponReady(c.testWeaponSwitchFixture, s) && s.Health == int16(c.testInitialHealth) && math.Abs(s.Self[2]-c.testTeleportPosition[2]) < 1
+					if c.testInitialInventory != nil {
+						weaponReady = initialInventoryReady(c.testInitialInventory, c.testInitialWeapon, s) && s.Health == int16(c.testInitialHealth) && math.Abs(s.Self[2]-c.testTeleportPosition[2]) < 1
+					}
 				}
 				if s.OnGround && s.Health > 0 && math.Abs(s.Self[0]-c.testTeleportPosition[0]) < 1 && math.Abs(s.Self[1]-c.testTeleportPosition[1]) < 1 && weaponReady {
 					if err := c.command("test_combat_ready"); err != nil {

@@ -24,10 +24,11 @@ type Seeds struct {
 	Count int `json:"count"`
 }
 type Recipe struct {
-	Runner       string `json:"runner"`
-	Loadout      string `json:"loadout,omitempty"`
-	Mixed        bool   `json:"mixed,omitempty"`
-	RewardConfig string `json:"reward_config,omitempty"`
+	RequireNativeObjective bool   `json:"require_native_objective,omitempty"`
+	Runner                 string `json:"runner"`
+	Loadout                string `json:"loadout,omitempty"`
+	Mixed                  bool   `json:"mixed,omitempty"`
+	RewardConfig           string `json:"reward_config,omitempty"`
 }
 type Episode struct {
 	Generator    *Generator       `json:"generator,omitempty"`
@@ -163,7 +164,7 @@ func (e Episode) validate() error {
 		return fmt.Errorf("unknown episode status")
 	}
 	mapSupported := e.Map == "base1" || e.Map == "base2"
-	if e.Generator != nil && (e.Generator.Kind == "campaign-ground-combat-v1" || e.Generator.Kind == nativeGroundKind || isCampaignGroupKind(e.Generator.Kind)) {
+	if e.Generator != nil && (e.Generator.Kind == "campaign-ground-combat-v1" || e.Generator.Kind == nativeGroundKind || e.Generator.Kind == nativeRosterKind || e.Generator.Kind == nativeProfileKind || e.Generator.Kind == nativeHabitatRosterKind || isCampaignGroupKind(e.Generator.Kind)) {
 		for _, name := range AllCombatMapNames() {
 			mapSupported = mapSupported || e.Map == name
 		}

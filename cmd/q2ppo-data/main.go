@@ -92,6 +92,7 @@ func run() error {
 		return trainingepisodes.MergeRollouts(strings.Split(*merge, ","), *out)
 	}
 	var manifest struct {
+		NativeObjectiveRequired            bool                     `json:"native_objective_required"`
 		ExecutionContract                  string                   `json:"combat_execution_contract"`
 		Provider                           string                   `json:"provider"`
 		Kind                               string                   `json:"provider_kind"`
@@ -148,16 +149,17 @@ func run() error {
 		Valid    bool `json:"provenance_valid"`
 		Complete bool `json:"capture_complete"`
 		Results  []struct {
-			Root      string                     `json:"root"`
-			Seed      int                        `json:"seed"`
-			Valid     bool                       `json:"capture_valid"`
-			Dispatch  bool                       `json:"dispatch_valid"`
-			ConfigSHA string                     `json:"provider_config_sha256"`
-			Worker    int                        `json:"worker"`
-			Mixed     bool                       `json:"fixture_mixed"`
-			Fixture   *trainingepisodes.Instance `json:"generated_fixture"`
-			Goal      *learningenv.GoalStop      `json:"goal_stop"`
-			Death     *learningenv.DeathStop     `json:"death_stop"`
+			NativeObjectiveRequired bool                       `json:"native_objective_required"`
+			Root                    string                     `json:"root"`
+			Seed                    int                        `json:"seed"`
+			Valid                   bool                       `json:"capture_valid"`
+			Dispatch                bool                       `json:"dispatch_valid"`
+			ConfigSHA               string                     `json:"provider_config_sha256"`
+			Worker                  int                        `json:"worker"`
+			Mixed                   bool                       `json:"fixture_mixed"`
+			Fixture                 *trainingepisodes.Instance `json:"generated_fixture"`
+			Goal                    *learningenv.GoalStop      `json:"goal_stop"`
+			Death                   *learningenv.DeathStop     `json:"death_stop"`
 		} `json:"results"`
 	}
 	if e = read(filepath.Join(*batch, "report.json"), &report); e != nil {
@@ -231,6 +233,9 @@ func run() error {
 	terminals := 0
 	reconciledRewardRows := 0
 	for i, r := range report.Results {
+		if r.NativeObjectiveRequired != manifest.NativeObjectiveRequired {
+			return fmt.Errorf("native objective contract differs between report and manifest")
+		}
 		if !r.Valid || !r.Dispatch || seen[r.Seed] {
 			return fmt.Errorf("invalid episode")
 		}
@@ -350,7 +355,19 @@ func run() error {
 			} else if r.Mixed {
 				expectedClasses = append(expectedClasses, "monster_gunner")
 			}
-			if err = learningenv.VerifyGoalStopForClasses(goal, native.Release, events, observed, expectedClasses, cfg.Test.TeleportMap); err != nil {
+			if r.NativeObjectiveRequired && goal.Version != "combat_goal_stop_v2" {
+				return fmt.Errorf("required native objective receipt downgraded")
+			}
+			if goal.Version == "combat_goal_stop_v2" {
+				states, e := learningenv.ReadCombatObjectives(strings.NewReader(string(log)))
+				if e != nil {
+					return e
+				}
+				err = learningenv.VerifyGoalStopWithObjectiveForClasses(goal, native.Release, events, observed, expectedClasses, cfg.Test.TeleportMap, states)
+			} else {
+				err = learningenv.VerifyGoalStopForClasses(goal, native.Release, events, observed, expectedClasses, cfg.Test.TeleportMap)
+			}
+			if err != nil {
 				return err
 			}
 			for i := range args {

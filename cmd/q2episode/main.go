@@ -38,10 +38,22 @@ func run() error {
 	artifacts := flag.String("artifacts", "", "fresh runtime output root")
 	campaign := flag.Int("campaign-sites", 0, "generate this many distinct original encounter sites per selected map into out")
 	allMapSites := flag.Int("all-map-sites", 0, "scan all 39 campaign maps only; generate up to this many checked ground sites per map")
+	nativeRoster := flag.Bool("native-random-roster", false, "with all-map-sites, generate map-native repeated groups of2..4 and partial inventory")
+	nativeProfiles := flag.Bool("native-monster-profiles", false, "with all-map-sites, scan each native combat type using its own stock hull/habitat")
+	habitatRoster := flag.Bool("native-habitat-roster", false, "with all-map-sites, add random native profile groups using per-class habitat placements")
 	campaignMaps := flag.String("campaign-maps", "base1,base2", "comma-separated stock campaign maps for site generation")
 	campaignGroup := flag.String("campaign-group", "", "comma-separated distinct ground monster classes; generate group recipes with Super Shotgun inventory")
 	campaignGroupLoadout := flag.String("campaign-group-loadout", "weapons-ssg", "group starting inventory: blaster, machinegun, weapons, weapons-ssg or weapons-grenades-recovery")
 	flag.Parse()
+	if *habitatRoster && (*allMapSites == 0 || *nativeProfiles || *nativeRoster) {
+		return fmt.Errorf("native-habitat-roster requires all-map-sites and excludes other native catalog modes")
+	}
+	if *nativeProfiles && (*allMapSites == 0 || *nativeRoster) {
+		return fmt.Errorf("native-monster-profiles requires all-map-sites and excludes native-random-roster")
+	}
+	if *nativeRoster && *allMapSites == 0 {
+		return fmt.Errorf("native-random-roster requires all-map-sites")
+	}
 	if *allMapSites != 0 {
 		if *campaign != 0 || *out == "" {
 			return fmt.Errorf("all-map-sites needs out and cannot combine with campaign-sites")
@@ -50,7 +62,17 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		episodes, coverage, err := trainingepisodes.AllMapRecipes(abs, *allMapSites)
+		var episodes []trainingepisodes.Episode
+		var coverage []trainingepisodes.MapCoverage
+		if *habitatRoster {
+			episodes, coverage, err = trainingepisodes.NativeHabitatRosterRecipes(abs, *allMapSites)
+		} else if *nativeProfiles {
+			episodes, coverage, err = trainingepisodes.NativeProfileRecipes(abs, *allMapSites)
+		} else if *nativeRoster {
+			episodes, coverage, err = trainingepisodes.NativeRosterRecipes(abs, *allMapSites, 2, 4)
+		} else {
+			episodes, coverage, err = trainingepisodes.AllMapRecipes(abs, *allMapSites)
+		}
 		if err != nil {
 			return err
 		}

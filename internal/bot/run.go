@@ -58,6 +58,8 @@ type Config struct {
 	TestLight                              *int
 	TestInvulnerable                       bool
 	TestInitialHealth                      int
+	TestInitialInventory                   []quake.InventoryItem
+	TestInitialWeapon                      string
 	TestChangeEntry                        string
 	TestSession                            string
 	TestSessionRole                        string
@@ -348,6 +350,14 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	if cfg.TestInitialHealth < 0 || cfg.TestInitialHealth > 100 || cfg.TestInitialHealth > 0 && (!cfg.FramePaced || cfg.TestTeleport == "") {
 		return fmt.Errorf("initial_health requires frame pacing, teleport, and 1..100 health")
 	}
+	if cfg.TestInitialInventory != nil || cfg.TestInitialWeapon != "" {
+		if cfg.Host != "127.0.0.1" || !cfg.TestSynchronous || !cfg.TestCombatBarrier || !cfg.CombatCapture || cfg.TestTeleport == "" || !multiWeaponFixture(cfg.TestWeaponSwitchFixture) {
+			return fmt.Errorf("exact initial inventory requires isolated synchronous multiweapon capture")
+		}
+		if _, err := initialInventoryCommand(cfg.TestInitialInventory, cfg.TestInitialWeapon); err != nil {
+			return err
+		}
+	}
 	if cfg.TestChangeEntry != "" {
 		if _, err := transitionMapArgument(cfg.TestChangeMap, cfg.TestChangeEntry); err != nil {
 			return err
@@ -473,7 +483,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	if cfg.TestSpawnClass == "" {
 		cfg.TestSpawnClass = "monster_soldier_light"
 	}
-	if cfg.TestSpawnClass != "monster_soldier" && cfg.TestSpawnClass != "monster_soldier_light" && cfg.TestSpawnClass != "monster_soldier_ss" && cfg.TestSpawnClass != "monster_infantry" && cfg.TestSpawnClass != "monster_tank" && cfg.TestSpawnClass != "monster_flyer" && cfg.TestSpawnClass != "monster_parasite" {
+	if cfg.TestSpawnClass != "monster_soldier" && cfg.TestSpawnClass != "monster_soldier_light" && cfg.TestSpawnClass != "monster_soldier_ss" && cfg.TestSpawnClass != "monster_infantry" && cfg.TestSpawnClass != "monster_gunner" && cfg.TestSpawnClass != "monster_berserk" && cfg.TestSpawnClass != "monster_brain" && cfg.TestSpawnClass != "monster_chick" && cfg.TestSpawnClass != "monster_medic" && cfg.TestSpawnClass != "monster_mutant" && cfg.TestSpawnClass != "monster_gladiator" && cfg.TestSpawnClass != "monster_tank_commander" && cfg.TestSpawnClass != "monster_supertank" && cfg.TestSpawnClass != "monster_jorg" && cfg.TestSpawnClass != "monster_makron" && cfg.TestSpawnClass != "monster_floater" && cfg.TestSpawnClass != "monster_hover" && cfg.TestSpawnClass != "monster_boss2" && cfg.TestSpawnClass != "monster_flipper" && cfg.TestSpawnClass != "monster_tank" && cfg.TestSpawnClass != "monster_flyer" && cfg.TestSpawnClass != "monster_parasite" {
 		return fmt.Errorf("unsupported test spawn class %q", cfg.TestSpawnClass)
 	}
 	if cfg.AASDir == "" {
@@ -502,6 +512,8 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		testSetupHoldFrames:     cfg.TestSetupHoldFrames,
 		testHideHealthFrames:    cfg.TestHideHealthFrames,
 		testInitialHealth:       cfg.TestInitialHealth,
+		testInitialInventory:    append([]quake.InventoryItem(nil), cfg.TestInitialInventory...),
+		testInitialWeapon:       cfg.TestInitialWeapon,
 		testWeaponSwitchFixture: cfg.TestWeaponSwitchFixture,
 		testInvulnerable:        cfg.TestInvulnerable,
 		testChangeEntry:         cfg.TestChangeEntry,

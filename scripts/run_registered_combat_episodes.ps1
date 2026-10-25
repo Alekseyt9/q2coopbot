@@ -42,6 +42,7 @@ try{
         $ep=$task.episode
         $out=Join-Path $schedule.output_root "$($ep.id)-$mode"
         $argsMap=@{OutputRoot=$out;Workers=4;Timescale=2;GameFrames=$ep.game_frames;Seed=$task.seeds[0];Port=$Port;Skill=$ep.skill;CombatMode=$mode;Loadout=$ep.recipe.loadout;EpisodesPerWorker=[int]($task.seeds.Count/4);Synchronous=$true;StopOnGoal=$true;StopOnFirstDeath=$true;ReleaseGameFrame=100;RewardConfig=(Join-Path $repo $ep.recipe.reward_config)}
+        if($ep.recipe.require_native_objective){$argsMap.RequireNativeObjective=$true}
         if($mode -eq 'learned'){$argsMap.ProviderFile=$schedule.model_path}
         if($schedule.record_combat_advice){
             if($mode -ne 'learned'){throw 'Combat advice requires learned control'}

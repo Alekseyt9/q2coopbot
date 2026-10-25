@@ -7,6 +7,33 @@ import (
 	"testing"
 )
 
+func TestResetStockWeaponsAndSparseZeroInventory(t *testing.T) {
+	o := damageStep(10).Observation
+	o.Version, o.Health, o.Ammo, o.OnGround = policy.ObservationVersion, 100, 5, true
+	o.Position = quake.Vec3{32, -224, 24}
+	visible := true
+	o.Enemies = []policy.Enemy{{Class: "monster_parasite", Relative: quake.Vec3{168, 0, 0}, ClearShot: &visible}}
+	items := []quake.InventoryItem{{Name: "Blaster", Count: 1}}
+	age := 0
+	o.Inventory, o.InventoryAgeFrames = &items, &age
+	expected := ResetExpectation{Version: ResetVersion, Map: "base1", Position: o.Position, Health: 100, Ammo: 5, EnemyClass: "monster_parasite", EnemyPosition: quake.Vec3{200, -224, 24}, Inventory: []quake.InventoryItem{{Name: "Blaster", Count: 1}, {Name: "Shells", Count: 0}}}
+	for name, model := range resetWeaponModels {
+		expected.Weapon = name
+		o.Weapon = "models/weapons/" + model + "/tris.md2"
+		if r := VerifyReset(o, expected); !r.ObservedFieldsConfirmed {
+			t.Fatalf("%s: %s", name, r.Reason)
+		}
+	}
+	items = append(items, quake.InventoryItem{Name: "Shells", Count: 1})
+	if r := VerifyReset(o, expected); r.Reason != "reset_inventory_mismatch" {
+		t.Fatal("unexpected ammo accepted", r)
+	}
+	expected.Weapon = "unknown"
+	if r := VerifyReset(o, expected); r.Reason != "invalid_or_unsupported_reset_expectation" {
+		t.Fatal("unknown weapon accepted", r)
+	}
+}
+
 func TestGrenadesResetRequiresObservedWeaponAndAmmo(t *testing.T) {
 	o := damageStep(10).Observation
 	o.Version = policy.ObservationVersion

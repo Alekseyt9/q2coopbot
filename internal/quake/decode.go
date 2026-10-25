@@ -667,8 +667,8 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 				if e != nil {
 					return frames, e
 				}
-			} else if effect == 3 || effect == 11 {
-				// TE_RAILTRAIL and TE_BUBBLETRAIL: two packed positions.
+			} else if effect == 3 || effect == 11 || effect == 23 {
+				// TE_RAILTRAIL, TE_BUBBLETRAIL and TE_BFG_LASER: two packed positions.
 				if e = r.skip(12); e != nil {
 					return frames, e
 				}
@@ -677,7 +677,7 @@ func (d *Decoder) Parse(data []byte) ([]Frame, error) {
 				if e = r.skip(9); e != nil {
 					return frames, e
 				}
-			} else if effect == 5 || effect == 6 || effect == 7 || effect == 8 || effect == 17 || effect == 18 {
+			} else if effect == 5 || effect == 6 || effect == 7 || effect == 8 || effect == 17 || effect == 18 || effect == 20 || effect == 21 {
 				// Explosion temporary entities carry one packed position.
 				var position Vec3
 				for i := range position {

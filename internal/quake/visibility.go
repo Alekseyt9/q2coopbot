@@ -12,6 +12,7 @@ type bspVisibility struct {
 	phsOffsets []int
 	nodes      []bspVisNode
 	leaves     []int
+	areas      []int
 	planes     []bspPlane
 }
 
@@ -26,7 +27,7 @@ func parseBSPVisibility(raw, nodes, leaves []byte, planes []bspPlane) *bspVisibi
 		return nil
 	}
 	v := &bspVisibility{data: append([]byte(nil), raw...), phsOffsets: make([]int, count),
-		nodes: make([]bspVisNode, len(nodes)/28), leaves: make([]int, len(leaves)/28), planes: planes}
+		nodes: make([]bspVisNode, len(nodes)/28), leaves: make([]int, len(leaves)/28), areas: make([]int, len(leaves)/28), planes: planes}
 	for i := range v.phsOffsets {
 		offset := int(int32(binary.LittleEndian.Uint32(raw[4+i*8+4:])))
 		if offset < 4+count*8 || offset >= len(raw) {
@@ -42,8 +43,46 @@ func parseBSPVisibility(raw, nodes, leaves []byte, planes []bspPlane) *bspVisibi
 	}
 	for i := range v.leaves {
 		v.leaves[i] = int(int16(binary.LittleEndian.Uint16(leaves[i*28+4:])))
+		v.areas[i] = int(int16(binary.LittleEndian.Uint16(leaves[i*28+6:])))
 	}
 	return v
+}
+
+// StaticArea is a conservative authoring aid. Different areas may be connected
+// by live area portals; equal areas do not certify actual visibility.
+func (m *MapInfo) StaticArea(point Vec3) (int, bool) {
+	if m == nil || m.visibility == nil {
+		return 0, false
+	}
+	v := m.visibility
+	node := 0
+	for steps := 0; steps <= len(v.nodes); steps++ {
+		if node < 0 {
+			leaf := -1 - node
+			if leaf >= 0 && leaf < len(v.areas) && v.areas[leaf] > 0 {
+				return v.areas[leaf], true
+			}
+			return 0, false
+		}
+		if node >= len(v.nodes) {
+			return 0, false
+		}
+		n := v.nodes[node]
+		if n.plane < 0 || n.plane >= len(v.planes) {
+			return 0, false
+		}
+		p := v.planes[n.plane]
+		d := -p.dist
+		for a, x := range p.normal {
+			d += point[a] * x
+		}
+		side := 0
+		if d < 0 {
+			side = 1
+		}
+		node = n.children[side]
+	}
+	return 0, false
 }
 
 func (v *bspVisibility) pointCluster(point Vec3) int {

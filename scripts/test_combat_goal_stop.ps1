@@ -48,4 +48,11 @@ foreach($key in @('observed_frame','kill_frame','health','actor','spawncount')){
 }
 $changed=$receipt.PSObject.Copy();$changed.classes=@('monster_parasite')
 if(Get-CombatVerifiedSavedGoalReceipt $changed @($row,$deadTail) $events $context $classes){throw 'Tampered saved classes accepted'}
+$repeated=@('monster_gunner','monster_gunner')
+$first=$events[1].PSObject.Copy();$first.frame=150
+$second=$events[1].PSObject.Copy();$second.frame=168;$second.target=344
+if(Get-CombatGoalReceipt $row @($first) $context $repeated){throw 'One kill satisfied two identical monsters'}
+if(Get-CombatGoalReceipt $row @($first,$first) $context $repeated){throw 'Repeated event counted as another monster'}
+$both=Get-CombatGoalReceipt $row @($first,$second) $context $repeated
+if(!$both -or $both.kills.Count -ne 2 -or $both.kill_frame -ne 168){throw 'Two distinct same-class kills not accepted'}
 'Goal stop regression checks passed'

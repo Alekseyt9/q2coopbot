@@ -3,6 +3,7 @@ package trainingepisodes
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"q2coopbot/internal/quake"
 )
@@ -107,7 +108,16 @@ func grounded(world *quake.MapInfo, p quake.Vec3) (quake.Vec3, bool) {
 }
 
 func campaignRecipe(world quake.MapInfo, source quake.MapEntity, entityIndex int, class string, mapIndex, sceneIndex int, kinds ...string) (Episode, bool) {
+	profiled := len(kinds) == 1 && kinds[0] == nativeProfileKind
 	primary, ok := grounded(&world, source.Origin)
+	if profiled {
+		profile := monsterProfiles[class]
+		primary = source.Origin
+		ok = true
+		if profile.Habitat == "ground" {
+			primary, ok = groundForHull(&world, source.Origin, profile.Min[2], 128)
+		}
+	}
 	if !ok {
 		return Episode{}, false
 	}
@@ -118,12 +128,19 @@ func campaignRecipe(world quake.MapInfo, source quake.MapEntity, entityIndex int
 			player[0] += distance * math.Cos(a)
 			player[1] += distance * math.Sin(a)
 			player, ok = grounded(&world, player)
+			if profiled {
+				player, ok = groundForHull(&world, player, -24, 1024)
+			}
 			if !ok {
 				continue
 			}
 			player[0] = math.Round(player[0]*8) / 8
 			player[1] = math.Round(player[1]*8) / 8
-			if checkStart(Instance{Map: world.Name, Player: player, Monsters: []GeneratedMonster{{Class: class, Position: primary}}}, &world) != "" {
+			geometry := ""
+			if profiled {
+				geometry = nativeProfileGeometry
+			}
+			if checkStart(Instance{Map: world.Name, MonsterGeometry: geometry, Player: player, Monsters: []GeneratedMonster{{Class: class, Position: primary}}}, &world) != "" {
 				continue
 			}
 			id := fmt.Sprintf("campaign-%s-site-%02d-blaster", world.Name, sceneIndex+1)
@@ -140,6 +157,16 @@ func campaignRecipe(world quake.MapInfo, source quake.MapEntity, entityIndex int
 			}
 			ep.Generator.Site = site
 			base := 1000000 + mapIndex*600000 + sceneIndex*40000
+			if profiled {
+				ep.Generator.Kind = nativeProfileKind
+				ep.Recipe.RequireNativeObjective = true
+				ep.ID = fmt.Sprintf("campaign-%s-native-profile-%s-site-%03d", world.Name, strings.ReplaceAll(strings.TrimPrefix(class, "monster_"), "_", "-"), sceneIndex+1)
+				ep.InitialState = "Exact map-native stock profile and habitat; partial stock inventory; isolated original encounter"
+				ep.Recipe.Loadout = "weapons"
+				inventory := DefaultPartialInventoryDistribution()
+				ep.Generator.Inventory = &inventory
+				base = 2000000000 + mapIndex*3000000 + sceneIndex*10000
+			}
 			if len(kinds) == 1 && kinds[0] == nativeGroundKind {
 				ep.Generator.Kind = nativeGroundKind
 				ep.ID = fmt.Sprintf("campaign-%s-native-site-%02d-blaster", world.Name, sceneIndex+1)
@@ -148,6 +175,9 @@ func campaignRecipe(world quake.MapInfo, source quake.MapEntity, entityIndex int
 			}
 			for i, split := range splitNames {
 				ep.Splits[split] = Seeds{Start: base + i*10000, Count: 4096}
+				if profiled {
+					ep.Splits[split] = Seeds{Start: base + i*2000, Count: 512}
+				}
 				lo, hi := primary, primary
 				lo[0] += float64(i*4 - 8)
 				hi[0] = lo[0] + 2

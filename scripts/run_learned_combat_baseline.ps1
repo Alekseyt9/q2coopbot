@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+	[switch]$RequireNativeObjective,
     [ValidateSet('legacy_v1','checked_ground_crouch_v1')][string]$ExecutionContract='legacy_v1',
     [ValidateRange(1,4)][int]$Workers=4,
     [ValidateRange(1,20)][int]$EpisodesPerWorker=2,
@@ -160,6 +161,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             '-Timescale',$using:Timescale,'-OutputRoot',$out,'-Client',$using:client)
         $arguments+=@('-CombatMode',$using:CombatMode);if($episodeProvider){$arguments+=@('-ProviderFile',$episodeProvider)}
         $arguments+=@('-GameFrames',$using:GameFrames)
+        if($using:RequireNativeObjective){$arguments+='-RequireNativeObjective'}
         $arguments+=@('-TrainingMonsterHealth',$using:TrainingMonsterHealth)
         $arguments+=@('-ReleaseGameFrame',$using:ReleaseGameFrame)
         $arguments+=@('-RecoverySkill',$using:Skill)
@@ -215,6 +217,11 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             $field=@{}
             foreach($match in [regex]::Matches($summaryText,'(game_fps|wall_s|frame_gaps|decode_errors|game_frames|moves)=([0-9.]+)')){$field[$match.Groups[1].Value]=[double]::Parse($match.Groups[2].Value,[Globalization.CultureInfo]::InvariantCulture)}
             $seedAck=@(Get-Content -LiteralPath (Join-Path $out 'server.log') | Where-Object {$_ -eq "g_test_seed ready version=1 seed=$($using:Seed+$index)"}).Count -eq 1
+            if($using:RequireNativeObjective){
+                . "$using:repo/scripts/read_combat_objective.ps1"
+                $objectiveStates=@(Read-CombatObjective (Join-Path $out 'server.log'))
+                if(!$objectiveStates.Count -or @($objectiveStates|Where-Object map -ne $captureMap).Count){throw 'Missing or wrong-world native objective state'}
+            }
             $goal=$null;$goalValid=$false
             if($using:StopOnGoal -and (Test-Path (Join-Path $out 'goal-stop.json'))){
                 . "$using:repo/scripts/combat_goal_stop.ps1"
@@ -223,7 +230,9 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 $release=@(Get-Content (Join-Path $out 'server.log') | Select-String '^sv_test_combat spawncount=(-?\d+) server_frame=(\d+) g_test_combat_start game_frame=\d+ ready=1 seed=\d+$')
                 if($release.Count -ne 1){throw 'Goal release proof missing'}
                 $classes=if($sample){@($sample.monsters.class)}else{@('monster_parasite')};if(!$sample -and $episodeMixed){$classes+='monster_gunner'}
-                $verified=Get-CombatVerifiedSavedGoalReceipt $goal $rows @(Read-DamageEvents (Join-Path $out 'server.log')) @{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value} $classes $captureMap
+                $context=@{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value;require_objective=[bool]$using:RequireNativeObjective}
+                $objectives=if($using:RequireNativeObjective){. "$using:repo/scripts/read_combat_objective.ps1";@(Read-CombatObjective (Join-Path $out 'server.log'))}else{@()}
+                $verified=Get-CombatVerifiedSavedGoalReceipt $goal $rows @(Read-DamageEvents (Join-Path $out 'server.log')) $context $classes $captureMap $objectives
                 $goalValid=$verified -and (Test-Path (Join-Path $out 'goal.stop')) -and (Get-Content (Join-Path $out 'goal.stop') -Raw).Trim() -eq 'combat_goal_complete'
                 if(!$goalValid){throw 'Unverified goal stop'}
             }
@@ -252,10 +261,23 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             $resetExpectation=Join-Path $out 'reset-expectation.json'
             @{version='observed_fixture_reset_v1';map=$config.test.teleport_map;seed=$(if($using:Synchronous){$using:Seed+$index}else{$null})
                 position=@($config.test.teleport.Split(',')|ForEach-Object {[double]::Parse($_,[Globalization.CultureInfo]::InvariantCulture)})
-                health=$config.test.initial_health;armor=0;weapon=$(if($using:Loadout -eq 'weapons-grenades-recovery'){'Grenades'}elseif($using:Loadout -eq 'weapons-ssg'){'Super Shotgun'}elseif($using:Loadout -in 'machinegun','weapons','weapons-scarce'){'Machinegun'}elseif($using:Synchronous -and $using:Loadout -eq 'blaster'){'Blaster'}else{'Shotgun'});ammo=$(switch($using:Loadout){weapons-grenades-recovery{5};machinegun{100};weapons{40};weapons-scarce{10};blaster{if($using:Synchronous){0}else{20}};default{20}});enemy_class=$(if($sample -and $config.test.spawn_class -eq 'monster_soldier_light'){'monster_soldier'}else{$config.test.spawn_class})
+                health=$config.test.initial_health;armor=0;weapon=$(if($using:Loadout -eq 'weapons-grenades-recovery'){'Grenades'}elseif($using:Loadout -eq 'weapons-ssg'){'Super Shotgun'}elseif($using:Loadout -in 'machinegun','weapons','weapons-scarce'){'Machinegun'}elseif($using:Synchronous -and $using:Loadout -eq 'blaster'){'Blaster'}else{'Shotgun'});ammo=$(switch($using:Loadout){weapons-grenades-recovery{5};machinegun{100};weapons{40};weapons-scarce{10};blaster{if($using:Synchronous){0}else{20}};default{20}});enemy_class=$(if($sample -and $config.test.spawn_class -in 'monster_soldier_light','monster_soldier_ss'){'monster_soldier'}else{$config.test.spawn_class})
                 inventory=$(if($using:Loadout -in 'weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery'){@(@{name='Blaster';count=1},@{name='Machinegun';count=1},@{name='Shotgun';count=1},@{name='Bullets';count=$(if($using:Loadout -eq 'weapons-scarce'){10}else{40})},@{name='Shells';count=$(if($using:Loadout -eq 'weapons-scarce'){6}else{20})})+$(if($using:Loadout -eq 'weapons-ssg'){@(@{name='Super Shotgun';count=1})}elseif($using:Loadout -eq 'weapons-grenades-recovery'){@(@{name='Grenades';count=5})}else{@()})}else{$null})
                 enemy_position=@($config.test.spawn_soldier.Split(',')|ForEach-Object {[double]::Parse($_,[Globalization.CultureInfo]::InvariantCulture)})
             }|ConvertTo-Json|Set-Content -LiteralPath $resetExpectation -Encoding utf8NoBOM
+            if($sample -and $sample.inventory){
+                $expected=Get-Content -LiteralPath $resetExpectation -Raw|ConvertFrom-Json
+                if($sample.monster_geometry){
+                    $aliases=@{monster_soldier_light='monster_soldier';monster_soldier_ss='monster_soldier';monster_chick='monster_bitch';monster_gladiator='monster_gladiatr';monster_floater='monster_float';monster_supertank='monster_boss1';monster_tank_commander='monster_tank';monster_jorg='monster_boss3';monster_makron='monster_boss3'}
+                    if($aliases.ContainsKey($config.test.spawn_class)){$expected.enemy_class=$aliases[$config.test.spawn_class]}
+                }
+                $expected.weapon=$sample.inventory.initial_weapon
+                $expected.inventory=@($sample.inventory.items)
+                $ammoTypes=@{'Blaster'='';'Shotgun'='Shells';'Super Shotgun'='Shells';'Machinegun'='Bullets';'Chaingun'='Bullets';'Grenade Launcher'='Grenades';'Rocket Launcher'='Rockets';'HyperBlaster'='Cells';'Railgun'='Slugs';'BFG10K'='Cells';'Grenades'='Grenades'}
+                $ammoName=$ammoTypes[$expected.weapon]
+                $expected.ammo=if($ammoName){[int]@($sample.inventory.items|Where-Object name -eq $ammoName)[0].count}else{0}
+                $expected|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $resetExpectation -Encoding utf8NoBOM
+            }
             $exportArguments=@('--trace',(Join-Path $out 'bot.jsonl'),'--out',$dataset,'--worker',"worker-$worker",'--episode',"seed-$($using:Seed+$index)",'--end-reason',$(if($goalValid){'combat_goal_complete'}elseif($deathValid){'combat_first_life_death'}else{'game_frame_limit'}),'--server-log',(Join-Path $out 'server.log'),'--client-name','SoloRetreatBot','--require-execution','--reset-expectation',$resetExpectation)
             if($using:Synchronous){$exportArguments+='--synchronous'}
             if($goalValid){
@@ -283,6 +305,12 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                     $skillProof=@($rngLog|Select-String '^g_test_skill_start game_frame=(\d+) skill=(\d+)$')
                     if($skillProof.Count -ne 1 -or [int]$skillProof[0].Matches[0].Groups[1].Value -ne $using:ReleaseGameFrame -or [int]$skillProof[0].Matches[0].Groups[2].Value -ne $using:Skill){throw 'Native skill not confirmed at release'}
                     $expectedWeaponPhase=if($using:Loadout -eq 'shotgun'){'Shotgun gunframe_before=\d+ gunframe_after=19'}elseif($using:Loadout -eq 'weapons-grenades-recovery'){'Grenades gunframe_before=\d+ gunframe_after=16'}elseif($using:Loadout -eq 'weapons-ssg'){'Super Shotgun gunframe_before=\d+ gunframe_after=18'}elseif($using:Loadout -in 'machinegun','weapons','weapons-scarce'){'Machinegun gunframe_before=\d+ gunframe_after=6'}else{'Blaster gunframe_before=\d+ gunframe_after=9'}
+                    if($sample -and $sample.inventory){
+                        $idle=@{'Blaster'=9;'Shotgun'=19;'Super Shotgun'=18;'Machinegun'=6;'Chaingun'=32;'Grenade Launcher'=17;'Rocket Launcher'=13;'HyperBlaster'=21;'Railgun'=19;'BFG10K'=33;'Grenades'=16}
+                        $initial=$sample.inventory.initial_weapon
+                        $expectedWeaponPhase=[regex]::Escape($initial)+' gunframe_before=\d+ gunframe_after='+$idle[$initial]
+                        if(!@($rngLog|Select-String '^sv_test_.*g_test_inventory_set version=1|^g_test_inventory_set version=1').Count){throw 'Native exact inventory application receipt missing'}
+                    }
                     $weapon=@($rngLog|Select-String ("^g_test_weapon_start game_frame=(\d+) actor=1 weapon="+$expectedWeaponPhase+'$'))
                     if($weapon.Count -ne 1 -or [int]$weapon[0].Matches[0].Groups[1].Value -ne $using:ReleaseGameFrame){throw 'Fixed weapon phase differs'}
                     $world=@($rngLog|Select-String '^g_test_world_start frame=(\d+) phase=fixed_map_hold free_pool_reset=1$')
@@ -306,11 +334,12 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             $p95=$(if($latencies.Count){$latencies[[math]::Ceiling(.95*$latencies.Count)-1]}else{$null})
             $p99=$(if($latencies.Count){$latencies[[math]::Ceiling(.99*$latencies.Count)-1]}else{$null})
             $dispatchValid=($using:CombatMode -eq 'rules') -or (($using:CombatMode -eq 'learned') -and ($controlled -gt 0)) -or (($using:CombatMode -eq 'learned-shadow') -and ($shadow -gt 0) -and ($controlled -eq 0))
-            # The extra Gunner is in the fixture entity lump; verify the actual native input.
+            # Additional Gunners are in the entity lump. The primary actor is
+            # spawned by the client and verified by Confirm-GeneratedCombatStart.
             $captureMap=if($sample -and $sample.map){$sample.map}else{'base1'}
             $entities=Get-Content -LiteralPath (Join-Path $out "runtime/baseq2/maps/$captureMap.ent") -Raw
             $gunnerCount=[regex]::Matches($entities,'"classname"\s+"monster_gunner"').Count
-            $expectedGunners=if($sample){@($sample.monsters|Where-Object class -eq 'monster_gunner').Count}else{[int]$episodeMixed}
+            $expectedGunners=if($sample){@($sample.monsters|Select-Object -Skip 1|Where-Object class -eq 'monster_gunner').Count}else{[int]$episodeMixed}
             if($gunnerCount -ne $expectedGunners){throw 'Episode composition differs from declared pattern'}
             if($goalValid){$null=& "$using:repo/scripts/analyze_combat_first_life.ps1" -RunRoot $out -EndObservationFrame $goal.observed_frame}
             $life=Get-Content -LiteralPath (Join-Path $out 'combat-first-life.json') -Raw | ConvertFrom-Json
@@ -324,7 +353,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 generated_fixture=$sample;generated_start=$generatedProof
                 harness_accepted=[bool]$report.accepted;harness_reason=$report.reason;worker_exit_code=$process.ExitCode
                 capture_valid=($captures.Count -eq $rows.Count -and $mismatches -eq 0 -and $field.decode_errors -eq 0 -and $frameBudgetValid -and $seedAck -and $dispatchValid -and $datasetReport.command_proof.accepted -and $datasetReport.observed_reset_confirmed -and (!$episodeProvider -or $episodeProviderHash -eq (Get-FileHash -LiteralPath $episodeProvider).Hash))
-                goal_stop=$goal;death_stop=$death;actual_game_frames=$field.game_frames;frame_budget_valid=[bool]$frameBudgetValid
+                native_objective_required=[bool]$using:RequireNativeObjective;goal_stop=$goal;death_stop=$death;actual_game_frames=$field.game_frames;frame_budget_valid=[bool]$frameBudgetValid
                 provider_config_sha256=$episodeProviderHash
                 feedback=$feedbackReport
                 feedback_audit=$feedbackAuditReport
@@ -370,6 +399,7 @@ $manifest=[ordered]@{
     inventory_transport_version=$(if($Synchronous){'native_frame_inventory_sparse_v2'}else{'stock_inventory_v1'})
     inventory_drop_once_frame=$InventoryDropOnceFrame
     stop_on_goal=[bool]$StopOnGoal
+    native_objective_required=[bool]$RequireNativeObjective
     monster_no_infighting=[bool]$Synchronous
     standard_monster_spawn_height=24.125
     game_frame_budget=$(if($Synchronous){'Commands after combat barrier; preparation excluded'}else{'All commands; preparation included'})

@@ -2,15 +2,15 @@
 function Get-CombatGoalKillEvidence([int]$Actor, $Events, $Release, [string[]]$Classes, [string]$Map) {
     $kills=@($Events | Where-Object {$_.spawncount -eq $Release.spawncount -and $_.map -eq $Map -and $_.frame -ge $Release.frame -and
         $_.attacker -eq $Actor -and $_.attacker_class -eq 'player' -and $_.mod -ne 21 -and $_.killed -and $_.health_before -gt 0 -and $_.target_class -in $Classes})
-    $selected=@(foreach($class in $Classes){
-        $found=@($kills | Where-Object target_class -eq $class | Sort-Object frame | Select-Object -First 1)
-        if($found.Count -ne 1){return $null};$found[0]
+    $selected=@(foreach($group in @($Classes|Group-Object)){
+        $found=@($kills | Where-Object target_class -eq $group.Name | Sort-Object frame | Group-Object target | ForEach-Object {$_.Group[0]} | Sort-Object frame | Select-Object -First $group.Count)
+        if($found.Count -ne $group.Count){return $null};$found
     })
     if(!$selected.Count -or @($selected.target | Sort-Object -Unique).Count -ne $Classes.Count){return $null}
     [pscustomobject]@{kills=$selected;frame=[int](($selected | Measure-Object frame -Maximum).Maximum)}
 }
 
-function Get-CombatGoalReceipt($Row, $Events, $Release, [string[]]$Classes, [string]$Map='base1') {
+function Get-CombatGoalReceipt($Row, $Events, $Release, [string[]]$Classes, [string]$Map='base1', $Objectives=$null) {
     if($Map -notmatch '^[a-z][a-z0-9_]{0,31}$' -or !$Row -or !$Release -or $Row.health -le 0 -or $Row.map -ne $Map -or $Row.connection -ne 1 -or $Row.combat_policy.observation.identity.life -ne 1){return $null}
     if($Row.spawncount -ne $Release.spawncount -or $Row.observation_frame -le $Release.frame){return $null}
     # The first released ClientThink can kill inside the release server frame.
@@ -22,10 +22,17 @@ function Get-CombatGoalReceipt($Row, $Events, $Release, [string[]]$Classes, [str
     $selected=$evidence.kills;$lastKill=$evidence.frame
     # Keep a complete observed transition after the final kill, including its reward.
     if($Row.observation_frame -lt $lastKill+1){return $null}
-    [pscustomobject]@{version='combat_goal_stop_v1';reason='combat_goal_complete';spawncount=$Row.spawncount;actor=$Row.self_entity;classes=$Classes;kill_frame=$lastKill;observed_frame=$Row.observation_frame;health=$Row.health;kills=@($selected | Select-Object frame,target,target_class)}
+    $receipt=[pscustomobject]@{version='combat_goal_stop_v1';reason='combat_goal_complete';spawncount=$Row.spawncount;actor=$Row.self_entity;classes=$Classes;kill_frame=$lastKill;observed_frame=$Row.observation_frame;health=$Row.health;kills=@($selected | Select-Object frame,target,target_class)}
+    if($Release.require_objective){
+        $state=@($Objectives|Where-Object {$_.spawncount -eq $Row.spawncount -and $_.map -eq $Map -and $_.frame -eq $Row.observation_frame})
+        if($state.Count -ne 1 -or $state[0].alive -ne 0 -or $state[0].pending -ne 0){return $null}
+        $receipt.version='combat_goal_stop_v2'
+        $receipt|Add-Member -NotePropertyName native_objective -NotePropertyValue $state[0]
+    }
+    $receipt
 }
 
-function Get-CombatEarliestGoalReceipt($Rows, $Events, $Release, [string[]]$Classes, [string]$Map='base1') {
+function Get-CombatEarliestGoalReceipt($Rows, $Events, $Release, [string[]]$Classes, [string]$Map='base1', $Objectives=$null) {
     # Rows arrive in trace order. Retain observations until native events catch
     # up; choosing the newest row makes the terminal depend on polling timing.
     $actorRow=$null
@@ -38,16 +45,16 @@ function Get-CombatEarliestGoalReceipt($Rows, $Events, $Release, [string[]]$Clas
     if(!$evidence){return $null}
     foreach($candidate in $Rows){
         if($candidate.observation_frame -le $evidence.frame){continue}
-        $receipt=Get-CombatGoalReceipt $candidate $Events $Release $Classes $Map
+        $receipt=Get-CombatGoalReceipt $candidate $Events $Release $Classes $Map $Objectives
         if($receipt){return $receipt}
     }
 }
 
-function Get-CombatVerifiedSavedGoalReceipt($Saved, $Rows, $Events, $Release, [string[]]$Classes, [string]$Map='base1') {
+function Get-CombatVerifiedSavedGoalReceipt($Saved, $Rows, $Events, $Release, [string[]]$Classes, [string]$Map='base1', $Objectives=$null) {
     # Final process shutdown may append a later death. Verify the already
     # selected earliest complete transition, rather than the last trace row.
     if(!$Saved){return $null}
-    $verified=Get-CombatEarliestGoalReceipt $Rows $Events $Release $Classes $Map
+    $verified=Get-CombatEarliestGoalReceipt $Rows $Events $Release $Classes $Map $Objectives
     if(!$verified){return $null}
     foreach($key in @('version','reason','spawncount','actor','kill_frame','observed_frame','health')){
         if($Saved.$key -ne $verified.$key){return $null}
@@ -56,12 +63,14 @@ function Get-CombatVerifiedSavedGoalReceipt($Saved, $Rows, $Events, $Release, [s
     $savedKills=@($Saved.kills|Select-Object frame,target,target_class)|ConvertTo-Json -Depth 6 -Compress
     $verifiedKills=@($verified.kills|Select-Object frame,target,target_class)|ConvertTo-Json -Depth 6 -Compress
     if($savedKills -ne $verifiedKills){return $null}
+    if($Release.require_objective -and ($Saved.native_objective|ConvertTo-Json -Compress) -ne ($verified.native_objective|ConvertTo-Json -Compress)){return $null}
     return $verified
 }
 
-function Wait-CombatGoalOrExit($Bot, [string]$Root, [int]$TimeoutMilliseconds, [string[]]$Classes, [string]$Map='base1', [bool]$FirstDeath=$false) {
+function Wait-CombatGoalOrExit($Bot, [string]$Root, [int]$TimeoutMilliseconds, [string[]]$Classes, [string]$Map='base1', [bool]$FirstDeath=$false, [bool]$RequireObjective=$false) {
     . "$PSScriptRoot/read_damage_events.ps1"
     . "$PSScriptRoot/combat_trace_reader.ps1"
+    if($RequireObjective){. "$PSScriptRoot/read_combat_objective.ps1"}
     if($FirstDeath){. "$PSScriptRoot/combat_death_stop.ps1"}
     $clock=[Diagnostics.Stopwatch]::StartNew();$receipt=$null;$row=$null;$pendingDeath=$null
     $trace=Join-Path $Root 'bot.jsonl';$log=Join-Path $Root 'server.log'
@@ -74,6 +83,7 @@ function Wait-CombatGoalOrExit($Bot, [string]$Root, [int]$TimeoutMilliseconds, [
         $release=@(Get-Content -LiteralPath $log | Select-String '^sv_test_combat spawncount=(-?\d+) server_frame=(\d+) g_test_combat_start game_frame=\d+ ready=1 seed=\d+$')
         if($release.Count -ne 1){continue}
         $context=@{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value}
+        $context.require_objective=$RequireObjective
         foreach($nextRow in @(Read-CombatTraceRows $cursor 8388608)){
                 # Keep only supervisor evidence, not full feature/action tensors.
                 $observations.Add([pscustomobject]@{observation_frame=$nextRow.observation_frame;spawncount=$nextRow.spawncount;
@@ -90,7 +100,8 @@ function Wait-CombatGoalOrExit($Bot, [string]$Root, [int]$TimeoutMilliseconds, [
         }
         if(!$row){continue}
         $events=@(Read-DamageEvents $log)
-        $receipt=Get-CombatEarliestGoalReceipt $observations $events $context $Classes $Map
+        $objectives=if($RequireObjective){@(Read-CombatObjective $log)}else{@()}
+        $receipt=Get-CombatEarliestGoalReceipt $observations $events $context $Classes $Map $objectives
         $receiptName='goal-stop.json';$stopReason='combat_goal_complete'
         if(!$receipt -and $FirstDeath){
             $receipt=Get-CombatFirstLifeDeathReceipt $pendingDeath $events $context $Map

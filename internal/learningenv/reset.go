@@ -42,7 +42,8 @@ func VerifyReset(o policy.Observation, expected ResetExpectation) ResetProof {
 		r.Reason = "unobserved_enemy_reset_requires_paired_proof"
 		return r
 	}
-	if expected.Version != ResetVersion || expected.Map == "" || expected.Health <= 0 || expected.EnemyClass == "" || expected.Weapon != "Shotgun" && expected.Weapon != "Super Shotgun" && expected.Weapon != "Blaster" && expected.Weapon != "Machinegun" && expected.Weapon != "Grenades" {
+	weaponModel, supportedWeapon := resetWeaponModels[expected.Weapon]
+	if expected.Version != ResetVersion || expected.Map == "" || expected.Health <= 0 || expected.EnemyClass == "" || !supportedWeapon {
 		r.Reason = "invalid_or_unsupported_reset_expectation"
 		return r
 	}
@@ -64,7 +65,7 @@ func VerifyReset(o policy.Observation, expected ResetExpectation) ResetProof {
 		r.Reason = "reset_resources_mismatch"
 	case !o.OnGround || o.Ducked || !near(o.Position, expected.Position):
 		r.Reason = "reset_pose_mismatch"
-	case o.Weapon != expected.Weapon && !(expected.Weapon == "Shotgun" && o.Weapon == "models/weapons/v_shotg/tris.md2") && !(expected.Weapon == "Super Shotgun" && o.Weapon == "models/weapons/v_shotg2/tris.md2") && !(expected.Weapon == "Machinegun" && o.Weapon == "models/weapons/v_machn/tris.md2") && !(expected.Weapon == "Grenades" && o.Weapon == "models/weapons/v_handgr/tris.md2"):
+	case o.Weapon != expected.Weapon && o.Weapon != "models/weapons/"+weaponModel+"/tris.md2":
 		r.Reason = "reset_weapon_mismatch"
 	}
 	if r.Reason != "" {
@@ -80,8 +81,9 @@ func VerifyReset(o policy.Observation, expected ResetExpectation) ResetProof {
 			counts[item.Name] = item.Count
 		}
 		for _, item := range expected.Inventory {
-			count, known := counts[item.Name]
-			if item.Name == "" || item.Count < 0 || !known || count != item.Count {
+			// A fresh protocol inventory is complete but omits zero counts.
+			count := counts[item.Name]
+			if item.Name == "" || item.Count < 0 || count != item.Count {
 				r.Reason = "reset_inventory_mismatch"
 				return r
 			}
@@ -104,6 +106,13 @@ func VerifyReset(o policy.Observation, expected ResetExpectation) ResetProof {
 	}
 	r.ObservedFieldsConfirmed = true
 	return r
+}
+
+var resetWeaponModels = map[string]string{
+	"Blaster": "v_blast", "Shotgun": "v_shotg", "Super Shotgun": "v_shotg2",
+	"Machinegun": "v_machn", "Chaingun": "v_chain", "Grenade Launcher": "v_launch",
+	"Rocket Launcher": "v_rocket", "HyperBlaster": "v_hyperb", "Railgun": "v_rail",
+	"BFG10K": "v_bfg", "Grenades": "v_handgr",
 }
 
 // A real peer can have its enemy occluded at reset. Only paired export may

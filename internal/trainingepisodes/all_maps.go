@@ -8,14 +8,16 @@ import (
 )
 
 type MapCoverage struct {
-	Map            string         `json:"map"`
-	Kind           string         `json:"kind"`
-	State          string         `json:"state"`
-	Sites          int            `json:"sites"`
-	Reason         string         `json:"reason,omitempty"`
-	GeometrySHA256 string         `json:"geometry_sha256,omitempty"`
-	NativeVerified bool           `json:"native_verified"`
-	NativeMonsters map[string]int `json:"native_monsters"`
+	ProfileSites   map[string]int    `json:"profile_sites,omitempty"`
+	ProfileMissing map[string]string `json:"profile_missing,omitempty"`
+	Map            string            `json:"map"`
+	Kind           string            `json:"kind"`
+	State          string            `json:"state"`
+	Sites          int               `json:"sites"`
+	Reason         string            `json:"reason,omitempty"`
+	GeometrySHA256 string            `json:"geometry_sha256,omitempty"`
+	NativeVerified bool              `json:"native_verified"`
+	NativeMonsters map[string]int    `json:"native_monsters"`
 }
 
 // AllMapRecipes includes every stock campaign map, using real grounded BSP anchors when
@@ -97,7 +99,7 @@ func AllMapRecipes(root string, perMap int) ([]Episode, []MapCoverage, error) {
 func siteAnchorClass(class string, pass int) (string, bool) {
 	if pass == 0 {
 		switch class {
-		case "monster_soldier_light", "monster_soldier", "monster_gunner", "monster_infantry", "monster_parasite":
+		case "monster_soldier_light", "monster_soldier", "monster_soldier_ss", "monster_gunner", "monster_infantry", "monster_parasite", "monster_berserk", "monster_brain":
 			return class, true
 		}
 	}
@@ -123,7 +125,7 @@ func nativeMonsterCounts(world quake.MapInfo) map[string]int {
 }
 
 func nativeGroundClass(pool map[string]int) string {
-	for _, class := range []string{"monster_infantry", "monster_parasite", "monster_soldier", "monster_soldier_light", "monster_gunner"} {
+	for _, class := range []string{"monster_infantry", "monster_parasite", "monster_soldier", "monster_soldier_light", "monster_gunner", "monster_soldier_ss", "monster_berserk", "monster_brain"} {
 		if pool[class] > 0 {
 			return class
 		}

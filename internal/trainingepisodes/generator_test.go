@@ -20,12 +20,13 @@ func TestGeneratorSeedRevisionPreservesPairedConditions(t *testing.T) {
 	}
 	var ep Episode
 	for _, candidate := range r.Episodes {
-		if candidate.ID == "parasite-blaster-generated" {
+		if candidate.ID == "campaign-base1-native-site-01-blaster" {
 			ep = candidate
 			break
 		}
 	}
-	original, err := generate(ep, "validation", 700004, &world)
+	seed := ep.Splits["validation"].Start + 4
+	original, err := generate(ep, "validation", seed, &world)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +38,7 @@ func TestGeneratorSeedRevisionPreservesPairedConditions(t *testing.T) {
 	if err := g.validate(ep); err != nil {
 		t.Fatal(err)
 	}
-	paired, err := generate(ep, "validation", 700004, &world)
+	paired, err := generate(ep, "validation", seed, &world)
 	if err != nil || !reflect.DeepEqual(original, paired) {
 		t.Fatalf("capability revision changed paired start: %v", err)
 	}
@@ -66,11 +67,11 @@ func TestGeneratedConditionsArePairedAndPlanCannotBeModified(t *testing.T) {
 		t.Fatal(err)
 	}
 	output := t.TempDir()
-	p, err := Build(r, root, []string{"parasite-blaster-generated"}, "validation", "rules", "", output, 4, 0)
+	p, err := Build(r, root, []string{"campaign-base1-native-site-01-blaster"}, "validation", "rules", "", output, 4, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := Build(r, root, []string{"parasite-blaster-generated"}, "validation", "rules", "", output, 4, 0)
+	again, err := Build(r, root, []string{"campaign-base1-native-site-01-blaster"}, "validation", "rules", "", output, 4, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
