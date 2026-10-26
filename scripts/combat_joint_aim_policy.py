@@ -23,13 +23,13 @@ def base_model(model,*,allow_probe=False,allow_shared=False,allow_target_samplin
     header=validate_target_sampling(model.get("target_sampling"))
     assert header is None or allow_target_sampling,"Target calibration requires explicit scoring; ordinary training unsupported"
     from combat_wide_aim import validate as validate_wide,DISTRIBUTION as WIDE_DISTRIBUTION
-    validate_wide(model)
+    validate_wide(model,allow_probe=allow_probe)
     assert allow_wide or model.get('wide_aim') is None,'Wide policy requires its explicit likelihood/optimizer scope'
     assert model.get('action_distribution')==(WIDE_DISTRIBUTION if model.get('wide_aim') is not None else candidates.VERSION)
     assert model.get('aim_candidate_head',{}).get('version')==candidates.VERSION
     assert not model.get('execution_mode') and not model.get('geometry_aim_ranker') and not model.get('geometry_aim_exploration')
     assert not model.get('deterministic') and model['feature_version'] in BODY_FEATURE_VERSIONS
-    assert allow_probe or not (model.get('diagnostic_anchor_probe') is not None or model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') is not None or model.get('diagnostic_continuation_probe') is not None or model.get('diagnostic_weapon_probe') is not None),'Diagnostic acquisition cannot enter ordinary training/scoring'
+    assert allow_probe or not (model.get('diagnostic_wide_gate_probe') is not None or model.get('diagnostic_anchor_probe') is not None or model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') is not None or model.get('diagnostic_continuation_probe') is not None or model.get('diagnostic_weapon_probe') is not None),'Diagnostic acquisition cannot enter ordinary training/scoring'
     if model.get('diagnostic_anchor_probe') is not None:
         from combat_anchor_probe import validate as validate_anchor
         validate_anchor(model)
@@ -51,6 +51,7 @@ def base_model(model,*,allow_probe=False,allow_shared=False,allow_target_samplin
     result.pop('diagnostic_weapon_probe',None)
     result.pop('diagnostic_anchor_probe',None)
     result.pop('wide_aim',None)
+    result.pop('diagnostic_wide_gate_probe',None)
     from combat_precision_head import validate_precision_model
     validate_precision_model(result)
     return result
@@ -133,6 +134,7 @@ class JointAim(nn.Module):
         from combat_wide_aim import WideAim
         self.wide=WideAim(model['wide_aim']) if model.get('wide_aim') is not None else None
         from combat_target_sampling import validate as validate_target_sampling
+        if self.wide is not None:self.wide.probe=model.get('diagnostic_wide_gate_probe')
         self.target_sampling=validate_target_sampling(model.get("target_sampling"))
         probe=model.get('diagnostic_joint_aim_probe')
         self.probe_frame=probe['frame'] if probe else None

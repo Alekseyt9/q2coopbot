@@ -10,10 +10,16 @@ DISTRIBUTION='combat_joint_aim_wide_v2'
 SAMPLER='frame_hash_wide_bernoulli_v1'
 SALT=0x6a09e667f3bcc909
 WIDTH=187
+PROBE_VERSION='combat_one_frame_wide_gate_clamp_v1'
 
 
-def validate(model):
+def validate(model,*,allow_probe=False):
     h=model.get('wide_aim')
+    probe=model.get('diagnostic_wide_gate_probe')
+    if probe is not None:
+        assert allow_probe and h and h['enabled'],'Diagnostic gate cannot enter ordinary scoring/training'
+        assert set(probe)=={'version','frame','choice'} and probe['version']==PROBE_VERSION
+        assert type(probe['frame']) is int and 0<probe['frame']<=2**31-1 and type(probe['choice']) is int and probe['choice'] in (0,1)
     if h is None:
         assert model.get('action_distribution')!=DISTRIBUTION,'Wide event requires a head'
         return
@@ -21,7 +27,7 @@ def validate(model):
     assert set(h)=={'version','sampler','enabled','layers'} and h['version']==VERSION and h['sampler']==SAMPLER and type(h['enabled']) is bool
     assert not model.get('deterministic') and model.get('combat_execution_contract')=='stock_weapons_fire_v1'
     assert model.get('conditional_fire') and model.get('aim_candidate_head')
-    assert not any(k.startswith('diagnostic_') for k in model)
+    assert not any(k.startswith('diagnostic_') and k!='diagnostic_wide_gate_probe' for k in model)
     assert not any(model.get(k) for k in ('execution_mode','geometry_aim_ranker','geometry_aim_exploration'))
     width=WIDTH
     assert len(h['layers'])==3
@@ -58,7 +64,7 @@ def transform(source,anchor,choice):
 
 class WideAim(nn.Module):
     def __init__(self,spec):
-        super().__init__();self.enabled=spec['enabled']
+        super().__init__();self.enabled=spec['enabled'];self.probe=None
         self.layers=nn.Sequential(nn.Linear(WIDTH,32,device='cuda'),nn.ReLU(),nn.Linear(32,16,device='cuda'),nn.ReLU(),nn.Linear(16,1,device='cuda'))
         with torch.no_grad():
             for i,l in zip((0,2,4),spec['layers']):
@@ -74,9 +80,9 @@ class WideAim(nn.Module):
         return logits,active&self.enabled
 
 
-def events(model,rows,features,target,mode,vertical,weapon):
+def events(model,rows,features,target,mode,vertical,weapon,*,allow_probe=False):
     """Pure sampled-event verification on CUDA; first-life export contract."""
-    validate(model);annotations=[r['sample'].get('wide_aim') for r in rows]
+    validate(model,allow_probe=allow_probe);annotations=[r['sample'].get('wide_aim') for r in rows]
     h=model.get('wide_aim')
     if h is None or not h['enabled']:
         assert all(a is None for a in annotations),'Wide annotation on disabled/legacy policy'
@@ -106,7 +112,7 @@ def events(model,rows,features,target,mode,vertical,weapon):
         d=torch.distributions.Bernoulli(logits=l)
         assert float((d.log_prob(choice.double())[active]-lp[active]).abs().max())<1e-9
         assert torch.equal((uniforms[active]<l[active].sigmoid()).long(),choice[active])
-    return dict(features=exact,source=source,choice=choice,active=active,uniforms=uniforms,annotations=annotations)
+    return dict(features=exact,source=source,choice=choice,active=active,uniforms=uniforms,annotations=annotations,frames=torch.tensor([r['frame'] for r in rows],device='cuda',dtype=torch.long))
 
 
 def terms(module,data,target,mode,vertical,weapon,*,verify=False):
@@ -115,6 +121,11 @@ def terms(module,data,target,mode,vertical,weapon,*,verify=False):
         return zero,zero
     logits,active=module(data['features'],data['source'],target,mode,vertical,weapon)
     assert torch.equal(active,data['active'])
+    if module.probe is not None:
+        root=data['frames']==module.probe['frame']
+        assert int(root.sum())==1 and bool(active[root].all()),'Missing or ineligible diagnostic gate root'
+        logits=torch.where(root,torch.full_like(logits,40*module.probe['choice']-20),logits)
+        assert int(data['choice'][root][0])==module.probe['choice'],'Clamp branch differs'
     d=torch.distributions.Bernoulli(logits=logits)
     lp=torch.where(active,d.log_prob(data['choice'].to(logits.dtype)),torch.zeros_like(logits))
     ent=torch.where(active,d.entropy(),torch.zeros_like(logits))

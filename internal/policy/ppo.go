@@ -15,6 +15,7 @@ import (
 const PPOKind = "combat_ppo_v1"
 
 type PPOFile struct {
+	DiagnosticWideGate      *DiagnosticWideGateFile      `json:"diagnostic_wide_gate_probe,omitempty"`
 	WideAim                 *WideAimFile                 `json:"wide_aim,omitempty"`
 	DiagnosticAnchorProbe   *DiagnosticAnchorProbeFile   `json:"diagnostic_anchor_probe,omitempty"`
 	CombatExecution         string                       `json:"combat_execution_contract,omitempty"`
@@ -133,6 +134,9 @@ func LoadPPO(path string) (*PPO, error) {
 	if e = validateDiagnosticAnchorProbe(f); e != nil {
 		return nil, e
 	}
+	if e = validateDiagnosticWideGate(f); e != nil {
+		return nil, e
+	}
 	outputs := 8
 	if f.WeaponHead != "" {
 		if f.WeaponHead != WeaponHeadVersion || (f.Features != WeaponFeatureVersion && f.Features != TargetFeatureVersion && f.Features != NavigationFeatureVersion && f.Features != ThreatFeatureVersion && !equippedPrefixFeatures(f.Features)) || f.EntityAttention != nil {
@@ -234,7 +238,7 @@ func (p *PPO) SamplingSeed() int64        { return p.file.SamplingSeed }
 func (p *PPO) ActionDistribution() string { return p.file.ActionDistribution }
 func (p *PPO) IsDiagnosticAimProbe() bool { return p.file.DiagnosticAimProbe != nil }
 func (p *PPO) IsDiagnosticCombatProbe() bool {
-	return p.IsDiagnosticAimProbe() || p.IsDiagnosticAnchorProbe() || p.file.DiagnosticMovementProbe != nil || p.file.DiagnosticContinuation != nil || p.file.DiagnosticWeaponProbe != nil
+	return p.file.DiagnosticWideGate != nil || p.IsDiagnosticAimProbe() || p.IsDiagnosticAnchorProbe() || p.file.DiagnosticMovementProbe != nil || p.file.DiagnosticContinuation != nil || p.file.DiagnosticWeaponProbe != nil
 }
 
 // IsStochastic reports eligibility for the standard full-head PPO sampler.

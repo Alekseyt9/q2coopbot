@@ -166,6 +166,9 @@ func (p *PPO) legacyWideSample(o Observation, s Sample) (Sample, error) {
 }
 
 func (p *PPO) wideAimLogit(o Observation, s Sample, anchor [2]float64) (float64, error) {
+	if logit, active := p.diagnosticWideGateLogit(o.Identity.Frame); active {
+		return logit, nil
+	}
 	f, err := FeaturesForVersion(o, EquippedWeaponFeatureVersion)
 	if err != nil {
 		return 0, err
@@ -200,6 +203,9 @@ func (p *PPO) selectWideAim(o Observation, s *Sample, fireUniform float64) error
 	}
 	a, active, err := observedWideAim(o, *s)
 	if err != nil || !active {
+		if _, root := p.diagnosticWideGateLogit(o.Identity.Frame); root && err == nil {
+			return fmt.Errorf("diagnostic wide gate root is ineligible")
+		}
 		return err
 	}
 	l, err := p.wideAimLogit(o, *s, a)
@@ -210,6 +216,9 @@ func (p *PPO) selectWideAim(o Observation, s *Sample, fireUniform float64) error
 	choice := 0
 	if u < math.Exp(-softplus(-l)) {
 		choice = 1
+	}
+	if h := p.file.DiagnosticWideGate; h != nil && h.Frame == o.Identity.Frame && choice != h.Choice {
+		return fmt.Errorf("diagnostic gate clamp did not select required branch")
 	}
 	s.WideAim = &WideAimSample{Version: WideAimVersion, SourceLatent: s.Latent, Anchor: a, Choice: choice, Uniform: u, FireUniform: fireUniform, Logit: l, LogProbability: wideLogProbability(l, choice)}
 	s.Latent, err = applyWideChoice(s.Latent, a, choice)

@@ -33,7 +33,7 @@ def finalize(model_path, data, out):
     joint,core_model=None,model
     if model.get('action_distribution'):
         from combat_joint_aim_policy import JointAim,base_model
-        diagnostic_probe=bool(model.get('diagnostic_anchor_probe') or model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') or model.get('diagnostic_continuation_probe') or model.get('diagnostic_weapon_probe'))
+        diagnostic_probe=bool(model.get('diagnostic_wide_gate_probe') or model.get('diagnostic_anchor_probe') or model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') or model.get('diagnostic_continuation_probe') or model.get('diagnostic_weapon_probe'))
         core_model=base_model(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True,allow_wide=True)
         joint=JointAim(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True,allow_wide=True)
     paired = meta.get('paired_adapter_version')
@@ -135,7 +135,7 @@ def finalize(model_path, data, out):
     target = torch.tensor([r['sample'].get('target', 0) for r in rows], device='cuda', dtype=torch.long)
     mode = torch.tensor([r['sample'].get('aim_mode', 0) for r in rows], device='cuda', dtype=torch.long)
     from combat_wide_aim import events as wide_events
-    wide_data=wide_events(model,rows,x,target,mode,vertical,weapon) if joint is not None else None
+    wide_data=wide_events(model,rows,x,target,mode,vertical,weapon,allow_probe=diagnostic_probe) if joint is not None else None
     if joint is None:
         assert model.get('wide_aim') is None and all(r['sample'].get('wide_aim') is None for r in rows)
     std = torch.tensor(model['log_std'], device='cuda', dtype=torch.float32)
@@ -284,6 +284,9 @@ def finalize(model_path, data, out):
         audit.update(wide_aim_version=model['wide_aim']['version'],wide_aim_enabled=model['wide_aim']['enabled'],
             wide_event_rows=int(wide_data['active'].sum()),wide_selected_rows=int(wide_data['choice'].sum()),
             wide_source_transform_and_cdf_verified=True,wide_training_scope_required='combat_full_joint_wide_ppo_v2')
+    if model.get('diagnostic_wide_gate_probe'):
+        assert meta.get('diagnostic_only') and not meta.get('ppo_training_ready',False)
+        audit.update(diagnostic_wide_gate_probe=model['diagnostic_wide_gate_probe'],ordinary_training_eligible=False,wide_gate_clamp_and_final_fire_cdf_verified=True)
     if model.get('diagnostic_joint_aim_probe'):
         audit.update(diagnostic_probe_version=model['diagnostic_joint_aim_probe']['version'],
                      diagnostic_probe_frame=model['diagnostic_joint_aim_probe']['frame'],
@@ -358,6 +361,8 @@ def finalize(model_path, data, out):
     if model.get('diagnostic_weapon_probe'):
         meta.update(version='combat_diagnostic_weapon_probe_rollout_v1',diagnostic_only=True,ppo_training_ready=False,
                     ordinary_training_eligible=False,diagnostic_weapon_version=model['diagnostic_weapon_probe']['version'])
+    if model.get('diagnostic_wide_gate_probe'):
+        meta.update(version='combat_diagnostic_wide_gate_probe_rollout_v1',diagnostic_only=True,ppo_training_ready=False,ordinary_training_eligible=False,likelihood_scope='diagnostic_one_frame_gate_distribution_not_ordinary_policy')
     if meta.get('diagnostic_only'):
         meta['ordinary_training_eligible'] = False
     if anchor_audit is not None:
