@@ -8,7 +8,7 @@ from process_combat_architecture_pool import read, save, sha
 from ppo_combat import network, torch
 from ppo_recurrent import prepare_context, sequence, Recurrent
 from combat_attention import CausalAttention, EntityAttention
-from combat_cuda_bootstrap import next_values
+from combat_cuda_bootstrap import bootstrap_rows
 from combat_sequence_storage import preserve_sequence
 
 
@@ -26,15 +26,16 @@ def finalize(model_path, data, out):
     contract = require_same(model.get('combat_execution_contract'),meta.get('combat_execution_contract'))
     assert meta['version'] == 'combat_ppo_native_cuda_pending_v1'
     assert meta['numerical_verification'] == 'cuda_pending'
+    assert meta.get('bootstrap_feature_contract') in (None,'nonzero_next_only_v1')
     assert meta['model_sha256'] == sha(model_path) and not model['deterministic']
     assert meta['feature_version'] == model['feature_version']
     assert meta.get('action_distribution','') == model.get('action_distribution',''), 'Action distribution differs'
     joint,core_model=None,model
     if model.get('action_distribution'):
         from combat_joint_aim_policy import JointAim,base_model
-        diagnostic_probe=bool(model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') or model.get('diagnostic_continuation_probe') or model.get('diagnostic_weapon_probe'))
-        core_model=base_model(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True)
-        joint=JointAim(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True)
+        diagnostic_probe=bool(model.get('diagnostic_anchor_probe') or model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') or model.get('diagnostic_continuation_probe') or model.get('diagnostic_weapon_probe'))
+        core_model=base_model(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True,allow_wide=True)
+        joint=JointAim(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True,allow_wide=True)
     paired = meta.get('paired_adapter_version')
     if paired:
         assert paired == 'coop_primary_native_adapter_v1' and meta['paired_adapter_verified']
@@ -57,6 +58,9 @@ def finalize(model_path, data, out):
         weapon_helpers.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
                               ('combat_memory_route_features.py','combat_memory_route_movement.py'))
     if joint is not None:
+        weapon_helpers.append(pathlib.Path(__file__).with_name('combat_wide_aim.py').resolve())
+        if model.get('diagnostic_anchor_probe'):
+            weapon_helpers.append(pathlib.Path(__file__).with_name('combat_anchor_probe.py').resolve())
         if model.get('diagnostic_weapon_probe'):
             weapon_helpers.append(pathlib.Path(__file__).with_name('combat_weapon_probe.py').resolve())
         weapon_helpers.append(pathlib.Path(__file__).with_name('combat_target_sampling.py').resolve())
@@ -90,6 +94,11 @@ def finalize(model_path, data, out):
     rows = [json.loads(line) for line in (data / 'native-rollout.jsonl').read_text().splitlines()]
     assert len(rows) == meta['rows'] > 0
     assert all(r['sample']['version'] == meta['policy_version'] for r in rows)
+    anchor_audit = None
+    if model.get('diagnostic_anchor_probe'):
+        assert meta.get('diagnostic_only') and not meta.get('ppo_training_ready', False)
+        from combat_anchor_probe import verify as verify_anchor
+        anchor_audit = verify_anchor(model, rows)
     context, prepared = [], None
     if meta.get('recurrent_version'):
         assert sha(data / 'sequence.jsonl') == meta['sequence_sha256']
@@ -116,10 +125,7 @@ def finalize(model_path, data, out):
 
     actor, value = build('actor'), build('value')
     x = torch.tensor([r['features'] for r in rows], device='cuda', dtype=torch.float32)
-    nx = torch.tensor([r['next_features'] for r in rows], device='cuda', dtype=torch.float32)
-    assert x.shape == nx.shape and bool(torch.isfinite(x).all()) and bool(torch.isfinite(nx).all())
-    reset = torch.tensor([r['next_reset'] for r in rows], device='cuda', dtype=torch.bool)
-    zero = torch.tensor([r['bootstrap_zero'] for r in rows], device='cuda', dtype=torch.bool)
+    assert bool(torch.isfinite(x).all())
     assert all(not r['terminal'] or r['bootstrap_zero'] for r in rows)
     assert all(r['next_frame'] == r['frame'] + 1 or r['next_reset'] for r in rows)
     z = torch.tensor([r['sample']['latent'] for r in rows], device='cuda', dtype=torch.float32)
@@ -128,6 +134,10 @@ def finalize(model_path, data, out):
     weapon = torch.tensor([r['sample'].get('weapon', 0) for r in rows], device='cuda', dtype=torch.long)
     target = torch.tensor([r['sample'].get('target', 0) for r in rows], device='cuda', dtype=torch.long)
     mode = torch.tensor([r['sample'].get('aim_mode', 0) for r in rows], device='cuda', dtype=torch.long)
+    from combat_wide_aim import events as wide_events
+    wide_data=wide_events(model,rows,x,target,mode,vertical,weapon) if joint is not None else None
+    if joint is None:
+        assert model.get('wide_aim') is None and all(r['sample'].get('wide_aim') is None for r in rows)
     std = torch.tensor(model['log_std'], device='cuda', dtype=torch.float32)
 
     def evaluate(module, name):
@@ -146,7 +156,7 @@ def finalize(model_path, data, out):
             from combat_aim_candidates import log_probability,frame_uniforms,choose
             source,choice,timing,active=events(rows,x,target,mode,vertical,weapon)
             score_inputs=None
-            if joint.geometry_head:
+            if joint.geometry_head or joint.wide is not None:
                 # The live Go scorer uses float64. Preserve original JSON
                 # inputs for geometry differences and hash-CDF verification;
                 # training and prototype export remain float32 on CUDA.
@@ -162,7 +172,12 @@ def finalize(model_path, data, out):
                 movement_shift=movement_shifts(model,frame_tensor)
             lp,_,logits,score_active=probabilities(joint,raw,std,source,z,attack,vertical,weapon,x,target,mode,choice,timing,
                 getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None),getattr(actor,'conditional_fire_branch',None),
-                frames=frame_tensor,score_inputs=score_inputs,movement_shift=movement_shift)
+                frames=frame_tensor,score_inputs=score_inputs,movement_shift=movement_shift,wide_data=wide_data)
+            if joint.wide is not None:
+                from combat_wide_aim import terms as wide_terms,verify_fire as verify_wide_fire
+                from combat_conditional_fire import logits as final_fire_logits
+                wide_terms(joint.wide,wide_data,target,mode,vertical,weapon,verify=True)
+                verify_wide_fire(wide_data,final_fire_logits(getattr(actor,'conditional_fire_branch',None),x,raw,target,mode,z,vertical,weapon),attack)
             assert torch.equal(active,score_active)
             if model.get('diagnostic_weapon_probe'):
                 from combat_weapon_probe import adjust_log_probability,verify_draw_receipts as verify_weapon_receipts
@@ -208,14 +223,12 @@ def finalize(model_path, data, out):
         initial_value_error=value_error
         critic_precision='float32'
         bootstrap_prepared=prepared
-        bootstrap_features=nx
         if value_error>=1e-4:
             # Match the live Go float64 critic without weakening acceptance.
             # Recreate inputs from JSON; promoting already-rounded float32
             # context would retain the error being diagnosed.
             value=value.double()
             exact_x=torch.tensor([r['features'] for r in rows],device='cuda',dtype=torch.float64)
-            bootstrap_features=torch.tensor([r['next_features'] for r in rows],device='cuda',dtype=torch.float64)
             bootstrap_prepared=prepare_context(context,rows,'cuda',dtype=torch.float64) if prepared is not None else None
             if bootstrap_prepared is not None:
                 predicted,critic_memory_error=sequence(value,bootstrap_prepared,32,True,'value')
@@ -226,8 +239,7 @@ def finalize(model_path, data, out):
             critic_precision='float64_fallback'
         assert log_error < .003 and value_error < 1e-4 and max(actor_memory_error, critic_memory_error) < 2e-5, (
             log_error, value_error, actor_memory_error, critic_memory_error)
-        bootstrap = next_values(value, bootstrap_features, bootstrap_prepared, reset=reset)
-        bootstrap[zero] = 0
+        bootstrap = bootstrap_rows(value, rows, bootstrap_prepared)
         assert bool(torch.isfinite(bootstrap).all())
         values = bootstrap.cpu().tolist()  # Serialization only; neural computation stays on CUDA.
     for path, digest in sources.items():
@@ -262,12 +274,16 @@ def finalize(model_path, data, out):
                  log_probability_max_error=log_error, value_max_error=value_error,
                  actor_memory_max_error=actor_memory_error, critic_memory_max_error=critic_memory_error,
                  critic_precision=critic_precision,initial_float32_value_max_error=initial_value_error,
-                 next_resets=int(reset.sum()), zero_bootstraps=int(zero.sum()),
+                  next_resets=sum(bool(r['next_reset']) for r in rows), zero_bootstraps=sum(bool(r['bootstrap_zero']) for r in rows),
                  native_rollout_sha256=meta['native_rollout_sha256'], model_sha256=sha(model_path),
-                 scope='Exact native Step.Next features and reset flags; numerical checks and bootstrap on CUDA. Go performs only native proof, feature extraction and sampled action contract checks.')
+                 scope='Exact native Step.Next features/reset flags for nonzero bootstrap; zero-bootstrap next states are not encoded/evaluated. Numerical checks and bootstrap on CUDA. Go performs only native proof, feature extraction and sampled action contract checks.')
     if joint is not None:
         audit.update(action_distribution=model['action_distribution'],candidate_log_probability_max_error=candidate_error,
                      original_latent_transform_verified=True,frame_hash_candidate_assignments_verified=True)
+    if model.get('wide_aim') is not None:
+        audit.update(wide_aim_version=model['wide_aim']['version'],wide_aim_enabled=model['wide_aim']['enabled'],
+            wide_event_rows=int(wide_data['active'].sum()),wide_selected_rows=int(wide_data['choice'].sum()),
+            wide_source_transform_and_cdf_verified=True,wide_training_scope_required='combat_full_joint_wide_ppo_v2')
     if model.get('diagnostic_joint_aim_probe'):
         audit.update(diagnostic_probe_version=model['diagnostic_joint_aim_probe']['version'],
                      diagnostic_probe_frame=model['diagnostic_joint_aim_probe']['frame'],
@@ -277,6 +293,9 @@ def finalize(model_path, data, out):
                      diagnostic_continuation=continuation_audit,ordinary_training_eligible=False)
     if model.get('diagnostic_weapon_probe'):
         audit.update(diagnostic_weapon_probe=weapon_probe_audit,ordinary_training_eligible=False)
+    if anchor_audit is not None:
+        audit.update(diagnostic_anchor_probe=anchor_audit, ordinary_training_eligible=False,
+                     likelihood_scope='source_policy_event_only_not_intervened_actuation_density')
     if model.get('diagnostic_movement_probe'):
         audit.update(diagnostic_movement_version=model['diagnostic_movement_probe']['version'],
                      diagnostic_movement_frame=model['diagnostic_movement_probe']['frame'],
@@ -341,6 +360,11 @@ def finalize(model_path, data, out):
                     ordinary_training_eligible=False,diagnostic_weapon_version=model['diagnostic_weapon_probe']['version'])
     if meta.get('diagnostic_only'):
         meta['ordinary_training_eligible'] = False
+    if anchor_audit is not None:
+        meta.update(version='combat_diagnostic_anchor_probe_rollout_v1', diagnostic_only=True,
+                    ordinary_training_eligible=False, ppo_training_ready=False,
+                    diagnostic_anchor_version=anchor_audit['version'],
+                    likelihood_scope='source_policy_event_only_not_intervened_actuation_density')
     if paired:
         meta['paired_training_ready'] = True
         meta['paired_training_scope'] = 'Experimental verified primary learner pilot; scripted peer excluded. Registry-wide eligibility unproven.'

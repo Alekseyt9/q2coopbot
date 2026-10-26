@@ -23,7 +23,7 @@ def restore_optimizer(optimizer,snapshot):
     # the baseline used by later retries or the final rejection restore.
     optimizer.load_state_dict(copy.deepcopy(snapshot))
 
-def guarded_actor_step(parameters,optimizer,objective,loss_before,base_lr,target_kl,project=None,group_lrs=None):
+def guarded_actor_step(parameters,optimizer,objective,loss_before,base_lr,target_kl,project=None,group_lrs=None,momentum_parameters=None):
     """Backtrack Adam; repair only a confirmed uphill first-moment direction.
 
     Keep second moments and step counters. A rejected fallback restores every
@@ -42,13 +42,16 @@ def guarded_actor_step(parameters,optimizer,objective,loss_before,base_lr,target
             for p,v in zip(parameters,saved):p.copy_(v)
         restore_optimizer(optimizer,snapshot)
     fallback=False
+    def repair_momentum():
+        states=optimizer.state.values() if momentum_parameters is None else (optimizer.state[p] for p in momentum_parameters if p in optimizer.state)
+        for state in states:
+            if 'exp_avg' in state:state['exp_avg'].zero_()
     for retry in range(13):
         restore()
         if fallback:
             # Retain accumulated squared-gradient scale and the Adam clock;
             # replacing only momentum makes this proposal follow today's grad.
-            for state in optimizer.state.values():
-                if 'exp_avg' in state:state['exp_avg'].zero_()
+            repair_momentum()
         set_rates(.5**retry)
         optimizer.step()
         with torch.no_grad():
@@ -60,8 +63,7 @@ def guarded_actor_step(parameters,optimizer,objective,loss_before,base_lr,target
                     fallback=True;result['direction_fallback']=True
                     # Re-evaluate repaired momentum at this same step size.
                     restore()
-                    for state in optimizer.state.values():
-                        if 'exp_avg' in state:state['exp_avg'].zero_()
+                    repair_momentum()
                     set_rates()
                     optimizer.step()
                     if project is not None:project()

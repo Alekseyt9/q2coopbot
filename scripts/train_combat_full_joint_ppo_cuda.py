@@ -1,10 +1,11 @@
 """Full CUDA PPO on pinned, fresh registered TRAIN captures, with exact resume."""
 import argparse
 import json
+import copy
 from pathlib import Path
 from ppo_combat import torch, nn, training_devices, advantages, validate_objective, guarded_actor_step
 from ppo_recurrent import prepare_context, sequence
-from combat_full_joint_ppo import FullJointScope, SCOPE
+from combat_full_joint_ppo import FullJointScope, SCOPE, WIDE_SCOPE
 from combat_joint_aim_policy import events, probabilities
 from evaluate_registered_combat_models import read, save, sha
 
@@ -85,16 +86,26 @@ def main():
         pins[str(path)] = digest
         return path
     model_hash = sha(pin(a.model)); model = read(a.model); config = read(pin(a.config))
-    assert config['version'] == SCOPE and 1 <= config['actor_steps'] <= 100 and 1 <= config['value_steps'] <= 100
+    assert config['version'] == (WIDE_SCOPE if model.get('wide_aim') is not None else SCOPE) and 1 <= config['actor_steps'] <= 100 and 1 <= config['value_steps'] <= 100
     assert 0 < config['gamma'] <= 1 and 0 <= config['lambda'] <= 1 and 0 < config['clip'] <= .3
     assert 0 < config['target_kl'] <= .05 and config['entropy'] >= 0 and config['max_grad_norm'] > 0
     torch.manual_seed(config['seed'])
     scope = FullJointScope(model, config)
+    actor_scope=config.get('actor_scope','all')
+    assert actor_scope in ('all','wide_only')
+    if actor_scope=='wide_only':
+        assert scope.joint.wide is not None and scope.joint.wide.enabled,'Wide-only fitting requires enabled option'
+        frozen_actor={k:v.detach().clone() for k,v in scope.actor.state_dict().items()}
+        frozen_joint={k:v.detach().clone() for k,v in scope.joint.state_dict().items() if not k.startswith('wide.')}
+        frozen_std=scope.std.detach().clone()
     consumed, old_seeds, updates = [], [], 0
     if a.resume:
         cp = torch.load(pin(a.resume), map_location='cuda', weights_only=True)
         consumed = scope.restore(cp, model_hash)
         old_seeds = cp['consumed_seeds']; updates = cp['updates_completed']
+    if actor_scope=='wide_only':
+        gate_parameters=list(scope.joint.wide.parameters());gate_ids={id(p) for p in gate_parameters}
+        frozen_moments={p:copy.deepcopy(v) for p,v in scope.actor_optimizer.state.items() if id(p) not in gate_ids}
     request = read(pin(a.request))
     rows, history, tokens, seeds, metadata = admit(request, model_hash, consumed, old_seeds, pin)
     for meta in metadata: validate_objective(config, meta)
@@ -105,6 +116,8 @@ def main():
     final = torch.tensor([r['sample']['latent'] for r in rows], device='cuda', dtype=torch.float32)
     attack = torch.tensor([float(r['sample']['attack']) for r in rows], device='cuda')
     source, choice, timing, _ = events(rows, x, target, mode, vertical, weapon)
+    from combat_wide_aim import events as wide_events
+    wide_data=wide_events(model,rows,x,target,mode,vertical,weapon)
     score_inputs = None
     if scope.joint.geometry_head:
         score_inputs = (
@@ -113,9 +126,18 @@ def main():
             torch.tensor([(r['sample'].get('aim_candidate') or {}).get('timing',[0.,0.]) for r in rows], device='cuda', dtype=torch.float64))
     old = torch.tensor([r['sample']['log_probability'] for r in rows], device='cuda')
     def likelihood(raw):
-        return probabilities(scope.joint, raw, scope.std, source, final, attack, vertical,
+        lp,ent=probabilities(scope.joint, raw, scope.std, source, final, attack, vertical,
             weapon, x, target, mode, choice, timing, scope.actor.sampled_motion_aim_branch,
-            scope.actor.motor_branch, scope.actor.conditional_fire_branch, score_inputs=score_inputs)[:2]
+            scope.actor.motor_branch, scope.actor.conditional_fire_branch, score_inputs=score_inputs,wide_data=wide_data)[:2]
+        if actor_scope=='wide_only':
+            from combat_wide_aim import terms
+            gate_lp,gate_ent=terms(scope.joint.wide,wide_data,target,mode,vertical,weapon)
+            # Same full forward likelihood; only the option receives gradients.
+            # None gradients preserve old Adam moments AND parameters (zero
+            # gradients would still move parameters with old momentum).
+            lp=lp.detach()+(gate_lp-gate_lp.detach())
+            ent=ent.detach()+(gate_ent-gate_ent.detach())
+        return lp,ent
     with torch.no_grad():
         raw, actor_memory = sequence(scope.actor, prepared, 32, True, 'actor')
         value, value_memory = sequence(scope.value, prepared, 32, True, 'value')
@@ -136,12 +158,13 @@ def main():
         loss, kl = objective()
         if float(kl.detach()) > config['target_kl']: break
         assert bool(torch.isfinite(loss))
-        scope.actor_optimizer.zero_grad(); loss.backward()
+        scope.actor_optimizer.zero_grad(set_to_none=True); loss.backward()
         norm = nn.utils.clip_grad_norm_(scope.actor_parameters, config['max_grad_norm'])
         assert bool(torch.isfinite(norm))
         trial = guarded_actor_step(scope.actor_parameters, scope.actor_optimizer, objective,
             loss.detach(), config['actor_lr'], config['target_kl'], scope.project,
-            group_lrs=[g['lr'] for g in scope.actor_optimizer.param_groups])
+            group_lrs=[g['lr'] for g in scope.actor_optimizer.param_groups],
+            momentum_parameters=gate_parameters if actor_scope=='wide_only' else None)
         trials.append(trial)
         if not trial['accepted']: break
     for _ in range(config['value_steps']):
@@ -160,13 +183,21 @@ def main():
               parent_checkpoint_sha256=sha(a.resume) if a.resume else None,
               initialization='resumed_full_joint_adam' if a.resume else 'explicit_fresh_full_policy_optimizer_boundary')
     torch.save(cp, a.out/'checkpoint.pt')
-    report = dict(version=SCOPE, state='passed', device='cuda', training_performed=True,
+    if actor_scope=='wide_only':
+        from combat_full_joint_ppo import equal_tree
+        assert equal_tree(scope.actor.state_dict(),frozen_actor)
+        assert equal_tree({k:v for k,v in scope.joint.state_dict().items() if not k.startswith('wide.')},frozen_joint)
+        assert torch.equal(scope.std.detach(),frozen_std)
+        assert all(equal_tree(scope.actor_optimizer.state[p],v) for p,v in frozen_moments.items())
+    report = dict(version=scope.scope, state='passed', device='cuda', training_performed=True,actor_scope=actor_scope,
+        legacy_policy_parameters_unchanged=actor_scope=='wide_only',legacy_policy_moments_unchanged=actor_scope=='wide_only',
+        wide_event_rows=int(wide_data['active'].sum()),wide_selected_rows=int(wide_data['choice'].sum()),
         rows=len(rows), train_seeds=sorted(seeds), updates_completed=updates+1,
         actor_steps=sum(t['accepted'] for t in trials), actor_trials=trials, final_approx_kl=float(final_kl),
         old_log_probability_max_error=lp_error, old_value_max_error=value_error,
         behavior_sha256=model_hash, weights_sha256=sha(a.out/'weights.json'), checkpoint_sha256=sha(a.out/'checkpoint.pt'),
         optimizer_initialization=cp['initialization'], inputs=pins,
-        scope='Fresh native TRAIN; all policy modules and critic. Frozen geometry predictor. No promotion or quality claim.')
+        scope='Fresh native TRAIN. Explicit actor scope all or wide_only; critic fitted separately, geometry predictor frozen. No promotion or quality claim.')
     save(a.out/'report.json', report)
     save(a.out/'complete.json', dict(state='complete', weights_sha256=report['weights_sha256'],
         checkpoint_sha256=report['checkpoint_sha256'], report_sha256=sha(a.out/'report.json')))

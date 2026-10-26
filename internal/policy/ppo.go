@@ -15,6 +15,8 @@ import (
 const PPOKind = "combat_ppo_v1"
 
 type PPOFile struct {
+	WideAim                 *WideAimFile                 `json:"wide_aim,omitempty"`
+	DiagnosticAnchorProbe   *DiagnosticAnchorProbeFile   `json:"diagnostic_anchor_probe,omitempty"`
 	CombatExecution         string                       `json:"combat_execution_contract,omitempty"`
 	Kind                    string                       `json:"kind"`
 	Features                string                       `json:"feature_version"`
@@ -56,6 +58,8 @@ type PPOFile struct {
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
 // Jacobian cancels. Quantization/guards belong to environment execution.
 type Sample struct {
+	WideAim           *WideAimSample                `json:"wide_aim,omitempty"`
+	AnchorProbe       *DiagnosticAnchorSample       `json:"anchor_probe,omitempty"`
 	Version           string                        `json:"version"`
 	SamplingSeed      int64                         `json:"sampling_seed"`
 	Latent            [4]float64                    `json:"latent"`
@@ -114,6 +118,9 @@ func LoadPPO(path string) (*PPO, error) {
 	if e = validateAimCandidates(f); e != nil {
 		return nil, e
 	}
+	if e = validateWideAim(f); e != nil {
+		return nil, e
+	}
 	if e = validateDiagnosticMovementProbe(f); e != nil {
 		return nil, e
 	}
@@ -121,6 +128,9 @@ func LoadPPO(path string) (*PPO, error) {
 		return nil, e
 	}
 	if e = validateDiagnosticContinuation(f); e != nil {
+		return nil, e
+	}
+	if e = validateDiagnosticAnchorProbe(f); e != nil {
 		return nil, e
 	}
 	outputs := 8
@@ -224,7 +234,7 @@ func (p *PPO) SamplingSeed() int64        { return p.file.SamplingSeed }
 func (p *PPO) ActionDistribution() string { return p.file.ActionDistribution }
 func (p *PPO) IsDiagnosticAimProbe() bool { return p.file.DiagnosticAimProbe != nil }
 func (p *PPO) IsDiagnosticCombatProbe() bool {
-	return p.IsDiagnosticAimProbe() || p.file.DiagnosticMovementProbe != nil || p.file.DiagnosticContinuation != nil || p.file.DiagnosticWeaponProbe != nil
+	return p.IsDiagnosticAimProbe() || p.IsDiagnosticAnchorProbe() || p.file.DiagnosticMovementProbe != nil || p.file.DiagnosticContinuation != nil || p.file.DiagnosticWeaponProbe != nil
 }
 
 // IsStochastic reports eligibility for the standard full-head PPO sampler.
@@ -355,6 +365,11 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 		return Action{}, 0, 0, e
 	}
 	lp += candidateLP
+	wideLP, e := p.reviewWideAim(o, s)
+	if e != nil {
+		return Action{}, 0, 0, e
+	}
+	lp += wideLP
 	for i, z := range densityLatent {
 		delta := (z - means[i]) / math.Exp(p.file.LogStd[i])
 		lp += -.5*delta*delta - p.file.LogStd[i] - .5*math.Log(2*math.Pi)
@@ -362,6 +377,9 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	fireLogit, e := p.conditionalFireLogit(o, x[4], s)
 	if e != nil {
 		return Action{}, 0, 0, e
+	}
+	if s.WideAim != nil && (s.WideAim.FireUniform < math.Exp(-softplus(-fireLogit))) != s.Attack {
+		return Action{}, 0, 0, fmt.Errorf("wide conditional fire receipt differs")
 	}
 	if p.file.DiagnosticWeaponProbe.active(o.Identity.Frame) && (s.WeaponProbe == nil ||
 		(s.WeaponProbe.FireUniform < math.Exp(-softplus(-fireLogit))) != s.Attack) {
@@ -405,6 +423,10 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 		}
 		lp += probs[s.Weapon]
 		a.Weapon = weaponNames[s.Weapon]
+	}
+	a, e = p.applyAnchorReceipt(o, s, a)
+	if e != nil {
+		return Action{}, 0, 0, e
 	}
 	_, e = Command(o, a, [3]int16{})
 	return a, lp, value, e
@@ -571,6 +593,9 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 	if e = p.selectJointAim(o, &s); e != nil {
 		return Action{}, e
 	}
+	if e = p.selectWideAim(o, &s, fireUniform); e != nil {
+		return Action{}, e
+	}
 	if p.file.ConditionalFire != nil || p.file.ExecutionMode == ExecutionGreedyTargetModeFire {
 		fireLogit, err := p.conditionalFireLogit(o, x[4], s)
 		if err != nil {
@@ -594,6 +619,10 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		s.ContinuationProbe = &DiagnosticContinuationSample{Version: DiagnosticContinuationVersion, Frame: probe.Frame,
 			Seed: probe.Seed, Reset: o.Identity.Frame == probe.Frame,
 			GaussianNoise: append([]float64(nil), noise[:]...), FireUniform: fireUniform}
+	}
+	s.AnchorProbe, e = p.anchorReceipt(o, s)
+	if e != nil {
+		return Action{}, e
 	}
 	a, lp, value, e := p.Review(o, s)
 	if e != nil {

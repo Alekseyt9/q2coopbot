@@ -14,6 +14,8 @@ from combat_checkpoint_scope import require_checkpoint_scope
 
 SCOPE = 'combat_full_joint_policy_ppo_v1'
 CHECKPOINT = 'combat_full_joint_policy_checkpoint_v1'
+WIDE_SCOPE = 'combat_full_joint_wide_ppo_v2'
+WIDE_CHECKPOINT = 'combat_full_joint_wide_checkpoint_v2'
 
 
 def equal_tree(a, b):
@@ -29,17 +31,20 @@ def equal_tree(a, b):
 class FullJointScope:
     def __init__(self, model, config):
         assert torch.cuda.is_available(), 'CUDA required'
-        validate(model, allow_shared=True)  # Diagnostic/target calibration stay excluded.
+        wide=model.get('wide_aim') is not None
+        self.scope=WIDE_SCOPE if wide else SCOPE
+        self.checkpoint_version=WIDE_CHECKPOINT if wide else CHECKPOINT
+        validate(model, allow_shared=True,allow_wide=wide)  # Diagnostic/target calibration stay excluded.
         assert model.get('attention') and not model.get('memory'), 'Temporal attention scope only'
         assert not any(k.startswith('diagnostic_') for k in model)
         assert not any(model.get(k) for k in ('memory_recovery', 'movement_inertia', 'weapon_fire_residual'))
-        assert config['version'] == SCOPE
+        assert config['version'] == self.scope
         for key in ('actor_lr', 'route_lr', 'fine_lr', 'candidate_lr', 'value_lr'):
             assert math.isfinite(config[key]) and 0 < config[key] <= .01, key
         self.model, self.config = copy.deepcopy(model), copy.deepcopy(config)
-        core = base_model(model, allow_shared=True)
+        core = base_model(model, allow_shared=True,allow_wide=wide)
         self.actor, self.value = branch(core, 'actor'), branch(core, 'value')
-        self.joint = JointAim(model, allow_shared=True)
+        self.joint = JointAim(model, allow_shared=True,allow_wide=wide)
         if self.joint.shared is not None:
             # Inference uses float64 geometry; trainable/exported weights remain
             # float32, so rebuilding JSON never discards optimizer precision.
@@ -94,13 +99,15 @@ class FullJointScope:
         if self.joint.shared is not None:
             result['aim_candidate_head']['shared_scorer']['layers'] = layers(self.joint.shared)
             result['aim_candidate_head']['shared_scorer']['beta'] = float(self.joint.shared_beta.detach())
-        validate(result, allow_shared=True)
+        if self.joint.wide is not None:
+            result['wide_aim']['layers']=layers(self.joint.wide.layers)
+        validate(result, allow_shared=True,allow_wide=self.joint.wide is not None)
         return result
 
     def snapshot(self, weights_sha256, consumed):
         self.verify()
         assert len(weights_sha256) == 64 and len(set(consumed)) == len(consumed)
-        return copy.deepcopy(dict(version=CHECKPOINT, checkpoint_training_scope=SCOPE,
+        return copy.deepcopy(dict(version=self.checkpoint_version, checkpoint_training_scope=self.scope,
             weights_sha256=weights_sha256, config=self.config, consumed_rollouts=list(consumed),
             actor=self.actor.state_dict(), value=self.value.state_dict(), joint=self.joint.state_dict(),
             log_std=self.std.detach(), actor_optimizer=self.actor_optimizer.state_dict(),
@@ -115,8 +122,8 @@ class FullJointScope:
                 for g in self.actor_optimizer.param_groups]
 
     def restore(self, cp, weights_sha256):
-        require_checkpoint_scope(cp, SCOPE)
-        assert cp['version'] == CHECKPOINT and cp['weights_sha256'] == weights_sha256
+        require_checkpoint_scope(cp, self.scope)
+        assert cp['version'] == self.checkpoint_version and cp['weights_sha256'] == weights_sha256
         assert cp['config'] == self.config and cp['optimizer_layout'] == self.layout(), 'Explicit optimizer migration required'
         for name, state in (('actor', self.actor.state_dict()), ('value', self.value.state_dict()),
                             ('joint', self.joint.state_dict()), ('log_std', self.std.detach())):

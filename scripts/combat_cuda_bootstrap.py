@@ -4,6 +4,21 @@ from ppo_combat import torch
 from combat_attention import CausalAttention,EntityAttention
 from ppo_recurrent import Recurrent
 
+def bootstrap_rows(value,rows,prepared=None):
+    """Only nonzero bootstraps have next-state features or critic evaluations."""
+    assert all(not r['terminal'] or r['bootstrap_zero'] for r in rows)
+    dtype=next(value.parameters()).dtype
+    result=torch.zeros(len(rows),device='cuda',dtype=dtype)
+    selected=[i for i,r in enumerate(rows) if not r['bootstrap_zero']]
+    if not selected:return result
+    features=torch.tensor([rows[i]['next_features'] for i in selected],device='cuda',dtype=dtype)
+    assert features.ndim==2 and all(len(rows[i]['next_features'])==len(rows[i]['features']) for i in selected)
+    assert bool(torch.isfinite(features).all())
+    selection=torch.tensor(selected,device='cuda',dtype=torch.long)
+    reset=torch.tensor([rows[i]['next_reset'] for i in selected],device='cuda',dtype=torch.bool)
+    result[selection]=next_values(value,features,prepared,selection,reset)
+    return result
+
 def next_values(value,next_features,prepared=None,selection=None,reset=None):
     assert next_features.device.type=='cuda' and next_features.ndim==2
     if isinstance(value,EntityAttention):return value.single(next_features)[:,0]

@@ -49,6 +49,10 @@ func (p *PPO) ActionForSample(o Observation, s Sample) (Action, error) {
 		}
 		a.Weapon = weaponNames[s.Weapon]
 	}
-	_, err := Command(o, a, [3]int16{})
+	a, err := p.applyAnchorReceipt(o, s, a)
+	if err != nil {
+		return Action{}, err
+	}
+	_, err = Command(o, a, [3]int16{})
 	return a, err
 }

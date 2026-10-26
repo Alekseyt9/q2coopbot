@@ -70,6 +70,23 @@ type row struct {
 	BootstrapZero bool                  `json:"bootstrap_zero"`
 }
 
+// A terminal/verified-goal bootstrap is exactly zero. Its next observation is
+// retained in the native dataset, but is never an input to the critic. Stock
+// death cleanup may expose negative inventory while dropping an armed grenade.
+func cudaNextFeatures(exported *row, s *learningenv.Step, featureVersion string, zero bool) error {
+	exported.BootstrapZero = zero
+	exported.NextReset = !policy.SameLife(s.Observation.Identity, s.Next.Identity) || s.Next.Identity.Frame != s.Observation.Identity.Frame+1
+	if zero {
+		return nil
+	}
+	features, err := policy.FeaturesForVersion(*s.Next, featureVersion)
+	if err != nil {
+		return err
+	}
+	exported.NextFeatures = features
+	return nil
+}
+
 func main() {
 	if e := run(); e != nil {
 		fmt.Fprintln(os.Stderr, e)
@@ -624,12 +641,9 @@ func run() error {
 			}
 			exported := row{Features: features, NextValue: nv, Sample: *s.Sample, Reward: *reward.Score, Terminal: s.Terminal, Truncated: s.Truncated, Seed: r.Seed, Index: s.Index, Frame: s.Observation.Identity.Frame, NextFrame: s.Next.Identity.Frame, Interventions: s.Interventions}
 			if *cudaOnly {
-				exported.NextFeatures, e = policy.FeaturesForVersion(*s.Next, p.FeatureVersion())
-				if e != nil {
+				if e = cudaNextFeatures(&exported, &s, p.FeatureVersion(), zero); e != nil {
 					return e
 				}
-				exported.NextReset = !policy.SameLife(s.Observation.Identity, s.Next.Identity) || s.Next.Identity.Frame != s.Observation.Identity.Frame+1
-				exported.BootstrapZero = zero
 			}
 			if e = enc.Encode(exported); e != nil {
 				return e
@@ -691,6 +705,7 @@ func run() error {
 			metadata["action_distribution"] = behavior.ActionDistribution()
 		}
 		metadata["numerical_verification"] = "cuda_pending"
+		metadata["bootstrap_feature_contract"] = "nonzero_next_only_v1"
 		metadata["native_rollout_sha256"] = rolloutSHA
 		delete(metadata, "rollout_sha256")
 	}

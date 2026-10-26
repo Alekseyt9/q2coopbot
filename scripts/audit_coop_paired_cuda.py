@@ -31,7 +31,7 @@ def main():
     assert len(rows) == after['rows'] == before['rows'] == 80
     assert len(list(lines(cuda/'sequence.jsonl'))) == after['sequence_rows'] == 80
     assert all(r['sample']['version'] == after['policy_version'] and r['seed'] == r['sample']['sampling_seed'] for r in rows)
-    assert all(len(r['features']) == len(r['next_features']) == 881 for r in rows)
+    assert all(len(r['features']) == 881 and (r['bootstrap_zero'] or len(r['next_features']) == 881) for r in rows)
     assert sum(r['terminal'] for r in rows) == 1 and rows[-1]['terminal']
     assert rows[-1]['next_value'] == 0 and rows[-1]['bootstrap_zero']
     result = dict(version='coop_primary_cuda_pilot_audit_v1', rows=len(rows),

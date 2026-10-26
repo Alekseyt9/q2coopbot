@@ -67,7 +67,7 @@ def main():
     assert len(models) == 1
     model = pathlib.Path(models.pop())
     model_header=read(model)
-    assert not model_header.get('diagnostic_joint_aim_probe') and model_header.get('diagnostic_movement_probe') is None and model_header.get('diagnostic_continuation_probe') is None, 'Probes require diagnostic per-case CUDA batches, never a merged ordinary PPO corpus'
+    assert not any(model_header.get(k) is not None for k in ('diagnostic_anchor_probe','diagnostic_joint_aim_probe','diagnostic_movement_probe','diagnostic_continuation_probe','diagnostic_weapon_probe')), 'Probes require diagnostic per-case CUDA batches, never a merged ordinary PPO corpus'
     assert all(sha(model) == p['model_sha256'] for p in selected_plans)
     if args.config:
         assert args.resume and args.anchor and args.bank

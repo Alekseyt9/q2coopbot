@@ -221,6 +221,9 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 			return fmt.Errorf("combat provider: %w", err)
 		}
 		if p, ok := combatProvider.(*policy.PPO); ok {
+			if p.IsDiagnosticAnchorProbe() && (naturalCombat || cfg.CombatMode != "learned" || cfg.Host != "127.0.0.1" || !cfg.CombatCapture || !cfg.TestSynchronous || !cfg.TestCombatBarrier || cfg.TestTeleport == "") {
+				return fmt.Errorf("observed anchor probe requires isolated synchronous captured loopback combat with barrier")
+			}
 			if p.CombatExecutionContract() != contract {
 				return fmt.Errorf("model combat execution contract differs from runtime")
 			}

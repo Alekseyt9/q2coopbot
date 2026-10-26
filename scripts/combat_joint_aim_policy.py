@@ -18,15 +18,21 @@ GEOMETRY_KIND='geometry_candidate_delta31_mlp_v1'
 GEOMETRY_SAMPLER='frame_hash_geometry_delta31_v1'
 
 
-def base_model(model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False):
+def base_model(model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False,allow_wide=False):
     from combat_target_sampling import validate as validate_target_sampling
     header=validate_target_sampling(model.get("target_sampling"))
     assert header is None or allow_target_sampling,"Target calibration requires explicit scoring; ordinary training unsupported"
-    assert model.get('action_distribution')==candidates.VERSION
+    from combat_wide_aim import validate as validate_wide,DISTRIBUTION as WIDE_DISTRIBUTION
+    validate_wide(model)
+    assert allow_wide or model.get('wide_aim') is None,'Wide policy requires its explicit likelihood/optimizer scope'
+    assert model.get('action_distribution')==(WIDE_DISTRIBUTION if model.get('wide_aim') is not None else candidates.VERSION)
     assert model.get('aim_candidate_head',{}).get('version')==candidates.VERSION
     assert not model.get('execution_mode') and not model.get('geometry_aim_ranker') and not model.get('geometry_aim_exploration')
     assert not model.get('deterministic') and model['feature_version'] in BODY_FEATURE_VERSIONS
-    assert allow_probe or not (model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') is not None or model.get('diagnostic_continuation_probe') is not None or model.get('diagnostic_weapon_probe') is not None),'Diagnostic acquisition cannot enter ordinary training/scoring'
+    assert allow_probe or not (model.get('diagnostic_anchor_probe') is not None or model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') is not None or model.get('diagnostic_continuation_probe') is not None or model.get('diagnostic_weapon_probe') is not None),'Diagnostic acquisition cannot enter ordinary training/scoring'
+    if model.get('diagnostic_anchor_probe') is not None:
+        from combat_anchor_probe import validate as validate_anchor
+        validate_anchor(model)
     if model.get('diagnostic_weapon_probe') is not None:
         from combat_weapon_probe import validate as validate_weapon_probe
         validate_weapon_probe(model)
@@ -43,6 +49,8 @@ def base_model(model,*,allow_probe=False,allow_shared=False,allow_target_samplin
     result.pop('diagnostic_movement_probe',None)
     result.pop('diagnostic_continuation_probe',None)
     result.pop('diagnostic_weapon_probe',None)
+    result.pop('diagnostic_anchor_probe',None)
+    result.pop('wide_aim',None)
     from combat_precision_head import validate_precision_model
     validate_precision_model(result)
     return result
@@ -56,8 +64,8 @@ def _layers(spec,width,outputs):
         width=output
 
 
-def validate(model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False):
-    base_model(model,allow_probe=allow_probe,allow_shared=allow_shared,allow_target_sampling=allow_target_sampling)
+def validate(model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False,allow_wide=False):
+    base_model(model,allow_probe=allow_probe,allow_shared=allow_shared,allow_target_sampling=allow_target_sampling,allow_wide=allow_wide)
     h=model['aim_candidate_head']
     assert set(h)=={'version','offset_degrees','sampler','layers','predictor'} | ({'shared_scorer'} if h.get('shared_scorer') else set())
     shared=h.get('shared_scorer')
@@ -120,8 +128,10 @@ class FrozenHints(nn.Module):
 
 
 class JointAim(nn.Module):
-    def __init__(self,model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False):
-        super().__init__();validate(model,allow_probe=allow_probe,allow_shared=allow_shared,allow_target_sampling=allow_target_sampling)
+    def __init__(self,model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False,allow_wide=False):
+        super().__init__();validate(model,allow_probe=allow_probe,allow_shared=allow_shared,allow_target_sampling=allow_target_sampling,allow_wide=allow_wide)
+        from combat_wide_aim import WideAim
+        self.wide=WideAim(model['wide_aim']) if model.get('wide_aim') is not None else None
         from combat_target_sampling import validate as validate_target_sampling
         self.target_sampling=validate_target_sampling(model.get("target_sampling"))
         probe=model.get('diagnostic_joint_aim_probe')
@@ -211,11 +221,12 @@ def events(rows,features,target,mode,vertical,weapon):
     assert all(a is None or (set(a)=={'source_latent','candidate','candidates','log_probability','timing'} | ({'logits'} if 'logits' in a else set()) and a['candidates']==25 and math.isfinite(a['log_probability'])) for a in annotations)
     final=torch.tensor([r['sample']['latent'] for r in rows],device='cuda',dtype=torch.float64)
     expected=candidates.apply_offsets(source,mode,choice)
-    assert bool(torch.isfinite(timing).all()) and float((expected-final).abs().max())<1e-8,'Recorded correction transform differs'
+    legacy_final=torch.tensor([(r['sample'].get('wide_aim') or {}).get('source_latent',r['sample']['latent']) for r in rows],device='cuda',dtype=torch.float64)
+    assert bool(torch.isfinite(timing).all()) and float((expected-legacy_final).abs().max())<1e-8,'Recorded correction transform differs'
     return source.to(features.dtype),choice,timing.to(features.dtype),active
 
 
-def probabilities(joint,raw,std,source,final,attack,vertical,weapon,features,target,mode,choice,timing,motion_branch=None,reference_branch=None,fire_branch=None,*,frames=None,score_inputs=None,movement_shift=None):
+def probabilities(joint,raw,std,source,final,attack,vertical,weapon,features,target,mode,choice,timing,motion_branch=None,reference_branch=None,fire_branch=None,*,frames=None,score_inputs=None,movement_shift=None,wide_data=None):
     from combat_precision_head import probabilities as original
     lp,ent=original(raw,std,source,attack,vertical,weapon,features,target,mode,motion_branch,reference_branch,fire_branch,movement_shift=movement_shift)
     from combat_target_sampling import correction as target_correction
@@ -229,5 +240,12 @@ def probabilities(joint,raw,std,source,final,attack,vertical,weapon,features,tar
     logits,active=joint(sf,sz,target,mode,vertical,weapon,st,frames=frames)
     lp=lp+after.log_prob(attack)-before.log_prob(attack)+candidates.log_probability(logits,choice,active)
     ent=ent+after.entropy()-before.entropy()+candidates.entropy(logits,active)
+    if joint.wide is not None:
+        assert wide_data is not None,'Wide policy requires explicit source/choice events'
+        from combat_wide_aim import terms
+        wlp,went=terms(joint.wide,wide_data,target,mode,vertical,weapon)
+        lp=lp+wlp;ent=ent+went
+    elif wide_data is not None:
+        assert not bool(wide_data['active'].any())
     assert bool(torch.isfinite(lp).all()) and bool(torch.isfinite(ent).all())
     return lp,ent,logits,active
