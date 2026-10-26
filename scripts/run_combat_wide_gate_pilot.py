@@ -15,6 +15,7 @@ from combat_plan_history import historical_plans
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     for k in ('source','reference-plan','compatibility','out'):ap.add_argument('--'+k,type=Path,required=True)
+    ap.add_argument('--collect-only',action='store_true',help='Close verified source collection without actor/critic fitting')
     ap.add_argument('--config',type=Path,help='Exact existing checkpoint-compatible training config')
     ap.add_argument('--seed-offset',type=int,default=192)
     ap.add_argument('--cases',type=int,choices=(16,32),default=32)
@@ -27,6 +28,7 @@ def main():
     config=read(config_path);assert config['actor_scope']=='wide_only' and config['actor_steps']==config['value_steps']==32
     reference=read(a.reference_plan);ids=[t['episode']['id'] for t in reference['tasks']]
     assert len(ids)==53
+    assert a.seed_offset>=0 and all(a.seed_offset+128<=t['episode']['splits']['train']['count'] for t in reference['tasks']), 'Inventory cohort exceeds a registered TRAIN split'
     out.mkdir(parents=True);(out/'frozen-scripts').mkdir()
     os.environ['GOCACHE']=str(repo/'workspace/build/gocache')
     os.environ['Q2COOPBOT_DIAGNOSTIC_ENGINE_ROOT']=str(repo/'workspace/artifacts/combat-objective-engine-v2-20261025')
@@ -92,7 +94,7 @@ def main():
             path=repo/'scripts'/name;pins[str(path)]=sha(path);shutil.copyfile(path,out/'frozen-scripts'/name)
         save(out/'protocol.json',dict(version='combat_wide_gate_train_pilot_v2',source=str(source),inputs=pins,
             maps=names,cases=a.cases,seed_offset=a.seed_offset,train_seeds=[t['seeds'][0] for t in plan['tasks']],selection='Inventory-only initialMG/atleast5bullets enumeration, historical seed exclusion, then normal static geometry admission. One fresh case per distinct SHA-ordered map; all native class and random remaining inventory constraints unchanged. No outcome filtering.',
-            split='train',actor_scope='wide_only',actor_steps=32,value_steps=32,config=config,max_instances=16,timescale=2,
+            split='train',actor_scope='wide_only',actor_steps=0 if a.collect_only else 32,value_steps=0 if a.collect_only else 32,collection_only=a.collect_only,config=config,max_instances=16,timescale=2,
             initial_weights_native_compatibility=str(a.compatibility.resolve()),training_performed=False,promotion=False,
             scope='Isolated gate-learning batch; all planned cases required. Fresh seeds against physical plan history. No diagnostic-source replay or synthetic labels; no quality claim.'))
         run('collect',[shutil.which('pwsh'),'-NoProfile','-File',repo/'scripts/run_registered_combat_pool.ps1','-Plans',out/'train-plan.json',
@@ -110,6 +112,10 @@ def main():
         save(out/'train-request.json',dict(version='combat_full_joint_train_request_v1',split='train',plan=str(out/'train-plan.json'),plan_sha256=sha(out/'train-plan.json'),
             pool_report=str(out/'pool/report.json'),pool_report_sha256=sha(out/'pool/report.json'),cases=cases))
         for p,h in pins.items():assert sha(p)==h
+        if a.collect_only:
+            save(out/'complete.json',dict(state='complete',device='cuda',collection_only=True,train_cases=a.cases,train_rows=sum(read(Path(c['data'])/'report.json')['rows'] for c in cases),source_model_sha256=seal['weights_sha256'],native_cases=a.cases,cuda_cases=a.cases,training_performed=False,quality_evaluated=False,promotion=False))
+            save(out/'progress.json',dict(stage='complete',complete_sha256=sha(out/'complete.json')))
+            print(out/'complete.json');return
         run('fit',[sys.executable,repo/'scripts/train_combat_full_joint_ppo_cuda.py','--model',source/'weights.json','--resume',source/'checkpoint.pt',
             '--request',out/'train-request.json','--config',config_path,'--out',out/'fit'])
         fitted=read(out/'fit/report.json');assert fitted['state']=='passed' and fitted['actor_scope']=='wide_only'

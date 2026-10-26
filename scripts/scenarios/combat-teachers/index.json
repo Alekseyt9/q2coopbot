@@ -1,0 +1,18 @@
+{
+  "version": "combat_counterfactual_teacher_index_v1",
+  "purpose": "Paired native supervision;active-combat ownership excludes only independently verified passive goal-stop receipts",
+  "ordinary_ppo_eligible": false,
+  "parent_index_archive": "workspace/artifacts/combat-native-teacher-active-ownership-v2-20261026/source-index.json",
+  "corpora": [
+    {
+      "id": "coupled-wide-gate-active-ownership-v2-20261026",
+      "schema": "combat_native_coupled_gate_teacher_v1",
+      "manifest": "workspace/artifacts/combat-native-teacher-active-ownership-v2-20261026/manifest.json",
+      "manifest_sha256": "96157faf393f98edffc1eb39a0ded53576d03c4d74db656bb3944787cee7909a",
+      "records": 65,
+      "scope": "All original65 contexts retained;ownership metadata corrected using native/CUDA-pinned traces. Eleven passive goal-stop rows excluded;genuine rules combat retained unlabelled. Original corpora/index archived. Input features,paired utilities and preference margins unchanged. TRAIN diagnostic data,not policy quality evidence.",
+      "supervised_trainer_implemented": false,
+      "ordinary_ppo_eligible": false
+    }
+  ]
+}
