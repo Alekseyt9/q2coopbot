@@ -18,14 +18,17 @@ GEOMETRY_KIND='geometry_candidate_delta31_mlp_v1'
 GEOMETRY_SAMPLER='frame_hash_geometry_delta31_v1'
 
 
-def base_model(model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False,allow_wide=False):
+def base_model(model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False,allow_wide=False,allow_options=False):
     from combat_target_sampling import validate as validate_target_sampling
     header=validate_target_sampling(model.get("target_sampling"))
     assert header is None or allow_target_sampling,"Target calibration requires explicit scoring; ordinary training unsupported"
     from combat_wide_aim import validate as validate_wide,DISTRIBUTION as WIDE_DISTRIBUTION
     validate_wide(model,allow_probe=allow_probe)
     assert allow_wide or model.get('wide_aim') is None,'Wide policy requires its explicit likelihood/optimizer scope'
-    assert model.get('action_distribution')==(WIDE_DISTRIBUTION if model.get('wide_aim') is not None else candidates.VERSION)
+    from combat_movement_options import validate as validate_options,DISTRIBUTION as OPTIONS_DISTRIBUTION
+    validate_options(model)
+    assert allow_options or model.get('movement_options') is None,'Movement options require explicit optimizer/likelihood scope'
+    assert model.get('action_distribution')==(OPTIONS_DISTRIBUTION if model.get('movement_options') is not None else WIDE_DISTRIBUTION if model.get('wide_aim') is not None else candidates.VERSION)
     assert model.get('aim_candidate_head',{}).get('version')==candidates.VERSION
     assert not model.get('execution_mode') and not model.get('geometry_aim_ranker') and not model.get('geometry_aim_exploration')
     assert not model.get('deterministic') and model['feature_version'] in BODY_FEATURE_VERSIONS
@@ -50,6 +53,7 @@ def base_model(model,*,allow_probe=False,allow_shared=False,allow_target_samplin
     result.pop('diagnostic_continuation_probe',None)
     result.pop('diagnostic_weapon_probe',None)
     result.pop('diagnostic_anchor_probe',None)
+    result.pop('movement_options',None)
     result.pop('wide_aim',None)
     result.pop('diagnostic_wide_gate_probe',None)
     from combat_precision_head import validate_precision_model
@@ -65,8 +69,8 @@ def _layers(spec,width,outputs):
         width=output
 
 
-def validate(model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False,allow_wide=False):
-    base_model(model,allow_probe=allow_probe,allow_shared=allow_shared,allow_target_sampling=allow_target_sampling,allow_wide=allow_wide)
+def validate(model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False,allow_wide=False,allow_options=False):
+    base_model(model,allow_probe=allow_probe,allow_shared=allow_shared,allow_target_sampling=allow_target_sampling,allow_wide=allow_wide,allow_options=allow_options)
     h=model['aim_candidate_head']
     assert set(h)=={'version','offset_degrees','sampler','layers','predictor'} | ({'shared_scorer'} if h.get('shared_scorer') else set())
     shared=h.get('shared_scorer')
@@ -129,8 +133,8 @@ class FrozenHints(nn.Module):
 
 
 class JointAim(nn.Module):
-    def __init__(self,model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False,allow_wide=False):
-        super().__init__();validate(model,allow_probe=allow_probe,allow_shared=allow_shared,allow_target_sampling=allow_target_sampling,allow_wide=allow_wide)
+    def __init__(self,model,*,allow_probe=False,allow_shared=False,allow_target_sampling=False,allow_wide=False,allow_options=False):
+        super().__init__();validate(model,allow_probe=allow_probe,allow_shared=allow_shared,allow_target_sampling=allow_target_sampling,allow_wide=allow_wide,allow_options=allow_options)
         from combat_wide_aim import WideAim
         self.wide=WideAim(model['wide_aim']) if model.get('wide_aim') is not None else None
         from combat_target_sampling import validate as validate_target_sampling

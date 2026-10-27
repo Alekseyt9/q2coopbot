@@ -34,8 +34,8 @@ def finalize(model_path, data, out):
     if model.get('action_distribution'):
         from combat_joint_aim_policy import JointAim,base_model
         diagnostic_probe=bool(model.get('diagnostic_wide_gate_probe') or model.get('diagnostic_anchor_probe') or model.get('diagnostic_joint_aim_probe') or model.get('diagnostic_movement_probe') or model.get('diagnostic_continuation_probe') or model.get('diagnostic_weapon_probe'))
-        core_model=base_model(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True,allow_wide=True)
-        joint=JointAim(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True,allow_wide=True)
+        core_model=base_model(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True,allow_wide=True,allow_options=True)
+        joint=JointAim(model,allow_probe=diagnostic_probe,allow_shared=True,allow_target_sampling=True,allow_wide=True,allow_options=True)
     paired = meta.get('paired_adapter_version')
     if paired:
         assert paired == 'coop_primary_native_adapter_v1' and meta['paired_adapter_verified']
@@ -58,6 +58,7 @@ def finalize(model_path, data, out):
         weapon_helpers.extend(pathlib.Path(__file__).with_name(name).resolve() for name in
                               ('combat_memory_route_features.py','combat_memory_route_movement.py'))
     if joint is not None:
+        weapon_helpers.append(pathlib.Path(__file__).with_name('combat_movement_options.py').resolve())
         weapon_helpers.append(pathlib.Path(__file__).with_name('combat_wide_aim.py').resolve())
         if model.get('diagnostic_anchor_probe'):
             weapon_helpers.append(pathlib.Path(__file__).with_name('combat_anchor_probe.py').resolve())
@@ -150,7 +151,7 @@ def finalize(model_path, data, out):
     with torch.no_grad():
         raw, actor_memory_error = evaluate(actor, 'actor')
         predicted, critic_memory_error = evaluate(value, 'value')
-        candidate_error=None; movement_draw_error=None;continuation_audit=None;weapon_probe_audit=None
+        candidate_error=None; movement_draw_error=None;continuation_audit=None;weapon_probe_audit=None; options_audit=None; option_lp=None
         if joint is not None:
             from combat_joint_aim_policy import events,probabilities
             from combat_aim_candidates import log_probability,frame_uniforms,choose
@@ -167,12 +168,19 @@ def finalize(model_path, data, out):
                 score_inputs=(sf,sz,st)
             frame_tensor=torch.tensor([r['frame'] for r in rows],device='cuda',dtype=torch.long)
             movement_shift=None
+            if model.get('movement_options') is not None:
+                from combat_movement_options import verify as verify_options
+                option_shift,option_lp,options_audit=verify_options(model,rows,context,prepared,actor)
+                if model['movement_options']['enabled']:movement_shift=option_shift
+            else:
+                assert all(r['sample'].get('movement_option') is None for r in rows)
             if model.get('diagnostic_movement_probe'):
                 from combat_movement_probe import shifts as movement_shifts
                 movement_shift=movement_shifts(model,frame_tensor)
             lp,_,logits,score_active=probabilities(joint,raw,std,source,z,attack,vertical,weapon,x,target,mode,choice,timing,
                 getattr(actor,'sampled_motion_aim_branch',None),getattr(actor,'motor_branch',None),getattr(actor,'conditional_fire_branch',None),
                 frames=frame_tensor,score_inputs=score_inputs,movement_shift=movement_shift,wide_data=wide_data)
+            if option_lp is not None:lp=lp+option_lp
             if joint.wide is not None:
                 from combat_wide_aim import terms as wide_terms,verify_fire as verify_wide_fire
                 from combat_conditional_fire import logits as final_fire_logits
@@ -280,6 +288,8 @@ def finalize(model_path, data, out):
     if joint is not None:
         audit.update(action_distribution=model['action_distribution'],candidate_log_probability_max_error=candidate_error,
                      original_latent_transform_verified=True,frame_hash_candidate_assignments_verified=True)
+    if model.get('movement_options') is not None:
+        audit.update(movement_options_version=model['movement_options']['version'],movement_options=options_audit,ordinary_training_eligible=False,movement_options_training_scope_required='combat_movement_options_ppo_v1')
     if model.get('wide_aim') is not None:
         audit.update(wide_aim_version=model['wide_aim']['version'],wide_aim_enabled=model['wide_aim']['enabled'],
             wide_event_rows=int(wide_data['active'].sum()),wide_selected_rows=int(wide_data['choice'].sum()),
@@ -324,6 +334,8 @@ def finalize(model_path, data, out):
                      diagnostic_stopped_crouch_all_frames=meta.get('diagnostic_stopped_crouch_all_frames',False),ordinary_training_eligible=False)
     if meta.get('diagnostic_checked_ground_request_frame',0) or meta.get('diagnostic_checked_ground_request_all_frames',False):
         audit.update(diagnostic_checked_ground_request_frame=meta.get('diagnostic_checked_ground_request_frame',0),diagnostic_checked_ground_request_all_frames=meta.get('diagnostic_checked_ground_request_all_frames',False),ordinary_training_eligible=False)
+    if meta.get('diagnostic_grenade_release_frame',0):
+        audit.update(diagnostic_grenade_release_frame=meta['diagnostic_grenade_release_frame'],ordinary_training_eligible=False)
     if meta.get('diagnostic_forced_duck_frame',0):
         audit.update(diagnostic_forced_duck_frame=meta['diagnostic_forced_duck_frame'],ordinary_training_eligible=False)
     audit.update(combat_execution_contract=contract,execution_contract_verified=True)
@@ -333,10 +345,14 @@ def finalize(model_path, data, out):
     meta.update(version='combat_ppo_rollout_v1', numerical_verification='cuda_verified_v1',
                 rollout_sha256=sha(out / 'rollout.jsonl'), source_sha256=sources,
                 cuda_verification_sha256=sha(out / 'cuda-verification.json'))
+    if model.get('movement_options') is not None:
+        meta.update(version='combat_movement_options_rollout_v1',ppo_training_ready=False,movement_options_training_scope_required='combat_movement_options_ppo_v1')
     if meta.get('diagnostic_stopped_crouch_frame',0) or meta.get('diagnostic_stopped_crouch_all_frames',False):
         meta.update(version='combat_diagnostic_stopped_crouch_rollout_v1',diagnostic_only=True,ppo_training_ready=False)
     if meta.get('diagnostic_checked_ground_request_frame',0) or meta.get('diagnostic_checked_ground_request_all_frames',False):
         meta.update(version='combat_diagnostic_checked_ground_rollout_v1',diagnostic_only=True,ppo_training_ready=False)
+    if meta.get('diagnostic_grenade_release_frame',0):
+        meta.update(version='combat_diagnostic_grenade_release_rollout_v1',diagnostic_only=True,ppo_training_ready=False)
     if meta.get('diagnostic_forced_duck_frame',0):
         meta.update(version='combat_diagnostic_forced_duck_rollout_v1',diagnostic_only=True,ppo_training_ready=False)
     if model.get('diagnostic_joint_aim_probe'):

@@ -125,6 +125,7 @@ func run() error {
 		Loadout                            string                   `json:"loadout"`
 		StopOnGoal                         bool                     `json:"stop_on_goal"`
 		StoppedCrouchProbeFrame            int                      `json:"diagnostic_stopped_crouch_frame"`
+		GrenadeReleaseProbeFrame           int                      `json:"diagnostic_grenade_release_frame"`
 		ForcedDuckProbeFrame               int                      `json:"diagnostic_forced_duck_frame"`
 		CheckedGroundRequestProbeFrame     int                      `json:"diagnostic_checked_ground_request_frame"`
 		CheckedGroundRequestProbeAllFrames bool                     `json:"diagnostic_checked_ground_request_all_frames"`
@@ -587,7 +588,11 @@ func run() error {
 					if err != nil {
 						return err
 					}
-					if err = contextEncoder.Encode(map[string]any{"features": x, "seed": r.Seed, "index": s.Index, "frame": s.Observation.Identity.Frame, "memory": s.Sample.Memory}); err != nil {
+					contextRow := map[string]any{"features": x, "seed": r.Seed, "index": s.Index, "frame": s.Observation.Identity.Frame, "memory": s.Sample.Memory}
+					if s.Sample.MovementOption != nil {
+						contextRow["movement_option"] = s.Sample.MovementOption
+					}
+					if err = contextEncoder.Encode(contextRow); err != nil {
 						return err
 					}
 					contextRows++
@@ -683,6 +688,11 @@ func run() error {
 	if manifest.Reward.HandoffBootstrap != "" {
 		metadata["handoff_bootstrap"] = manifest.Reward.HandoffBootstrap
 		metadata["scope"] = "Explicit objective fork: verified goals/deaths close bootstrap; unfinished ownership handoffs retain exact observed next-state CUDA value."
+	}
+	if manifest.GrenadeReleaseProbeFrame > 0 {
+		metadata["diagnostic_only"] = true
+		metadata["ppo_training_ready"] = false
+		metadata["diagnostic_grenade_release_frame"] = manifest.GrenadeReleaseProbeFrame
 	}
 	if manifest.ForcedDuckProbeFrame != 0 {
 		metadata["diagnostic_only"] = true

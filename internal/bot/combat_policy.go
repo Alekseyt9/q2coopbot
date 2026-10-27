@@ -10,6 +10,7 @@ import (
 )
 
 type combatControl struct {
+	grenadeReleaseProbeFrame           int
 	forcedDuckProbeFrame               int
 	executionContract                  string
 	weaponRequests                     weaponRequestHistory
@@ -175,6 +176,11 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 	if b.forcedDuckProbeFrame != 0 && (b.forcedDuckProbeFrame == -1 || o.Identity.Frame == b.forcedDuckProbeFrame) && c.testSynchronous && c.testCombatGo && b.life == 1 {
 		var probeChanges []policy.Intervention
 		guarded, probeChanges = c.planner.diagnosticForcedDuckRequest(c.planner.World.Snapshot, limited, guarded, safetyChanges)
+		changes = append(changes, probeChanges...)
+	}
+	if b.grenadeReleaseProbeFrame > 0 && o.Identity.Frame == b.grenadeReleaseProbeFrame && c.testSynchronous && c.testCombatGo && b.life == 1 {
+		var probeChanges []policy.Intervention
+		guarded, probeChanges = diagnosticGrenadeRelease(c.planner.World.Snapshot, guarded)
 		changes = append(changes, probeChanges...)
 	}
 	converted := policy.FromCommand(o, proposed, c.planner.World.Snapshot.DeltaAngles, "")

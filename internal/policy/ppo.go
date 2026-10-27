@@ -364,8 +364,12 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 	if optionErr != nil {
 		return Action{}, 0, 0, optionErr
 	}
-	means[0] += shift[0]
-	means[1] += shift[1]
+	if shift[0] != 0 {
+		means[0] += shift[0]
+	}
+	if shift[1] != 0 {
+		means[1] += shift[1]
+	}
 	lp += optionLP
 	means = p.movementProbeMeans(o.Identity.Frame, means)
 	for _, z := range s.Latent {
@@ -520,8 +524,12 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 	s.MovementOption = optionReceipt
 	if optionReceipt != nil {
 		shift := p.file.MovementOptions.Shifts[optionReceipt.Choice]
-		means[0] += shift[0]
-		means[1] += shift[1]
+		if shift[0] != 0 {
+			means[0] += shift[0]
+		}
+		if shift[1] != 0 {
+			means[1] += shift[1]
+		}
 	}
 	means = p.movementProbeMeans(o.Identity.Frame, means)
 	verticalAim := p.file.SampledMotionAim != nil && p.file.SampledMotionAim.Version != SampledMotionAimVersion
