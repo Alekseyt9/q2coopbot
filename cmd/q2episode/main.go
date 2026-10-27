@@ -24,6 +24,7 @@ func run() error {
 	assess := flag.String("assess-plan", "", "assess existing encounter inventory/roster difficulty without gameplay; requires out")
 	difficulty := flag.String("difficulty", "all", "initial-condition selection: all or beginner (estimated resource/time/pressure limits)")
 	difficultyReport := flag.String("difficulty-report", "", "optional pre-outcome assessment report for all generated candidates")
+	inventoryProfile := flag.String("inventory-profile", "standard", "initial generated inventory: standard (bullet packs of 50), rocket-practice, ammo-boundary (evaluation only), or legacy")
 	ids := flag.String("episodes", "", "comma-separated episode IDs")
 	split := flag.String("split", "validation", "train, validation, test or confirmation")
 	mode := flag.String("mode", "both", "rules, learned or both")
@@ -48,6 +49,11 @@ func run() error {
 	campaignGroup := flag.String("campaign-group", "", "comma-separated distinct ground monster classes; generate group recipes with Super Shotgun inventory")
 	campaignGroupLoadout := flag.String("campaign-group-loadout", "weapons-ssg", "group starting inventory: blaster, machinegun, weapons, weapons-ssg or weapons-grenades-recovery")
 	flag.Parse()
+	profiles := map[string]string{"standard": trainingepisodes.BulletPacks50Profile, "rocket-practice": trainingepisodes.RocketPracticeProfile, "ammo-boundary": trainingepisodes.AmmoBoundaryProfile, "legacy": ""}
+	profile, ok := profiles[*inventoryProfile]
+	if !ok {
+		return fmt.Errorf("inventory-profile must be standard, rocket-practice, ammo-boundary or legacy")
+	}
 	if *difficulty != "all" && *difficulty != "beginner" {
 		return fmt.Errorf("difficulty must be all or beginner")
 	}
@@ -156,7 +162,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	p, err := trainingepisodes.Build(r, abs, strings.Split(*ids, ","), *split, *mode, *model, *artifacts, *count, *offset)
+	p, err := trainingepisodes.BuildWithInventoryProfile(r, abs, strings.Split(*ids, ","), *split, *mode, *model, *artifacts, *count, *offset, profile)
 	if err != nil {
 		return err
 	}

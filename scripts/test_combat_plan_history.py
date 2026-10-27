@@ -3,8 +3,12 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+import subprocess
+import os
+from types import SimpleNamespace
 
-from combat_plan_history import discover_plan_files, historical_plans
+from combat_plan_history import discover_plan_files, historical_plans, _discover_plan_files_walk
 
 
 class PlanHistoryTests(unittest.TestCase):
@@ -52,6 +56,34 @@ class PlanHistoryTests(unittest.TestCase):
         except OSError:
             self.skipTest('Directory symlink privilege unavailable; junction checked separately on Windows')
         self.assertEqual(discover_plan_files(scan), [])
+
+    def test_native_and_fallback_discovery_match(self):
+        self.write('nested space/План/UPPER-PLAN.JSON', {'tasks': [{'seeds': [31]}]})
+        self.write('.hidden/x-plan.json', {'tasks': [{'seeds': [32]}]})
+        self.write('excluded/plan.json', {'tasks': [{'seeds': [33]}]})
+        excluded=[self.root/'excluded']
+        expected=_discover_plan_files_walk(self.root,excluded)
+        self.assertEqual(discover_plan_files(self.root,excluded),expected)
+        with patch('combat_plan_history.shutil.which',return_value=None):
+            self.assertEqual(discover_plan_files(self.root,excluded),expected)
+
+    @unittest.skipUnless(os.name=='nt','Windows native discovery')
+    def test_failed_native_search_is_not_empty_history(self):
+        with patch('combat_plan_history.shutil.which',return_value='rg'), patch(
+                'combat_plan_history.subprocess.run',return_value=SimpleNamespace(returncode=2,stdout='',stderr='Access denied')):
+            with self.assertRaisesRegex(RuntimeError,'History file discovery failed'):
+                discover_plan_files(self.root)
+
+    @unittest.skipUnless(os.name=='nt','Windows junction contract')
+    def test_windows_junction_is_not_followed(self):
+        self.write('outside/plan.json', {'tasks': [{'seeds': [34]}]})
+        scan=self.root/'scan';scan.mkdir();alias=scan/'junction'
+        quote=lambda p:"'"+str(p).replace("'","''")+"'"
+        subprocess.run(['pwsh','-NoProfile','-Command',
+            'New-Item -ItemType Junction -Path '+quote(alias)+' -Target '+quote(self.root/'outside')+' | Out-Null'],
+            check=True,capture_output=True,creationflags=subprocess.CREATE_NO_WINDOW)
+        self.addCleanup(lambda: os.rmdir(alias) if alias.exists() else None)
+        self.assertEqual(discover_plan_files(scan),[])
 
 
 if __name__ == '__main__':

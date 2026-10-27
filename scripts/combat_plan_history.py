@@ -3,9 +3,33 @@ import fnmatch
 import json
 import os
 from pathlib import Path
+import shutil
+import subprocess
 
 
 def discover_plan_files(root, exclude_roots=()):
+    """Use the native file walker on Windows, without following runtime aliases."""
+    root=Path(root).resolve()
+    excluded=tuple(Path(p).resolve() for p in exclude_roots)
+    if not root.exists() or any(root==p or root.is_relative_to(p) for p in excluded):return []
+    executable=shutil.which('rg') if os.name=='nt' else None
+    if executable:
+        result=subprocess.run([executable,'--files','--hidden','--no-ignore','--iglob','*plan*.json','--',str(root)],
+            capture_output=True,text=True,encoding='utf-8',creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        if result.returncode not in (0,1) or result.stderr.strip():
+            raise RuntimeError('History file discovery failed: '+result.stderr)
+        paths=[]
+        for line in result.stdout.splitlines():
+            path=Path(line)
+            if any(path==p or path.is_relative_to(p) for p in excluded):continue
+            # Match the Python walk's exclusion of file symlinks/reparse points.
+            if path.is_symlink() or getattr(path.lstat(),'st_file_attributes',0)&0x400:continue
+            paths.append(path)
+        return sorted(paths)
+    return _discover_plan_files_walk(root,excluded)
+
+
+def _discover_plan_files_walk(root, exclude_roots=()):
     root = Path(root).resolve()
     excluded = tuple(Path(p).resolve() for p in exclude_roots)
     pending = [root] if root.exists() and not any(root == p or root.is_relative_to(p) for p in excluded) else []

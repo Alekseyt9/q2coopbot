@@ -356,6 +356,9 @@ func VerifyPlan(path, root string) error {
 	if p.DifficultyPolicy != "" && p.DifficultyPolicy != BeginnerDifficultyPolicy && p.DifficultyPolicy != VisibleBeginnerPolicy {
 		return fmt.Errorf("unknown encounter difficulty policy")
 	}
+	if p.InventoryProfile != "" && p.InventoryProfile != BulletPacks50Profile && p.InventoryProfile != AmmoBoundaryProfile && p.InventoryProfile != RocketPracticeProfile {
+		return fmt.Errorf("unknown inventory profile")
+	}
 	if p.PolicySamplingSeedOffset < 0 || p.PolicySamplingSeedOffset > 2147483647 {
 		return fmt.Errorf("invalid policy sampling seed offset")
 	}
@@ -415,7 +418,7 @@ func VerifyPlan(path, root string) error {
 			}
 			count = t.Seeds[len(t.Seeds)-1] - t.Seeds[0] + 1
 		}
-		expected, err := Build(r, root, []string{t.Episode.ID}, t.Split, mode, model, p.OutputRoot, count, t.Seeds[0]-start.Start)
+		expected, err := BuildWithInventoryProfile(r, root, []string{t.Episode.ID}, t.Split, mode, model, p.OutputRoot, count, t.Seeds[0]-start.Start, p.InventoryProfile)
 		if err != nil {
 			return err
 		}

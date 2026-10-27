@@ -54,8 +54,12 @@ func (p *PPO) conditionalFireLogit(o Observation, base float64, s Sample) (float
 		x = y
 	}
 	result := base + x[0]
-	if p.file.WeaponFireResidual != nil && weaponFireResidualActive(features) {
-		inputs, err := conditionalFireInputs(features, s)
+	if p.file.WeaponFireResidual != nil && weaponFireResidualActiveForVersion(features, p.file.WeaponFireResidual.Version) {
+		version := ConditionalFireVersion
+		if p.file.WeaponFireResidual.Version == WeaponCycleFireResidualVersion {
+			version = ConditionalFireContextVersion
+		}
+		inputs, err := conditionalFireInputsForVersion(features, s, version)
 		if err != nil {
 			return 0, err
 		}

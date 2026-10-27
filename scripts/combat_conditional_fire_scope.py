@@ -4,11 +4,12 @@ from combat_full_joint_ppo import equal_tree,SCOPE
 from ppo_combat import torch
 
 ACTOR_SCOPE='conditional_fire_only'
+CYCLE_ACTOR_SCOPE='conditional_fire_cycle_only'
 
 
 def fork_config(scope,config):
     assert scope.scope==SCOPE and scope.config.get('actor_scope','all')=='all'
-    assert config['actor_scope']==ACTOR_SCOPE and config['version']==SCOPE
+    assert config['actor_scope'] in (ACTOR_SCOPE,CYCLE_ACTOR_SCOPE) and config['version']==SCOPE
     changed={k for k in scope.config.keys()|config.keys() if scope.config.get(k)!=config.get(k)}
     assert changed<= {'actor_scope','actor_lr','fire_phase_balance'},'Unsupported fire fork configuration change'
     if config.get('fire_phase_balance') is not None:
@@ -22,9 +23,13 @@ def fork_config(scope,config):
 
 class FireFreeze:
     def __init__(self,scope):
-        assert scope.scope==SCOPE and scope.config.get('actor_scope')==ACTOR_SCOPE
+        assert scope.scope==SCOPE and scope.config.get('actor_scope') in (ACTOR_SCOPE,CYCLE_ACTOR_SCOPE)
         self.scope=scope
         module=scope.actor.conditional_fire_branch
+        if scope.config['actor_scope']==CYCLE_ACTOR_SCOPE:
+            from combat_weapon_fire_residual import CYCLE_VERSION
+            assert scope.model['weapon_fire_residual']['version']==CYCLE_VERSION
+            module=scope.actor.weapon_fire_residual_branch
         assert module is not None and not scope.model.get('wide_aim') and not scope.model.get('movement_options')
         self.parameters=list(module.parameters());self.ids={id(p) for p in self.parameters}
         assert self.ids and self.ids<={id(p) for p in scope.actor_parameters}

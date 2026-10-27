@@ -29,7 +29,7 @@ def equal_tree(a, b):
 
 
 class FullJointScope:
-    def __init__(self, model, config):
+    def __init__(self, model, config, *, allow_cycle_fire=False):
         assert torch.cuda.is_available(), 'CUDA required'
         wide=model.get('wide_aim') is not None
         self.scope=WIDE_SCOPE if wide else SCOPE
@@ -37,7 +37,10 @@ class FullJointScope:
         validate(model, allow_shared=True,allow_wide=wide)  # Diagnostic/target calibration stay excluded.
         assert model.get('attention') and not model.get('memory'), 'Temporal attention scope only'
         assert not any(k.startswith('diagnostic_') for k in model)
-        assert not any(model.get(k) for k in ('memory_recovery', 'movement_inertia', 'weapon_fire_residual'))
+        assert not any(model.get(k) for k in ('memory_recovery', 'movement_inertia'))
+        if model.get('weapon_fire_residual'):
+            from combat_weapon_fire_residual import CYCLE_VERSION
+            assert allow_cycle_fire and model['weapon_fire_residual']['version']==CYCLE_VERSION,'Cycle fire requires explicit trainer/migration'
         assert config['version'] == self.scope
         for key in ('actor_lr', 'route_lr', 'fine_lr', 'candidate_lr', 'value_lr'):
             assert math.isfinite(config[key]) and 0 < config[key] <= .01, key
