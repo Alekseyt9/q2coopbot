@@ -9,6 +9,8 @@ import (
 // execution guards or quantization. No engine outcomes are model inputs.
 const ConditionalFireVersion = "combat_action_conditioned_fire_v1"
 const ConditionalFireInputWidth = 181
+const ConditionalFireContextVersion = "combat_action_conditioned_fire_context_v2"
+const ConditionalFireContextInputWidth = ConditionalFireInputWidth + 49 + 37
 
 func validateConditionalFire(f PPOFile) error {
 	if err := validateWeaponFireResidual(f); err != nil {
@@ -31,7 +33,7 @@ func (p *PPO) conditionalFireLogit(o Observation, base float64, s Sample) (float
 	if err != nil {
 		return 0, err
 	}
-	x, err := conditionalFireInputs(features, s)
+	x, err := conditionalFireInputsForVersion(features, s, p.file.ConditionalFire.Version)
 	if err != nil {
 		return 0, err
 	}
@@ -85,10 +87,13 @@ func validateConditionalFireSpec(spec *SpatialAimFile) error {
 	if spec == nil {
 		return nil
 	}
-	if spec.Version != ConditionalFireVersion || len(spec.Layers) != 3 {
+	if (spec.Version != ConditionalFireVersion && spec.Version != ConditionalFireContextVersion) || len(spec.Layers) != 3 {
 		return fmt.Errorf("invalid conditional fire version/layers")
 	}
 	width := ConditionalFireInputWidth
+	if spec.Version == ConditionalFireContextVersion {
+		width = ConditionalFireContextInputWidth
+	}
 	for i, output := range []int{32, 16, 1} {
 		layer := spec.Layers[i]
 		if len(layer.Weight) != output || len(layer.Bias) != output {
@@ -161,5 +166,20 @@ func conditionalFireInputs(features []float64, s Sample) ([]float64, error) {
 	}
 	onehot(s.Vertical, 3)
 	onehot(s.Weapon, 12)
+	return x, nil
+}
+
+func conditionalFireInputsForVersion(features []float64, s Sample, version string) ([]float64, error) {
+	if version != ConditionalFireVersion && version != ConditionalFireContextVersion {
+		return nil, fmt.Errorf("unknown conditional fire input version")
+	}
+	x, err := conditionalFireInputs(features, s)
+	if err != nil {
+		return nil, err
+	}
+	if version == ConditionalFireContextVersion {
+		x = append(x, features[169:218]...)
+		x = append(x, features[259:296]...)
+	}
 	return x, nil
 }

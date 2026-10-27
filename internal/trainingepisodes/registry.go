@@ -249,6 +249,7 @@ type Task struct {
 	RewardSHA256  string     `json:"reward_sha256,omitempty"`
 }
 type Plan struct {
+	DifficultyPolicy               string `json:"difficulty_policy,omitempty"`
 	Version                        int    `json:"version"`
 	RegistryPath                   string `json:"registry_path"`
 	RegistrySHA256                 string `json:"registry_sha256"`

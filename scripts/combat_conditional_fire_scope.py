@@ -10,7 +10,10 @@ def fork_config(scope,config):
     assert scope.scope==SCOPE and scope.config.get('actor_scope','all')=='all'
     assert config['actor_scope']==ACTOR_SCOPE and config['version']==SCOPE
     changed={k for k in scope.config.keys()|config.keys() if scope.config.get(k)!=config.get(k)}
-    assert changed<= {'actor_scope','actor_lr'},'Fire fork may change only actor scope and its learning rate'
+    assert changed<= {'actor_scope','actor_lr','fire_phase_balance'},'Unsupported fire fork configuration change'
+    if config.get('fire_phase_balance') is not None:
+        from combat_fire_phase_balance import VERSION
+        assert config['fire_phase_balance']==VERSION
     scope.config=copy.deepcopy(config)
     for group in scope.actor_optimizer.param_groups:
         if group['name']=='actor_and_std':group['lr']=config['actor_lr']

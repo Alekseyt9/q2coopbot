@@ -353,6 +353,9 @@ func VerifyPlan(path, root string) error {
 	if p.Version != 1 || p.Workers != 4 || p.RegistrySHA256 != r.SHA256 || len(p.Tasks) == 0 {
 		return fmt.Errorf("invalid or stale plan")
 	}
+	if p.DifficultyPolicy != "" && p.DifficultyPolicy != BeginnerDifficultyPolicy && p.DifficultyPolicy != VisibleBeginnerPolicy {
+		return fmt.Errorf("unknown encounter difficulty policy")
+	}
 	if p.PolicySamplingSeedOffset < 0 || p.PolicySamplingSeedOffset > 2147483647 {
 		return fmt.Errorf("invalid policy sampling seed offset")
 	}
@@ -363,6 +366,7 @@ func VerifyPlan(path, root string) error {
 		}
 	}
 	seen := map[string]bool{}
+	difficultyWorlds := map[string]*quake.MapInfo{}
 	if err := ValidatePlanExecutionContract(&p); err != nil {
 		return err
 	}
@@ -402,9 +406,53 @@ func VerifyPlan(path, root string) error {
 		if mode == "rules" {
 			model = ""
 		}
-		expected, err := Build(r, root, []string{t.Episode.ID}, t.Split, mode, model, p.OutputRoot, len(t.Seeds), t.Seeds[0]-start.Start)
+		count := len(t.Seeds)
+		if p.DifficultyPolicy != "" {
+			for i, seed := range t.Seeds {
+				if i > 0 && seed <= t.Seeds[i-1] {
+					return fmt.Errorf("difficulty-filtered seeds must be strictly ordered")
+				}
+			}
+			count = t.Seeds[len(t.Seeds)-1] - t.Seeds[0] + 1
+		}
+		expected, err := Build(r, root, []string{t.Episode.ID}, t.Split, mode, model, p.OutputRoot, count, t.Seeds[0]-start.Start)
 		if err != nil {
 			return err
+		}
+		if p.DifficultyPolicy != "" && len(expected.Tasks) == 1 {
+			wanted := map[int]bool{}
+			for _, seed := range t.Seeds {
+				wanted[seed] = true
+			}
+			et := &expected.Tasks[0]
+			allSeeds, allInstances := et.Seeds, et.Instances
+			et.Seeds = nil
+			et.Instances = nil
+			for i, seed := range allSeeds {
+				if wanted[seed] {
+					if len(allInstances) != len(allSeeds) {
+						return fmt.Errorf("missing generated difficulty instances")
+					}
+					a := AssessEncounter(allInstances[i], t.Episode.GameFrames)
+					if p.DifficultyPolicy == VisibleBeginnerPolicy {
+						world := difficultyWorlds[t.Episode.Map]
+						if world == nil {
+							loaded, err := loadGenerationWorld(root, t.Episode.Map)
+							if err != nil {
+								return err
+							}
+							world = &loaded
+							difficultyWorlds[t.Episode.Map] = world
+						}
+						a = assessVisibleEncounter(allInstances[i], t.Episode.GameFrames, world)
+					}
+					if !a.EligibleInitialTraining {
+						return fmt.Errorf("non-beginner instance in initial-training plan: %s seed %d", t.Episode.ID, seed)
+					}
+					et.Seeds = append(et.Seeds, seed)
+					et.Instances = append(et.Instances, allInstances[i])
+				}
+			}
 		}
 		if len(expected.Tasks) != 1 || !reflect.DeepEqual(t, expected.Tasks[0]) {
 			return fmt.Errorf("plan conditions or bindings changed: %s", t.Episode.ID)

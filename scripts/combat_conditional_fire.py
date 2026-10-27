@@ -10,6 +10,8 @@ from train_combat_bc import torch, nn
 
 VERSION = 'combat_action_conditioned_fire_v1'
 INPUT_WIDTH = 181
+CONTEXT_VERSION = 'combat_action_conditioned_fire_context_v2'
+CONTEXT_WIDTH = INPUT_WIDTH + 49 + 37
 
 
 def validate(model):
@@ -19,8 +21,8 @@ def validate(model):
     assert model['feature_version'] in BODY_FEATURE_VERSIONS
     assert model.get('aim_mode_head') == 'combat_target_coarse_fine_aim_v1'
     assert model.get('spatial_aim') and model.get('sampled_motion_aim') and not model.get('entity_attention')
-    assert spec['version'] == VERSION and len(spec['layers']) == 3
-    width = INPUT_WIDTH
+    assert spec['version'] in (VERSION, CONTEXT_VERSION) and len(spec['layers']) == 3
+    width = CONTEXT_WIDTH if spec['version']==CONTEXT_VERSION else INPUT_WIDTH
     for layer, output in zip(spec['layers'], (32, 16, 1)):
         assert len(layer['bias']) == len(layer['weight']) == output
         for row, bias in zip(layer['weight'], layer['bias']):
@@ -64,12 +66,23 @@ def logits(module, features, raw, target, mode, latent, vertical, weapon):
     if module is None:
         return raw[:, 4]
     x = inputs(features, target, mode, latent, vertical, weapon)
-    delta = module(x)
+    # Keep the legacy 181 input contract used by action geometry and the
+    # separate SG residual. Only the versioned main fire branch is expanded.
+    branch_input = context_inputs(features,x) if module[0].in_features==CONTEXT_WIDTH else x
+    delta = module(branch_input)
     assert delta.shape == (len(raw), 1) and bool(torch.isfinite(delta).all())
     result = raw[:, 4] + delta[:, 0].to(raw.dtype)
     from combat_weapon_fire_residual import apply as apply_weapon_fire
     result = apply_weapon_fire(getattr(module, 'weapon_fire_residual_branch', None), features, x, result)
     assert bool(torch.isfinite(result).all())
+    return result
+
+
+def context_inputs(features, fire_inputs):
+    x=body_legacy(features)
+    assert fire_inputs.is_cuda and fire_inputs.shape==(len(x),INPUT_WIDTH)
+    result=torch.cat((fire_inputs,x[:,169:218].detach(),x[:,259:296].detach()),-1)
+    assert result.shape==(len(x),CONTEXT_WIDTH) and bool(torch.isfinite(result).all())
     return result
 
 
@@ -87,7 +100,9 @@ def export(model, module):
         assert not model.get('conditional_fire')
         return
     from ppo_combat import layers
-    model['conditional_fire'] = dict(version=VERSION, layers=layers(module))
+    width=module[0].in_features
+    assert width in (INPUT_WIDTH,CONTEXT_WIDTH)
+    model['conditional_fire'] = dict(version=CONTEXT_VERSION if width==CONTEXT_WIDTH else VERSION, layers=layers(module))
     validate(model)
 
 

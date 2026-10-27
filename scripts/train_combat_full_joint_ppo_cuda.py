@@ -11,12 +11,17 @@ from evaluate_registered_combat_models import read, save, sha
 
 
 def admit(request, model_hash, consumed, consumed_seeds, pin):
-    assert request['version'] == 'combat_full_joint_train_request_v1' and request['split'] == 'train'
+    from combat_train_subset import REQUEST_VERSION,validate as validate_subset
+    assert request['version'] in ('combat_full_joint_train_request_v1',REQUEST_VERSION) and request['split'] == 'train'
+    if request['version']=='combat_full_joint_train_request_v1':
+        assert 'selection' not in request and 'selection_sha256' not in request,'Subset requires explicit v2 request'
     plan = read(pin(request['plan'], request['plan_sha256']))
     pool = read(pin(request['pool_report'], request['pool_report_sha256']))
     assert plan['model_sha256'] == model_hash
     assert pool['state'] == 'complete' and pool['source_unchanged'] is True
-    assert any(p['sha256'] == request['plan_sha256'] and p['model_sha256'] == model_hash for p in pool['plans'])
+    plan_indices={i for i,p in enumerate(pool['plans'])
+        if p['sha256']==request['plan_sha256'] and p['model_sha256']==model_hash}
+    assert len(plan_indices)==1, 'TRAIN request must bind exactly one pool plan'
     expected = {}
     for task in plan['tasks']:
         assert task['split'] == 'train' and task['modes'] == ['learned']
@@ -25,12 +30,17 @@ def admit(request, model_hash, consumed, consumed_seeds, pin):
             seed = instance['engine_seed']
             assert instance['split'] == 'train' and seed not in expected
             expected[seed] = instance
+    if request['version']==REQUEST_VERSION:
+        selection=read(pin(request['selection'],request['selection_sha256']))
+        selected=validate_subset(plan,selection,request['plan_sha256'])
+        expected={seed:instance for seed,instance in expected.items() if seed in selected}
+        assert set(expected)==selected
     rows, history, tokens, seeds, metadata = [], [], [], set(), []
     assert request['cases']
     for case in request['cases']:
         seed = case['seed']; directory = Path(case['data']).resolve(); capture = Path(case['capture_root']).resolve()
         assert seed in expected and seed not in seeds and seed not in consumed_seeds
-        jobs = [j for j in pool['jobs'] if j['seed'] == seed and j['mode'] == 'learned']
+        jobs = [j for j in pool['jobs'] if j['seed'] == seed and j['mode'] == 'learned' and j['plan_index'] in plan_indices]
         assert len(jobs) == 1 and not jobs[0]['error'] and capture.is_relative_to(Path(jobs[0]['root']).resolve())
         assert read(pin(capture/'fixture-0.json')) == expected[seed], 'Capture is not the frozen TRAIN instance'
         assert read(pin(capture/'manifest.json'))['native_objective_required'] is True
@@ -74,6 +84,7 @@ def main():
         ap.add_argument('--'+key, type=Path, required=True)
     ap.add_argument('--resume', type=Path)
     ap.add_argument('--fork-conditional-fire',action='store_true',help='Explicit scope/LR fork preserving all restored Adam states')
+    ap.add_argument('--fork-episode-balance',action='store_true',help='Explicit equal battle mass fork preserving full policy Adam/config')
     a = ap.parse_args(); assert not a.out.exists()
     training_devices(); torch.set_default_device('cuda'); torch.set_num_threads(2)
     torch.use_deterministic_algorithms(True)
@@ -94,10 +105,17 @@ def main():
     checkpoint=torch.load(pin(a.resume),map_location='cuda',weights_only=True) if a.resume else None
     assert checkpoint is None or not checkpoint.get('technical_only'),'Synthetic checkpoint cannot train on games'
     assert not a.fork_conditional_fire or checkpoint is not None
-    scope = FullJointScope(model, checkpoint['config'] if a.fork_conditional_fire else config)
+    assert not a.fork_episode_balance or checkpoint is not None
+    assert not (a.fork_episode_balance and a.fork_conditional_fire)
+    scope = FullJointScope(model, checkpoint['config'] if a.fork_conditional_fire or a.fork_episode_balance else config)
     actor_scope=config.get('actor_scope','all')
     assert actor_scope in ('all','wide_only','conditional_fire_only')
+    assert config.get('fire_phase_balance') is None or actor_scope=='conditional_fire_only'
     assert not a.fork_conditional_fire or actor_scope=='conditional_fire_only'
+    if config.get('episode_balance') is not None:
+        from combat_episode_balance import VERSION as EPISODE_BALANCE
+        assert config['episode_balance']==EPISODE_BALANCE and actor_scope=='all' and scope.scope==SCOPE
+        assert config.get('fire_phase_balance') is None
     if actor_scope=='wide_only':
         assert scope.joint.wide is not None and scope.joint.wide.enabled,'Wide-only fitting requires enabled option'
         frozen_actor={k:v.detach().clone() for k,v in scope.actor.state_dict().items()}
@@ -109,6 +127,9 @@ def main():
         consumed = scope.restore(cp, model_hash)
         old_seeds = cp['consumed_seeds']; updates = cp['updates_completed']
     fire_freeze=None
+    if a.fork_episode_balance:
+        from combat_episode_balance import fork_config as fork_episode_config
+        fork_episode_config(scope,config)
     if actor_scope=='conditional_fire_only':
         from combat_conditional_fire_scope import FireFreeze,fork_config
         assert checkpoint is not None,'Fire-only training requires an explicit restored checkpoint'
@@ -122,6 +143,15 @@ def main():
     for meta in metadata: validate_objective(config, meta)
     prepared = prepare_context(history, rows, 'cuda')
     x = torch.tensor([r['features'] for r in rows], device='cuda', dtype=torch.float32)
+    phase_report=None
+    episode_report=None
+    loss_weights=torch.ones(len(rows),device='cuda',dtype=x.dtype)
+    if config.get('episode_balance') is not None:
+        from combat_episode_balance import weights as episode_weights
+        loss_weights,episode_report=episode_weights(rows)
+    if config.get('fire_phase_balance') is not None:
+        from combat_fire_phase_balance import weights as fire_phase_weights
+        loss_weights,phase_report=fire_phase_weights(x,config['fire_phase_balance'])
     cat = lambda key: torch.tensor([r['sample'].get(key, 0) for r in rows], device='cuda', dtype=torch.long)
     target, mode, vertical, weapon = (cat(k) for k in ('target', 'aim_mode', 'vertical', 'weapon'))
     final = torch.tensor([r['sample']['latent'] for r in rows], device='cuda', dtype=torch.float32)
@@ -157,13 +187,21 @@ def main():
         value_error = float((value[:, 0]-torch.tensor([r['sample']['value'] for r in rows], device='cuda')).abs().max())
         assert lp_error < .003 and value_error < 1e-4 and max(actor_memory, value_memory) < 2e-5
     adv, returns = advantages(rows, config['gamma'], config['lambda'])
-    ad = torch.tensor(adv, device='cuda'); ad = (ad-ad.mean())/(ad.std(unbiased=False)+1e-8)
+    ad = torch.tensor(adv, device='cuda')
+    if episode_report is not None:
+        from combat_episode_balance import normalize_advantages
+        ad=normalize_advantages(ad,loss_weights)
+    else:ad = (ad-ad.mean())/(ad.std(unbiased=False)+1e-8)
     ret = torch.tensor(returns, device='cuda')
     def objective():
         raw, _ = sequence(scope.actor, prepared)
         lp, entropy = likelihood(raw); delta = lp-old; ratio = delta.exp()
-        return (-torch.minimum(ratio*ad, ratio.clamp(1-config['clip'],1+config['clip'])*ad).mean()
-                -config['entropy']*entropy.mean()), ((ratio-1)-delta).mean()
+        surrogate=-torch.minimum(ratio*ad, ratio.clamp(1-config['clip'],1+config['clip'])*ad)
+        divergence=(ratio-1)-delta
+        # Bound both original-distribution and balanced-state KL so the rare
+        # phase cannot move freely behind a small unweighted average.
+        return ((surrogate-config['entropy']*entropy)*loss_weights).mean(), torch.maximum(
+            divergence.mean(),(divergence*loss_weights).mean())
     trials = []
     for _ in range(config['actor_steps']):
         loss, kl = objective()
@@ -181,7 +219,9 @@ def main():
         if not trial['accepted']: break
     for _ in range(config['value_steps']):
         value, _ = sequence(scope.value, prepared)
-        loss = (value[:, 0]-ret).square().mean(); assert bool(torch.isfinite(loss))
+        squared=(value[:, 0]-ret).square()
+        loss = (squared*loss_weights).mean() if episode_report is not None else squared.mean()
+        assert bool(torch.isfinite(loss))
         scope.value_optimizer.zero_grad(); loss.backward()
         norm = nn.utils.clip_grad_norm_(scope.value.parameters(), config['max_grad_norm'])
         assert bool(torch.isfinite(norm)); scope.value_optimizer.step()
@@ -194,7 +234,7 @@ def main():
     cp = scope.snapshot(sha(a.out/'weights.json'), consumed+tokens)
     cp.update(consumed_seeds=sorted(set(old_seeds)|seeds), updates_completed=updates+1,
               parent_checkpoint_sha256=sha(a.resume) if a.resume else None,
-              initialization='conditional_fire_scope_fork_preserved_full_adam' if a.fork_conditional_fire else 'resumed_full_joint_adam' if a.resume else 'explicit_fresh_full_policy_optimizer_boundary')
+              initialization='episode_balance_fork_preserved_full_adam' if a.fork_episode_balance else 'conditional_fire_scope_fork_preserved_full_adam' if a.fork_conditional_fire else 'resumed_full_joint_adam' if a.resume else 'explicit_fresh_full_policy_optimizer_boundary')
     if fire_freeze:cp['conditional_fire_updates_completed']=(0 if a.fork_conditional_fire else checkpoint.get('conditional_fire_updates_completed',0))+1
     torch.save(cp, a.out/'checkpoint.pt')
     if actor_scope=='wide_only':
@@ -207,8 +247,11 @@ def main():
         legacy_policy_parameters_unchanged=actor_scope=='wide_only',legacy_policy_moments_unchanged=actor_scope=='wide_only',
         non_fire_actor_parameters_unchanged=bool(fire_freeze),non_fire_adam_states_unchanged=bool(fire_freeze),
         conditional_fire_updates_completed=cp.get('conditional_fire_updates_completed'),
+        fire_phase_balance=phase_report,
+        episode_balance=episode_report,
         wide_event_rows=int(wide_data['active'].sum()),wide_selected_rows=int(wide_data['choice'].sum()),
         rows=len(rows), train_seeds=sorted(seeds), updates_completed=updates+1,
+        train_request_version=request['version'],condition_subset_sha256=request.get('selection_sha256'),
         actor_steps=sum(t['accepted'] for t in trials), actor_trials=trials, final_approx_kl=float(final_kl),
         old_log_probability_max_error=lp_error, old_value_max_error=value_error,
         behavior_sha256=model_hash, weights_sha256=sha(a.out/'weights.json'), checkpoint_sha256=sha(a.out/'checkpoint.pt'),

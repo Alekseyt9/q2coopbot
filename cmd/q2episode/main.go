@@ -21,6 +21,9 @@ func run() error {
 	registry := flag.String("registry", "scripts/scenarios/combat-training/index.json", "training episode registry")
 	list := flag.Bool("list", false, "validate and list available/planned episodes")
 	verify := flag.String("verify-plan", "", "recompute and verify a frozen generated execution plan")
+	assess := flag.String("assess-plan", "", "assess existing encounter inventory/roster difficulty without gameplay; requires out")
+	difficulty := flag.String("difficulty", "all", "initial-condition selection: all or beginner (estimated resource/time/pressure limits)")
+	difficultyReport := flag.String("difficulty-report", "", "optional pre-outcome assessment report for all generated candidates")
 	ids := flag.String("episodes", "", "comma-separated episode IDs")
 	split := flag.String("split", "validation", "train, validation, test or confirmation")
 	mode := flag.String("mode", "both", "rules, learned or both")
@@ -45,6 +48,19 @@ func run() error {
 	campaignGroup := flag.String("campaign-group", "", "comma-separated distinct ground monster classes; generate group recipes with Super Shotgun inventory")
 	campaignGroupLoadout := flag.String("campaign-group-loadout", "weapons-ssg", "group starting inventory: blaster, machinegun, weapons, weapons-ssg or weapons-grenades-recovery")
 	flag.Parse()
+	if *difficulty != "all" && *difficulty != "beginner" {
+		return fmt.Errorf("difficulty must be all or beginner")
+	}
+	if *assess != "" {
+		if *out == "" {
+			return fmt.Errorf("assess-plan requires out")
+		}
+		report, err := trainingepisodes.AssessPlanFile(*assess)
+		if err != nil {
+			return err
+		}
+		return writeFreshJSON(*out, report)
+	}
 	if *habitatRoster && (*allMapSites == 0 || *nativeProfiles || *nativeRoster) {
 		return fmt.Errorf("native-habitat-roster requires all-map-sites and excludes other native catalog modes")
 	}
@@ -144,6 +160,25 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	var selectionErr error
+	if *difficulty == "beginner" {
+		report, filterErr := trainingepisodes.FilterVisibleBeginnerPlan(p, abs)
+		selectionErr = filterErr
+		path := *difficultyReport
+		if path == "" {
+			path = *out + ".difficulty.json"
+		}
+		if err := writeFreshJSON(path, report); err != nil {
+			return err
+		}
+	} else if *difficultyReport != "" {
+		if err := writeFreshJSON(*difficultyReport, trainingepisodes.AssessPlan(p)); err != nil {
+			return err
+		}
+	}
+	if selectionErr != nil {
+		return selectionErr
+	}
 	p.RecordCombatAdvice = *recordCombatAdvice
 	if p.RecordCombatAdvice && *mode != "learned" {
 		return fmt.Errorf("combat advice requires learned plans")
@@ -173,4 +208,15 @@ func run() error {
 	e := json.NewEncoder(f)
 	e.SetIndent("", "  ")
 	return e.Encode(p)
+}
+
+func writeFreshJSON(path string, value any) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	encoder := json.NewEncoder(f)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(value)
 }

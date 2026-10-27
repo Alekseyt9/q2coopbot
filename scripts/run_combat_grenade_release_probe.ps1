@@ -1,14 +1,28 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$Protocol,[Parameter(Mandatory)][string]$OutputRoot)
+param([Parameter(Mandatory)][string]$Protocol,[Parameter(Mandatory)][string]$OutputRoot,[switch]$DryRun)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 $protocolPath=(Resolve-Path -LiteralPath $Protocol).Path
 $spec=Get-Content -LiteralPath $protocolPath -Raw|ConvertFrom-Json
-if($spec.version -ne 'combat_grenade_release_native_probe_v1' -or $spec.cases.Count -ne 4 -or $spec.repeats -ne 2 -or $spec.max_instances -ne 16 -or $spec.new_native_games -ne 16){throw 'Unexpected fixed diagnostic budget'}
+$caseCount=if($null -eq $spec.cases){0}else{@($spec.cases).Count}
+$legacy=$spec.version -eq 'combat_grenade_release_native_probe_v1' -and $caseCount -eq 4
+$varied=$spec.version -eq 'combat_grenade_release_native_probe_v2' -and $caseCount -ge 1 -and $caseCount -le 16
+$expectedGames=$caseCount*4
+if((!$legacy -and !$varied) -or $spec.repeats -ne 2 -or $spec.max_instances -ne 16 -or $spec.new_native_games -ne $expectedGames){throw 'Unexpected declared diagnostic budget'}
+if($varied -and $spec.new_cuda_checks -ne $expectedGames){throw 'Varied probe requires matching CUDA budget'}
+if($spec.port -lt 1024 -or $spec.port+$expectedGames -gt 65536){throw 'Invalid diagnostic port range'}
+$names=[Collections.Generic.HashSet[string]]::new()
+$seeds=[Collections.Generic.HashSet[long]]::new()
+foreach($case in $spec.cases){
+    if($case.name -notmatch '^[a-zA-Z0-9_-]+$' -or !$names.Add([string]$case.name)){throw 'Invalid or duplicate diagnostic name'}
+    if($null -eq $case.seed -or $case.seed -le 0 -or $case.seed -gt 2147483647 -or !$seeds.Add([long]$case.seed)){throw 'Invalid or duplicate diagnostic seed'}
+    if($null -eq $case.frame -or $case.frame -le 0 -or $case.frame -gt 1000000 -or $case.fixture.engine_seed -ne $case.seed){throw 'Invalid diagnostic frame or fixture binding'}
+}
 $root=[IO.Path]::GetFullPath($OutputRoot)
 if(Test-Path -LiteralPath $root){throw 'Fresh probe output required'}
-if(@(Get-NetUDPEndpoint -ErrorAction SilentlyContinue|Where-Object {$_.LocalPort -ge $spec.port -and $_.LocalPort -lt $spec.port+16}).Count){throw 'Probe ports occupied'}
 foreach($entry in $spec.inputs.PSObject.Properties){if((Get-FileHash -LiteralPath $entry.Name).Hash.ToLowerInvariant() -ne $entry.Value){throw 'Pinned probe input changed'}}
+if($DryRun){Write-Output "Verified $caseCount worlds, $expectedGames diagnostic games, at most 16 concurrent instances";return}
+if(@(Get-NetUDPEndpoint -ErrorAction SilentlyContinue|Where-Object {$_.LocalPort -ge $spec.port -and $_.LocalPort -lt $spec.port+$expectedGames}).Count){throw 'Probe ports occupied'}
 $null=New-Item -ItemType Directory -Path $root
 . "$PSScriptRoot/harness_manifest.ps1"
 . "$PSScriptRoot/combat_harness_bundle.ps1"
@@ -28,7 +42,7 @@ foreach($case in $spec.cases){
     }}
 }
 try{
-    @{stage='native-probe';runner_pid=$PID;cases=16}|ConvertTo-Json|Set-Content "$root/progress.json" -Encoding utf8NoBOM
+    @{stage='native-probe';runner_pid=$PID;cases=$expectedGames}|ConvertTo-Json|Set-Content "$root/progress.json" -Encoding utf8NoBOM
     $results=@($jobs|ForEach-Object -Parallel {
         $ErrorActionPreference='Stop';$job=$_;$errorText=''
         try{
@@ -46,7 +60,7 @@ try{
             root=$job.root;frame=$job.frame;port=$job.port;error=$errorText}
     } -ThrottleLimit 16)
     $unchanged=$fingerprint -eq (Get-HarnessFingerprint (Get-HarnessSourceRecords $repo))
-    $valid=$unchanged -and $results.Count -eq 16 -and !@($results|Where-Object error).Count
+    $valid=$unchanged -and $results.Count -eq $expectedGames -and !@($results|Where-Object error).Count
     @{state=$(if($valid){'complete'}else{'failed'});source_unchanged=$unchanged;jobs=$results;
         protocol_sha256=$protocolHash;source_fingerprint=$fingerprint;max_instances=16;timescale=2;
         training_performed=$false;promotion=$false;scope=$spec.scope}|ConvertTo-Json -Depth 12|Set-Content "$root/report.json" -Encoding utf8NoBOM

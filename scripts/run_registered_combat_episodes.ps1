@@ -37,7 +37,11 @@ foreach($task in $schedule.tasks){
     if(!$DryRun -and $task.seeds.Count%4){throw 'Small cohorts require the episode pool scheduler'}
     for($i=0;$i -lt $task.seeds.Count;$i++){
         $seed=$task.seeds[$i]
-        if($seed -lt $range.start -or $seed -ge $range.start+$range.count -or ($i -gt 0 -and $seed -ne $task.seeds[$i-1]+1)){throw 'Seed outside registered split or not contiguous'}
+        if($seed -lt $range.start -or $seed -ge $range.start+$range.count -or ($i -gt 0 -and $seed -le $task.seeds[$i-1])){throw 'Seed outside registered split or not strictly ordered'}
+        if($i -gt 0 -and $seed -ne $task.seeds[$i-1]+1){
+            $filtered=$schedule.difficulty_policy -in @('beginner_resources_v1','beginner_visible_resources_v2')
+            if(!$filtered -or !$DryRun){throw 'Noncontiguous filtered seeds require the independent episode pool scheduler'}
+        }
     }
     if($task.split -eq 'train' -and !$task.episode.ppo_trainable){throw 'Evaluation-only episode selected for training'}
     foreach($mode in $task.modes){if($mode -notin $task.episode.modes){throw 'Controller not supported by episode'};if($mode -eq 'learned' -and !$schedule.model_path){throw 'Missing model'}}
