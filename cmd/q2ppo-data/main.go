@@ -126,6 +126,7 @@ func run() error {
 		StopOnGoal                         bool                     `json:"stop_on_goal"`
 		StoppedCrouchProbeFrame            int                      `json:"diagnostic_stopped_crouch_frame"`
 		GrenadeReleaseProbeFrame           int                      `json:"diagnostic_grenade_release_frame"`
+		RocketAimProbeFrame                int                      `json:"diagnostic_rocket_aim_frame"`
 		ForcedDuckProbeFrame               int                      `json:"diagnostic_forced_duck_frame"`
 		CheckedGroundRequestProbeFrame     int                      `json:"diagnostic_checked_ground_request_frame"`
 		CheckedGroundRequestProbeAllFrames bool                     `json:"diagnostic_checked_ground_request_all_frames"`
@@ -133,6 +134,9 @@ func run() error {
 	}
 	if e := read(filepath.Join(*batch, "manifest.json"), &manifest); e != nil {
 		return e
+	}
+	if manifest.RocketAimProbeFrame != 0 {
+		return fmt.Errorf("rocket surface aim diagnostics require a dedicated typed exporter; ordinary PPO export is forbidden")
 	}
 	if manifest.Provider != "learned" || manifest.Kind != policy.PPOKind || !manifest.Synchronous {
 		return fmt.Errorf("fresh direct synchronous PPO batch required")

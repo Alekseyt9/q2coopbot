@@ -1,0 +1,42 @@
+{
+  "version": "combat_weapon_curriculum_v1",
+  "registry": "scripts/scenarios/combat-training/index.json",
+  "policy": "Shared learned combat policy; isolated weapon practice followed by mixed partial inventories.",
+  "ordinary_inventory_profile": "standard",
+  "diagnostic_inventory_profile": "ammo-boundary",
+  "stages": [
+    {
+      "id": "rocket-explosion-point",
+      "status": "inventory_profile_ready_geometry_labels_pending",
+      "inventory_profile": "rocket-practice",
+      "candidate_generator": "cmd/q2rocket-candidates",
+      "candidate_generator_status": "offline_validated_not_connected_to_policy",
+      "difficulty": "beginner",
+      "episode_ids": [
+        "campaign-base1-native-profile-soldier-site-017-random-roster",
+        "campaign-base2-native-profile-soldier-light-site-018-random-roster",
+        "campaign-ware2-native-profile-soldier-light-site-018-random-roster",
+        "campaign-jail4-native-profile-soldier-site-017-random-roster"
+      ],
+      "coverage_required": [
+        "direct hit preferable",
+        "lead moving target",
+        "floor near target feet",
+        "wall near a monster group",
+        "blast occluded by geometry",
+        "nearby explosion risks self damage"
+      ],
+      "objective": "Actual native damage to all monsters, kills, survival and ammunition efficiency. No bonus for merely aiming at a floor or wall.",
+      "acceptance": "Fresh source/candidate/rules comparison by geometry stratum; no regression in other weapons; no automatic promotion."
+    },
+    {"id": "blaster-projectile-leading", "status": "planned"},
+    {"id": "machinegun-chaingun-recoil-tracking", "status": "planned", "bullets": [50, 100, 150, 200]},
+    {"id": "shotgun-distance-and-finishing", "status": "planned"},
+    {"id": "railgun-shot-timing", "status": "planned"},
+    {"id": "hyperblaster-leading-and-cell-budget", "status": "planned"},
+    {"id": "grenade-bounce-and-release-timing", "status": "planned"},
+    {"id": "bfg-area-use-and-cell-budget", "status": "planned"},
+    {"id": "mixed-inventory-weapon-choice", "status": "planned", "inventory_profile": "standard"}
+  ],
+  "training_performed": false
+}

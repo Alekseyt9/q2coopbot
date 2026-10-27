@@ -51,6 +51,8 @@ type Config struct {
 	TestCombatOnly                         bool
 	TestStoppedCrouchProbeFrame            int
 	TestGrenadeReleaseProbeFrame           int
+	TestRocketAimProbeFrame                int
+	TestRocketAimProbePoint                string
 	TestForcedDuckProbeFrame               int
 	TestCheckedGroundRequestProbeFrame     int
 	TestCheckedGroundRequestProbeAllFrames bool
@@ -162,6 +164,10 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		return contractErr
 	}
 	cfg.CombatExecutionContract = contract
+	rocketPoint, rocketErr := validateRocketAimProbe(cfg, contract)
+	if rocketErr != nil {
+		return rocketErr
+	}
 	if contract != policy.LegacyCombatExecution && (!cfg.TestSynchronous || !cfg.TestCombatOnly || cfg.CombatMode != "learned" ||
 		!cfg.CombatCapture || cfg.Host != "127.0.0.1" || !cfg.CombatCheckedWallSlide || cfg.CombatActionQualityGuard || cfg.CombatDiagnosticNominalAim ||
 		cfg.TestStoppedCrouchProbeFrame != 0 || cfg.TestStoppedCrouchProbeAllFrames || cfg.TestCheckedGroundRequestProbeFrame != 0 || cfg.TestCheckedGroundRequestProbeAllFrames) {
@@ -520,7 +526,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	defer conn.Close()
 	client := &Client{
-		combatControl:      combatControl{grenadeReleaseProbeFrame: cfg.TestGrenadeReleaseProbeFrame, forcedDuckProbeFrame: cfg.TestForcedDuckProbeFrame, executionContract: contract, mode: cfg.CombatMode, provider: combatProvider, campaignEvaluation: naturalCombat, actionQualityGuard: cfg.CombatActionQualityGuard, checkedWallSlide: cfg.CombatCheckedWallSlide, diagnosticNominalAim: cfg.CombatDiagnosticNominalAim, stoppedCrouchProbeFrame: cfg.TestStoppedCrouchProbeFrame, checkedGroundRequestProbeFrame: cfg.TestCheckedGroundRequestProbeFrame, checkedGroundRequestProbeAllFrames: cfg.TestCheckedGroundRequestProbeAllFrames, stoppedCrouchProbeAllFrames: cfg.TestStoppedCrouchProbeAllFrames},
+		combatControl:      combatControl{rocketAimProbeFrame: cfg.TestRocketAimProbeFrame, rocketAimProbePoint: rocketPoint, grenadeReleaseProbeFrame: cfg.TestGrenadeReleaseProbeFrame, forcedDuckProbeFrame: cfg.TestForcedDuckProbeFrame, executionContract: contract, mode: cfg.CombatMode, provider: combatProvider, campaignEvaluation: naturalCombat, actionQualityGuard: cfg.CombatActionQualityGuard, checkedWallSlide: cfg.CombatCheckedWallSlide, diagnosticNominalAim: cfg.CombatDiagnosticNominalAim, stoppedCrouchProbeFrame: cfg.TestStoppedCrouchProbeFrame, checkedGroundRequestProbeFrame: cfg.TestCheckedGroundRequestProbeFrame, checkedGroundRequestProbeAllFrames: cfg.TestCheckedGroundRequestProbeAllFrames, stoppedCrouchProbeAllFrames: cfg.TestStoppedCrouchProbeAllFrames},
 		combatCapture:      cfg.CombatCapture,
 		scenarioResultPath: cfg.TestScenarioResult, scenarioTailFrames: cfg.TestScenarioTailFrames,
 		scenario:                scenario,

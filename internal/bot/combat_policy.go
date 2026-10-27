@@ -11,6 +11,8 @@ import (
 
 type combatControl struct {
 	grenadeReleaseProbeFrame           int
+	rocketAimProbeFrame                int
+	rocketAimProbePoint                *quake.Vec3
 	forcedDuckProbeFrame               int
 	executionContract                  string
 	weaponRequests                     weaponRequestHistory
@@ -184,6 +186,11 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		changes = append(changes, probeChanges...)
 	}
 	converted := policy.FromCommand(o, proposed, c.planner.World.Snapshot.DeltaAngles, "")
+	if b.rocketAimProbeFrame > 0 && o.Identity.Frame == b.rocketAimProbeFrame && b.rocketAimProbePoint != nil && c.testSynchronous && c.testCombatGo && b.life == 1 {
+		var probeChanges []policy.Intervention
+		guarded, probeChanges = diagnosticRocketSurfaceAim(o, c.planner.World.Snapshot, c.planner.World.Geometry, guarded, *b.rocketAimProbePoint)
+		changes = append(changes, probeChanges...)
+	}
 	if math.Abs(converted.PitchDelta-a.PitchDelta) > .01 {
 		changes = append(changes, policy.Intervention{Component: "pitch", Reason: "protocol_pitch_limit"})
 	}
