@@ -143,7 +143,7 @@ func validateAimCandidates(f PPOFile) error {
 	if h != nil && h.Shared != nil && h.Shared.Kind == GeometryDeltaAimKind {
 		expectedSampler = GeometryDeltaAimSampler
 	}
-	if h == nil || (f.ActionDistribution != JointAimCandidateVersion && f.ActionDistribution != WideAimDistribution) || h.Version != JointAimCandidateVersion ||
+	if h == nil || (f.ActionDistribution != JointAimCandidateVersion && f.ActionDistribution != WideAimDistribution && f.ActionDistribution != MovementOptionsDistribution) || h.Version != JointAimCandidateVersion ||
 		f.Deterministic || f.ExecutionMode != "" || f.GeometryAimExplore != nil || f.GeometryAimRanker != nil ||
 		!equippedPrefixFeatures(f.Features) || f.TargetHead != TargetHeadVersion || f.AimModeHead != PrecisionHeadVersion ||
 		h.Sampler != expectedSampler || !reflect.DeepEqual(h.Offsets, []float64{0, -5, -2.5, 2.5, 5}) ||

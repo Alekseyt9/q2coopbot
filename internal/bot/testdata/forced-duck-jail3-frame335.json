@@ -1,0 +1,196 @@
+{
+  "snapshot": {
+    "map": "jail3",
+    "frame": 335,
+    "self": [
+      -795.375,
+      -431.875,
+      616.125
+    ],
+    "self_velocity": [
+      0,
+      0,
+      0
+    ],
+    "gravity": 800,
+    "on_ground": true,
+    "ducked": true,
+    "health": 35,
+    "pm_type": 0,
+    "pm_time": 0,
+    "pm_flags": 5,
+    "pm_state_known": true,
+    "view_angles": [
+      -1281,
+      9408,
+      0
+    ],
+    "delta_angles": [
+      0,
+      16384,
+      0
+    ],
+    "movers": [
+      {
+        "solid": 31,
+        "solid_known": true,
+        "id": 289,
+        "model": 18,
+        "origin": [
+          568,
+          -792,
+          692
+        ],
+        "angles": [
+          270,
+          0,
+          0
+        ]
+      },
+      {
+        "solid": 31,
+        "solid_known": true,
+        "id": 323,
+        "model": 36,
+        "origin": [
+          1,
+          1,
+          1
+        ],
+        "angles": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "solid": 31,
+        "solid_known": true,
+        "id": 311,
+        "model": 29,
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "angles": [
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "collision_bodies": [
+      {
+        "model_path": "models/objects/barrels/tris.md2",
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "id": 134,
+        "class": "",
+        "origin": [
+          -392,
+          40,
+          816
+        ],
+        "solid": 9250
+      },
+      {
+        "model_path": "models/objects/barrels/tris.md2",
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "id": 135,
+        "class": "",
+        "origin": [
+          -360,
+          0,
+          816
+        ],
+        "solid": 9250
+      },
+      {
+        "model_path": "models/monsters/medic/tris.md2",
+        "angles": [
+          0,
+          243.28125,
+          0
+        ],
+        "skin": 1,
+        "id": 327,
+        "class": "",
+        "origin": [
+          -723.5,
+          -350.75,
+          616
+        ],
+        "frame": 132,
+        "solid": 8291
+      },
+      {
+        "model_path": "models/monsters/tank/tris.md2",
+        "angles": [
+          0,
+          180,
+          0
+        ],
+        "id": 328,
+        "class": "",
+        "origin": [
+          -683.5,
+          -7,
+          592
+        ],
+        "frame": 49,
+        "solid": 13380
+      },
+      {
+        "model_path": "models/monsters/medic/tris.md2",
+        "angles": [
+          0,
+          0,
+          0
+        ],
+        "skin": 1,
+        "id": 329,
+        "class": "",
+        "origin": [
+          -604.375,
+          -68,
+          616
+        ],
+        "frame": 102,
+        "solid": 8291
+      }
+    ]
+  },
+  "proposed": {
+    "Pitch": -844,
+    "Yaw": -6871,
+    "Roll": 0,
+    "Forward": -54,
+    "Side": -83,
+    "Up": 0,
+    "Buttons": 1,
+    "Impulse": 0,
+    "Msec": 100,
+    "Light": 0
+  },
+  "applied": {
+    "Pitch": -844,
+    "Yaw": -6871,
+    "Roll": 0,
+    "Forward": 0,
+    "Side": 0,
+    "Up": 0,
+    "Buttons": 1,
+    "Impulse": 0,
+    "Msec": 100,
+    "Light": 114
+  },
+  "evidence": "combat-wide-prior-screen-v1-20261026 jail3 seed1847002396 frame335; observed geometry only, no native counterfactual"
+}

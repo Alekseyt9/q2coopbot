@@ -6,6 +6,7 @@ import (
 )
 
 const DiagnosticContinuationVersion = "combat_policy_continuation_rng_fork_v1"
+const DiagnosticPostWindowContinuationVersion = "combat_post_movement_window_rng_fork_v2"
 
 type DiagnosticContinuationFile struct {
 	Version string `json:"version"`
@@ -29,10 +30,30 @@ func validateDiagnosticContinuation(f PPOFile) error {
 	if p == nil {
 		return nil
 	}
-	if p.Version != DiagnosticContinuationVersion || p.Frame <= 1 || p.Frame > math.MaxInt32 || p.Seed < 0 || p.Seed > math.MaxInt32 ||
-		f.Deterministic || (f.Features != EquippedWeaponFeatureVersion && f.Features != ProjectileTypeNeutralFeatureVersion) || f.ActionDistribution != JointAimCandidateVersion || f.AimCandidateHead == nil ||
+	legacy := (f.Features == EquippedWeaponFeatureVersion || f.Features == ProjectileTypeNeutralFeatureVersion) && f.ActionDistribution == JointAimCandidateVersion && f.WideAim == nil
+	wide := equippedPrefixFeatures(f.Features) && f.ActionDistribution == WideAimDistribution && f.WideAim != nil && f.WideAim.Enabled
+	postWindow := p.Version == DiagnosticPostWindowContinuationVersion && f.Features == MemoryRouteFeatureVersion &&
+		f.ActionDistribution == JointAimCandidateVersion && f.WideAim == nil
+	validSchema := p.Version == DiagnosticContinuationVersion && (legacy || wide) || postWindow
+	if !validSchema || p.Frame <= 1 || p.Frame > math.MaxInt32 || p.Seed < 0 || p.Seed > math.MaxInt32 ||
+		f.Deterministic || f.AimCandidateHead == nil ||
 		f.DiagnosticAimProbe != nil || f.ExecutionMode != "" || f.GeometryAimRanker != nil || f.GeometryAimExplore != nil {
 		return fmt.Errorf("invalid diagnostic continuation contract")
+	}
+	if postWindow {
+		m := f.DiagnosticMovementProbe
+		if m == nil || m.Version != DiagnosticMovementWindowVersion || validateDiagnosticMovementProbe(f) != nil ||
+			m.Frame > math.MaxInt32-m.Duration || p.Frame != m.Frame+m.Duration ||
+			f.DiagnosticWeaponProbe != nil || f.DiagnosticAnchorProbe != nil || f.DiagnosticWideGate != nil {
+			return fmt.Errorf("post-window continuation requires an exact completed movement window")
+		}
+		return nil
+	}
+	if wide && (f.DiagnosticMovementProbe != nil || f.DiagnosticWeaponProbe != nil || f.DiagnosticAnchorProbe != nil) {
+		return fmt.Errorf("wide continuation cannot mix other interventions")
+	}
+	if g := f.DiagnosticWideGate; g != nil && (!wide || g.Frame+1 != p.Frame) {
+		return fmt.Errorf("continuation must fork immediately after wide gate root")
 	}
 	if m := f.DiagnosticMovementProbe; m != nil && m.Frame+1 != p.Frame {
 		return fmt.Errorf("continuation must fork immediately after movement probe")
@@ -83,7 +104,7 @@ func (p *PPO) validateContinuationSample(o Observation, s Sample) error {
 		}
 		return nil
 	}
-	if o.Identity.Life != 1 || r == nil || r.Version != DiagnosticContinuationVersion || r.Frame != f.Frame || r.Seed != f.Seed ||
+	if o.Identity.Life != 1 || r == nil || r.Version != f.Version || r.Frame != f.Frame || r.Seed != f.Seed ||
 		r.Reset != (o.Identity.Frame == f.Frame) || len(r.GaussianNoise) != 4 || math.IsNaN(r.FireUniform) || r.FireUniform < 0 || r.FireUniform >= 1 {
 		return fmt.Errorf("invalid continuation receipt")
 	}

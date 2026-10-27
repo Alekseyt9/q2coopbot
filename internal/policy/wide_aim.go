@@ -43,8 +43,13 @@ func validateWideAim(f PPOFile) error {
 		!equippedPrefixFeatures(f.Features) || f.TargetHead != TargetHeadVersion || f.AimModeHead != PrecisionHeadVersion ||
 		f.ConditionalFire == nil || f.AimCandidateHead == nil || len(h.Layers) != 3 ||
 		f.DiagnosticAimProbe != nil || f.DiagnosticAnchorProbe != nil || f.DiagnosticMovementProbe != nil ||
-		f.DiagnosticWeaponProbe != nil || f.DiagnosticContinuation != nil || f.GeometryAimRanker != nil || f.GeometryAimExplore != nil {
+		f.DiagnosticWeaponProbe != nil || f.GeometryAimRanker != nil || f.GeometryAimExplore != nil {
 		return fmt.Errorf("invalid learned wide aim contract")
+	}
+	if f.DiagnosticContinuation != nil {
+		if err := validateDiagnosticContinuation(f); err != nil {
+			return err
+		}
 	}
 	width := WideAimInputWidth
 	for i, output := range []int{32, 16, 1} {

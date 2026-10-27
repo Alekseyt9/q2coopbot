@@ -20,6 +20,10 @@ def validate(model,*,allow_probe=False):
         assert allow_probe and h and h['enabled'],'Diagnostic gate cannot enter ordinary scoring/training'
         assert set(probe)=={'version','frame','choice'} and probe['version']==PROBE_VERSION
         assert type(probe['frame']) is int and 0<probe['frame']<=2**31-1 and type(probe['choice']) is int and probe['choice'] in (0,1)
+    if model.get('diagnostic_continuation_probe') is not None and h is not None:
+        assert allow_probe,'Diagnostic continuation cannot enter ordinary scoring/training'
+        from combat_continuation_probe import validate as validate_continuation
+        validate_continuation(model)
     if h is None:
         assert model.get('action_distribution')!=DISTRIBUTION,'Wide event requires a head'
         return
@@ -27,7 +31,7 @@ def validate(model,*,allow_probe=False):
     assert set(h)=={'version','sampler','enabled','layers'} and h['version']==VERSION and h['sampler']==SAMPLER and type(h['enabled']) is bool
     assert not model.get('deterministic') and model.get('combat_execution_contract')=='stock_weapons_fire_v1'
     assert model.get('conditional_fire') and model.get('aim_candidate_head')
-    assert not any(k.startswith('diagnostic_') and k!='diagnostic_wide_gate_probe' for k in model)
+    assert not any(k.startswith('diagnostic_') and k not in ('diagnostic_wide_gate_probe','diagnostic_continuation_probe') for k in model)
     assert not any(model.get(k) for k in ('execution_mode','geometry_aim_ranker','geometry_aim_exploration'))
     width=WIDTH
     assert len(h['layers'])==3
@@ -101,7 +105,8 @@ def events(model,rows,features,target,mode,vertical,weapon,*,allow_probe=False):
     choice=torch.tensor([a['choice'] if a else 0 for a in annotations],device='cuda',dtype=torch.long)
     final=torch.tensor([r['sample']['latent'] for r in rows],device='cuda',dtype=torch.float64)
     assert bool(torch.isfinite(source).all()) and float((transform(source,anchor,choice)-final).abs().max())<1e-8
-    uniforms=torch.tensor([frame_uniforms(r['sample']['sampling_seed']^SALT,r['frame'],1)[0] for r in rows],device='cuda',dtype=torch.float64)
+    from combat_continuation_probe import effective_seed
+    uniforms=torch.tensor([frame_uniforms(effective_seed(model,r)^SALT,r['frame'],1)[0] for r in rows],device='cuda',dtype=torch.float64)
     if bool(active.any()):
         actual=torch.tensor([a['anchor_degrees'] if a else [0,0] for a in annotations],device='cuda',dtype=torch.float64)
         assert float((actual[active]-anchor[active]).abs().max())<1e-8

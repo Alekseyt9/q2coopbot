@@ -8,9 +8,11 @@ $root=[IO.Path]::GetFullPath($(if([IO.Path]::IsPathRooted($OutputRoot)){$OutputR
 if(Test-Path -LiteralPath $root){throw 'Fresh pool output required'}
 if($Port -lt 1024 -or $Port+$MaxInstances-1 -gt 65535){throw 'Invalid port range'}
 $schedules=@();$outputs=@{}
+. "$PSScriptRoot/registered_combat_planner.ps1"
+$plannerContext=New-RegisteredCombatPlanner $repo
 foreach($path in $Plans){
     $full=(Resolve-Path -LiteralPath $path).Path
-    & "$PSScriptRoot/run_registered_combat_episodes.ps1" -Plan $full -DryRun
+    & "$PSScriptRoot/run_registered_combat_episodes.ps1" -Plan $full -DryRun -PlannerContext $plannerContext
     $s=Get-Content -LiteralPath $full -Raw|ConvertFrom-Json
     if(@($s.tasks|Where-Object {$_.episode.recipe.runner -ne 'combat-baseline'}).Count){throw 'Episode pool requires combat-baseline recipes; use -Scheduler cohort for full campaign runner'}
     $target=[IO.Path]::GetFullPath($s.output_root)
@@ -18,6 +20,7 @@ foreach($path in $Plans){
     $outputs[$target]=$true
     $schedules+=@{path=$full;sha256=(Get-FileHash $full).Hash.ToLowerInvariant();schedule=$s}
 }
+Assert-RegisteredCombatPlanner $repo $plannerContext -CheckSources
 if(!$schedules.Count){throw 'No plans'}
 $jobs=[Collections.Generic.List[object]]::new();$groups=@();$index=0;$ordinal=0
 for($p=0;$p -lt $schedules.Count;$p++){

@@ -69,6 +69,7 @@ type ConfigFile struct {
 		CombatBarrier                      bool                  `json:"combat_barrier"`
 		CombatOnly                         bool                  `json:"combat_only"`
 		StoppedCrouchProbeFrame            int                   `json:"stopped_crouch_probe_frame,omitempty"`
+		ForcedDuckProbeFrame               int                   `json:"forced_duck_probe_frame,omitempty"`
 		CheckedGroundRequestProbeFrame     int                   `json:"checked_ground_request_probe_frame,omitempty"`
 		CheckedGroundRequestProbeAllFrames bool                  `json:"checked_ground_request_probe_all_frames,omitempty"`
 		StoppedCrouchProbeAllFrames        bool                  `json:"stopped_crouch_probe_all_frames,omitempty"`
@@ -268,6 +269,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.TestSynchronous = file.Test.Synchronous
 	cfg.TestCombatOnly = file.Test.CombatOnly
 	cfg.TestStoppedCrouchProbeFrame = file.Test.StoppedCrouchProbeFrame
+	cfg.TestForcedDuckProbeFrame = file.Test.ForcedDuckProbeFrame
 	cfg.TestCheckedGroundRequestProbeFrame = file.Test.CheckedGroundRequestProbeFrame
 	cfg.TestCheckedGroundRequestProbeAllFrames = file.Test.CheckedGroundRequestProbeAllFrames
 	cfg.TestStoppedCrouchProbeAllFrames = file.Test.StoppedCrouchProbeAllFrames

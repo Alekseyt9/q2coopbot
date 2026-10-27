@@ -15,6 +15,7 @@ import (
 const PPOKind = "combat_ppo_v1"
 
 type PPOFile struct {
+	MovementOptions         *MovementOptionsFile         `json:"movement_options,omitempty"`
 	DiagnosticWideGate      *DiagnosticWideGateFile      `json:"diagnostic_wide_gate_probe,omitempty"`
 	WideAim                 *WideAimFile                 `json:"wide_aim,omitempty"`
 	DiagnosticAnchorProbe   *DiagnosticAnchorProbeFile   `json:"diagnostic_anchor_probe,omitempty"`
@@ -59,6 +60,7 @@ type PPOFile struct {
 // Latent-space log probability is used for PPO ratios: the fixed tanh map's
 // Jacobian cancels. Quantization/guards belong to environment execution.
 type Sample struct {
+	MovementOption    *MovementOptionSample         `json:"movement_option,omitempty"`
 	WideAim           *WideAimSample                `json:"wide_aim,omitempty"`
 	AnchorProbe       *DiagnosticAnchorSample       `json:"anchor_probe,omitempty"`
 	Version           string                        `json:"version"`
@@ -80,6 +82,7 @@ type Sample struct {
 	WeaponProbe       *DiagnosticWeaponSample       `json:"weapon_probe,omitempty"`
 }
 type PPO struct {
+	movementOption      movementOptionState
 	file                PPOFile
 	actor, critic       *MLP
 	version             string
@@ -117,6 +120,9 @@ func LoadPPO(path string) (*PPO, error) {
 		return nil, e
 	}
 	if e = validateAimCandidates(f); e != nil {
+		return nil, e
+	}
+	if e = validateMovementOptions(f); e != nil {
 		return nil, e
 	}
 	if e = validateWideAim(f); e != nil {
@@ -354,6 +360,13 @@ func (p *PPO) Review(o Observation, s Sample) (Action, float64, float64, error) 
 		}
 		lp += probs[s.AimMode]
 	}
+	shift, optionLP, optionErr := p.reviewMovementOption(o, x, s.MovementOption)
+	if optionErr != nil {
+		return Action{}, 0, 0, optionErr
+	}
+	means[0] += shift[0]
+	means[1] += shift[1]
+	lp += optionLP
 	means = p.movementProbeMeans(o.Identity.Frame, means)
 	for _, z := range s.Latent {
 		if math.IsNaN(z) || math.IsInf(z, 0) {
@@ -500,6 +513,16 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 			return Action{}, err
 		}
 	}
+	optionReceipt, optionState, optionErr := p.prepareMovementOption(o, x)
+	if optionErr != nil {
+		return Action{}, optionErr
+	}
+	s.MovementOption = optionReceipt
+	if optionReceipt != nil {
+		shift := p.file.MovementOptions.Shifts[optionReceipt.Choice]
+		means[0] += shift[0]
+		means[1] += shift[1]
+	}
 	means = p.movementProbeMeans(o.Identity.Frame, means)
 	verticalAim := p.file.SampledMotionAim != nil && p.file.SampledMotionAim.Version != SampledMotionAimVersion
 	var noise [4]float64
@@ -620,7 +643,7 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 			WeaponUniform: weaponUniform, FireUniform: fireUniform, GaussianNoise: append([]float64(nil), noise[:]...)}
 	}
 	if probe := p.file.DiagnosticContinuation; probe != nil && o.Identity.Frame >= probe.Frame {
-		s.ContinuationProbe = &DiagnosticContinuationSample{Version: DiagnosticContinuationVersion, Frame: probe.Frame,
+		s.ContinuationProbe = &DiagnosticContinuationSample{Version: probe.Version, Frame: probe.Frame,
 			Seed: probe.Seed, Reset: o.Identity.Frame == probe.Frame,
 			GaussianNoise: append([]float64(nil), noise[:]...), FireUniform: fireUniform}
 	}
@@ -633,6 +656,7 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 		return Action{}, e
 	}
 	s.LogProbability, s.Value = lp, value
+	p.movementOption = optionState
 	if p.IsRecurrent() {
 		p.memory = memoryState{identity: o.Identity, actor: after.Actor, value: after.Value, position: after.Position, valid: true}
 		p.lastAction = &a

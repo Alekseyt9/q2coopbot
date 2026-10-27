@@ -1,0 +1,12 @@
+{
+  "version": "combat_continuation_registry_v1",
+  "ordinary_ppo_eligible": false,
+  "training_targets_emitted": false,
+  "split_unit": "map",
+  "corpora": [
+    {
+      "manifest": "workspace\\artifacts\\combat-continuation-evidence-v1-20261026\\manifest.json",
+      "manifest_sha256": "830629a55f9eff0deea4473cf3b387c9763f07ff8fa1fcb496bcba0b077d055b"
+    }
+  ]
+}

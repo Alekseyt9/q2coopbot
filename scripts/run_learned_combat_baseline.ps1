@@ -18,7 +18,7 @@ param(
     [switch]$HealthKit,
     [switch]$Synchronous,
     [ValidateRange(0,1000000)][int]$InventoryDropOnceFrame=0,
-    [ValidateRange(0,1000000)][int]$StoppedCrouchProbeFrame=0,
+    [ValidateRange(-1,1000000)][int]$ForcedDuckProbeFrame=0,[ValidateRange(0,1000000)][int]$StoppedCrouchProbeFrame=0,
     [ValidateRange(0,1000000)][int]$CheckedGroundRequestProbeFrame=0,
     [switch]$CheckedGroundRequestProbeAllFrames,
     [switch]$StoppedCrouchProbeAllFrames,
@@ -39,7 +39,8 @@ param(
     [string]$OutputRoot=''
 )
 $ErrorActionPreference='Stop'
-if($ExecutionContract -ne 'legacy_v1' -and (!$Synchronous -or $CombatMode -ne 'learned' -or !$CheckedWallSlide -or $Feedback -or $StoppedCrouchProbeFrame -or $StoppedCrouchProbeAllFrames -or $CheckedGroundRequestProbeFrame -or $CheckedGroundRequestProbeAllFrames -or $DiagnosticNominalAim)){throw 'Execution contract requires exclusive checked synchronous learned capture'}
+if($ForcedDuckProbeFrame -and (!$Synchronous -or $CombatMode -ne 'learned' -or !$CheckedWallSlide -or $ExecutionContract -ne 'stock_weapons_fire_v1' -or $StoppedCrouchProbeFrame -or $StoppedCrouchProbeAllFrames -or $CheckedGroundRequestProbeFrame -or $CheckedGroundRequestProbeAllFrames -or $DiagnosticNominalAim -or $CombatAdvice)){throw 'Forced duck requires exclusive synchronous stock-weapon diagnostic'}
+if($ExecutionContract -ne 'legacy_v1'  -and (!$Synchronous -or $CombatMode -ne 'learned' -or !$CheckedWallSlide -or $Feedback -or $StoppedCrouchProbeFrame -or $StoppedCrouchProbeAllFrames -or $CheckedGroundRequestProbeFrame -or $CheckedGroundRequestProbeAllFrames -or $DiagnosticNominalAim)){throw 'Execution contract requires exclusive checked synchronous learned capture'}
 if($InventoryDropOnceFrame -and !$Synchronous){throw 'Inventory packet-drop probe requires synchronous capture'}
 if($CombatAdvice -and (!$Synchronous -or $CombatMode -ne 'learned')){throw 'Combat advice requires synchronous learned capture'}
 if($DiagnosticNominalAim -and (!$Synchronous -or $CombatMode -ne 'learned')){throw 'Diagnostic aim requires synchronous learned evaluation'}
@@ -174,6 +175,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
         if($using:CheckedWallSlide){$arguments+='-CheckedWallSlide'}
         if($using:DiagnosticNominalAim){$arguments+='-DiagnosticNominalAim'}
         if($using:StoppedCrouchProbeFrame){$arguments+=@('-StoppedCrouchProbeFrame',$using:StoppedCrouchProbeFrame)}
+        if($using:ForcedDuckProbeFrame){$arguments+=@('-ForcedDuckProbeFrame',$using:ForcedDuckProbeFrame)}
         if($using:CheckedGroundRequestProbeFrame){$arguments+=@('-CheckedGroundRequestProbeFrame',$using:CheckedGroundRequestProbeFrame)}
         if($using:CheckedGroundRequestProbeAllFrames){$arguments+=@('-CheckedGroundRequestProbeAllFrames')}
         $arguments+=@('-ExecutionContract',$using:ExecutionContract)
@@ -410,7 +412,7 @@ $manifest=[ordered]@{
     standard_monster_spawn_height=24.125
     game_frame_budget=$(if($Synchronous){'Commands after combat barrier; preparation excluded'}else{'All commands; preparation included'})
     observation_version='combat_observation_v3';action_version='combat_action_v1';reward_version=$(if($RewardConfig){(Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json).version}else{$null});reward_config_sha256=$(if($RewardConfig){$rewardHash}else{$null});reward_config=$(if($RewardConfig){Get-Content -LiteralPath $RewardConfig -Raw|ConvertFrom-Json}else{$null});server_outcome_version=$(if($Synchronous){'server_step_effects_v1'}else{'server_damage_window_v1'})
-    timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;skill=$Skill;mixed=[bool]$Mixed;episode_pattern=$EpisodePattern;solo_fixture=$SoloFixture;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous;observation_timing_contract=$(if($Synchronous){'frozen_world_v1'}else{'wall_clock_v1'});teacher_vertical=[bool]$TeacherVertical;combat_advice=[bool]$CombatAdvice;checked_wall_slide=[bool]$CheckedWallSlide;diagnostic_nominal_aim=[bool]$DiagnosticNominalAim;combat_execution_contract=$ExecutionContract;diagnostic_stopped_crouch_frame=$StoppedCrouchProbeFrame;diagnostic_checked_ground_request_frame=$CheckedGroundRequestProbeFrame;diagnostic_checked_ground_request_all_frames=[bool]$CheckedGroundRequestProbeAllFrames;diagnostic_stopped_crouch_all_frames=[bool]$StoppedCrouchProbeAllFrames
+    timescale=$Timescale;game_frames=$GameFrames;workers=$Workers;episodes_per_worker=$EpisodesPerWorker;loadout=$Loadout;skill=$Skill;mixed=[bool]$Mixed;episode_pattern=$EpisodePattern;solo_fixture=$SoloFixture;health_kit=[bool]$HealthKit;synchronous=[bool]$Synchronous;observation_timing_contract=$(if($Synchronous){'frozen_world_v1'}else{'wall_clock_v1'});teacher_vertical=[bool]$TeacherVertical;combat_advice=[bool]$CombatAdvice;checked_wall_slide=[bool]$CheckedWallSlide;diagnostic_nominal_aim=[bool]$DiagnosticNominalAim;combat_execution_contract=$ExecutionContract;diagnostic_forced_duck_frame=$ForcedDuckProbeFrame;diagnostic_stopped_crouch_frame=$StoppedCrouchProbeFrame;diagnostic_checked_ground_request_frame=$CheckedGroundRequestProbeFrame;diagnostic_checked_ground_request_all_frames=[bool]$CheckedGroundRequestProbeAllFrames;diagnostic_stopped_crouch_all_frames=[bool]$StoppedCrouchProbeAllFrames
     reset=$(if($Synchronous){'Cold native server restart per episode; first usable fixture and fresh inventory verified; single-client barrier confirms independent episode RNG seed. Full-world/AI equivalence remains unconfirmed.'}else{'Cold native server restart per episode, verified first usable observed fixture fields. Inventory/RNG/AI/full-world equivalence remain unconfirmed.'})
     source_fingerprint=$fingerprint;provenance_valid=$valid;sources=$sources
     native_source_fingerprint=$nativeFingerprint;native_sources=$nativeSources
@@ -420,7 +422,7 @@ $manifest=[ordered]@{
     seeds=@($results.seed);physics=$(if($Synchronous){'Stock native PMove and tick; world pauses between synchronous actions, AI frozen during fixture preparation. Live params remain in worker config, without RCON.'}else{'Stock native physics; only timescale and loopback rate differ. Live params remain in worker config, without RCON.'})
     seed_assignments=@($results|Select-Object worker,episode,seed,port,fixture_mixed,solo_fixture)
     stop=$(if($StopOnGoal){'Verified native fixture kills in first life, followed by observed final effect; otherwise fixed game-frame maximum and wall watchdog.'}else{'Fixed game-frame limit per client; scenario wall watchdog; first-life diagnostics and per-life transitions remain separate.'})
-    dataset_scope=$(if($CheckedGroundRequestProbeAllFrames -or $CheckedGroundRequestProbeFrame -or $StoppedCrouchProbeFrame -or $StoppedCrouchProbeAllFrames){'Diagnostic motion intervention; not eligible for ordinary PPO fitting or automatic promotion.'}elseif($RewardConfig){'Separate observations, execution proof, native effects and explicit experimental first-life rewards. No positive demonstration labels or victory inference.'}else{'Separate observed steps, exact native command dispatch proof and damage effect windows; effects are not shot accuracy or delayed causal credit. No scalar reward or positive demonstration labels.'})
+    dataset_scope=$(if($ForcedDuckProbeFrame -or $CheckedGroundRequestProbeAllFrames -or $CheckedGroundRequestProbeFrame -or $StoppedCrouchProbeFrame -or $StoppedCrouchProbeAllFrames){'Diagnostic motion intervention; not eligible for ordinary PPO fitting or automatic promotion.'}elseif($RewardConfig){'Separate observations, execution proof, native effects and explicit experimental first-life rewards. No positive demonstration labels or victory inference.'}else{'Separate observed steps, exact native command dispatch proof and damage effect windows; effects are not shot accuracy or delayed causal credit. No scalar reward or positive demonstration labels.'})
 }
 if($BinaryBundle){$manifest.binary_bundle=$BinaryBundle;$manifest.binary_bundle_receipt_sha256=(Get-FileHash -LiteralPath (Join-Path $BinaryBundle 'receipt.json')).Hash.ToLowerInvariant()}
 $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $OutputRoot 'manifest.json') -Encoding utf8

@@ -10,6 +10,7 @@ import (
 )
 
 type combatControl struct {
+	forcedDuckProbeFrame               int
 	executionContract                  string
 	weaponRequests                     weaponRequestHistory
 	actionQualityGuard                 bool
@@ -169,6 +170,11 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 	if (b.executionContract == policy.CheckedGroundCombatExecution || b.checkedGroundRequestProbeAllFrames || b.stoppedCrouchProbeAllFrames || b.stoppedCrouchProbeFrame > 0 && o.Identity.Frame == b.stoppedCrouchProbeFrame) && c.testSynchronous && c.testCombatGo && b.life == 1 {
 		var probeChanges []policy.Intervention
 		guarded, probeChanges = c.planner.diagnosticStoppedCrouch(c.planner.World.Snapshot, limited, guarded)
+		changes = append(changes, probeChanges...)
+	}
+	if b.forcedDuckProbeFrame != 0 && (b.forcedDuckProbeFrame == -1 || o.Identity.Frame == b.forcedDuckProbeFrame) && c.testSynchronous && c.testCombatGo && b.life == 1 {
+		var probeChanges []policy.Intervention
+		guarded, probeChanges = c.planner.diagnosticForcedDuckRequest(c.planner.World.Snapshot, limited, guarded, safetyChanges)
 		changes = append(changes, probeChanges...)
 	}
 	converted := policy.FromCommand(o, proposed, c.planner.World.Snapshot.DeltaAngles, "")

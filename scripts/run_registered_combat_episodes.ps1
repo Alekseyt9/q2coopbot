@@ -1,18 +1,31 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$Plan,[int]$Port=34300,[switch]$DryRun)
+param([Parameter(Mandatory)][string]$Plan,[int]$Port=34300,[switch]$DryRun,
+ [object]$PlannerContext,[switch]$LegacyPlanner)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
+$env:GOCACHE=Join-Path $repo 'workspace/build/gocache'
 $planPath=(Resolve-Path -LiteralPath $Plan).Path
 $schedule=Get-Content -LiteralPath $planPath -Raw|ConvertFrom-Json
 if($schedule.version -ne 1 -or $schedule.workers -ne 4 -or !$schedule.tasks.Count){throw 'Invalid registered schedule'}
 if((Get-FileHash $schedule.registry_path).Hash.ToLowerInvariant() -ne $schedule.registry_sha256){throw 'Registry index changed'}
 Push-Location $repo
 try{
-    & go run ./cmd/q2episode --verify-plan $planPath --root $repo
+    if($LegacyPlanner -and $PlannerContext){throw 'Legacy planner cannot use a compiled context'}
+    if(!$LegacyPlanner){
+        . "$PSScriptRoot/registered_combat_planner.ps1"
+        $ownPlanner=!$PlannerContext
+        if($ownPlanner){$PlannerContext=New-RegisteredCombatPlanner $repo}
+        Assert-RegisteredCombatPlanner $repo $PlannerContext
+    }
+    if($LegacyPlanner){& go run ./cmd/q2episode --verify-plan $planPath --root $repo}
+    else{& $PlannerContext.executable --verify-plan $planPath --root $repo}
     if($LASTEXITCODE){throw 'Frozen generated plan verification failed'}
-    $listing=& go run ./cmd/q2episode --registry $schedule.registry_path --list
-    if($LASTEXITCODE){throw 'Registry validation failed'}
-    $catalog=($listing -join "`n")|ConvertFrom-Json
+    if($LegacyPlanner){
+        $listing=& go run ./cmd/q2episode --registry $schedule.registry_path --list
+        if($LASTEXITCODE){throw 'Registry validation failed'}
+        $catalog=($listing -join "`n")|ConvertFrom-Json
+    }else{$catalog=Get-RegisteredCombatCatalog $PlannerContext $schedule.registry_path $schedule.registry_sha256}
+    if(!$LegacyPlanner){Assert-RegisteredCombatPlanner $repo $PlannerContext -CheckSources:$ownPlanner}
 }finally{Pop-Location}
 if($schedule.model_path -and (Get-FileHash $schedule.model_path).Hash.ToLowerInvariant() -ne $schedule.model_sha256){throw 'Frozen model changed'}
 foreach($task in $schedule.tasks){

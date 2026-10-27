@@ -324,6 +324,8 @@ def finalize(model_path, data, out):
                      diagnostic_stopped_crouch_all_frames=meta.get('diagnostic_stopped_crouch_all_frames',False),ordinary_training_eligible=False)
     if meta.get('diagnostic_checked_ground_request_frame',0) or meta.get('diagnostic_checked_ground_request_all_frames',False):
         audit.update(diagnostic_checked_ground_request_frame=meta.get('diagnostic_checked_ground_request_frame',0),diagnostic_checked_ground_request_all_frames=meta.get('diagnostic_checked_ground_request_all_frames',False),ordinary_training_eligible=False)
+    if meta.get('diagnostic_forced_duck_frame',0):
+        audit.update(diagnostic_forced_duck_frame=meta['diagnostic_forced_duck_frame'],ordinary_training_eligible=False)
     audit.update(combat_execution_contract=contract,execution_contract_verified=True)
     meta['combat_execution_contract']=contract
     save(out / 'cuda-verification.json', audit)
@@ -335,6 +337,8 @@ def finalize(model_path, data, out):
         meta.update(version='combat_diagnostic_stopped_crouch_rollout_v1',diagnostic_only=True,ppo_training_ready=False)
     if meta.get('diagnostic_checked_ground_request_frame',0) or meta.get('diagnostic_checked_ground_request_all_frames',False):
         meta.update(version='combat_diagnostic_checked_ground_rollout_v1',diagnostic_only=True,ppo_training_ready=False)
+    if meta.get('diagnostic_forced_duck_frame',0):
+        meta.update(version='combat_diagnostic_forced_duck_rollout_v1',diagnostic_only=True,ppo_training_ready=False)
     if model.get('diagnostic_joint_aim_probe'):
         meta.update(version='combat_diagnostic_joint_aim_probe_rollout_v1',diagnostic_only=True,ppo_training_ready=False,
                     diagnostic_probe_version=model['diagnostic_joint_aim_probe']['version'])
@@ -363,6 +367,10 @@ def finalize(model_path, data, out):
                     ordinary_training_eligible=False,diagnostic_weapon_version=model['diagnostic_weapon_probe']['version'])
     if model.get('diagnostic_wide_gate_probe'):
         meta.update(version='combat_diagnostic_wide_gate_probe_rollout_v1',diagnostic_only=True,ppo_training_ready=False,ordinary_training_eligible=False,likelihood_scope='diagnostic_one_frame_gate_distribution_not_ordinary_policy')
+    if model.get('wide_aim') and model.get('diagnostic_continuation_probe'):
+        meta.update(version='combat_diagnostic_wide_continuation_rollout_v1',diagnostic_only=True,
+                    ppo_training_ready=False,ordinary_training_eligible=False,
+                    likelihood_scope='diagnostic_wide_event_with_future_rng_fork_not_ordinary_policy')
     if meta.get('diagnostic_only'):
         meta['ordinary_training_eligible'] = False
     if anchor_audit is not None:

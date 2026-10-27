@@ -21,8 +21,11 @@ func validateDiagnosticWideGate(f PPOFile) error {
 		(h.Choice != 0 && h.Choice != 1) || f.WideAim == nil || !f.WideAim.Enabled ||
 		f.ActionDistribution != WideAimDistribution || f.Deterministic || f.ExecutionMode != "" ||
 		f.DiagnosticAnchorProbe != nil || f.DiagnosticAimProbe != nil || f.DiagnosticMovementProbe != nil ||
-		f.DiagnosticWeaponProbe != nil || f.DiagnosticContinuation != nil {
+		f.DiagnosticWeaponProbe != nil {
 		return fmt.Errorf("invalid diagnostic wide gate clamp")
+	}
+	if f.DiagnosticContinuation != nil {
+		return validateDiagnosticContinuation(f)
 	}
 	return nil
 }

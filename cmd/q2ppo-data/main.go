@@ -125,6 +125,7 @@ func run() error {
 		Loadout                            string                   `json:"loadout"`
 		StopOnGoal                         bool                     `json:"stop_on_goal"`
 		StoppedCrouchProbeFrame            int                      `json:"diagnostic_stopped_crouch_frame"`
+		ForcedDuckProbeFrame               int                      `json:"diagnostic_forced_duck_frame"`
 		CheckedGroundRequestProbeFrame     int                      `json:"diagnostic_checked_ground_request_frame"`
 		CheckedGroundRequestProbeAllFrames bool                     `json:"diagnostic_checked_ground_request_all_frames"`
 		StoppedCrouchProbeAllFrames        bool                     `json:"diagnostic_stopped_crouch_all_frames"`
@@ -682,6 +683,11 @@ func run() error {
 	if manifest.Reward.HandoffBootstrap != "" {
 		metadata["handoff_bootstrap"] = manifest.Reward.HandoffBootstrap
 		metadata["scope"] = "Explicit objective fork: verified goals/deaths close bootstrap; unfinished ownership handoffs retain exact observed next-state CUDA value."
+	}
+	if manifest.ForcedDuckProbeFrame != 0 {
+		metadata["diagnostic_only"] = true
+		metadata["ppo_training_ready"] = false
+		metadata["diagnostic_forced_duck_frame"] = manifest.ForcedDuckProbeFrame
 	}
 	if manifest.CheckedGroundRequestProbeFrame > 0 || manifest.CheckedGroundRequestProbeAllFrames {
 		metadata["diagnostic_only"] = true

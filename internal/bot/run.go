@@ -50,6 +50,7 @@ type Config struct {
 	TestHitscanGuardProbe                  bool
 	TestCombatOnly                         bool
 	TestStoppedCrouchProbeFrame            int
+	TestForcedDuckProbeFrame               int
 	TestCheckedGroundRequestProbeFrame     int
 	TestCheckedGroundRequestProbeAllFrames bool
 	TestStoppedCrouchProbeAllFrames        bool
@@ -164,6 +165,12 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		!cfg.CombatCapture || cfg.Host != "127.0.0.1" || !cfg.CombatCheckedWallSlide || cfg.CombatActionQualityGuard || cfg.CombatDiagnosticNominalAim ||
 		cfg.TestStoppedCrouchProbeFrame != 0 || cfg.TestStoppedCrouchProbeAllFrames || cfg.TestCheckedGroundRequestProbeFrame != 0 || cfg.TestCheckedGroundRequestProbeAllFrames) {
 		return fmt.Errorf("checked combat execution contract requires exclusive captured local synchronous learned fixture")
+	}
+	if cfg.TestForcedDuckProbeFrame < -1 || cfg.TestForcedDuckProbeFrame > 1000000 || cfg.TestForcedDuckProbeFrame != 0 &&
+		(!cfg.TestSynchronous || !cfg.TestCombatOnly || cfg.CombatMode != "learned" || !cfg.CombatCapture || cfg.Host != "127.0.0.1" ||
+			!cfg.CombatCheckedWallSlide || cfg.CombatActionQualityGuard || cfg.CombatDiagnosticNominalAim || cfg.TestCombatAdvice ||
+			cfg.TestStoppedCrouchProbeFrame != 0 || cfg.TestStoppedCrouchProbeAllFrames || cfg.TestCheckedGroundRequestProbeFrame != 0 || cfg.TestCheckedGroundRequestProbeAllFrames || contract != policy.StockWeaponsFireCombatExecution) {
+		return fmt.Errorf("forced duck probe requires exclusive captured local synchronous stock-weapon learned fixture")
 	}
 	if cfg.TestCheckedGroundRequestProbeFrame < 0 || cfg.TestCheckedGroundRequestProbeFrame > 1000000 || cfg.TestCheckedGroundRequestProbeAllFrames && cfg.TestCheckedGroundRequestProbeFrame != 0 || (cfg.TestCheckedGroundRequestProbeFrame > 0 || cfg.TestCheckedGroundRequestProbeAllFrames) &&
 		(!cfg.TestSynchronous || !cfg.TestCombatOnly || cfg.CombatMode != "learned" || !cfg.CombatCapture || cfg.Host != "127.0.0.1" || cfg.TestStoppedCrouchProbeFrame != 0 || cfg.TestStoppedCrouchProbeAllFrames) {
@@ -505,7 +512,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	defer conn.Close()
 	client := &Client{
-		combatControl:      combatControl{executionContract: contract, mode: cfg.CombatMode, provider: combatProvider, campaignEvaluation: naturalCombat, actionQualityGuard: cfg.CombatActionQualityGuard, checkedWallSlide: cfg.CombatCheckedWallSlide, diagnosticNominalAim: cfg.CombatDiagnosticNominalAim, stoppedCrouchProbeFrame: cfg.TestStoppedCrouchProbeFrame, checkedGroundRequestProbeFrame: cfg.TestCheckedGroundRequestProbeFrame, checkedGroundRequestProbeAllFrames: cfg.TestCheckedGroundRequestProbeAllFrames, stoppedCrouchProbeAllFrames: cfg.TestStoppedCrouchProbeAllFrames},
+		combatControl:      combatControl{forcedDuckProbeFrame: cfg.TestForcedDuckProbeFrame, executionContract: contract, mode: cfg.CombatMode, provider: combatProvider, campaignEvaluation: naturalCombat, actionQualityGuard: cfg.CombatActionQualityGuard, checkedWallSlide: cfg.CombatCheckedWallSlide, diagnosticNominalAim: cfg.CombatDiagnosticNominalAim, stoppedCrouchProbeFrame: cfg.TestStoppedCrouchProbeFrame, checkedGroundRequestProbeFrame: cfg.TestCheckedGroundRequestProbeFrame, checkedGroundRequestProbeAllFrames: cfg.TestCheckedGroundRequestProbeAllFrames, stoppedCrouchProbeAllFrames: cfg.TestStoppedCrouchProbeAllFrames},
 		combatCapture:      cfg.CombatCapture,
 		scenarioResultPath: cfg.TestScenarioResult, scenarioTailFrames: cfg.TestScenarioTailFrames,
 		scenario:                scenario,

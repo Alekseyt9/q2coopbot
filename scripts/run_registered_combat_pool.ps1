@@ -14,15 +14,18 @@ $root=[IO.Path]::GetFullPath($(if([IO.Path]::IsPathRooted($OutputRoot)){$OutputR
 if(Test-Path -LiteralPath $root){throw 'Fresh pool output required'}
 if($Port+$MaxInstances-1 -gt 65535){throw 'Pool port range invalid'}
 $schedules=@();$outputs=@{}
+. "$PSScriptRoot/registered_combat_planner.ps1"
+$plannerContext=New-RegisteredCombatPlanner $repo
 foreach($path in $Plans){
     $full=(Resolve-Path -LiteralPath $path).Path
-    & "$PSScriptRoot/run_registered_combat_episodes.ps1" -Plan $full -DryRun
+    & "$PSScriptRoot/run_registered_combat_episodes.ps1" -Plan $full -DryRun -PlannerContext $plannerContext
     $schedule=Get-Content -LiteralPath $full -Raw|ConvertFrom-Json
     $target=[IO.Path]::GetFullPath($schedule.output_root)
     if($outputs.ContainsKey($target) -or (Test-Path -LiteralPath $target) -or $target -eq $root){throw 'Duplicate or occupied plan output'}
     $outputs[$target]=$true
     $schedules+=@{path=$full;sha256=(Get-FileHash $full).Hash.ToLowerInvariant();schedule=$schedule}
 }
+Assert-RegisteredCombatPlanner $repo $plannerContext -CheckSources
 if(!$schedules.Count){throw 'No plans'}
 $slots=[int]($MaxInstances/4)
 if($DryRun){Write-Output "Verified pool: $MaxInstances instances, $slots concurrent case/model cohorts";return}
