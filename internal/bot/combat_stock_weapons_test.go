@@ -9,6 +9,40 @@ import (
 )
 
 // Fixed commands and BSP only; no neural inference or fitting.
+func TestNaturalStockExecutionAdmission(t *testing.T) {
+	base := Config{Host: "127.0.0.1", FramePaced: true, CombatCapture: true, TracePath: "trace", CombatMode: "learned", CombatProviderFile: "weights", CombatLiveCompanion: true, CombatCheckedWallSlide: true}
+	if !naturalStockExecution(base, policy.StockWeaponsFireCombatExecution) {
+		t.Fatal("natural captured companion rejected")
+	}
+	for _, mutate := range []func(*Config){
+		func(c *Config) { c.TestTeleport = "0,0,0" },
+		func(c *Config) { c.TestRocketAimProbeFrame = 99 },
+		func(c *Config) { c.Host = "192.0.2.1" },
+		func(c *Config) { c.CombatCapture = false },
+		func(c *Config) { c.CombatCheckedWallSlide = false },
+		func(c *Config) { c.CombatLiveCompanion = false },
+	} {
+		c := base
+		mutate(&c)
+		if naturalStockExecution(c, policy.StockWeaponsFireCombatExecution) {
+			t.Fatal("unsafe natural admission")
+		}
+	}
+	if naturalStockExecution(base, policy.CheckedGroundCombatExecution) {
+		t.Fatal("other contract admitted")
+	}
+	for _, weapon := range []string{"Blaster", "Machinegun", "Shotgun", "Super Shotgun"} {
+		if stockWeaponNeedsSolo(weapon) {
+			t.Fatalf("existing partner guards bypassed: %s", weapon)
+		}
+	}
+	for _, weapon := range []string{"Rocket Launcher", "Railgun", "BFG10K", "Grenades"} {
+		if !stockWeaponNeedsSolo(weapon) {
+			t.Fatalf("new weapon partner restriction lost: %s", weapon)
+		}
+	}
+}
+
 func TestStockWeaponExecutionPreservesLegacyAndNativeCommand(t *testing.T) {
 	c := policyClient(t, "learned")
 	s := c.planner.World.Snapshot

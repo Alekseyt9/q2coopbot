@@ -89,7 +89,8 @@ $providerKind=$null
 if($ProviderFile){$providerKind=(Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).kind;$remoteProvider=($providerKind -eq 'combat_remote_v1')}
 $ppoProvider=($providerKind -eq 'combat_ppo_v1')
 if($CombatMode -eq 'learned' -and $Loadout -in 'weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery' -and (!$ppoProvider -or (Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).weapon_head -ne 'combat_masked_weapon_v1')){throw 'Learned weapon-choice fixture requires a versioned PPO weapon head'}
-$trainedProvider=$providerKind -in @('combat_bc_mlp_v1','combat_ppo_v1')
+$trainedProvider=$providerKind -in @('combat_bc_mlp_v1','combat_ppo_v1','combat_hjepa_v1')
+if($providerKind -eq 'combat_hjepa_v1' -and (!$Synchronous -or $ExecutionContract -ne 'legacy_v1' -or $Loadout -notin 'blaster','machinegun','shotgun')){throw 'H-JEPA pilot requires synchronous legacy fixed-weapon execution'}
 if($ppoProvider -and !$Synchronous){throw 'PPO pilot requires synchronous mode'}
 if($remoteProvider -and !$Synchronous){throw 'Remote policy requires -Synchronous'}
 if($Feedback -and (!$remoteProvider -or !$RewardConfig)){throw 'Feedback requires remote provider, synchronous mode and reward config'}

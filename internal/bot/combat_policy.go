@@ -123,7 +123,7 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 	}
 	supportedFixture := c.testWeaponSwitchFixture == "parasite_blaster" || c.testWeaponSwitchFixture == "parasite_machinegun" || c.testWeaponSwitchFixture == "parasite_shotgun" || multiWeaponFixture(c.testWeaponSwitchFixture)
 	fixtureWeapon := (c.testSynchronous || c.testHitscanGuardProbe) && supportedFixture && directHitscanWeapon(o.Weapon)
-	stockFixtureWeapon := b.executionContract == policy.StockWeaponsFireCombatExecution && c.testSynchronous && supportedFixture && directStockWeapon(o.Weapon)
+	stockFixtureWeapon := b.executionContract == policy.StockWeaponsFireCombatExecution && (b.campaignEvaluation || c.testSynchronous && supportedFixture) && directStockWeapon(o.Weapon)
 	weaponPolicy, choosesWeapons := b.provider.(interface{ WeaponHeadVersion() string })
 	// An equipped pickup must not prevent a weapon-enabled policy from
 	// requesting its own replacement. Unsupported firing remains blocked by
@@ -197,6 +197,12 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 	sel.CandidateCommand, sel.GuardedCommand, sel.Interventions = &proposed, &guarded, changes
 	sel.ElapsedUS = time.Since(start).Microseconds()
 	budget := 5 * time.Millisecond
+	// Natural Quake II advances at 10 Hz. Reserve half a server tick for
+	// local learned inference plus geometry validation; the historical 5 ms
+	// pilot budget spuriously replaces valid temporal-policy commands.
+	if _, local := b.provider.(*policy.PPO); local && b.campaignEvaluation {
+		budget = 50 * time.Millisecond
+	}
 	enforceBudget := !c.testSynchronous
 	if remote, ok := b.provider.(*policy.Remote); ok && c.testSynchronous {
 		budget = remote.DecisionBudget()
@@ -310,7 +316,7 @@ func (p *Planner) guardDirectCombatEnvironment(s quake.Snapshot, cmd quake.UserC
 		stopMove("unsupported_motion_guard")
 	}
 	if cmd.Buttons&1 != 0 {
-		if stockWeapons && (s.Teammate != nil || s.LastTeammate != nil) {
+		if stockWeapons && stockWeaponNeedsSolo(s.Weapon) && (s.Teammate != nil || s.LastTeammate != nil) {
 			// New projectile firing is admitted only in isolated solo training.
 			// This contract does not claim multiplayer blast/rail penetration safety.
 			stopFire("stock_weapons_solo_only")

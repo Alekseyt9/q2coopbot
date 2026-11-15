@@ -151,6 +151,12 @@ func LoadProvider(path string, synchronous bool) (Provider, error) {
 	if header.Kind == MLPKind {
 		return LoadMLP(path)
 	}
+	if header.Kind == HJEPAKind {
+		if !synchronous {
+			return nil, fmt.Errorf("H-JEPA experiment requires synchronous harness")
+		}
+		return LoadHJEPA(path)
+	}
 	if header.Kind == PPOKind {
 		if !synchronous {
 			return nil, fmt.Errorf("PPO pilot requires synchronous harness")
