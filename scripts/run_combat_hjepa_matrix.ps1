@@ -22,7 +22,7 @@ try {
   }
  }
  foreach($task in $schedule.tasks){
-  if($task.seeds.Count -lt 1 -or $task.seeds.Count -gt 4 -or $task.episode.recipe.loadout -ne 'machinegun' -or $task.instances.Count -ne $task.seeds.Count){throw 'Matrix requires 1..4 generated fixed-MG instances per task'}
+  if($task.seeds.Count -lt 1 -or $task.seeds.Count -gt 4 -or $task.episode.recipe.loadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery' -or $task.instances.Count -ne $task.seeds.Count){throw 'Matrix requires 1..4 generated supported inventory instances per task'}
  }
  $maxWorkers=($schedule.tasks|ForEach-Object {$_.seeds.Count}|Measure-Object -Maximum).Maximum
  $batchSize=[int][math]::Floor(16/$maxWorkers)
@@ -38,7 +38,7 @@ try {
   $fixture="$root/fixtures-$i.json"
   if(!(Test-Path -LiteralPath $fixture)){@{instances=@($task.instances)}|ConvertTo-Json -Depth 30|Set-Content -LiteralPath $fixture -Encoding utf8NoBOM}
   $out="$root/$($v.name)/case-$i"
-  $argsMap=@{Workers=$task.seeds.Count;EpisodesPerWorker=1;Synchronous=$true;Loadout='machinegun';ReleaseGameFrame=100;
+  $argsMap=@{Workers=$task.seeds.Count;EpisodesPerWorker=1;Synchronous=$true;Loadout=$task.episode.recipe.loadout;Mixed=[bool]$task.episode.recipe.mixed;ReleaseGameFrame=100;
    GameFrames=$task.episode.game_frames;Seed=[int]$task.seeds[0];Port=$Port+$maxWorkers*($index%$batchSize);Skill=$task.episode.skill;
    CombatMode=$v.mode;StopOnGoal=$true;StopOnFirstDeath=$true;RewardConfig=(Join-Path $repo $task.episode.recipe.reward_config);
    GeneratedFixtures=$fixture;OutputRoot=$out;BinaryBundle=$bundle}

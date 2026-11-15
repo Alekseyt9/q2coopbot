@@ -15,6 +15,31 @@ func hTestLayer(in, out int) DenseLayer {
 	}
 	return l
 }
+
+func TestHJEPAInventoryDeclaration(t *testing.T) {
+	f := hTestModel()
+	for _, mode := range []string{"", "keep_equipped_v1"} {
+		f.WeaponMode = mode
+		p, err := LoadHJEPA(hWrite(t, f))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.KeepsEquippedWeapon() != (mode != "") {
+			t.Fatal("inventory admission must be explicit")
+		}
+		a, err := p.Decide(testObservation())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if a.Weapon != "" {
+			t.Fatal("keep-equipped must not invent a weapon selection")
+		}
+	}
+	f.WeaponMode = "automatic"
+	if _, err := LoadHJEPA(hWrite(t, f)); err == nil {
+		t.Fatal("unknown weapon mode admitted")
+	}
+}
 func hTestModel() HJEPAFile {
 	f := HJEPAFile{Kind: HJEPAKind, Features: WeaponFeatureVersion, PriorWeight: .25}
 	for i, s := range []int{1, 4, 16} {

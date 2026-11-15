@@ -22,7 +22,8 @@ type HJEPALevel struct {
 	Utility   []DenseLayer `json:"utility"`
 }
 type HJEPAFile struct {
-	Planner           string       `json:"planner,omitempty"` // empty/hierarchy, flat, bc, sequence
+	WeaponMode        string       `json:"weapon_mode,omitempty"` // explicit inventory evaluation without a weapon selector
+	Planner           string       `json:"planner,omitempty"`     // empty/hierarchy, flat, bc, sequence
 	Kind              string       `json:"kind"`
 	Features          string       `json:"feature_version"`
 	Levels            []HJEPALevel `json:"levels"`
@@ -38,6 +39,10 @@ type HJEPA struct {
 	version    string
 	lastSearch HJEPASearchAudit
 }
+
+// KeepsEquippedWeapon admits inventory fixtures only by an explicit model declaration.
+// Native empty-ammo switching remains engine behavior, not a learned decision.
+func (h *HJEPA) KeepsEquippedWeapon() bool { return h.file.WeaponMode == "keep_equipped_v1" }
 
 func validateHNet(net []DenseLayer, input, output int) error {
 	if len(net) < 1 || len(net) > 3 {
@@ -105,6 +110,9 @@ func LoadHJEPA(path string) (*HJEPA, error) {
 	}
 	if f.Planner != "" && f.Planner != "hierarchy" && f.Planner != "flat" && f.Planner != "bc" && f.Planner != "sequence" {
 		return nil, fmt.Errorf("unsupported H-JEPA planner")
+	}
+	if f.WeaponMode != "" && f.WeaponMode != "keep_equipped_v1" {
+		return nil, fmt.Errorf("unsupported H-JEPA weapon mode")
 	}
 	if math.IsNaN(f.PlanStep) || math.IsInf(f.PlanStep, 0) || f.PlanStep < 0 || f.PlanStep > .5 {
 		return nil, fmt.Errorf("invalid H-JEPA plan step")
