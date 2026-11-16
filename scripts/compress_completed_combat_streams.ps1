@@ -8,9 +8,10 @@ if(!$target.StartsWith($boundary,[StringComparison]::OrdinalIgnoreCase)){throw '
 for($parent=[IO.DirectoryInfo]::new($target);$parent -and $parent.FullName.StartsWith($boundary.TrimEnd('\'),[StringComparison]::OrdinalIgnoreCase);$parent=$parent.Parent){
  if($parent.Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Stream compression refuses junction ancestors'}
 }
+$targetArgumentPattern=[regex]::Escape($target)+'(?=$|[\\\s"''])'
 $running=@(Get-CimInstance Win32_Process|Where-Object {
  ($_.ExecutablePath -and $_.ExecutablePath.StartsWith($target+'\',[StringComparison]::OrdinalIgnoreCase)) -or
- ($_.Name -match '^(python.*|q2ppo-data|q2combat-export)\.exe$' -and $_.CommandLine -and $_.CommandLine.Contains($target))
+ ($_.Name -match '^(python.*|q2ppo-data|q2combat-export)\.exe$' -and $_.CommandLine -and $_.CommandLine.Replace('/','\') -match $targetArgumentPattern)
 })
 if($running.Count){throw 'Stream writer/exporter still running'}
 $log=Join-Path $target 'stream-compression.log'

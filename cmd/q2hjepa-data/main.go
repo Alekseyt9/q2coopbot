@@ -33,9 +33,13 @@ func run() error {
 	out := flag.String("out", "", "fresh JSONL output")
 	guardedWorld := flag.Bool("guarded-world", false, "offline world data: retain guarded actually executed commands, never expert BC labels")
 	terminalWorld := flag.Bool("terminal-world", false, "offline world data: retain verified same-life terminal next observations")
+	featureVersion := flag.String("feature-version", policy.WeaponFeatureVersion, "combat_features_v6 or hjepa_context_features_v1")
 	flag.Parse()
 	if *root == "" || *out == "" {
 		return fmt.Errorf("--root and --out required")
+	}
+	if _, err := policy.HJEPAFeatureWidth(*featureVersion); err != nil {
+		return err
 	}
 	var paths []string
 	err := filepath.WalkDir(*root, func(p string, d os.DirEntry, e error) error {
@@ -107,11 +111,11 @@ func run() error {
 			if _, e = policy.Command(o, a, [3]int16{}); e != nil {
 				return e
 			}
-			x, e := policy.FeaturesForVersion(o, policy.WeaponFeatureVersion)
+			x, e := policy.HJEPAFeatures(o, *featureVersion)
 			if e != nil {
 				return e
 			}
-			nx, e := worldNextFeatures(*n, *terminalWorld)
+			nx, e := worldNextFeatures(*n, *terminalWorld, *featureVersion)
 			if e != nil {
 				return e
 			}
@@ -154,7 +158,7 @@ func run() error {
 		Scope         string            `json:"scope"`
 		GuardedWorld  bool              `json:"guarded_world"`
 		TerminalWorld bool              `json:"terminal_world"`
-	}{"hjepa_data_v1", policy.WeaponFeatureVersion, count, sources, "Native verified applied actions, contiguous same-life frames. Opt-in guarded/terminal rows are offline world dynamics, not expert labels or PPO. Postmortem inventory is masked unavailable. Visibility utility is a legacy proxy until native relabelling.", *guardedWorld, *terminalWorld}
+	}{"hjepa_data_v1", *featureVersion, count, sources, "Native verified applied actions, contiguous same-life frames. Opt-in guarded/terminal rows are offline world dynamics, not expert labels or PPO. Postmortem inventory is masked unavailable. Visibility utility is a legacy proxy until native relabelling.", *guardedWorld, *terminalWorld}
 	b, _ := json.MarshalIndent(meta, "", "  ")
 	if e = os.WriteFile(*out+".meta.json", b, 0600); e != nil {
 		return e
@@ -162,14 +166,14 @@ func run() error {
 	fmt.Printf("Exported %d transitions from %d datasets\n", count, len(paths))
 	return nil
 }
-func worldNextFeatures(o policy.Observation, terminal bool) ([]float64, error) {
+func worldNextFeatures(o policy.Observation, terminal bool, featureVersion string) ([]float64, error) {
 	if terminal && o.Health <= 0 {
 		// Stock death cleanup may expose invalid dropped inventory. Only the world
 		// target masks it as unavailable; the native observation stays untouched.
 		o.Inventory = nil
 		o.InventoryAgeFrames = nil
 	}
-	return policy.FeaturesForVersion(o, policy.WeaponFeatureVersion)
+	return policy.HJEPAFeatures(o, featureVersion)
 }
 func main() {
 	if e := run(); e != nil {

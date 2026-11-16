@@ -23,25 +23,27 @@ type HJEPALevel struct {
 	Utility   []DenseLayer `json:"utility"`
 }
 type HJEPAFile struct {
-	WorldActionSpace   string       `json:"world_action_space,omitempty"` // explicit predictor inputs; empty preserves historical files
-	WeaponHead         string       `json:"weapon_head,omitempty"`
-	WeaponFeatures     string       `json:"weapon_feature_version,omitempty"`
-	WeaponActor        []DenseLayer `json:"weapon_actor,omitempty"`
-	WeaponSamplingSeed *int64       `json:"weapon_sampling_seed,omitempty"` // nil: greedy; present: reproducible categorical
-	WeaponOptionFrames int          `json:"weapon_option_frames,omitempty"` // optional learned choice commitment, 1..64 frames
-	WeaponMode         string       `json:"weapon_mode,omitempty"`          // explicit inventory policy declaration
-	Planner            string       `json:"planner,omitempty"`              // empty/hierarchy, flat, bc, sequence
-	Kind               string       `json:"kind"`
-	Features           string       `json:"feature_version"`
-	Levels             []HJEPALevel `json:"levels"`
-	Actor              []DenseLayer `json:"actor"`
-	Motor              []DenseLayer `json:"motor,omitempty"`     // optional independently distilled primitive proposal
-	PlanAxes           []int        `json:"plan_axes,omitempty"` // optional search ablation: 0 forward,1 side,2 yaw,3 pitch,4 fire
-	PriorWeight        float64      `json:"prior_weight"`
-	PlanStep           float64      `json:"plan_step,omitempty"`
-	ConsistencyMargin  *float64     `json:"consistency_margin,omitempty"`
+	PrimitiveSampling  *HJEPAActorSampling `json:"primitive_sampling,omitempty"`
+	WorldActionSpace   string              `json:"world_action_space,omitempty"` // explicit predictor inputs; empty preserves historical files
+	WeaponHead         string              `json:"weapon_head,omitempty"`
+	WeaponFeatures     string              `json:"weapon_feature_version,omitempty"`
+	WeaponActor        []DenseLayer        `json:"weapon_actor,omitempty"`
+	WeaponSamplingSeed *int64              `json:"weapon_sampling_seed,omitempty"` // nil: greedy; present: reproducible categorical
+	WeaponOptionFrames int                 `json:"weapon_option_frames,omitempty"` // optional learned choice commitment, 1..64 frames
+	WeaponMode         string              `json:"weapon_mode,omitempty"`          // explicit inventory policy declaration
+	Planner            string              `json:"planner,omitempty"`              // empty/hierarchy, flat, bc, sequence
+	Kind               string              `json:"kind"`
+	Features           string              `json:"feature_version"`
+	Levels             []HJEPALevel        `json:"levels"`
+	Actor              []DenseLayer        `json:"actor"`
+	Motor              []DenseLayer        `json:"motor,omitempty"`     // optional independently distilled primitive proposal
+	PlanAxes           []int               `json:"plan_axes,omitempty"` // optional search ablation: 0 forward,1 side,2 yaw,3 pitch,4 fire
+	PriorWeight        float64             `json:"prior_weight"`
+	PlanStep           float64             `json:"plan_step,omitempty"`
+	ConsistencyMargin  *float64            `json:"consistency_margin,omitempty"`
 }
 type HJEPA struct {
+	lastSample   *Sample
 	file         HJEPAFile
 	version      string
 	lastSearch   HJEPASearchAudit
@@ -55,7 +57,13 @@ type hWeaponOption struct {
 }
 
 // ResetEpisode separates independently loaded native captures during replay.
-func (p *HJEPA) ResetEpisode() { p.weaponOption = hWeaponOption{}; p.lastSearch = HJEPASearchAudit{} }
+func (p *HJEPA) ResetEpisode() {
+	p.weaponOption = hWeaponOption{}
+	p.lastSearch = HJEPASearchAudit{}
+	p.lastSample = nil
+}
+
+func (p *HJEPA) LastSample() *Sample { return p.lastSample }
 
 // KeepsEquippedWeapon admits inventory fixtures only by an explicit model declaration.
 // Native empty-ammo switching remains engine behavior, not a learned decision.
@@ -163,7 +171,8 @@ func LoadHJEPA(path string) (*HJEPA, error) {
 	if d.Decode(new(any)) != io.EOF {
 		return nil, fmt.Errorf("trailing H-JEPA data")
 	}
-	if f.Kind != HJEPAKind || f.Features != WeaponFeatureVersion || len(f.Levels) != 3 || math.IsNaN(f.PriorWeight) || math.IsInf(f.PriorWeight, 0) || f.PriorWeight < .01 || f.PriorWeight > 10 {
+	featureWidth, featureError := HJEPAFeatureWidth(f.Features)
+	if f.Kind != HJEPAKind || featureError != nil || len(f.Levels) != 3 || math.IsNaN(f.PriorWeight) || math.IsInf(f.PriorWeight, 0) || f.PriorWeight < .01 || f.PriorWeight > 10 {
 		return nil, fmt.Errorf("unsupported H-JEPA header")
 	}
 	if f.WorldActionSpace != "" && f.WorldActionSpace != "proposed_primitive_v1" {
@@ -171,6 +180,9 @@ func LoadHJEPA(path string) (*HJEPA, error) {
 	}
 	if f.Planner != "" && f.Planner != "hierarchy" && f.Planner != "flat" && f.Planner != "bc" && f.Planner != "sequence" {
 		return nil, fmt.Errorf("unsupported H-JEPA planner")
+	}
+	if err := validateHJEPAActorSampling(f); err != nil {
+		return nil, err
 	}
 	if f.WeaponMode != "" && f.WeaponMode != "keep_equipped_v1" && f.WeaponMode != "learned_masked_v1" {
 		return nil, fmt.Errorf("unsupported H-JEPA weapon mode")
@@ -214,7 +226,7 @@ func LoadHJEPA(path string) (*HJEPA, error) {
 		}
 		seenAxes[axis] = true
 	}
-	input := WeaponFeatureWidth
+	input := featureWidth
 	for i, l := range f.Levels {
 		if l.Stride != []int{1, 4, 16}[i] || len(l.Encoder) == 0 {
 			return nil, fmt.Errorf("H-JEPA strides must be 1,4,16")
@@ -238,7 +250,7 @@ func LoadHJEPA(path string) (*HJEPA, error) {
 		return nil, e
 	}
 	if len(f.Motor) > 0 {
-		if e = validateHNet(f.Motor, WeaponFeatureWidth, 8); e != nil {
+		if e = validateHNet(f.Motor, featureWidth, 8); e != nil {
 			return nil, e
 		}
 	}
@@ -249,7 +261,8 @@ func (p *HJEPA) Version() string { return p.version }
 
 // Replay exposes the same native networks to the cross-language audit tool.
 func (p *HJEPA) Replay(features, action []float64) (latents [][]float64, actor []float64, predictions [][]float64, err error) {
-	if len(features) != WeaponFeatureWidth || len(action) != 8 {
+	width, _ := HJEPAFeatureWidth(p.file.Features)
+	if len(features) != width || len(action) != 8 {
 		err = fmt.Errorf("H-JEPA replay width")
 		return
 	}
@@ -347,11 +360,12 @@ func (p *HJEPA) candidates(prior []float64) [][]float64 {
 	return out
 }
 func (p *HJEPA) Decide(o Observation) (Action, error) {
+	p.lastSample = nil
 	p.lastSearch = HJEPASearchAudit{}
 	if o.Version != ObservationVersion || o.Health <= 0 || o.AgeMS < 0 || o.AgeMS > 300 {
 		return Action{}, fmt.Errorf("invalid H-JEPA observation")
 	}
-	x, e := FeaturesForVersion(o, p.file.Features)
+	x, e := HJEPAFeatures(o, p.file.Features)
 	if e != nil {
 		return Action{}, e
 	}
@@ -377,6 +391,12 @@ func (p *HJEPA) Decide(o Observation) (Action, error) {
 		return Action{}, e
 	}
 	prior := hPrimitive(raw)
+	if p.file.PrimitiveSampling != nil {
+		prior, p.lastSample, e = p.samplePrimitive(o, raw)
+		if e != nil {
+			return Action{}, e
+		}
+	}
 	candidates := p.candidates(prior)
 	var goal, chosen []float64
 	chosen = prior
@@ -448,12 +468,25 @@ func (p *HJEPA) Decide(o Observation) (Action, error) {
 			return Action{}, err
 		}
 		a.Weapon = weaponNames[best]
+		if p.lastSample != nil {
+			p.lastSample.Weapon = best
+			if p.file.WeaponSamplingSeed != nil {
+				probs, err := p.WeaponDistribution(o)
+				if err != nil {
+					return Action{}, err
+				}
+				p.lastSample.LogProbability += math.Log(probs[best])
+			}
+		}
 	}
 	_, e = Command(o, a, [3]int16{})
 	return a, e
 }
 
 func (p *HJEPA) chooseWeapon(o Observation, features []float64) (int, error) {
+	// The weapon head has its own input contract. World context must neither
+	// append a second context tail nor change historical 845-wide heads.
+	features = features[:WeaponFeatureWidth]
 	if p.file.WeaponFeatures == HJEPAWeaponFeatureVersion {
 		var err error
 		features, err = appendHJEPAWeaponContext(o, features)
