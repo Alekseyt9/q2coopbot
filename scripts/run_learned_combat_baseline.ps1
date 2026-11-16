@@ -88,10 +88,11 @@ $remoteProvider=$false
 $providerKind=$null
 if($ProviderFile){$providerKind=(Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).kind;$remoteProvider=($providerKind -eq 'combat_remote_v1')}
 $ppoProvider=($providerKind -eq 'combat_ppo_v1')
-$hjepaKeepEquipped=$providerKind -eq 'combat_hjepa_v1' -and (Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).weapon_mode -eq 'keep_equipped_v1'
-if($CombatMode -eq 'learned' -and $Loadout -in 'weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery' -and !$hjepaKeepEquipped -and (!$ppoProvider -or (Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).weapon_head -ne 'combat_masked_weapon_v1')){throw 'Inventory fixture requires a versioned PPO weapon head or explicit keep-equipped H-JEPA'}
+$hjepaInventory=$providerKind -eq 'combat_hjepa_v1' -and (Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).weapon_mode -eq 'keep_equipped_v1'
+$hjepaInventory=$hjepaInventory -or ($providerKind -eq 'combat_hjepa_v1' -and (Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).weapon_mode -eq 'learned_masked_v1' -and (Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).weapon_head -eq 'combat_masked_weapon_v1')
+if($CombatMode -eq 'learned' -and $Loadout -in 'weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery' -and !$hjepaInventory -and (!$ppoProvider -or (Get-Content -LiteralPath $ProviderFile -Raw|ConvertFrom-Json).weapon_head -ne 'combat_masked_weapon_v1')){throw 'Inventory fixture requires a versioned PPO weapon head or explicit keep-equipped H-JEPA'}
 $trainedProvider=$providerKind -in @('combat_bc_mlp_v1','combat_ppo_v1','combat_hjepa_v1')
-if($providerKind -eq 'combat_hjepa_v1' -and (!$Synchronous -or ($ExecutionContract -ne 'legacy_v1' -and !($hjepaKeepEquipped -and $ExecutionContract -eq 'stock_weapons_fire_v1')) -or ($Loadout -notin 'blaster','machinegun','shotgun' -and !$hjepaKeepEquipped))){throw 'H-JEPA pilot requires synchronous execution and explicit mode for stock inventory fixtures'}
+if($providerKind -eq 'combat_hjepa_v1' -and (!$Synchronous -or ($ExecutionContract -ne 'legacy_v1' -and !($hjepaInventory -and $ExecutionContract -eq 'stock_weapons_fire_v1')) -or ($Loadout -notin 'blaster','machinegun','shotgun' -and !$hjepaInventory))){throw 'H-JEPA pilot requires synchronous execution and explicit mode for stock inventory fixtures'}
 if($ppoProvider -and !$Synchronous){throw 'PPO pilot requires synchronous mode'}
 if($remoteProvider -and !$Synchronous){throw 'Remote policy requires -Synchronous'}
 if($Feedback -and (!$remoteProvider -or !$RewardConfig)){throw 'Feedback requires remote provider, synchronous mode and reward config'}

@@ -5,8 +5,116 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"q2coopbot/internal/quake"
 	"testing"
 )
+
+func TestHJEPAWeaponMaskAndCompatibility(t *testing.T) {
+	f := hTestModel()
+	f.Planner = "bc"
+	old, err := LoadHJEPA(hWrite(t, f))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WeaponMode = "learned_masked_v1"
+	f.WeaponHead = WeaponHeadVersion
+	l := hTestLayer(WeaponFeatureWidth, 12)
+	l.Bias[9] = 1000
+	l.Bias[3] = 100
+	l.Bias[4] = 90
+	l.Bias[1] = 80
+	f.WeaponActor = []DenseLayer{l}
+	p, err := LoadHJEPA(hWrite(t, f))
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := testObservation()
+	age := 0
+	items := []quake.InventoryItem{{Name: "Blaster", Count: 1}, {Name: "Super Shotgun", Count: 1}, {Name: "Shells", Count: 1}, {Name: "Machinegun", Count: 1}, {Name: "Bullets", Count: 2}}
+	o.Inventory = &items
+	o.InventoryAgeFrames = &age
+	a, err := p.Decide(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Weapon != "Machinegun" {
+		t.Fatalf("unavailable Railgun/SSG must be masked: %q", a.Weapon)
+	}
+	b, err := old.Decide(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Weapon = ""
+	if a != b {
+		t.Fatal("weapon head changed primitive action")
+	}
+	items[2].Count = 2
+	a, err = p.Decide(o)
+	if err != nil || a.Weapon != "Super Shotgun" {
+		t.Fatalf("SSG ammo threshold: %v %v", a, err)
+	}
+	age = 21
+	a, err = p.Decide(o)
+	if err != nil || a.Weapon != "" {
+		t.Fatalf("stale inventory must keep: %v %v", a, err)
+	}
+	o.Inventory = nil
+	a, err = p.Decide(o)
+	if err != nil || a.Weapon != "" {
+		t.Fatalf("unknown inventory must keep: %v %v", a, err)
+	}
+	for _, mutate := range []func(*HJEPAFile){func(f *HJEPAFile) { f.WeaponHead = "unknown" }, func(f *HJEPAFile) { f.WeaponActor = nil }, func(f *HJEPAFile) { f.WeaponMode = "keep_equipped_v1" }} {
+		bad := f
+		mutate(&bad)
+		if _, err := LoadHJEPA(hWrite(t, bad)); err == nil {
+			t.Fatal("invalid weapon metadata admitted")
+		}
+	}
+}
+
+func TestHJEPAWeaponSamplingReplay(t *testing.T) {
+	f := hTestModel()
+	f.Planner = "bc"
+	f.WeaponMode = "learned_masked_v1"
+	f.WeaponHead = WeaponHeadVersion
+	l := hTestLayer(845, 12)
+	for i := range l.Bias {
+		l.Bias[i] = 1000
+	}
+	l.Bias[0] = 0
+	l.Bias[1] = 0
+	f.WeaponActor = []DenseLayer{l}
+	seed := int64(17)
+	f.WeaponSamplingSeed = &seed
+	p, err := LoadHJEPA(hWrite(t, f))
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := testObservation()
+	age := 0
+	items := []quake.InventoryItem{{Name: "Blaster", Count: 1}}
+	o.Inventory = &items
+	o.InventoryAgeFrames = &age
+	seen := map[string]bool{}
+	for frame := 1; frame <= 64; frame++ {
+		o.Identity.Frame = frame
+		a, err := p.Decide(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := p.Decide(o)
+		if err != nil || a != b {
+			t.Fatal("categorical replay changed")
+		}
+		if a.Weapon != "" && a.Weapon != "Blaster" {
+			t.Fatal("unavailable sampled weapon")
+		}
+		seen[a.Weapon] = true
+	}
+	if len(seen) != 2 {
+		t.Fatal("head must sample learned distribution, not always argmax")
+	}
+}
 
 func hTestLayer(in, out int) DenseLayer {
 	l := DenseLayer{Weight: make([][]float64, out), Bias: make([]float64, out)}

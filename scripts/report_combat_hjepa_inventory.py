@@ -19,8 +19,14 @@ def main():
     conditions = {i['engine_seed']: i for t in plan['tasks'] for i in t['instances']}
     difficulty = {i['seed']: i for i in json.loads(a.difficulty.read_text())['cases']}
     variants = {}
+    weapon_modes = {}
     for variant in complete['models']:
         name = variant['name']
+        if variant['mode'] == 'learned':
+            spec = json.loads(pathlib.Path(variant['model']).read_text())
+            weapon_modes[name] = spec.get('weapon_mode', spec.get('weapon_head', 'unspecified'))
+        else:
+            weapon_modes[name] = 'rules'
         paths = sorted((a.matrix / name).glob('case-*/report.json'))
         result = summarize(paths)
         assert set(conditions) == {e['seed'] for e in result['episodes']}
@@ -64,11 +70,12 @@ def main():
         result['totals'] = metrics(result['episodes'])
         variants[name] = result
     report = dict(version='hjepa_inventory_native_screen_v1', promotion=False,
-                  scope='Paired system comparison at skill 1, 300-frame budget; H-JEPA keeps equipped weapon '
-                        'and engine may switch on empty ammo. U1 and rules choose weapons. '
+                  weapon_modes=weapon_modes,
+                  scope='Paired system comparison at skill 1, 300-frame budget; per-controller weapon semantics '
+                        'are recorded in weapon_modes. Engine may switch on empty ammo. '
                         'Resource tiers are pre-outcome estimates, not solvability certificates. '
-                        'Frozen diagnostic conditions on previously seen maps; partial earlier runs exposed '
-                        'runtime admission issues. Not a fresh final test or held-out map generalization.',
+                        'Frozen conditions on previously seen maps; consult the source experiment protocol '
+                        'for diagnostic reuse or fresh-seed status. Not held-out map generalization.',
                   variants=variants)
     a.out.write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps({k: v['totals'] for k, v in variants.items()}, indent=2))

@@ -52,6 +52,14 @@ func TestWeaponHeadMaskedSamplesAndJointReview(t *testing.T) {
 			t.Fatal(err)
 		}
 		s := *p.LastSample()
+		dist := p.LastWeaponDistribution()
+		if len(dist) != 12 || math.Abs(dist[0]+dist[1]+dist[4]-1) > 1e-12 || dist[9] != 0 {
+			t.Fatal("offline teacher distribution differs from masked policy")
+		}
+		dist[0] = 999
+		if p.LastWeaponDistribution()[0] == 999 {
+			t.Fatal("teacher distribution aliases runtime state")
+		}
 		seen[s.Weapon] = true
 		if s.Weapon != 0 && s.Weapon != 1 && s.Weapon != 4 {
 			t.Fatalf("sampled unavailable weapon: %d", s.Weapon)

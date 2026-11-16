@@ -82,15 +82,16 @@ type Sample struct {
 	WeaponProbe       *DiagnosticWeaponSample       `json:"weapon_probe,omitempty"`
 }
 type PPO struct {
-	movementOption      movementOptionState
-	file                PPOFile
-	actor, critic       *MLP
-	version             string
-	rng                 *rand.Rand
-	last                *Sample
-	memory              memoryState
-	lastAction          *Action
-	continuationStarted bool
+	movementOption         movementOptionState
+	file                   PPOFile
+	actor, critic          *MLP
+	version                string
+	rng                    *rand.Rand
+	last                   *Sample
+	memory                 memoryState
+	lastAction             *Action
+	lastWeaponDistribution []float64
+	continuationStarted    bool
 }
 
 func LoadPPO(path string) (*PPO, error) {
@@ -459,6 +460,7 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 	if err := p.beginContinuation(o); err != nil {
 		return Action{}, err
 	}
+	p.lastWeaponDistribution = nil
 	p.last = nil
 	before := p.beforeMemory(o)
 	x, _, after, e := p.memoryRaw(o, before)
@@ -672,5 +674,12 @@ func (p *PPO) Decide(o Observation) (Action, error) {
 	if !p.file.Deterministic {
 		p.last = &s
 	}
+	p.lastWeaponDistribution = append([]float64(nil), weaponApplied...)
 	return a, nil
+}
+
+// LastWeaponDistribution exposes the already-computed distribution for offline
+// distillation. It neither samples again nor advances policy memory.
+func (p *PPO) LastWeaponDistribution() []float64 {
+	return append([]float64(nil), p.lastWeaponDistribution...)
 }

@@ -14,6 +14,7 @@ func run() error {
 	model := flag.String("model", "", "H-JEPA weights")
 	fixture := flag.String("parity", "", "CUDA reference fixture")
 	motorOnly := flag.Bool("motor-only", false, "check independent distilled motor fixture")
+	weaponOnly := flag.Bool("weapon-only", false, "check independent masked weapon logits fixture")
 	flag.Parse()
 	p, e := policy.LoadHJEPA(*model)
 	if e != nil {
@@ -23,7 +24,10 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	if *motorOnly {
+	if *motorOnly && *weaponOnly {
+		return fmt.Errorf("choose one head")
+	}
+	if *motorOnly || *weaponOnly {
 		var f struct {
 			Features [][]float64 `json:"features"`
 			Outputs  [][]float64 `json:"outputs"`
@@ -36,7 +40,13 @@ func run() error {
 		}
 		maxError := 0.
 		for i, x := range f.Features {
-			_, raw, _, err := p.Replay(x, []float64{0, 0, 0, 0, 0, 1, 0, 0})
+			var raw []float64
+			var err error
+			if *weaponOnly {
+				raw, err = p.WeaponLogits(x)
+			} else {
+				_, raw, _, err = p.Replay(x, []float64{0, 0, 0, 0, 0, 1, 0, 0})
+			}
 			if err != nil {
 				return err
 			}
@@ -51,7 +61,11 @@ func run() error {
 				maxError = math.Max(maxError, d)
 			}
 		}
-		return json.NewEncoder(os.Stdout).Encode(map[string]any{"accepted": true, "motor_only": true, "max_abs_error": maxError, "values_compared": len(f.Features) * 8})
+		width := 8
+		if *weaponOnly {
+			width = 12
+		}
+		return json.NewEncoder(os.Stdout).Encode(map[string]any{"accepted": true, "motor_only": *motorOnly, "weapon_only": *weaponOnly, "max_abs_error": maxError, "values_compared": len(f.Features) * width})
 	}
 	var f struct {
 		Features    [][]float64   `json:"features"`

@@ -250,7 +250,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 			}
 		} else if contract != policy.LegacyCombatExecution {
 			h, ok := combatProvider.(*policy.HJEPA)
-			if !ok || !h.KeepsEquippedWeapon() || contract != policy.StockWeaponsFireCombatExecution || !cfg.TestSynchronous || naturalCombat {
+			if !ok || !h.SupportsInventory() || contract != policy.StockWeaponsFireCombatExecution || !cfg.TestSynchronous || naturalCombat {
 				return fmt.Errorf("combat execution contract requires a local PPO or isolated keep-equipped H-JEPA")
 			}
 		}
@@ -270,7 +270,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	if multiWeaponFixture(cfg.TestWeaponSwitchFixture) {
 		p, ok := combatProvider.(*policy.PPO)
 		h, hj := combatProvider.(*policy.HJEPA)
-		inventoryProvider := ok && p.WeaponHeadVersion() == policy.WeaponHeadVersion || hj && h.KeepsEquippedWeapon()
+		inventoryProvider := ok && p.WeaponHeadVersion() == policy.WeaponHeadVersion || hj && h.SupportsInventory()
 		if !cfg.TestSynchronous || cfg.CombatMode != "rules" && (cfg.CombatMode != "learned" || !inventoryProvider) {
 			return fmt.Errorf("multiweapon fixture requires synchronous rules, masked PPO, or explicitly declared keep-equipped H-JEPA")
 		}

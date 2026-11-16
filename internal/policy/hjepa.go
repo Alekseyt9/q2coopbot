@@ -5,6 +5,7 @@ package policy
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -22,17 +23,20 @@ type HJEPALevel struct {
 	Utility   []DenseLayer `json:"utility"`
 }
 type HJEPAFile struct {
-	WeaponMode        string       `json:"weapon_mode,omitempty"` // explicit inventory evaluation without a weapon selector
-	Planner           string       `json:"planner,omitempty"`     // empty/hierarchy, flat, bc, sequence
-	Kind              string       `json:"kind"`
-	Features          string       `json:"feature_version"`
-	Levels            []HJEPALevel `json:"levels"`
-	Actor             []DenseLayer `json:"actor"`
-	Motor             []DenseLayer `json:"motor,omitempty"`     // optional independently distilled primitive proposal
-	PlanAxes          []int        `json:"plan_axes,omitempty"` // optional search ablation: 0 forward,1 side,2 yaw,3 pitch,4 fire
-	PriorWeight       float64      `json:"prior_weight"`
-	PlanStep          float64      `json:"plan_step,omitempty"`
-	ConsistencyMargin *float64     `json:"consistency_margin,omitempty"`
+	WeaponHead         string       `json:"weapon_head,omitempty"`
+	WeaponActor        []DenseLayer `json:"weapon_actor,omitempty"`
+	WeaponSamplingSeed *int64       `json:"weapon_sampling_seed,omitempty"` // nil: greedy; present: reproducible categorical
+	WeaponMode         string       `json:"weapon_mode,omitempty"`          // explicit inventory evaluation without a weapon selector
+	Planner            string       `json:"planner,omitempty"`              // empty/hierarchy, flat, bc, sequence
+	Kind               string       `json:"kind"`
+	Features           string       `json:"feature_version"`
+	Levels             []HJEPALevel `json:"levels"`
+	Actor              []DenseLayer `json:"actor"`
+	Motor              []DenseLayer `json:"motor,omitempty"`     // optional independently distilled primitive proposal
+	PlanAxes           []int        `json:"plan_axes,omitempty"` // optional search ablation: 0 forward,1 side,2 yaw,3 pitch,4 fire
+	PriorWeight        float64      `json:"prior_weight"`
+	PlanStep           float64      `json:"plan_step,omitempty"`
+	ConsistencyMargin  *float64     `json:"consistency_margin,omitempty"`
 }
 type HJEPA struct {
 	file       HJEPAFile
@@ -43,6 +47,24 @@ type HJEPA struct {
 // KeepsEquippedWeapon admits inventory fixtures only by an explicit model declaration.
 // Native empty-ammo switching remains engine behavior, not a learned decision.
 func (h *HJEPA) KeepsEquippedWeapon() bool { return h.file.WeaponMode == "keep_equipped_v1" }
+
+func (h *HJEPA) WeaponHeadVersion() string { return h.file.WeaponHead }
+func (h *HJEPA) SupportsInventory() bool {
+	return h.KeepsEquippedWeapon() || h.file.WeaponHead == WeaponHeadVersion
+}
+
+// WeaponLogits is also used by offline serialization parity checks.
+func (h *HJEPA) WeaponLogits(features []float64) ([]float64, error) {
+	if h.file.WeaponHead != WeaponHeadVersion || len(features) != WeaponFeatureWidth {
+		return nil, fmt.Errorf("H-JEPA weapon input/header")
+	}
+	for _, v := range features {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return nil, fmt.Errorf("nonfinite weapon features")
+		}
+	}
+	return hNet(h.file.WeaponActor, features)
+}
 
 func validateHNet(net []DenseLayer, input, output int) error {
 	if len(net) < 1 || len(net) > 3 {
@@ -111,8 +133,21 @@ func LoadHJEPA(path string) (*HJEPA, error) {
 	if f.Planner != "" && f.Planner != "hierarchy" && f.Planner != "flat" && f.Planner != "bc" && f.Planner != "sequence" {
 		return nil, fmt.Errorf("unsupported H-JEPA planner")
 	}
-	if f.WeaponMode != "" && f.WeaponMode != "keep_equipped_v1" {
+	if f.WeaponMode != "" && f.WeaponMode != "keep_equipped_v1" && f.WeaponMode != "learned_masked_v1" {
 		return nil, fmt.Errorf("unsupported H-JEPA weapon mode")
+	}
+	if f.WeaponMode == "learned_masked_v1" {
+		if f.WeaponHead != WeaponHeadVersion {
+			return nil, fmt.Errorf("H-JEPA weapon head version required")
+		}
+		if err := validateHNet(f.WeaponActor, WeaponFeatureWidth, len(weaponNames)); err != nil {
+			return nil, err
+		}
+		if f.WeaponSamplingSeed != nil && *f.WeaponSamplingSeed < 0 {
+			return nil, fmt.Errorf("negative weapon sampling seed")
+		}
+	} else if f.WeaponHead != "" || len(f.WeaponActor) != 0 || f.WeaponSamplingSeed != nil {
+		return nil, fmt.Errorf("H-JEPA weapon head requires learned mode")
 	}
 	if math.IsNaN(f.PlanStep) || math.IsInf(f.PlanStep, 0) || f.PlanStep < 0 || f.PlanStep > .5 {
 		return nil, fmt.Errorf("invalid H-JEPA plan step")
@@ -358,6 +393,42 @@ func (p *HJEPA) Decide(o Observation) (Action, error) {
 		}
 	}
 	a := Action{Version: ActionVersion, Identity: o.Identity, Forward: chosen[0], Side: chosen[1], YawDelta: chosen[2] * 180, PitchDelta: chosen[3] * 180, Attack: chosen[4] >= .5, Vertical: []string{"release", "jump", "crouch"}[vertical]}
+	if p.file.WeaponHead != "" {
+		logits, err := p.WeaponLogits(features)
+		if err != nil {
+			return Action{}, err
+		}
+		probs, err := weaponProbabilities(o, logits)
+		if err != nil {
+			return Action{}, err
+		}
+		best := 0
+		for i := 1; i < len(probs); i++ {
+			if probs[i] > probs[best] {
+				best = i
+			}
+		}
+		if p.file.WeaponSamplingSeed != nil {
+			// Counter-based sampling: replaying the same observed identity returns
+			// the same choice without advancing hidden RNG or consulting a teacher.
+			key, _ := json.Marshal(struct {
+				Seed     int64
+				Identity Identity
+			}{*p.file.WeaponSamplingSeed, o.Identity})
+			h := sha256.Sum256(key)
+			u := float64(binary.LittleEndian.Uint64(h[:8])>>11) / float64(uint64(1)<<53)
+			for i, v := range probs {
+				if v > 0 {
+					best = i
+					u -= v
+					if u < 0 {
+						break
+					}
+				}
+			}
+		}
+		a.Weapon = weaponNames[best]
+	}
 	_, e = Command(o, a, [3]int16{})
 	return a, e
 }
