@@ -104,15 +104,19 @@ func hActorLogProbability(raw []float64, cfg HJEPAActorSampling, sample Sample) 
 
 func (p *HJEPA) samplePrimitive(o Observation, raw []float64) ([]float64, *Sample, error) {
 	cfg := p.file.PrimitiveSampling
+	samplingID, err := p.samplingIdentity(o.Identity)
+	if err != nil {
+		return nil, nil, err
+	}
 	sample := &Sample{Version: HJEPAActorSampleVersion, SamplingSeed: cfg.Seed}
 	for i := range sample.Latent {
-		u, v := hActorUniform(cfg.Seed, o.Identity, 2*i), hActorUniform(cfg.Seed, o.Identity, 2*i+1)
+		u, v := hActorUniform(cfg.Seed, samplingID, 2*i), hActorUniform(cfg.Seed, samplingID, 2*i+1)
 		noise := math.Sqrt(-2*math.Log(u)) * math.Cos(2*math.Pi*v)
 		sample.Latent[i] = raw[i] + math.Exp(cfg.LogStd[i])*noise
 	}
 	fire, pose := hActorProbabilities(raw, cfg.Temperature)
-	sample.Attack = hActorUniform(cfg.Seed, o.Identity, 8) < fire
-	u := hActorUniform(cfg.Seed, o.Identity, 9)
+	sample.Attack = hActorUniform(cfg.Seed, samplingID, 8) < fire
+	u := hActorUniform(cfg.Seed, samplingID, 9)
 	for i, prob := range pose {
 		sample.Vertical = i
 		u -= prob

@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([int]$Port=31160,[switch]$LoadBarrier)
+param([int]$Port=31160,[switch]$LoadBarrier,[Alias('Seed')][Nullable[int]]$EngineSeed)
 $ErrorActionPreference='Stop'
 if($Port -lt 1024 -or $Port -gt 65532){throw 'Shared checkpoint suite requires three valid ports'}
 $repo=Split-Path $PSScriptRoot -Parent
@@ -14,7 +14,9 @@ Push-Location $repo
 try{go build -o $client ./cmd/q2coopbot;if($LASTEXITCODE){throw 'Client build failed'};go build -o $tool ./cmd/q2checkpoint;if($LASTEXITCODE){throw 'Checkpoint build failed'}}finally{Pop-Location}
 $trialScript=Join-Path $PSScriptRoot 'run_checkpoint_trial.ps1';$trialHost=(Get-Process -Id $PID).Path
 $seedConfig=Join-Path $out 'seed-config.json'
-@{runtime_root=$source;client_exe=$client;checkpoint_exe=$tool;output_root=(Join-Path $out 'seed');port=$Port;timescale=2;barrier=$true}|ConvertTo-Json|Set-Content $seedConfig -Encoding utf8
+$seedOptions=@{runtime_root=$source;client_exe=$client;checkpoint_exe=$tool;output_root=(Join-Path $out 'seed');port=$Port;timescale=2;barrier=$true}
+if($null -ne $EngineSeed){if($EngineSeed -lt 0){throw 'Checkpoint seed must be nonnegative'};$seedOptions.seed=$EngineSeed}
+$seedOptions|ConvertTo-Json|Set-Content $seedConfig -Encoding utf8
 & $trialHost -NoProfile -File $trialScript -Config $seedConfig|Out-Host
 if($LASTEXITCODE){throw 'Common checkpoint capture failed'}
 $seed=Get-Content (Join-Path $out 'seed/report.json') -Raw|ConvertFrom-Json
@@ -24,7 +26,12 @@ $records=Get-CheckpointPackageRecords $shared
 $packageJSON=$records|ConvertTo-Json -Compress -Depth 4
 $packageFingerprint=Get-HarnessFingerprint $records
 $configs=@()
-foreach($i in 0..1){$path=Join-Path $out "branch-$i.json";@{runtime_root=(Join-Path $out 'seed/runtime');client_exe=$client;checkpoint_exe=$tool;output_root=(Join-Path $out "branch-$i");port=($Port+$i+1);timescale=2;barrier=$true;restore_slots=$true;resume=$true;bot_mode=$(if($i -eq 0){'resume'}else{'fresh'});source_checkpoint=$shared;load_barrier=[bool]$LoadBarrier}|ConvertTo-Json|Set-Content $path -Encoding utf8;$configs+=$path}
+foreach($i in 0..1){
+    $path=Join-Path $out "branch-$i.json"
+    $branchOptions=@{runtime_root=(Join-Path $out 'seed/runtime');client_exe=$client;checkpoint_exe=$tool;output_root=(Join-Path $out "branch-$i");port=($Port+$i+1);timescale=2;barrier=$true;restore_slots=$true;resume=$true;bot_mode=$(if($i -eq 0){'resume'}else{'fresh'});source_checkpoint=$shared;load_barrier=[bool]$LoadBarrier}
+    if($null -ne $EngineSeed){$branchOptions.seed=$EngineSeed}
+    $branchOptions|ConvertTo-Json|Set-Content $path -Encoding utf8;$configs+=$path
+}
 $results=@($configs|ForEach-Object -Parallel {
     $err='';try{& $using:trialHost -NoProfile -File $using:trialScript -Config $_|Out-Host;if($LASTEXITCODE){$err='Branch process failed'}}catch{$err=$_.Exception.Message}
     $cfg=Get-Content $_ -Raw|ConvertFrom-Json;$path=Join-Path $cfg.output_root 'report.json'

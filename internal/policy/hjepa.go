@@ -43,11 +43,12 @@ type HJEPAFile struct {
 	ConsistencyMargin  *float64            `json:"consistency_margin,omitempty"`
 }
 type HJEPA struct {
-	lastSample   *Sample
-	file         HJEPAFile
-	version      string
-	lastSearch   HJEPASearchAudit
-	weaponOption hWeaponOption
+	samplingRestore *hSamplingRestore
+	lastSample      *Sample
+	file            HJEPAFile
+	version         string
+	lastSearch      HJEPASearchAudit
+	weaponOption    hWeaponOption
 }
 
 type hWeaponOption struct {
@@ -58,6 +59,7 @@ type hWeaponOption struct {
 
 // ResetEpisode separates independently loaded native captures during replay.
 func (p *HJEPA) ResetEpisode() {
+	p.samplingRestore = nil
 	p.weaponOption = hWeaponOption{}
 	p.lastSearch = HJEPASearchAudit{}
 	p.lastSample = nil
@@ -522,10 +524,14 @@ func (p *HJEPA) chooseWeapon(o Observation, features []float64) (int, error) {
 	if p.file.WeaponSamplingSeed != nil {
 		// Counter-based sampling: replaying the same observed identity returns
 		// the same choice without advancing hidden RNG or consulting a teacher.
+		samplingID, err := p.samplingIdentity(o.Identity)
+		if err != nil {
+			return 0, err
+		}
 		key, _ := json.Marshal(struct {
 			Seed     int64
 			Identity Identity
-		}{*p.file.WeaponSamplingSeed, o.Identity})
+		}{*p.file.WeaponSamplingSeed, samplingID})
 		h := sha256.Sum256(key)
 		u := float64(binary.LittleEndian.Uint64(h[:8])>>11) / float64(uint64(1)<<53)
 		for i, v := range probs {

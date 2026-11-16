@@ -1,6 +1,10 @@
 [CmdletBinding()]
-param([switch]$RequireNativeObjective,[ValidateSet('legacy_v1','checked_ground_crouch_v1','stock_weapons_fire_v1')][string]$ExecutionContract='legacy_v1',[ValidateRange(0,1000000)][int]$InventoryDropOnceFrame=0,[ValidateRange(0,1000000)][int]$RocketAimProbeFrame=0,[string]$RocketAimProbePoint='',[ValidateRange(0,1000000)][int]$GrenadeReleaseProbeFrame=0,[ValidateRange(-1,1000000)][int]$ForcedDuckProbeFrame=0,[ValidateRange(0,1000000)][int]$StoppedCrouchProbeFrame=0,[ValidateRange(0,1000000)][int]$CheckedGroundRequestProbeFrame=0,[switch]$CheckedGroundRequestProbeAllFrames,[switch]$StoppedCrouchProbeAllFrames,[switch]$DiagnosticNominalAim,[switch]$CheckedWallSlide,[switch]$GuardExpectBlocked,[string]$GuardTeammatePosition='',[ValidateRange(0,15)][int]$ClientStartupDelaySeconds=0,[string]$GeneratedFixture="",[ValidateSet('standard','remaining-far')][string]$ParasiteFixture='standard',[ValidateSet(0,100)][int]$ReleaseGameFrame=0,[ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$CombatAdvice,[switch]$Synchronous,[switch]$StopOnGoal,[switch]$StopOnFirstDeath,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','machinegun','weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
+param([ValidateRange(0,500)][int]$CheckpointCaptureFrame=0,[string]$CheckpointTool='',[switch]$RequireNativeObjective,[ValidateSet('legacy_v1','checked_ground_crouch_v1','stock_weapons_fire_v1')][string]$ExecutionContract='legacy_v1',[ValidateRange(0,1000000)][int]$InventoryDropOnceFrame=0,[ValidateRange(0,1000000)][int]$RocketAimProbeFrame=0,[string]$RocketAimProbePoint='',[ValidateRange(0,1000000)][int]$GrenadeReleaseProbeFrame=0,[ValidateRange(-1,1000000)][int]$ForcedDuckProbeFrame=0,[ValidateRange(0,1000000)][int]$StoppedCrouchProbeFrame=0,[ValidateRange(0,1000000)][int]$CheckedGroundRequestProbeFrame=0,[switch]$CheckedGroundRequestProbeAllFrames,[switch]$StoppedCrouchProbeAllFrames,[switch]$DiagnosticNominalAim,[switch]$CheckedWallSlide,[switch]$GuardExpectBlocked,[string]$GuardTeammatePosition='',[ValidateRange(0,15)][int]$ClientStartupDelaySeconds=0,[string]$GeneratedFixture="",[ValidateSet('standard','remaining-far')][string]$ParasiteFixture='standard',[ValidateSet(0,100)][int]$ReleaseGameFrame=0,[ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,[switch]$TeacherVertical,[switch]$CombatAdvice,[switch]$Synchronous,[switch]$StopOnGoal,[switch]$StopOnFirstDeath,[switch]$Worker,[ValidateRange(0,500)][int]$GameFrames=0,[ValidateSet('rules','learned-shadow','learned')][string]$CombatMode='rules',[string]$ProviderFile='',[switch]$Rules,[switch]$CombatCapture,[ValidateSet(1,2)][int]$Timescale=2,[switch]$ParasiteWeapon,[switch]$ParasiteMixed,[switch]$RequireMixedDetour,[ValidateSet('monster_infantry','monster_gunner')][string]$ParasiteMixedClass='monster_infantry',[switch]$ParasiteHealthKit,[ValidateRange(1,100)][int]$ParasiteHealth=100,[ValidateSet('stocked','blaster','machinegun','weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery','shotgun','hyper','rail','scarce')][string]$ParasiteLoadout='stocked',[switch]$CornerEscape,[switch]$Recovery,[ValidateRange(0,3)][int]$RecoverySkill=1,[ValidateRange(1,100)][int]$RecoveryHealth=55,[switch]$Group,[switch]$GroupRetreat,[switch]$Circle,[switch]$Cover,[switch]$CoverFight,[int]$CoverTargetX=200,[int]$Seed=601,[int]$Port=31820,[string]$OutputRoot='',[string]$Client='',[string]$System1='hf.co/apus-ailab/APUS-OpenJev-v1-4B-GGUF:Q8_0')
 $ErrorActionPreference='Stop'
+if($CheckpointCaptureFrame -or $CheckpointTool){
+    if(!$Worker -or !$Synchronous -or !$CombatCapture -or $CombatMode -ne 'learned' -or $ReleaseGameFrame -ne 100 -or $CheckpointCaptureFrame -lt 110 -or $CheckpointCaptureFrame -ge 100+$GameFrames -or !$CheckpointTool){throw 'Combat checkpoint capture requires a standalone fixed-release learned worker and a future combat frame'}
+    $CheckpointTool=(Resolve-Path -LiteralPath $CheckpointTool).Path
+}
 if(($RocketAimProbeFrame -gt 0) -ne (-not [string]::IsNullOrWhiteSpace($RocketAimProbePoint))){throw 'Rocket aim point/frame must be paired'}
 if($RocketAimProbeFrame -and (!$Synchronous -or $CombatMode -ne 'learned' -or !$CheckedWallSlide -or $ExecutionContract -ne 'stock_weapons_fire_v1' -or $GrenadeReleaseProbeFrame -or $ForcedDuckProbeFrame -or $StoppedCrouchProbeFrame -or $StoppedCrouchProbeAllFrames -or $CheckedGroundRequestProbeFrame -or $CheckedGroundRequestProbeAllFrames -or $DiagnosticNominalAim -or $CombatAdvice)){throw 'Rocket aim requires exclusive synchronous stock-weapon diagnostic'}
 if($GrenadeReleaseProbeFrame -and (!$Synchronous -or $CombatMode -ne 'learned' -or !$CheckedWallSlide -or $ExecutionContract -ne 'stock_weapons_fire_v1' -or $ForcedDuckProbeFrame -or $StoppedCrouchProbeFrame -or $StoppedCrouchProbeAllFrames -or $CheckedGroundRequestProbeFrame -or $CheckedGroundRequestProbeAllFrames -or $DiagnosticNominalAim -or $CombatAdvice)){throw 'Grenade release requires exclusive synchronous stock-weapon diagnostic'}
@@ -142,7 +146,7 @@ if($GuardTeammatePosition){
 }
 $worldBoundary=$null
 if($generated){$worldBoundary=Set-GeneratedCombatWorldBoundary (Join-Path $runtime "baseq2/maps/$fixtureMap.ent")}
-$server=$null;$bot=$null;$trace=Join-Path $OutputRoot 'bot.jsonl';$report=@{accepted=$false;reason='not_run';seed=$Seed;generated_world_boundary=$worldBoundary}
+$server=$null;$bot=$null;$checkpointProcess=$null;$trace=Join-Path $OutputRoot 'bot.jsonl';$report=@{accepted=$false;reason='not_run';seed=$Seed;generated_world_boundary=$worldBoundary}
 try{
     $env:Q2COOPBOT_TEST_RCON=[guid]::NewGuid().ToString('N')
     $args="-portable +set ip 127.0.0.1 +set noipx 1 +set dedicated 1 +set coop 1 +set deathmatch 0 +set cheats 1 +set maxclients 4 +set port $Port +set timescale $Timescale +set rcon_password $env:Q2COOPBOT_TEST_RCON +set sv_test_unlimited_loopback 1 +set g_test_damage 1 +set g_test_seed $Seed +map $fixtureMap"
@@ -153,6 +157,7 @@ try{
         if($InventoryDropOnceFrame){Add-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Value "set sv_test_inventory_drop_once_frame $InventoryDropOnceFrame" -Encoding ascii}
         if($ReleaseGameFrame){Add-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Value @('set sv_test_signon_hold_frame 40','set g_test_motion 1') -Encoding ascii}
         if($RequireNativeObjective){Add-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Value 'set g_test_combat_objective 1' -Encoding ascii}
+        if($CheckpointCaptureFrame){Add-Content -LiteralPath (Join-Path $runtime 'baseq2/learning-test.cfg') -Value 'set g_test_checkpoint_state 1' -Encoding ascii}
     }
     if($Recovery -or $CornerEscape -or $ParasiteWeapon){$args=$args.Replace("+map $fixtureMap","+set skill $RecoverySkill +map $fixtureMap");$report.skill=$RecoverySkill;$report.initial_health=$(if($CornerEscape){65}elseif($ParasiteWeapon){$ParasiteHealth}else{$RecoveryHealth})}
     $config=Join-Path $OutputRoot 'bot-config.json'
@@ -172,6 +177,22 @@ try{
         $configured.test|Add-Member -NotePropertyName initial_inventory -NotePropertyValue @($generated.inventory.items)
         $configured.test|Add-Member -NotePropertyName initial_weapon -NotePropertyValue $generated.inventory.initial_weapon
         $configured|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $config -Encoding utf8NoBOM
+    }
+    if($CheckpointCaptureFrame){
+        $configured=Get-Content -LiteralPath $config -Raw|ConvertFrom-Json
+        $configured.test|Add-Member -NotePropertyName checkpoint_control -NotePropertyValue (Join-Path $OutputRoot 'combat-control.json')
+        $configured|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $config -Encoding utf8NoBOM
+        # Checkpoint provenance requires regular AAS files. Read through each
+        # shared link into a private file; remove only the link directory entry.
+        foreach($aas in Get-ChildItem -LiteralPath (Join-Path $runtime 'baseq2/maps') -Filter '*.aas' -File){
+            if($aas.Attributes -band [IO.FileAttributes]::ReparsePoint){
+                $tempAAS=$aas.FullName+'.checkpoint-copy'
+                $aasInput=[IO.File]::OpenRead($aas.FullName)
+                try{$aasOutput=[IO.File]::Open($tempAAS,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read);try{$aasInput.CopyTo($aasOutput)}finally{$aasOutput.Dispose()}}finally{$aasInput.Dispose()}
+                Remove-Item -LiteralPath $aas.FullName
+                Move-Item -LiteralPath $tempAAS -Destination $aas.FullName
+            }
+        }
     }
     $server=Start-Process (Join-Path $runtime 'q2ded.exe') -ArgumentList $args -WorkingDirectory $runtime -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'server.log') -RedirectStandardError (Join-Path $OutputRoot 'server.err')
     # A CIM endpoint query can delay client launch past the fixed frame-100
@@ -216,8 +237,16 @@ try{
     $report.client_startup_delay_seconds=$ClientStartupDelaySeconds
     if($ClientStartupDelaySeconds){Start-Sleep -Seconds $ClientStartupDelaySeconds}
     $bot=Start-Process $Client -ArgumentList "--config `"$config`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
+    if($CheckpointCaptureFrame){
+        . "$PSScriptRoot/combat_checkpoint_capture.ps1"
+        $checkpointProcess=Start-CombatCheckpointCapture -Tool $CheckpointTool -Bot $bot -Trace $trace -OutputRoot $OutputRoot -Runtime $runtime -Port $Port -Seed $Seed -Map $fixtureMap -Frame $CheckpointCaptureFrame
+    }
     if(Get-NetUDPEndpoint -OwningProcess $server.Id|Where-Object LocalAddress -NotIn '127.0.0.1','::1'){throw 'Server not loopback'}
     $waitMilliseconds=$(if($GameFrames){[int]([math]::Max($(if($Synchronous){120}else{25}),$GameFrames/$(if($Synchronous){10}else{10*$Timescale})+$(if($Synchronous){30}else{10}))*1000)}else{25000});if($StopOnGoal){. "$PSScriptRoot/combat_goal_stop.ps1";$goalClasses=@($enemyClass);if($generated){$goalClasses=@($generated.monsters.class)}elseif($ParasiteMixed){$goalClasses+=$ParasiteMixedClass};Wait-CombatGoalOrExit $bot $OutputRoot $waitMilliseconds $goalClasses $fixtureMap ([bool]$StopOnFirstDeath) ([bool]$RequireNativeObjective)}else{$null=$bot.WaitForExit($waitMilliseconds)};if(!$bot.HasExited){throw 'Bot timeout'};if($bot.ExitCode){throw 'Bot failed'}
+    if($checkpointProcess){
+        if(!$checkpointProcess.WaitForExit(15000) -or $checkpointProcess.ExitCode){throw 'Combat checkpoint capture failed'}
+        $report.combat_checkpoint=Test-CombatCheckpointContinuation -OutputRoot $OutputRoot -Frame $CheckpointCaptureFrame
+    }
     $rows=@(Get-Content $trace|ForEach-Object {$_|ConvertFrom-Json})
     . "$PSScriptRoot/read_damage_events.ps1"
     $events=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log'))
@@ -240,6 +269,11 @@ try{
     }
     $report.barrel_safety=Measure-BarrelSafety $rows $events
     if($report.barrel_safety.suppressed_attack_violations){throw 'Barrel guard retained attack'}
+    if($CheckpointCaptureFrame){
+        $report.accepted=$true;$report.reason='combat_checkpoint_source_capture'
+        $report.scope='Native pre-decision save, exact release receipt and one applied root command; no loaded combat continuation or quality acceptance'
+        return
+    }
     if($generated -and $Synchronous){
         # A generated fight is a measurement, including losses and non-Parasite
         # compositions. Native reset/dispatch/goal proofs are checked by the
@@ -503,7 +537,7 @@ try{
     }
 }
 finally{
-    foreach($process in @($bot,$friendlyActor,$server)){if($process -and !$process.HasExited){Stop-Process -Id $process.Id;$null=$process.WaitForExit(5000)}}
+    foreach($process in @($checkpointProcess,$bot,$friendlyActor,$server)){if($process -and !$process.HasExited){Stop-Process -Id $process.Id;$null=$process.WaitForExit(5000)}}
     if((Test-Path $trace) -and (Test-Path (Join-Path $OutputRoot 'server.log'))){
         try{$report.first_life_diagnostic=& "$PSScriptRoot/analyze_combat_first_life.ps1" -RunRoot $OutputRoot}
         catch{$report.first_life_diagnostic_error=$_.Exception.Message}

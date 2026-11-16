@@ -15,7 +15,16 @@ import (
 	"q2coopbot/internal/quake"
 )
 
+const CombatPreDecisionBoundary = "combat_predecision_v1"
+
+// Atomic control publication can briefly deny readers on Windows. This is
+// neither a malformed request nor permission to dispatch the pending command.
+func ControlSharingError(err error) bool {
+	return runtime.GOOS == "windows" && (errors.Is(err, syscall.Errno(32)) || errors.Is(err, syscall.Errno(33)))
+}
+
 type Barrier struct {
+	Boundary   string   `json:"boundary,omitempty"`
 	ID         string   `json:"id"`
 	Map        string   `json:"map"`
 	Frame      int      `json:"frame"`
@@ -23,6 +32,7 @@ type Barrier struct {
 	Controls   []string `json:"controls"`
 }
 type CaptureRequest struct {
+	Boundary   string `json:"boundary,omitempty"`
 	Version    int    `json:"version"`
 	ID         string `json:"id"`
 	Map        string `json:"map"`
@@ -30,6 +40,7 @@ type CaptureRequest struct {
 	Generation int    `json:"generation"`
 }
 type Capture struct {
+	Combat json.RawMessage `json:"combat,omitempty"`
 	CaptureRequest
 	Participant string          `json:"participant"`
 	Error       string          `json:"error,omitempty"`
@@ -40,6 +51,7 @@ type Capture struct {
 	SelfEntity  int             `json:"self_entity,omitempty"`
 }
 type BarrierProof struct {
+	Boundary     string `json:"boundary,omitempty"`
 	ID           string `json:"id"`
 	Frame        int    `json:"frame"`
 	Generation   int    `json:"generation"`
@@ -58,6 +70,9 @@ func WriteCapture(path string, value any) error {
 }
 
 func (b Barrier) validate() error {
+	if b.Boundary != "" && b.Boundary != CombatPreDecisionBoundary {
+		return fmt.Errorf("unknown checkpoint boundary")
+	}
 	if !identifier.MatchString(b.ID) || !identifier.MatchString(b.Map) || b.Frame < 1 || b.Frame > 1000000 || b.Generation < 1 || len(b.Controls) < 1 || len(b.Controls) > 8 {
 		return fmt.Errorf("invalid checkpoint barrier")
 	}
@@ -73,8 +88,28 @@ func (b Barrier) validate() error {
 }
 
 func validateCapture(c Capture, r CaptureRequest) error {
-	if c.CaptureRequest != r || c.Error != "" || !identifier.MatchString(c.Participant) || c.Health <= 0 || !json.Valid(c.Planner) {
+	if c.CaptureRequest != r || c.Error != "" || !identifier.MatchString(c.Participant) || c.Health <= 0 {
 		return fmt.Errorf("checkpoint participant identity/state rejected")
+	}
+	if r.Boundary == CombatPreDecisionBoundary {
+		var state struct {
+			Version string `json:"version"`
+			Root    struct {
+				Map        string `json:"map"`
+				Frame      int    `json:"frame"`
+				Spawncount int    `json:"spawncount"`
+				Actor      int    `json:"actor"`
+			} `json:"decision_root"`
+		}
+		if len(c.Planner) > 0 || len(c.Runner) > 0 || json.Unmarshal(c.Combat, &state) != nil ||
+			state.Version != "hjepa_predecision_checkpoint_v1" || state.Root.Map != r.Map || state.Root.Frame != r.Frame ||
+			state.Root.Spawncount != r.Generation || state.Root.Actor != c.SelfEntity || c.SelfEntity < 1 {
+			return fmt.Errorf("combat capture boundary mismatch")
+		}
+		return nil
+	}
+	if r.Boundary != "" || len(c.Combat) > 0 || !json.Valid(c.Planner) {
+		return fmt.Errorf("checkpoint capture payload/boundary mismatch")
 	}
 	var anchor struct {
 		Version int    `json:"version"`
@@ -99,7 +134,7 @@ func validateCapture(c Capture, r CaptureRequest) error {
 func collectBarrier(ctx context.Context, c Config, password string) ([]Capture, error) {
 	b := c.Barrier
 	timeout := time.Duration(c.TimeoutMS) * time.Millisecond
-	r := CaptureRequest{Version: 1, ID: b.ID, Map: b.Map, Frame: b.Frame, Generation: b.Generation}
+	r := CaptureRequest{Version: 1, ID: b.ID, Map: b.Map, Frame: b.Frame, Generation: b.Generation, Boundary: b.Boundary}
 	for _, path := range b.Controls {
 		if err := WriteCapture(path, r); err != nil {
 			return nil, err
@@ -117,7 +152,7 @@ func collectBarrier(ctx context.Context, c Config, password string) ([]Capture, 
 		for _, path := range b.Controls {
 			var capture Capture
 			err := readJSON(path+".state.json", &capture)
-			if os.IsNotExist(err) || runtime.GOOS == "windows" && (errors.Is(err, syscall.Errno(32)) || errors.Is(err, syscall.Errno(33))) {
+			if os.IsNotExist(err) || ControlSharingError(err) {
 				ready = false
 				break
 			}
@@ -178,7 +213,7 @@ func saveCaptures(dir string, b *Barrier, captures []Capture) (*BarrierProof, er
 	if err := os.Mkdir(root, 0755); err != nil {
 		return nil, err
 	}
-	proof := &BarrierProof{ID: b.ID, Frame: b.Frame, Generation: b.Generation}
+	proof := &BarrierProof{ID: b.ID, Frame: b.Frame, Generation: b.Generation, Boundary: b.Boundary}
 	for _, capture := range captures {
 		name := capture.Participant + ".json"
 		if err := WriteCapture(filepath.Join(root, name), capture); err != nil {
@@ -194,7 +229,7 @@ func saveCaptures(dir string, b *Barrier, captures []Capture) (*BarrierProof, er
 }
 
 func verifySavedCaptures(dir, mapName string, proof *BarrierProof) error {
-	request := CaptureRequest{Version: 1, ID: proof.ID, Map: mapName, Frame: proof.Frame, Generation: proof.Generation}
+	request := CaptureRequest{Version: 1, ID: proof.ID, Map: mapName, Frame: proof.Frame, Generation: proof.Generation, Boundary: proof.Boundary}
 	if !identifier.MatchString(proof.ID) || proof.Frame < 1 || proof.Generation < 1 || len(proof.Participants) < 1 || len(proof.Participants) > 8 {
 		return fmt.Errorf("invalid saved barrier")
 	}

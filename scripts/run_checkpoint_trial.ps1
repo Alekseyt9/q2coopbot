@@ -4,7 +4,8 @@ $ErrorActionPreference='Stop'
 $configPath=(Resolve-Path $Config).Path
 $base=Split-Path $configPath -Parent
 $cfg=Get-Content $configPath -Raw|ConvertFrom-Json
-foreach($key in $cfg.PSObject.Properties.Name){if($key -notin @('runtime_root','client_exe','checkpoint_exe','output_root','port','timescale','barrier','restore_slots','resume','bot_mode','source_checkpoint','load_barrier')){throw "Unknown checkpoint trial field: $key"}}
+foreach($key in $cfg.PSObject.Properties.Name){if($key -notin @('runtime_root','client_exe','checkpoint_exe','output_root','port','timescale','barrier','restore_slots','resume','bot_mode','source_checkpoint','load_barrier','seed')){throw "Unknown checkpoint trial field: $key"}}
+if($null -ne $cfg.seed -and ($cfg.seed -lt 0 -or $cfg.seed -gt 2147483647 -or [long]$cfg.seed -ne $cfg.seed)){throw 'Checkpoint seed must be a nonnegative int32'}
 if($cfg.load_barrier -and !$cfg.resume){throw 'Load barrier requires client restore'}
 if($cfg.timescale -ne 2 -or $cfg.port -lt 1024 -or $cfg.port -gt 65534){throw 'Checkpoint trial requires 2x and a valid port'}
 if(Get-NetUDPEndpoint -LocalPort $cfg.port -ErrorAction SilentlyContinue){throw 'Checkpoint port occupied'}
@@ -33,7 +34,17 @@ foreach($asset in Get-ChildItem (Join-Path $source 'baseq2') -File -Recurse|Wher
     $rel=[IO.Path]::GetRelativePath((Join-Path $source 'baseq2'),$asset.FullName)
     $dest=Join-Path (Join-Path $runtime 'baseq2') $rel
     New-Item -ItemType Directory -Path (Split-Path $dest -Parent) -Force|Out-Null
-    try{New-Item -ItemType HardLink -Path $dest -Target $asset.FullName -ErrorAction Stop|Out-Null}catch{Copy-Item $asset.FullName $dest}
+    if($asset.Extension -eq '.aas'){
+        # Shared AAS paths are symbolic links. A native checkpoint pins regular
+        # runtime files; materialize the bytes in this private trial directory.
+        $aasInput=[IO.File]::OpenRead($asset.FullName)
+        try{
+            $aasOutput=[IO.File]::Open($dest,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
+            try{$aasInput.CopyTo($aasOutput)}finally{$aasOutput.Dispose()}
+        }finally{$aasInput.Dispose()}
+    }else{
+        try{New-Item -ItemType HardLink -Path $dest -Target $asset.FullName -ErrorAction Stop|Out-Null}catch{Copy-Item $asset.FullName $dest}
+    }
 }
 $instance=[guid]::NewGuid().ToString('N')
 $trace=Join-Path $out 'bot.jsonl'
@@ -68,13 +79,16 @@ function Checkpoint-Operation([string]$Action){
     $result=& $tool --config $path 2> (Join-Path $out "$Action.err")
     if($LASTEXITCODE){throw "Checkpoint $Action failed; inspect $Action.err"}
     $result|Set-Content (Join-Path $out "$Action-result.json") -Encoding utf8
-    return $result|ConvertFrom-Json
+    $parsedResult=$result|ConvertFrom-Json
+    if($Action -eq 'load' -and $null -ne $cfg.seed -and !$parsedResult.rng_restored){throw 'Seeded native checkpoint did not acknowledge RNG cursor restoration'}
+    return $parsedResult
 }
 $server=$null;$bot=$null;$actor=$null;$oldRcon=$env:Q2COOPBOT_TEST_RCON
 $report=[ordered]@{accepted=$false;reason='not_run';timescale=2;port=$cfg.port}
 try{
     $env:Q2COOPBOT_TEST_RCON=[guid]::NewGuid().ToString('N')
     $args="-portable +set ip 127.0.0.1 +set noipx 1 +set dedicated 1 +set coop 1 +set deathmatch 0 +set cheats 1 +set maxclients 4 +set port $($cfg.port) +set timescale 2 +set rcon_password $env:Q2COOPBOT_TEST_RCON +set sv_harness_instance $instance +set sv_test_unlimited_loopback 1 +set sv_test_trace_client CheckpointBot +map base2`$base1"
+    if($null -ne $cfg.seed){$args=$args.Replace('+map base2$base1',("+set g_test_seed $($cfg.seed) +map base2`$base1"))}
     if($cfg.source_checkpoint){$args=$args.Replace('+map base2$base1','+map base1')}
     $server=Start-Process (Join-Path $runtime 'q2ded.exe') -ArgumentList $args -WorkingDirectory $runtime -RedirectStandardOutput (Join-Path $out 'server.log') -RedirectStandardError (Join-Path $out 'server.err') -WindowStyle Hidden -PassThru
     $deadline=(Get-Date).AddSeconds(20)

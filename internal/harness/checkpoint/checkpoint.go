@@ -45,6 +45,8 @@ type Manifest struct {
 	Files      []File        `json:"files"`
 }
 type Result struct {
+	WorldUnadvanced bool     `json:"world_unadvanced,omitempty"`
+	CombatRestored  bool     `json:"combat_restored,omitempty"`
 	RNGRestored     bool     `json:"rng_restored,omitempty"`
 	LoadAnchor      *Barrier `json:"load_anchor,omitempty"`
 	BarrierVerified bool     `json:"barrier_verified"`
@@ -445,6 +447,9 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 		if _, err = request(ctx, c.Server, password, "set sv_test_checkpoint_frame 0", timeout); err != nil {
 			return result, err
 		}
+		if err = publishBarrierRelease(ctx, c, password, c.Release); err != nil {
+			return result, err
+		}
 		result.Map = manifest.Map
 		result.State = "release_verified"
 		result.BarrierVerified = true
@@ -526,6 +531,9 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 			if _, err = request(ctx, c.Server, password, "set sv_test_checkpoint_frame 0", timeout); err != nil {
 				return result, fmt.Errorf("checkpoint saved but barrier release unconfirmed: %w", err)
 			}
+			if err = publishSourceRelease(ctx, c, password); err != nil {
+				return result, fmt.Errorf("checkpoint saved but source release receipt failed: %w", err)
+			}
 		}
 		return result, nil
 	}
@@ -568,6 +576,15 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 		return result, err
 	}
 	holdConfirmed := false
+	combatLoad := manifest.Barrier != nil && manifest.Barrier.Boundary == CombatPreDecisionBoundary
+	if combatLoad {
+		if !c.HoldAfterLoad || !c.BindParticipants {
+			return result, fmt.Errorf("combat load requires bound held native root")
+		}
+		if _, err = request(ctx, c.Server, password, "set g_test_checkpoint_state 1", timeout); err != nil {
+			return result, err
+		}
+	}
 	if c.HoldAfterLoad {
 		defer func() {
 			if !holdConfirmed {
@@ -583,11 +600,22 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 	}
 	reply, err = request(ctx, c.Server, password, "load "+slot, timeout)
 	result.RNGRestored = strings.Contains(reply, "g_test_rng restored version=1 map="+manifest.Map+"\n")
+	result.CombatRestored = strings.Contains(reply, "g_test_checkpoint restored version=2 map="+manifest.Map+" released=1 ")
+	clockGeneration := 0
+	for _, line := range strings.Split(reply, "\n") {
+		var gen int
+		if _, scanErr := fmt.Sscanf(line, "sv_test_checkpoint_clock version=1 spawncount=%d frame=1 world_advanced=0", &gen); scanErr == nil && strings.HasSuffix(line, " frame=1 world_advanced=0") {
+			clockGeneration = gen
+		}
+	}
 	if err != nil {
 		return result, err
 	}
 	if !strings.Contains(reply, "Savegame: "+slot) || strings.Contains(reply, "No such") || strings.Contains(reply, "Couldn't") {
 		return result, fmt.Errorf("native load not acknowledged")
+	}
+	if combatLoad && (!result.RNGRestored || !result.CombatRestored) {
+		return result, fmt.Errorf("combat load missing native RNG/phase restore receipt")
 	}
 	reply, err = request(ctx, c.Server, password, "status", timeout)
 	if err != nil {
@@ -611,7 +639,11 @@ func Run(ctx context.Context, c Config, password string) (Result, error) {
 			_, scanErr := fmt.Sscanf(strings.TrimSpace(reply), `"sv_test_checkpoint_ack" is "%d:%d:%s`, &gen, &frame, &mapName)
 			mapName = strings.TrimSuffix(mapName, `"`)
 			if scanErr == nil && gen != manifest.Barrier.Generation && gen > 0 && frame == 1 && mapName == manifest.Map {
-				result.LoadAnchor = &Barrier{ID: manifest.Barrier.ID, Map: mapName, Frame: frame, Generation: gen}
+				if combatLoad && clockGeneration != gen {
+					return result, fmt.Errorf("loaded network clock advanced world or mismatched generation")
+				}
+				result.WorldUnadvanced = combatLoad && clockGeneration == gen
+				result.LoadAnchor = &Barrier{ID: manifest.Barrier.ID, Map: mapName, Frame: frame, Generation: gen, Boundary: manifest.Barrier.Boundary}
 				result.State = "load_held"
 				holdConfirmed = true
 				break

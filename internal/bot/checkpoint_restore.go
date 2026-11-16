@@ -28,6 +28,12 @@ func (c *Client) restoreCheckpointSnapshot(s quake.Snapshot) error {
 	if source == nil || c.checkpointRestored {
 		return nil
 	}
+	if c.checkpointMode == "combat" {
+		return c.restoreCombatCheckpointSnapshot(s)
+	}
+	if source.Boundary != "" || len(source.Combat) > 0 {
+		return fmt.Errorf("combat checkpoint requires a dedicated combat restore mode")
+	}
 	if s.Map != source.Map || c.decoder.PlayerNumber != source.SelfEntity || c.spawncount == source.Generation {
 		return fmt.Errorf("checkpoint restore native identity/generation mismatch")
 	}

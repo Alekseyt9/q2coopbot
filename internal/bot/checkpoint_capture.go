@@ -33,6 +33,12 @@ func (c *Client) captureCheckpointRequest() error {
 	if d.Decode(new(any)) != io.EOF || request.Version != 1 || request.ID == "" || request.Frame < 1 {
 		return fmt.Errorf("invalid checkpoint capture request")
 	}
+	if request.Boundary == checkpoint.CombatPreDecisionBoundary {
+		return c.captureCombatCheckpointRequest(request)
+	}
+	if request.Boundary != "" {
+		return fmt.Errorf("unknown checkpoint request boundary")
+	}
 	if request.ID == c.checkpointCapturedID || c.latestFrame < request.Frame || c.lastMoveFrame < c.latestFrame {
 		return nil
 	}

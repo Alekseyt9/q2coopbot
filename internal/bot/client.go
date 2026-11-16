@@ -27,6 +27,7 @@ type Client struct {
 	planChat                                planChat
 	checkpointControl                       string
 	checkpointCapturedID                    string
+	checkpointHeld                          *checkpoint.CaptureRequest
 	checkpointRestore                       *checkpoint.Capture
 	checkpointMode                          string
 	checkpointRestored                      bool
@@ -482,6 +483,10 @@ func (c *Client) run(ctx context.Context) error {
 			return e
 		}
 		if err := c.captureCheckpointRequest(); err != nil {
+			if checkpoint.ControlSharingError(err) {
+				_ = c.send(nil, false)
+				continue
+			}
 			return err
 		}
 		if c.checkpointRestoreErr != nil {
@@ -489,6 +494,12 @@ func (c *Client) run(ctx context.Context) error {
 		}
 		if c.demoErr != nil {
 			return c.demoErr
+		}
+		if held, err := c.holdCombatCheckpoint(); err != nil {
+			return err
+		} else if held {
+			_ = c.send(nil, false)
+			continue
 		}
 		now := time.Now()
 		if c.testPairStopFrame > 0 && c.latestFrame < c.testPairStopFrame {
