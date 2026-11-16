@@ -23,6 +23,7 @@ type HJEPALevel struct {
 	Utility   []DenseLayer `json:"utility"`
 }
 type HJEPAFile struct {
+	WorldActionSpace   string       `json:"world_action_space,omitempty"` // explicit predictor inputs; empty preserves historical files
 	WeaponHead         string       `json:"weapon_head,omitempty"`
 	WeaponFeatures     string       `json:"weapon_feature_version,omitempty"`
 	WeaponActor        []DenseLayer `json:"weapon_actor,omitempty"`
@@ -76,6 +77,29 @@ func (h *HJEPA) WeaponLogits(features []float64) ([]float64, error) {
 		}
 	}
 	return hNet(h.file.WeaponActor, features)
+}
+
+// WeaponDistribution exposes the behavior likelihood for fresh offline training.
+// Held options and greedy choices are not categorical policy-gradient samples.
+func (h *HJEPA) WeaponDistribution(o Observation) ([]float64, error) {
+	if h.file.WeaponSamplingSeed == nil || h.file.WeaponOptionFrames != 0 {
+		return nil, fmt.Errorf("weapon likelihood requires stochastic frame-wise choices")
+	}
+	x, err := FeaturesForVersion(o, WeaponFeatureVersion)
+	if err != nil {
+		return nil, err
+	}
+	if h.file.WeaponFeatures == HJEPAWeaponFeatureVersion {
+		x, err = appendHJEPAWeaponContext(o, x)
+		if err != nil {
+			return nil, err
+		}
+	}
+	logits, err := h.WeaponLogits(x)
+	if err != nil {
+		return nil, err
+	}
+	return weaponProbabilities(o, logits)
 }
 
 func validateHNet(net []DenseLayer, input, output int) error {
@@ -141,6 +165,9 @@ func LoadHJEPA(path string) (*HJEPA, error) {
 	}
 	if f.Kind != HJEPAKind || f.Features != WeaponFeatureVersion || len(f.Levels) != 3 || math.IsNaN(f.PriorWeight) || math.IsInf(f.PriorWeight, 0) || f.PriorWeight < .01 || f.PriorWeight > 10 {
 		return nil, fmt.Errorf("unsupported H-JEPA header")
+	}
+	if f.WorldActionSpace != "" && f.WorldActionSpace != "proposed_primitive_v1" {
+		return nil, fmt.Errorf("unsupported H-JEPA world action space")
 	}
 	if f.Planner != "" && f.Planner != "hierarchy" && f.Planner != "flat" && f.Planner != "bc" && f.Planner != "sequence" {
 		return nil, fmt.Errorf("unsupported H-JEPA planner")
