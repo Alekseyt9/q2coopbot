@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"q2coopbot/internal/bot"
 	"q2coopbot/internal/learningenv"
 	"q2coopbot/internal/policy"
 	"strings"
@@ -22,6 +23,7 @@ func run() error {
 	model := flag.String("model", "", "frozen source PPO")
 	out := flag.String("out", "", "fresh output JSONL")
 	split := flag.String("split", "", "train or validation, enforced against native fixture")
+	rulesAdvice := flag.Bool("rules-advice", false, "offline existing weapon rules preferences; U1 probabilities where no preference exists")
 	flag.Parse()
 	if *root == "" || *model == "" || *out == "" || (*split != "train" && *split != "validation") {
 		return fmt.Errorf("root,model,out and train/validation split required")
@@ -59,6 +61,21 @@ func run() error {
 	seeds := map[int]bool{}
 	hist := map[string]int{}
 	count := 0
+	labelKind := "hypothetical_u1_weapon_distribution_v1"
+	if *rulesAdvice {
+		labelKind = "hypothetical_weapon_rules_mix_v1"
+	}
+	adviceCounts := map[string]int{}
+	adviceSources := map[string]string{}
+	if *rulesAdvice {
+		for _, name := range []string{"internal/bot/weapon_training_advice.go", "internal/bot/weapon_economy.go", "internal/bot/inventory.go", "internal/bot/weapon_switch.go"} {
+			b, err := os.ReadFile(name)
+			if err != nil {
+				return err
+			}
+			adviceSources[name] = digest(b)
+		}
+	}
 	for _, path := range paths {
 		p, e := policy.LoadPPO(*model)
 		if e != nil {
@@ -154,6 +171,27 @@ func run() error {
 				return e
 			}
 			y := p.LastWeaponDistribution()
+			wx, e := policy.HJEPAWeaponFeatures(o)
+			if e != nil {
+				return e
+			}
+			adviceReason := ""
+			if *rulesAdvice {
+				name, reason, err := bot.WeaponTrainingAdvice(o)
+				if err != nil {
+					return err
+				}
+				adviceReason = reason
+				if reason != "" {
+					y = make([]float64, 12)
+					for i, w := range policy.WeaponChoices() {
+						if w == name {
+							y[i] = 1
+						}
+					}
+					adviceCounts[reason]++
+				}
+			}
 			mask, e := policy.WeaponAvailability(o)
 			if e != nil {
 				return e
@@ -171,7 +209,7 @@ func run() error {
 				}
 			}
 			hist[policy.WeaponChoices()[best]]++
-			row := map[string]any{"seed": seed, "split": *split, "identity": o.Identity, "features": x, "teacher_weapon_probabilities": y, "label_kind": "hypothetical_u1_weapon_distribution_v1"}
+			row := map[string]any{"seed": seed, "split": *split, "identity": o.Identity, "features": x, "weapon_features": wx, "teacher_weapon_probabilities": y, "label_kind": labelKind, "advice_reason": adviceReason}
 			if e = enc.Encode(row); e != nil {
 				return e
 			}
@@ -194,7 +232,9 @@ func run() error {
 	if digest(current) != digest(mb) {
 		return fmt.Errorf("teacher changed")
 	}
-	meta := map[string]any{"version": "hjepa_weapon_data_v1", "feature_version": policy.WeaponFeatureVersion, "split": *split, "rows": count, "seeds": seeds, "sources_sha256": sources, "native_receipts_sha256": receipts, "teacher_source": *model, "teacher_source_sha256": digest(mb), "teacher_argmax_histogram": hist, "label_kind": "hypothetical_u1_weapon_distribution_v1", "scope": "Client-only causal observations, actual past teacher memory, no future/server outcome inputs. Offline recommendations, not executed actions."}
+	meta := map[string]any{"version": "hjepa_weapon_data_v1", "feature_version": policy.WeaponFeatureVersion, "split": *split, "rows": count, "seeds": seeds, "sources_sha256": sources, "native_receipts_sha256": receipts, "teacher_source": *model, "teacher_source_sha256": digest(mb), "teacher_argmax_histogram": hist, "label_kind": labelKind, "advice_counts": adviceCounts, "scope": "Client-only causal observations, actual past teacher memory, no future/server outcome inputs. Offline recommendations, not executed actions."}
+	meta["advice_sources_sha256"] = adviceSources
+	meta["weapon_feature_version"] = policy.HJEPAWeaponFeatureVersion
 	b, e := json.MarshalIndent(meta, "", "  ")
 	if e != nil {
 		return e

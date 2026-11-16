@@ -24,9 +24,11 @@ type HJEPALevel struct {
 }
 type HJEPAFile struct {
 	WeaponHead         string       `json:"weapon_head,omitempty"`
+	WeaponFeatures     string       `json:"weapon_feature_version,omitempty"`
 	WeaponActor        []DenseLayer `json:"weapon_actor,omitempty"`
 	WeaponSamplingSeed *int64       `json:"weapon_sampling_seed,omitempty"` // nil: greedy; present: reproducible categorical
-	WeaponMode         string       `json:"weapon_mode,omitempty"`          // explicit inventory evaluation without a weapon selector
+	WeaponOptionFrames int          `json:"weapon_option_frames,omitempty"` // optional learned choice commitment, 1..64 frames
+	WeaponMode         string       `json:"weapon_mode,omitempty"`          // explicit inventory policy declaration
 	Planner            string       `json:"planner,omitempty"`              // empty/hierarchy, flat, bc, sequence
 	Kind               string       `json:"kind"`
 	Features           string       `json:"feature_version"`
@@ -39,10 +41,20 @@ type HJEPAFile struct {
 	ConsistencyMargin  *float64     `json:"consistency_margin,omitempty"`
 }
 type HJEPA struct {
-	file       HJEPAFile
-	version    string
-	lastSearch HJEPASearchAudit
+	file         HJEPAFile
+	version      string
+	lastSearch   HJEPASearchAudit
+	weaponOption hWeaponOption
 }
+
+type hWeaponOption struct {
+	valid       bool
+	last        Identity
+	start, slot int
+}
+
+// ResetEpisode separates independently loaded native captures during replay.
+func (p *HJEPA) ResetEpisode() { p.weaponOption = hWeaponOption{}; p.lastSearch = HJEPASearchAudit{} }
 
 // KeepsEquippedWeapon admits inventory fixtures only by an explicit model declaration.
 // Native empty-ammo switching remains engine behavior, not a learned decision.
@@ -55,7 +67,7 @@ func (h *HJEPA) SupportsInventory() bool {
 
 // WeaponLogits is also used by offline serialization parity checks.
 func (h *HJEPA) WeaponLogits(features []float64) ([]float64, error) {
-	if h.file.WeaponHead != WeaponHeadVersion || len(features) != WeaponFeatureWidth {
+	if h.file.WeaponHead != WeaponHeadVersion || len(features) != h.weaponInputWidth() {
 		return nil, fmt.Errorf("H-JEPA weapon input/header")
 	}
 	for _, v := range features {
@@ -137,16 +149,26 @@ func LoadHJEPA(path string) (*HJEPA, error) {
 		return nil, fmt.Errorf("unsupported H-JEPA weapon mode")
 	}
 	if f.WeaponMode == "learned_masked_v1" {
+		if f.WeaponFeatures != "" && f.WeaponFeatures != HJEPAWeaponFeatureVersion {
+			return nil, fmt.Errorf("unsupported H-JEPA weapon features")
+		}
+		if f.WeaponOptionFrames < 0 || f.WeaponOptionFrames > 64 {
+			return nil, fmt.Errorf("invalid weapon option duration")
+		}
 		if f.WeaponHead != WeaponHeadVersion {
 			return nil, fmt.Errorf("H-JEPA weapon head version required")
 		}
-		if err := validateHNet(f.WeaponActor, WeaponFeatureWidth, len(weaponNames)); err != nil {
+		weaponWidth := WeaponFeatureWidth
+		if f.WeaponFeatures == HJEPAWeaponFeatureVersion {
+			weaponWidth = HJEPAWeaponFeatureWidth
+		}
+		if err := validateHNet(f.WeaponActor, weaponWidth, len(weaponNames)); err != nil {
 			return nil, err
 		}
 		if f.WeaponSamplingSeed != nil && *f.WeaponSamplingSeed < 0 {
 			return nil, fmt.Errorf("negative weapon sampling seed")
 		}
-	} else if f.WeaponHead != "" || len(f.WeaponActor) != 0 || f.WeaponSamplingSeed != nil {
+	} else if f.WeaponHead != "" || f.WeaponFeatures != "" || len(f.WeaponActor) != 0 || f.WeaponSamplingSeed != nil || f.WeaponOptionFrames != 0 {
 		return nil, fmt.Errorf("H-JEPA weapon head requires learned mode")
 	}
 	if math.IsNaN(f.PlanStep) || math.IsInf(f.PlanStep, 0) || f.PlanStep < 0 || f.PlanStep > .5 {
@@ -394,41 +416,70 @@ func (p *HJEPA) Decide(o Observation) (Action, error) {
 	}
 	a := Action{Version: ActionVersion, Identity: o.Identity, Forward: chosen[0], Side: chosen[1], YawDelta: chosen[2] * 180, PitchDelta: chosen[3] * 180, Attack: chosen[4] >= .5, Vertical: []string{"release", "jump", "crouch"}[vertical]}
 	if p.file.WeaponHead != "" {
-		logits, err := p.WeaponLogits(features)
+		best, err := p.chooseWeapon(o, features)
 		if err != nil {
 			return Action{}, err
-		}
-		probs, err := weaponProbabilities(o, logits)
-		if err != nil {
-			return Action{}, err
-		}
-		best := 0
-		for i := 1; i < len(probs); i++ {
-			if probs[i] > probs[best] {
-				best = i
-			}
-		}
-		if p.file.WeaponSamplingSeed != nil {
-			// Counter-based sampling: replaying the same observed identity returns
-			// the same choice without advancing hidden RNG or consulting a teacher.
-			key, _ := json.Marshal(struct {
-				Seed     int64
-				Identity Identity
-			}{*p.file.WeaponSamplingSeed, o.Identity})
-			h := sha256.Sum256(key)
-			u := float64(binary.LittleEndian.Uint64(h[:8])>>11) / float64(uint64(1)<<53)
-			for i, v := range probs {
-				if v > 0 {
-					best = i
-					u -= v
-					if u < 0 {
-						break
-					}
-				}
-			}
 		}
 		a.Weapon = weaponNames[best]
 	}
 	_, e = Command(o, a, [3]int16{})
 	return a, e
+}
+
+func (p *HJEPA) chooseWeapon(o Observation, features []float64) (int, error) {
+	if p.file.WeaponFeatures == HJEPAWeaponFeatureVersion {
+		var err error
+		features, err = appendHJEPAWeaponContext(o, features)
+		if err != nil {
+			return 0, err
+		}
+	}
+	if p.file.WeaponOptionFrames > 0 {
+		mask, err := WeaponAvailability(o)
+		if err != nil {
+			return 0, err
+		}
+		s := &p.weaponOption
+		if s.valid && SameLife(s.last, o.Identity) && o.Identity.Frame >= s.last.Frame && o.Identity.Frame-s.last.Frame <= 1 && o.Identity.Frame-s.start < p.file.WeaponOptionFrames && mask[s.slot] {
+			s.last = o.Identity
+			return s.slot, nil
+		}
+	}
+	logits, err := p.WeaponLogits(features)
+	if err != nil {
+		return 0, err
+	}
+	probs, err := weaponProbabilities(o, logits)
+	if err != nil {
+		return 0, err
+	}
+	best := 0
+	for i := 1; i < len(probs); i++ {
+		if probs[i] > probs[best] {
+			best = i
+		}
+	}
+	if p.file.WeaponSamplingSeed != nil {
+		// Counter-based sampling: replaying the same observed identity returns
+		// the same choice without advancing hidden RNG or consulting a teacher.
+		key, _ := json.Marshal(struct {
+			Seed     int64
+			Identity Identity
+		}{*p.file.WeaponSamplingSeed, o.Identity})
+		h := sha256.Sum256(key)
+		u := float64(binary.LittleEndian.Uint64(h[:8])>>11) / float64(uint64(1)<<53)
+		for i, v := range probs {
+			if v > 0 {
+				best = i
+				u -= v
+				if u < 0 {
+					break
+				}
+			}
+		}
+	}
+	if p.file.WeaponOptionFrames > 0 {
+		p.weaponOption = hWeaponOption{valid: true, last: o.Identity, start: o.Identity.Frame, slot: best}
+	}
+	return best, nil
 }

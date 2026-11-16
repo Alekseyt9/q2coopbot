@@ -19,6 +19,9 @@ def load_rows(path, split):
         for name, digest in meta[field].items():
             if sha(pathlib.Path(name)) != digest:
                 raise ValueError('changed native source/proof')
+    for name, digest in meta.get('advice_sources_sha256', {}).items():
+        if sha(pathlib.Path(name)) != digest:
+            raise ValueError('changed offline advice source')
     if sha(pathlib.Path(meta['teacher_source'])) != meta['teacher_source_sha256']:
         raise ValueError('changed teacher')
     rows = [json.loads(line) for line in path.read_text().splitlines()]
@@ -30,7 +33,7 @@ def load_rows(path, split):
         if key in seen:
             raise ValueError('duplicate identity')
         seen.add(key)
-        if r['split'] != split or r['label_kind'] != 'hypothetical_u1_weapon_distribution_v1':
+        if r['split'] != split or r['label_kind'] != meta['label_kind'] or meta['label_kind'] not in ['hypothetical_u1_weapon_distribution_v1', 'hypothetical_weapon_rules_mix_v1']:
             raise ValueError('wrong label/split')
         if len(r['features']) != 845 or len(r['teacher_weapon_probabilities']) != 12:
             raise ValueError('wrong dimensions')
@@ -72,6 +75,7 @@ def main():
     ap.add_argument('--out', type=pathlib.Path, required=True)
     ap.add_argument('--epochs', type=int, default=300)
     ap.add_argument('--seed', type=int, default=261116)
+    ap.add_argument('--greedy', action='store_true', help='execute argmax learned preferences instead of categorical sampling')
     a = ap.parse_args()
     if not torch.cuda.is_available():
         raise RuntimeError('CUDA required for neural training')
@@ -83,6 +87,8 @@ def main():
         raise ValueError('train/validation seed overlap')
     if tm['teacher_source_sha256'] != vm['teacher_source_sha256']:
         raise ValueError('different teachers')
+    if tm['label_kind'] != vm['label_kind']:
+        raise ValueError('different label contracts')
     parent = json.loads(a.parent.read_text())
     if parent['kind'] != 'combat_hjepa_v1' or parent['feature_version'] != 'combat_features_v6':
         raise ValueError('incompatible parent')
@@ -114,6 +120,8 @@ def main():
     layers = export(net)
     model = dict(parent, weapon_mode='learned_masked_v1', weapon_head='combat_masked_weapon_v1', weapon_actor=layers,
                  weapon_sampling_seed=a.seed)
+    if a.greedy:
+        model.pop('weapon_sampling_seed', None)
     for key in ['levels', 'motor', 'actor', 'planner', 'plan_axes', 'plan_step', 'consistency_margin', 'prior_weight']:
         if model.get(key) != parent.get(key):
             raise ValueError('frozen parent changed')
@@ -136,7 +144,8 @@ def main():
          teacher_sha256=tm['teacher_source_sha256'], train_sha256=sha(a.train), validation_sha256=sha(a.validation),
          model_sha256=sha(a.out / 'model.json'), epochs=a.epochs, seed=a.seed, history=history,
          serialized_max_error=parity, seconds=time.perf_counter() - start,
-         scope='Only weapon_actor trained on U1 hypothetical probabilities. World/motor frozen; '
+         label_kind=tm['label_kind'], greedy=a.greedy,
+         scope='Only weapon_actor trained on explicitly labelled hypothetical probabilities/preferences. World/motor frozen; '
                'no runtime teacher. Fixed epoch budget; validation never backpropagated. Not a combat quality claim.'))
 
 

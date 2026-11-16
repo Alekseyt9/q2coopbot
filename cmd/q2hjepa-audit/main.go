@@ -52,6 +52,7 @@ func run() error {
 			return e
 		}
 		defer f.Close()
+		p.ResetEpisode()
 		scan := bufio.NewScanner(f)
 		scan.Buffer(make([]byte, 65536), 4*1024*1024)
 		for scan.Scan() {
