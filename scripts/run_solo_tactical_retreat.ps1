@@ -110,6 +110,7 @@ New-Item -ItemType Directory $OutputRoot|Out-Null
 $resetClock=[Diagnostics.Stopwatch]::StartNew()
 $fixtureMap=if($generated -and $generated.map){$generated.map}else{'base1'}
 $combatOnly=[bool]$generated
+if($generated){Copy-Item -LiteralPath $GeneratedFixture -Destination (Join-Path $OutputRoot 'fixture.json')}
 if($ClientStartupDelaySeconds -and (!$Synchronous -or $ReleaseGameFrame -ne 100)){throw 'Delayed startup probe requires fixed synchronous release100'}
 $runtime=& "$PSScriptRoot/prepare_elevator_cycle_runtime.ps1" -Map $fixtureMap -RuntimeRoot (Join-Path $OutputRoot 'runtime') -AllowEmptyMonsters:([bool]$GeneratedFixture)
 if($Recovery){
@@ -247,6 +248,7 @@ try{
         if(!$checkpointProcess.WaitForExit(15000) -or $checkpointProcess.ExitCode){throw 'Combat checkpoint capture failed'}
         $report.combat_checkpoint=Test-CombatCheckpointContinuation -OutputRoot $OutputRoot -Frame $CheckpointCaptureFrame
     }
+    if($generated){$report.generated_fixture=$generated;$report.generated_start=Confirm-GeneratedCombatStart $generated (Join-Path $OutputRoot 'server.log')}
     $rows=@(Get-Content $trace|ForEach-Object {$_|ConvertFrom-Json})
     . "$PSScriptRoot/read_damage_events.ps1"
     $events=@(Read-DamageEvents (Join-Path $OutputRoot 'server.log'))

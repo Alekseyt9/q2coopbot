@@ -531,7 +531,7 @@ func (p *HJEPA) chooseWeapon(o Observation, features []float64) (int, error) {
 		key, _ := json.Marshal(struct {
 			Seed     int64
 			Identity Identity
-		}{*p.file.WeaponSamplingSeed, samplingID})
+		}{p.samplingSeed(*p.file.WeaponSamplingSeed), samplingID})
 		h := sha256.Sum256(key)
 		u := float64(binary.LittleEndian.Uint64(h[:8])>>11) / float64(uint64(1)<<53)
 		for i, v := range probs {

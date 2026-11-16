@@ -23,11 +23,12 @@ type RestoreReceipt struct {
 }
 
 type CombatRestoreReceipt struct {
-	Version     string          `json:"version"`
-	Root        policy.Identity `json:"decision_root"`
-	Source      policy.Identity `json:"source_root"`
-	Model       string          `json:"model"`
-	PrefixFrame int             `json:"prefix_frame"`
+	SamplingStream int64           `json:"sampling_stream,omitempty"`
+	Version        string          `json:"version"`
+	Root           policy.Identity `json:"decision_root"`
+	Source         policy.Identity `json:"source_root"`
+	Model          string          `json:"model"`
+	PrefixFrame    int             `json:"prefix_frame"`
 }
 
 func verifyRestoreReceipts(dir string, manifest Manifest, b *Barrier) error {
@@ -58,7 +59,7 @@ func verifyRestoreReceipts(dir string, manifest Manifest, b *Barrier) error {
 			}
 			if json.Unmarshal(source.Combat, &state) != nil || r.Mode != "combat" || r.Combat == nil || len(r.Planner) > 0 || r.RunnerElapsed != nil ||
 				r.Combat.Version != "hjepa_predecision_restore_v1" || r.Combat.Source != state.Root || r.Combat.Model != state.Sampling.Model ||
-				r.Combat.PrefixFrame != b.Frame-1 || r.Combat.Root.Map != b.Map || r.Combat.Root.Spawncount != b.Generation ||
+				r.Combat.SamplingStream < 0 || r.Combat.SamplingStream > 2147483647 || r.Combat.PrefixFrame != b.Frame-1 || r.Combat.Root.Map != b.Map || r.Combat.Root.Spawncount != b.Generation ||
 				r.Combat.Root.Frame != b.Frame || r.Combat.Root.Actor != r.SelfEntity || r.Combat.Root.Life != state.Root.Life || r.Combat.Root.Connection < 1 {
 				return fmt.Errorf("combat restore prefix/model/native anchor mismatch")
 			}

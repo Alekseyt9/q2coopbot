@@ -40,6 +40,7 @@ type Config struct {
 	CheckpointControl                      string
 	CheckpointRestore                      string
 	CheckpointMode                         string
+	CheckpointSamplingStream               *int64
 	MemoryFile                             string
 	MemorySession                          string
 	TestWeaponSwitchFixture                string
@@ -221,6 +222,9 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		}
 	}
 	combatRestore := cfg.CheckpointRestore != "" && cfg.CheckpointMode == "combat"
+	if cfg.CheckpointSamplingStream != nil && (!combatRestore || *cfg.CheckpointSamplingStream < 0 || *cfg.CheckpointSamplingStream > 2147483647) {
+		return fmt.Errorf("checkpoint sampling stream requires combat restore and 0..2147483647")
+	}
 	if combatRestore && (!cfg.TestSynchronous || !cfg.TestCombatBarrier || cfg.CombatMode != "learned" || !cfg.CombatCapture) {
 		return fmt.Errorf("combat restore requires isolated synchronous learned capture")
 	}
@@ -560,7 +564,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		testWalkThenPlan: cfg.TestWalkThenPlan,
 		conn:             conn, address: address, qport: uint16(rand.Intn(65535) + 1), seq: 1,
 		decoder: quake.NewDecoder(), planner: &Planner{Campaign: cfg.Campaign, CampaignLeader: cfg.CampaignLeader, CampaignNextMap: cfg.CampaignNextMap, CampaignRoute: append([]string(nil), cfg.CampaignRoute...), CampaignUnitMaps: append([]string(nil), cfg.CampaignUnitMaps...), AASDir: cfg.AASDir, GameClock: cfg.FramePaced, TestNoAAS: cfg.TestNoAAS, TestNoBSP: cfg.TestNoBSP, TestPartialBSP: cfg.TestPartialBSP, TestHideDoor53: cfg.TestHideDoor53, TestDisableProjectileLead: cfg.TestDisableProjectileLead, TestDisableHandGrenade: cfg.Idle || cfg.TestWeaponSwitchFixture == "hand_grenade_observe" || cfg.TestWeaponSwitchFixture == "hand_grenade_guard" || handGrenadeArmFixture(cfg.TestWeaponSwitchFixture)},
-		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name, checkpointControl: cfg.CheckpointControl, checkpointRestore: restore, checkpointMode: cfg.CheckpointMode,
+		root: cfg.GameDir, worldFile: cfg.WorldFile, stopFile: cfg.StopFile, name: cfg.Name, checkpointControl: cfg.CheckpointControl, checkpointRestore: restore, checkpointMode: cfg.CheckpointMode, checkpointSamplingStream: cfg.CheckpointSamplingStream,
 		memoryFile: cfg.MemoryFile, memorySession: cfg.MemorySession,
 		idle: cfg.Idle, duration: cfg.Duration, framePaced: cfg.FramePaced, gameFrames: cfg.GameFrames,
 		exitOnReconnect: cfg.ExitOnReconnect, testChangeMap: cfg.TestChangeMap,

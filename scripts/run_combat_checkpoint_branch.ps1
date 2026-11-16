@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$SourceRoot,[Parameter(Mandatory)][string]$OutputRoot,[Parameter(Mandatory)][string]$Client,[Parameter(Mandatory)][string]$CheckpointTool,[int]$Port=31172,[ValidateRange(2,100)][int]$Frames=30)
+param([Parameter(Mandatory)][string]$SourceRoot,[Parameter(Mandatory)][string]$OutputRoot,[Parameter(Mandatory)][string]$Client,[Parameter(Mandatory)][string]$CheckpointTool,[int]$Port=31172,[ValidateRange(2,100)][int]$Frames=30,[Nullable[int]]$SamplingStream)
 $ErrorActionPreference='Stop'
 $SourceRoot=(Resolve-Path -LiteralPath $SourceRoot).Path
 $Client=(Resolve-Path -LiteralPath $Client).Path
@@ -61,6 +61,7 @@ try{
         output=@{trace_jsonl=(Join-Path $OutputRoot 'bot.jsonl');combat_capture=$true};
         test=@{synchronous=$true;combat_only=[bool]$sourceConfig.test.combat_only;combat_barrier=$true;weapon_switch_fixture=$sourceConfig.test.weapon_switch_fixture;checkpoint_restore=$checkpointDir;checkpoint_mode='combat';checkpoint_control=$control}}
     $config=Join-Path $OutputRoot 'bot-config.json'
+    if($null -ne $SamplingStream){if($SamplingStream -lt 0){throw 'Sampling stream must be nonnegative'};$botConfig.test.checkpoint_sampling_stream=[long]$SamplingStream}
     $botConfig|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $config -Encoding utf8NoBOM
     $bot=Start-Process $Client -ArgumentList @('--config',('"'+$config+'"')) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
     $deadline=[DateTime]::UtcNow.AddSeconds(15)

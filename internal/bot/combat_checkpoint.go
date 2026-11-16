@@ -121,7 +121,10 @@ func (s combatCheckpoint) validate() error {
 // restoreCombatCheckpoint prepares a fresh controller for its first decision.
 // Native root remains positive, while its last-observed prefix may end at zero.
 // Current entities, inventory, HP and cached observations are not restored here.
-func (b *combatControl) restoreCombatCheckpoint(s combatCheckpoint, native policy.Identity) (quake.UserCmd, error) {
+func (b *combatControl) restoreCombatCheckpoint(s combatCheckpoint, native policy.Identity, fork ...int64) (quake.UserCmd, error) {
+	if len(fork) > 1 || len(fork) == 1 && (fork[0] < 0 || fork[0] > 2147483647) {
+		return quake.UserCmd{}, fmt.Errorf("invalid combat sampling stream")
+	}
 	if err := s.validate(); err != nil {
 		return quake.UserCmd{}, err
 	}
@@ -157,6 +160,10 @@ func (b *combatControl) restoreCombatCheckpoint(s combatCheckpoint, native polic
 		target = &value
 	}
 	// Mutate the provider only after all other validations have succeeded.
+	if len(fork) == 1 {
+		s.Sampling.Stream = fork[0]
+		s.Sampling.Version = policy.HJEPASamplingBranchCheckpointVersion
+	}
 	if err := p.RestoreSamplingCheckpoint(s.Sampling, native); err != nil {
 		return quake.UserCmd{}, err
 	}

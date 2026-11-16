@@ -30,6 +30,7 @@ type Client struct {
 	checkpointHeld                          *checkpoint.CaptureRequest
 	checkpointRestore                       *checkpoint.Capture
 	checkpointMode                          string
+	checkpointSamplingStream                *int64
 	checkpointRestored                      bool
 	checkpointRestoreErr                    error
 	memoryFile                              string

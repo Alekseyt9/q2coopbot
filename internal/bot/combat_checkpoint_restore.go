@@ -28,7 +28,11 @@ func (c *Client) restoreCombatCheckpointSnapshot(s quake.Snapshot) error {
 		return fmt.Errorf("combat restore source boundary mismatch")
 	}
 	native := policy.Identity{Life: state.Root.Life, Map: s.Map, Frame: s.Frame, Connection: c.connection, Spawncount: c.spawncount, Actor: c.decoder.PlayerNumber}
-	previous, err := c.combatControl.restoreCombatCheckpoint(state, native)
+	var fork []int64
+	if c.checkpointSamplingStream != nil {
+		fork = append(fork, *c.checkpointSamplingStream)
+	}
+	previous, err := c.combatControl.restoreCombatCheckpoint(state, native, fork...)
 	if err != nil {
 		return err
 	}
@@ -40,7 +44,7 @@ func (c *Client) restoreCombatCheckpointSnapshot(s quake.Snapshot) error {
 	r := checkpoint.CaptureRequest{Version: 1, Boundary: source.Boundary, ID: source.ID, Map: s.Map, Frame: 1, Generation: c.spawncount}
 	c.checkpointHeld = &r
 	receipt := checkpoint.RestoreReceipt{Version: 1, SourceID: source.ID, Mode: "combat", Participant: c.name, SourceFrame: source.Frame, Frame: 1, Generation: c.spawncount, SelfEntity: c.decoder.PlayerNumber,
-		Combat: &checkpoint.CombatRestoreReceipt{Version: "hjepa_predecision_restore_v1", Root: native, Source: state.Root, Model: state.Sampling.Model, PrefixFrame: 0}}
+		Combat: &checkpoint.CombatRestoreReceipt{Version: "hjepa_predecision_restore_v1", Root: native, Source: state.Root, Model: state.Sampling.Model, PrefixFrame: 0, SamplingStream: c.combatControl.provider.(*policy.HJEPA).SamplingStream()}}
 	if err := checkpoint.WriteCapture(c.checkpointControl+".restored.json", receipt); err != nil {
 		return err
 	}

@@ -182,6 +182,9 @@ func verify(source, branch string, n int) (map[string]any, error) {
 	if err := json.Unmarshal(capture.Combat, &state); err != nil {
 		return nil, err
 	}
+	if restore.Combat.SamplingStream != state.Sampling.Stream {
+		return nil, fmt.Errorf("different draw streams require fragment evaluation, not exact continuation proof")
+	}
 	if load.LoadAnchor.ID != capture.ID || load.LoadAnchor.Boundary != capture.Boundary || load.LoadAnchor.Map != capture.Map ||
 		load.LoadAnchor.Frame != 1 || load.LoadAnchor.Generation != restore.Generation || restore.Participant != capture.Participant || restore.SelfEntity != capture.SelfEntity ||
 		restore.Combat.Source != state.Root || restore.Combat.Model != state.Sampling.Model || restore.Combat.Root.Spawncount != restore.Generation || restore.Combat.Root.Actor != capture.SelfEntity ||
@@ -274,12 +277,42 @@ func main() {
 	source := flag.String("source", "", "completed source directory")
 	branch := flag.String("branch", "", "completed loaded branch directory")
 	n := flag.Int("frames", 30, "decisions to compare")
+	other := flag.String("other-branch", "", "compare two explicitly configured fragment sampling streams")
+	same := flag.Bool("same-stream", false, "require a repeat of the same fragment stream")
+	export := flag.String("export-fragment", "", "fresh typed fragment JSON; diagnostic unless a verified TRAIN plan is supplied")
+	plan := flag.String("plan", "", "condition plan required for TRAIN fragment admission")
+	repo := flag.String("repo", ".", "repository root for condition plan verification")
+	creditPrefix := flag.String("credit-prefix", "", "typed TRAIN prefix for native terminal return targets")
+	creditTail := flag.String("credit-tail", "", "longer same-stream TRAIN continuation")
+	creditOut := flag.String("credit-out", "", "fresh target JSON")
 	flag.Parse()
+	if *creditPrefix != "" || *creditTail != "" || *creditOut != "" {
+		if *creditPrefix == "" || *creditTail == "" || *creditOut == "" {
+			fmt.Fprintln(os.Stderr, "credit-prefix,credit-tail,credit-out required")
+			os.Exit(2)
+		}
+		r, err := fragmentCredit(*creditPrefix, *creditTail, *creditOut)
+		if err != nil {
+			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"accepted": false, "reason": err.Error()})
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		_ = json.NewEncoder(os.Stdout).Encode(r)
+		return
+	}
 	if *source == "" || *branch == "" || *n < 2 || *n > 100 {
 		fmt.Fprintln(os.Stderr, "source,branch and2..100frames required")
 		os.Exit(2)
 	}
-	r, err := verify(*source, *branch, *n)
+	var r map[string]any
+	var err error
+	if *export != "" {
+		r, err = exportFragment(*source, *branch, *export, *plan, *repo, *n)
+	} else if *other != "" {
+		r, err = verifyForkPair(*source, *branch, *other, *n, *same)
+	} else {
+		r, err = verify(*source, *branch, *n)
+	}
 	if err != nil {
 		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"accepted": false, "reason": err.Error()})
 		fmt.Fprintln(os.Stderr, err)

@@ -295,3 +295,139 @@ Still open: active projectile/primed-grenade save/load proof; distinct sampled
 branch streams and typed fragment export; truncated-return/long-tail handling;
 actual training and independent full-battle validation. No fragment training
 or promotion has taken place. U1 remains unchanged.
+
+## Grenades and frozen-model sampling streams, 22:04 continuation
+
+Diagnostic fixture and evidence root:
+`workspace/artifacts/fg-20261116-214800`.
+It uses base1/seed1729, stock vulnerable Parasite,20Grenades plus fallback
+Blaster, and exact native inventory startup. Frozen actor parameters come from
+the existing sampled actor bridge. The diagnostic model explicitly keeps the
+equipped grenade; these captures are fidelity probes and are excluded from
+training/quality evidence. A second model changes categorical fire/pose
+temperature from0.25to2, with unchanged actor parameters. The first attempted
+warm JSON used the wrong `temperature` key and was rejected; the failed
+`flight-source` and original JSON are retained. `keep-grenades-warm-v2.json`
+uses the actual `categorical_temperature` contract.
+
+Primed grenade continuation passed: source root125, GunFrame11, no released
+projectile yet. Its native in-hand explosion at serverframe142 (gameframe144,
+mod24, HP100to41) is reproduced exactly. The latest engine repeat is
+`prime-source-v4`, `prime-branch-v4`, `prime-proof-v4.json`:30decisions,
+26130matching features, exact action/sample/native-step receipts and the
+matching explosion/damage record.
+
+Flying grenade initially failed: source root116 has observed `hand_grenade`
+entity67 already in flight. Loaded player recoil changed from[1,0,-1.5]to
+[0,0,-0.25], causing feature811tochange. The normal `ClientBegin` called
+`ClientEndServerFrame` a second time and consumed saved view/damage feedback.
+The opt-in bound-fragment begin now preserves the complete saved playerstate
+and publishes only its native inventory packet. Simply skipping end-frame
+first exposed the transport's missing inventory cache; this failed engine-v3
+run is retained. Engine-v4 rebuilds that transport cache with `InventoryMessage`
+without modifying playerstate. Ordinary nonfragment begin remains unchanged.
+
+Flying continuation now passes on the latest engine:
+`flight-source-116-v4`, `flight-branch-116-v4`, `flight-proof-v4.json`.
+All30decisions/871features, samples, commands and6native effect records match.
+Both current-engine primed/flying proofs pass; CMake game build succeeded.
+`engine-v4/engine.json` and `native-sources.json` pin its actual binaries/source.
+
+Added explicit fragment sampling streams while retaining the same frozen
+model bytes/version. `hjepa_sampling_checkpoint_v2` carries a nonzero stream;
+v1/default stream0 preserves all original draws. A domain-separated SHA256
+derives primitive and weapon draw seeds from each frozen base seed and stream.
+The density/distribution is unchanged. `Sample.sampling_seed` stays the model's
+base seed; exact replay additionally requires the logical checkpoint identity
+and stream. Nested captures retain both. Runtime configuration is explicitly
+`test.checkpoint_sampling_stream` and is allowed only for combat restore.
+The restore receipt records it; exact-continuation proof refuses mismatched
+streams rather than confusing a fork with a replay.
+
+Policy tests cover unchanged model identity/density, different primitive AND
+weapon draws, same-stream replay across native sessions, nested continuation,
+and invalid stream rejection. Native branches under `forks/` use streams0,1,2,
+and1again. Stream0 passes source continuation equality. Different streams1/2
+share identical871root features and produce27different comparable proposals.
+Stream1 has27sampled decisions before `system2_noncombat` control transfer;
+stream2 has30before the horizon. The verifier now records that boundary and
+never labels the subsequent rules tail as neural samples. The full30native
+steps remain verified. Repeat stream1 reproduces all30native steps/features,
+its27sampled decisions and native effects exactly.
+
+`forks/different-stream-proof-v2.json` and `repeat-stream-proof.json` bind model,
+source package, streams, raw captures and actual Go actor/density/draw replay.
+The original fixed30-neural-row proof failed at transfer step27 and is retained
+as `different-stream-proof.json`. `forks/source-manifest.json` binds the frozen
+Go/PS collection sources; fingerprints were unchanged during collection.
+Final `go test ./...` and `git diff --check` passed. U1 hash unchanged.
+
+Next: typed fragment transition exports, explicit terminal/control-transfer/
+horizon handling and delayed-effect targets, then training on genuine TRAIN
+banks with the full learned weapon head and fresh full-battle validation.
+The current keep-equipped diagnostic probes must not become training labels.
+
+
+## Typed TRAIN fragments and first joint CUDA update
+
+The distinct `hjepa_native_fragment_v2` export carries actual and logical
+sampling identities, frozen model/package/plan hashes, 871 observations and
+next observations, actor logits, primitive/weapon log probabilities, proposals,
+sent commands, interventions and causally joined native damage receipts.
+A horizon or a transfer to another controller remains a truncation requiring
+bootstrap; it cannot silently become a terminal with zero tail value. Raw
+fragments are never optimizer-ready. The existing full-episode loader is not
+used for these fragments. Diagnostic keep-equipped grenade captures remain
+excluded from training.
+
+`q2hjepa-fragment-proof --export-fragment` verifies a registered TRAIN condition
+plan and its exact generated fixture plus native start receipt. The plan
+specifies the condition; the frozen full learned H-JEPA actor is bound separately
+by capture/model hashes. Its primitive and weapon decisions are independently
+replayed in Go. A separate `--credit-prefix/--credit-tail/--credit-out` operation
+requires a longer continuation of the SAME source root, behavior model and draw
+stream. It compares the entire short prefix, allowing only process-local
+receipt identities and horizon markers to differ. Native death or closure of
+the nonspawning initial monster roster establishes the tail value; unresolved
+tails are rejected. Pre-root monster deaths are selected by causal native step
+end, not damage-event frame alone. Rewards are
+`100goal-100death+10capped_progress-.1received-self-.5team_v1`.
+
+Pilot root: `workspace/artifacts/fragment-train-20261116-221723`.
+The sole TRAIN condition is registry offset 511, base1 soldier site 017 random
+roster. Offset 520 was rejected before collection because TRAIN has only 512
+registered offsets. `source-0` captures before decision 110. Independent native
+branches `branch-0-1` and `branch-0-2` supply 30 sampled decisions each. Their
+longer same-stream continuations `tail-0-1` and `tail-0-2` reproduce those short
+prefixes exactly and clear the initial roster after 82 and 66 neural decisions.
+The authoritative exports are `v2-prefix-{1,2}.json`, `v2-tail-{1,2}.json` and
+`v2-targets-{1,2}.json`; older prototype v1 files are retained but not consumed.
+Root returns are 101.75454545454544 and 102.65454545454544. This is ONE checkpoint
+family with two stochastic streams, not 60 independent worlds.
+
+`scripts/train_combat_hjepa_fragments.py` performs bounded CUDA float64 joint
+primitive/weapon PPO with an independent-stream return baseline, masked weapon
+categorical probabilities, clipped ratios, gradient clipping and mean-KL-limited
+backtracking. It updates the first encoder, primitive actor/log std and separate
+weapon actor; auxiliary world heads are frozen. TRAIN source hashes, unique
+family/stream keys and exact initial Go/CUDA logits/density are admission gates.
+The first update used RTX 5070, 60 decisions, mean KL 0.006300208329442129 and
+step scale 0.015625. `fit-1/model.json` SHA256:
+`5a0edb132a2816935fd0e5244c0c973e793062da3d4df473f9ef739889e959bf`.
+Go/CUDA actor and weapon parity both passed (maximum absolute error
+2.6645352591003757e-15); initial joint density error was 1.0125233984581428e-13.
+Direct two-update training and one-update-plus-resume produced byte-identical
+models (`resume-check.json`). Fit-1 was fixed as the candidate before validation;
+fit-2 only checks deterministic resume. No live model was replaced.
+
+Fresh validation offset 448 failed during condition generation before gameplay
+(city1 soldier-ss actor overlap after 128 attempts); it is not a model loss.
+Offset 449 generated 16 worlds across base1/base2/base3/bunk1/ware1/jail1/hangar1/
+city1. Parent and fit-1 use deterministic mean primitives/greedy weapon in this
+screen. Their 32 native captures are valid: parent 1 win / 10 deaths / 5 timeouts,
+1059 received HP and 73 self HP; candidate 2 wins / 9 deaths / 5 timeouts,
+1026 received HP and 72 self HP. This small screen is not promotion evidence.
+The first U1 comparison launcher erroneously specified legacy_v1; U1 declares
+stock_weapons_fire_v1 and correctly rejected that mismatch before gameplay.
+Failed reports remain under `screen-449/native/u1`. Corrected U1 and rules
+comparisons use fresh `screen-449/baselines-corrected` output.
