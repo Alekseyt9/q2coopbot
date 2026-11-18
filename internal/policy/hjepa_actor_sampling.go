@@ -12,10 +12,11 @@ const HJEPAActorDistribution = "hjepa_primitive_distribution_v1"
 const HJEPAActorSampleVersion = "hjepa_primitive_sample_v1"
 
 type HJEPAActorSampling struct {
-	Version     string    `json:"version"`
-	Seed        int64     `json:"seed"`
-	LogStd      []float64 `json:"log_std"`
-	Temperature float64   `json:"categorical_temperature"`
+	FireTemperature *float64  `json:"fire_temperature,omitempty"` // nil preserves the legacy shared categorical temperature
+	Version         string    `json:"version"`
+	Seed            int64     `json:"seed"`
+	LogStd          []float64 `json:"log_std"`
+	Temperature     float64   `json:"categorical_temperature"`
 }
 
 func validateHJEPAActorSampling(f HJEPAFile) error {
@@ -26,6 +27,9 @@ func validateHJEPAActorSampling(f HJEPAFile) error {
 	if s.Version != HJEPAActorDistribution || s.Seed < 0 || len(s.LogStd) != 4 || f.Planner != "bc" || len(f.Motor) != 0 || f.WeaponOptionFrames != 0 ||
 		math.IsNaN(s.Temperature) || math.IsInf(s.Temperature, 0) || s.Temperature < .05 || s.Temperature > 5 {
 		return fmt.Errorf("invalid H-JEPA primitive sampling contract")
+	}
+	if t := hFireTemperature(*s); math.IsNaN(t) || math.IsInf(t, 0) || t < .05 || t > 5 {
+		return fmt.Errorf("invalid H-JEPA fire temperature")
 	}
 	for _, v := range s.LogStd {
 		if math.IsNaN(v) || math.IsInf(v, 0) || v < -10 || v > 1 {
@@ -47,7 +51,18 @@ func hActorUniform(seed int64, id Identity, stream int) float64 {
 }
 
 func hActorProbabilities(raw []float64, temperature float64) (float64, [3]float64) {
-	x := raw[4] / temperature
+	return hActorProbabilitiesWithFire(raw, temperature, temperature)
+}
+
+func hFireTemperature(cfg HJEPAActorSampling) float64 {
+	if cfg.FireTemperature != nil {
+		return *cfg.FireTemperature
+	}
+	return cfg.Temperature
+}
+
+func hActorProbabilitiesWithFire(raw []float64, temperature, fireTemperature float64) (float64, [3]float64) {
+	x := raw[4] / fireTemperature
 	fire := 0.
 	if x >= 0 {
 		fire = 1 / (1 + math.Exp(-x))
@@ -84,7 +99,7 @@ func hActorLogProbability(raw []float64, cfg HJEPAActorSampling, sample Sample) 
 		d := (z - raw[i]) / math.Exp(cfg.LogStd[i])
 		lp += -.5*d*d - cfg.LogStd[i] - .5*math.Log(2*math.Pi)
 	}
-	x := raw[4] / cfg.Temperature
+	x := raw[4] / hFireTemperature(cfg)
 	if sample.Attack {
 		lp += hLogSigmoid(x)
 	} else {
@@ -109,14 +124,14 @@ func (p *HJEPA) samplePrimitive(o Observation, raw []float64) ([]float64, *Sampl
 		return nil, nil, err
 	}
 	sample := &Sample{Version: HJEPAActorSampleVersion, SamplingSeed: cfg.Seed}
-	drawSeed := p.samplingSeed(cfg.Seed)
+	drawSeed := p.samplingSeed(cfg.Seed, o.Identity)
 	for i := range sample.Latent {
 		u, v := hActorUniform(drawSeed, samplingID, 2*i), hActorUniform(drawSeed, samplingID, 2*i+1)
 		noise := math.Sqrt(-2*math.Log(u)) * math.Cos(2*math.Pi*v)
 		sample.Latent[i] = raw[i] + math.Exp(cfg.LogStd[i])*noise
 	}
-	fire, pose := hActorProbabilities(raw, cfg.Temperature)
-	sample.Attack = hActorUniform(drawSeed, samplingID, 8) < fire
+	fire, pose := hActorProbabilitiesWithFire(raw, cfg.Temperature, hFireTemperature(*cfg))
+	sample.Attack = hActorUniform(p.fireSamplingSeed(cfg.Seed, o.Identity), samplingID, 8) < fire
 	u := hActorUniform(drawSeed, samplingID, 9)
 	for i, prob := range pose {
 		sample.Vertical = i

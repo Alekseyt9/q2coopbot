@@ -65,6 +65,7 @@ type ConfigFile struct {
 		CheckpointRestore                  string                `json:"checkpoint_restore"`
 		CheckpointMode                     string                `json:"checkpoint_mode"`
 		CheckpointSamplingStream           *int64                `json:"checkpoint_sampling_stream"`
+		CheckpointSamplingScope            string                `json:"checkpoint_sampling_scope"`
 		DisableProjectileLead              bool                  `json:"disable_projectile_lead"`
 		ProjectileComparison               bool                  `json:"projectile_comparison"`
 		CombatBarrier                      bool                  `json:"combat_barrier"`
@@ -198,6 +199,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.CheckpointControl = resolve(file.Test.CheckpointControl)
 	cfg.CheckpointRestore, cfg.CheckpointMode = resolve(file.Test.CheckpointRestore), file.Test.CheckpointMode
 	cfg.CheckpointSamplingStream = file.Test.CheckpointSamplingStream
+	cfg.CheckpointSamplingScope = file.Test.CheckpointSamplingScope
 	cfg.FramePaced, cfg.GameFrames = file.Run.FramePaced, file.Run.GameFrames
 	cfg.ConnectReadyFile, cfg.ConnectReleaseFile = resolve(file.Run.ConnectReadyFile), resolve(file.Run.ConnectReleaseFile)
 	if file.Run.Mode != "" && file.Run.Mode != "companion" && file.Run.Mode != "campaign" {

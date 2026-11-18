@@ -86,12 +86,16 @@ func (b *combatControl) captureCombatCheckpoint(root policy.Identity, previous q
 }
 
 func (s combatCheckpoint) validate() error {
+	if err := s.Sampling.Validate(); err != nil {
+		return err
+	}
 	prior := s.Root
 	prior.Frame--
 	if s.Version != combatCheckpointVersion || s.Root.Frame < 2 || s.LastHealth <= 0 || s.Memory.Anchor != prior ||
 		s.Sampling.Source.Map != s.Root.Map || s.Sampling.Source.Actor != s.Root.Actor || s.Sampling.Source.Life != s.Root.Life ||
 		s.Engagement.Identity != prior || len(s.Engagement.Known) > 256 ||
-		s.Engagement.LastSeen > prior.Frame || s.Engagement.LastSeen < prior.Frame-policy.ThreatMemoryFrames {
+		s.Engagement.LastSeen > prior.Frame ||
+		(s.Engagement.LastSeen < prior.Frame-policy.ThreatMemoryFrames && !(len(s.Engagement.Known) == 0 && s.Engagement.LastSeen == 0)) {
 		return fmt.Errorf("combat checkpoint root/prefix/engagement mismatch")
 	}
 	if _, _, err := policy.RestoreObservationMemory(s.Memory, prior); err != nil {
@@ -121,8 +125,8 @@ func (s combatCheckpoint) validate() error {
 // restoreCombatCheckpoint prepares a fresh controller for its first decision.
 // Native root remains positive, while its last-observed prefix may end at zero.
 // Current entities, inventory, HP and cached observations are not restored here.
-func (b *combatControl) restoreCombatCheckpoint(s combatCheckpoint, native policy.Identity, fork ...int64) (quake.UserCmd, error) {
-	if len(fork) > 1 || len(fork) == 1 && (fork[0] < 0 || fork[0] > 2147483647) {
+func (b *combatControl) restoreCombatCheckpoint(s combatCheckpoint, native policy.Identity, fork ...policy.HJEPASamplingCheckpoint) (quake.UserCmd, error) {
+	if len(fork) > 1 || len(fork) == 1 && (fork[0].Model != s.Sampling.Model || fork[0].Source != s.Sampling.Source || fork[0].Validate() != nil) {
 		return quake.UserCmd{}, fmt.Errorf("invalid combat sampling stream")
 	}
 	if err := s.validate(); err != nil {
@@ -146,6 +150,9 @@ func (b *combatControl) restoreCombatCheckpoint(s combatCheckpoint, native polic
 		return r
 	}
 	engagement := combatEngagement{identity: prior, known: make(map[int]string), lastSeen: native.Frame - (s.Root.Frame - s.Engagement.LastSeen)}
+	if len(s.Engagement.Known) == 0 && s.Engagement.LastSeen == 0 {
+		engagement.lastSeen = 0
+	}
 	for id, class := range s.Engagement.Known {
 		engagement.known[id] = class
 	}
@@ -161,8 +168,7 @@ func (b *combatControl) restoreCombatCheckpoint(s combatCheckpoint, native polic
 	}
 	// Mutate the provider only after all other validations have succeeded.
 	if len(fork) == 1 {
-		s.Sampling.Stream = fork[0]
-		s.Sampling.Version = policy.HJEPASamplingBranchCheckpointVersion
+		s.Sampling = fork[0]
 	}
 	if err := p.RestoreSamplingCheckpoint(s.Sampling, native); err != nil {
 		return quake.UserCmd{}, err

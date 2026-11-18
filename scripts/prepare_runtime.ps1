@@ -99,7 +99,7 @@ function Install-RuntimeImmutable([string]$Source, [string]$Target, [string]$Poo
 # NTFS permits only 1024 links per file. Shared immutable PAK shards avoid a
 # private 184MB copy per episode once the original archive reaches that limit.
 function Install-RuntimePak([string]$Source, [string]$Target, [string]$PoolRoot) {
-    # A path failure must not trigger copies of 32 shared shards. Shards solve
+    # A path failure must not trigger copies of 64 shared shards. Shards solve
     # the NTFS link-count limit, not overlong paths.
     if ([IO.Path]::GetFullPath($Target).Length -ge 260) {
         throw "Runtime hard-link path exceeds native Windows limit; use a shorter artifact root: $Target"
@@ -113,7 +113,7 @@ function Install-RuntimePak([string]$Source, [string]$Target, [string]$PoolRoot)
     $digest = Get-RuntimeImmutableHash $Source
     $pool = Join-Path $PoolRoot $digest
     New-Item -ItemType Directory -Path $pool -Force | Out-Null
-    foreach ($index in 0..31) {
+    foreach ($index in 0..63) {
         $anchor = Join-Path $pool "asset-$index.pak"
         if (-not (Test-Path -LiteralPath $anchor)) {
             $temporary = Join-Path $pool ([guid]::NewGuid().ToString('N') + '.tmp')

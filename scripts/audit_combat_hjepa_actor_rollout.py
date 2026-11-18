@@ -35,7 +35,7 @@ def main():
             maximum['raw_actor']=max(maximum['raw_actor'],float((raw-torch.tensor(row['actor_raw'],dtype=torch.float64)).abs().max()))
             latent=torch.tensor(s['latent'],dtype=torch.float64);log_std=torch.tensor(cfg['log_std'],dtype=torch.float64)
             lp=(-.5*((latent-raw[:4])/log_std.exp()).square()-log_std-.5*math.log(2*math.pi)).sum()
-            fire=raw[4]/cfg['categorical_temperature'];lp+=F.logsigmoid(fire if s['attack'] else -fire)
+            fire=raw[4]/(cfg.get('fire_temperature') if cfg.get('fire_temperature') is not None else cfg['categorical_temperature']);lp+=F.logsigmoid(fire if s['attack'] else -fire)
             lp+=F.log_softmax(raw[5:]/cfg['categorical_temperature'],0)[s['vertical']]
             maximum['primitive_log_probability']=max(maximum['primitive_log_probability'],abs(float(lp)-row['primitive_log_probability']))
             if row['source']!=current_source:

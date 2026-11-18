@@ -182,7 +182,8 @@ func verify(source, branch string, n int) (map[string]any, error) {
 	if err := json.Unmarshal(capture.Combat, &state); err != nil {
 		return nil, err
 	}
-	if restore.Combat.SamplingStream != state.Sampling.Stream {
+	rootActionEquivalent := (restore.Combat.SamplingScope == policy.HJEPASamplingRootFireScope || restore.Combat.SamplingScope == policy.HJEPASamplingRootJointScope) && state.Sampling.Scope == "" && state.Sampling.Stream == 0
+	if (restore.Combat.SamplingStream != state.Sampling.Stream || restore.Combat.SamplingScope != state.Sampling.Scope) && !rootActionEquivalent {
 		return nil, fmt.Errorf("different draw streams require fragment evaluation, not exact continuation proof")
 	}
 	if load.LoadAnchor.ID != capture.ID || load.LoadAnchor.Boundary != capture.Boundary || load.LoadAnchor.Map != capture.Map ||
@@ -279,6 +280,8 @@ func main() {
 	n := flag.Int("frames", 30, "decisions to compare")
 	other := flag.String("other-branch", "", "compare two explicitly configured fragment sampling streams")
 	same := flag.Bool("same-stream", false, "require a repeat of the same fragment stream")
+	rootOnly := flag.Bool("root-only", false, "compare original source and loaded root features for any sampling stream")
+	rootStreams := flag.Bool("root-fire-streams", false, "select two sampled root fire actions; action-stratified, not IID training data")
 	export := flag.String("export-fragment", "", "fresh typed fragment JSON; diagnostic unless a verified TRAIN plan is supplied")
 	plan := flag.String("plan", "", "condition plan required for TRAIN fragment admission")
 	repo := flag.String("repo", ".", "repository root for condition plan verification")
@@ -286,6 +289,16 @@ func main() {
 	creditTail := flag.String("credit-tail", "", "longer same-stream TRAIN continuation")
 	creditOut := flag.String("credit-out", "", "fresh target JSON")
 	flag.Parse()
+	if *rootStreams {
+		r, err := selectRootFireStreams(*source)
+		if err != nil {
+			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"accepted": false, "reason": err.Error()})
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		_ = json.NewEncoder(os.Stdout).Encode(r)
+		return
+	}
 	if *creditPrefix != "" || *creditTail != "" || *creditOut != "" {
 		if *creditPrefix == "" || *creditTail == "" || *creditOut == "" {
 			fmt.Fprintln(os.Stderr, "credit-prefix,credit-tail,credit-out required")
@@ -300,13 +313,19 @@ func main() {
 		_ = json.NewEncoder(os.Stdout).Encode(r)
 		return
 	}
-	if *source == "" || *branch == "" || *n < 2 || *n > 100 {
-		fmt.Fprintln(os.Stderr, "source,branch and2..100frames required")
+	minimumFrames := 2
+	if *export != "" || *rootOnly {
+		minimumFrames = 1
+	}
+	if *source == "" || *branch == "" || *n < minimumFrames || *n > 500 {
+		fmt.Fprintf(os.Stderr, "source,branch and %d..500 frames required\n", minimumFrames)
 		os.Exit(2)
 	}
 	var r map[string]any
 	var err error
-	if *export != "" {
+	if *rootOnly {
+		r, err = verifySourceRoot(*source, *branch)
+	} else if *export != "" {
 		r, err = exportFragment(*source, *branch, *export, *plan, *repo, *n)
 	} else if *other != "" {
 		r, err = verifyForkPair(*source, *branch, *other, *n, *same)

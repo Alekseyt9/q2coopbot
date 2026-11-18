@@ -70,20 +70,23 @@ func replayFork(source, branch string, n int) (forkData, error) {
 		} `json:"combat"`
 		Test struct {
 			Stream *int64 `json:"checkpoint_sampling_stream"`
+			Scope  string `json:"checkpoint_sampling_scope"`
 		} `json:"test"`
 	}
 	if err := read(filepath.Join(branch, "bot-config.json"), &config); err != nil {
 		return result, err
 	}
-	if config.Test.Stream == nil || *config.Test.Stream != receipt.Combat.SamplingStream {
+	if config.Test.Stream == nil || *config.Test.Stream != receipt.Combat.SamplingStream || config.Test.Scope != receipt.Combat.SamplingScope {
 		return result, fmt.Errorf("fork stream not explicitly bound by config")
 	}
 	p, err := policy.LoadHJEPA(config.Combat.Provider)
 	if err != nil {
 		return result, err
 	}
-	state.Sampling.Stream = *config.Test.Stream
-	state.Sampling.Version = policy.HJEPASamplingBranchCheckpointVersion
+	state.Sampling, err = state.Sampling.WithStream(*config.Test.Stream, config.Test.Scope)
+	if err != nil {
+		return result, err
+	}
 	if err := p.RestoreSamplingCheckpoint(state.Sampling, receipt.Combat.Root); err != nil {
 		return result, err
 	}
@@ -161,7 +164,7 @@ func verifyForkPair(source, branch, other string, n int, same bool) (map[string]
 	if err != nil {
 		return nil, err
 	}
-	if a.sourceID != b.sourceID || a.model != b.model || (a.stream == b.stream) != same {
+	if a.sourceID != b.sourceID || a.model != b.model || a.sampling.Scope != b.sampling.Scope || (a.stream == b.stream) != same {
 		return nil, fmt.Errorf("fork source/model/stream comparison mismatch")
 	}
 	if same && (a.policyCount != b.policyCount || a.boundary != b.boundary || a.validatedCount != b.validatedCount) {
@@ -188,6 +191,13 @@ func verifyForkPair(source, branch, other string, n int, same bool) (map[string]
 		if i <= count {
 			px, py := *x.Combat.Selection.Candidate, *y.Combat.Selection.Candidate
 			px.Identity = py.Identity
+			if i == 1 && (a.sampling.Scope == policy.HJEPASamplingFireOnlyScope || a.sampling.Scope == policy.HJEPASamplingRootFireScope) {
+				px.Attack = py.Attack
+				if px != py || x.Combat.Selection.Sample.Latent != y.Combat.Selection.Sample.Latent || x.Combat.Selection.Sample.Vertical != y.Combat.Selection.Sample.Vertical || x.Combat.Selection.Sample.Weapon != y.Combat.Selection.Sample.Weapon {
+					return nil, fmt.Errorf("fire-only fork changed non-fire root proposal/draws")
+				}
+				px.Attack = x.Combat.Selection.Candidate.Attack
+			}
 			if px != py {
 				differences++
 			}
@@ -208,5 +218,5 @@ func verifyForkPair(source, branch, other string, n int, same bool) (map[string]
 	for p, h := range b.hashes {
 		a.hashes[p] = h
 	}
-	return map[string]any{"accepted": true, "proof": "native_hjepa_fragment_fork_v1", "same_stream_repeat": same, "streams": []int64{a.stream, b.stream}, "requested_native_frames": n, "validated_native_frames": []int{a.validatedCount, b.validatedCount}, "sampled_policy_decisions": []int{a.policyCount, b.policyCount}, "policy_boundaries": []string{a.boundary, b.boundary}, "proposal_differences": differences, "root_features_equal": 871, "exact_actor_and_density_replay": true, "native_single_steps_verified": a.validatedCount + b.validatedCount, "model": a.model, "source_checkpoint_id": a.sourceID, "input_sha256": a.hashes, "fragment_training": false, "promotion": false}, nil
+	return map[string]any{"accepted": true, "proof": "native_hjepa_fragment_fork_v1", "sampling_scope": a.sampling.Scope, "root_non_fire_draws_equal": a.sampling.Scope == policy.HJEPASamplingFireOnlyScope || a.sampling.Scope == policy.HJEPASamplingRootFireScope, "future_policy_rng_common": a.sampling.Scope == policy.HJEPASamplingRootFireScope || a.sampling.Scope == policy.HJEPASamplingRootJointScope, "same_stream_repeat": same, "streams": []int64{a.stream, b.stream}, "requested_native_frames": n, "validated_native_frames": []int{a.validatedCount, b.validatedCount}, "sampled_policy_decisions": []int{a.policyCount, b.policyCount}, "policy_boundaries": []string{a.boundary, b.boundary}, "proposal_differences": differences, "root_features_equal": 871, "exact_actor_and_density_replay": true, "native_single_steps_verified": a.validatedCount + b.validatedCount, "model": a.model, "source_checkpoint_id": a.sourceID, "input_sha256": a.hashes, "fragment_training": false, "promotion": false}, nil
 }

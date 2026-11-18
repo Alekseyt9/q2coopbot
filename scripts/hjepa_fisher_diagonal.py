@@ -19,14 +19,16 @@ def fisher_diagonal(model, features):
     inputs, raw = [], features
     for module in sequence:
         inputs.append(raw);raw = module(raw)
-    if raw.shape[1] != 8 or model.log_std.numel() != 4 or model.temperature <= 0:
+    fire_temperature = getattr(model, 'fire_temperature', None)
+    fire_temperature = model.temperature if fire_temperature is None else fire_temperature
+    if raw.shape[1] != 8 or model.log_std.numel() != 4 or model.temperature <= 0 or fire_temperature <= 0:
         raise ValueError('primitive distribution shape')
     count = len(features)
     metric = raw.new_zeros((count,8,8))
     axis = torch.arange(4,device=raw.device)
     metric[:,axis,axis] = model.log_std.mul(-2).exp()
-    fire = (raw[:,4]/model.temperature).sigmoid()
-    metric[:,4,4] = fire*(1-fire)/(model.temperature**2)
+    fire = (raw[:,4]/fire_temperature).sigmoid()
+    metric[:,4,4] = fire*(1-fire)/(fire_temperature**2)
     pose = (raw[:,5:]/model.temperature).softmax(-1)
     metric[:,5:,5:] = (torch.diag_embed(pose)-pose[:,:,None]*pose[:,None,:])/(model.temperature**2)
     jacobian = torch.eye(8,dtype=raw.dtype,device=raw.device).expand(count,-1,-1)

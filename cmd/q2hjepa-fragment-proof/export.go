@@ -27,6 +27,13 @@ func exportFragment(source, branch, out, planPath, repo string, n int) (map[stri
 		return nil, fmt.Errorf("sampled actor required")
 	}
 	f := learningenv.Fragment{Version: learningenv.FragmentVersion, Split: "diagnostic", Family: fork.sourceID, Model: fork.model, BaseSeed: model.PrimitiveSampling.Seed, Sampling: fork.sampling, NativeRoot: fork.nativeRoot, SourceSHA256: fork.hashes}
+	if fork.sampling.Scope == policy.HJEPASamplingFireOnlyScope {
+		f.Version = learningenv.FragmentFireVersion
+	} else if fork.sampling.Scope == policy.HJEPASamplingRootFireScope {
+		f.Version = learningenv.FragmentRootFireVersion
+	} else if fork.sampling.Scope == policy.HJEPASamplingRootJointScope {
+		f.Version = learningenv.FragmentRootJointVersion
+	}
 	f.SourceDirectory, f.BranchDirectory, f.ModelPath = source, branch, fork.modelPath
 	if planPath != "" {
 		if err := trainingepisodes.VerifyPlan(planPath, repo); err != nil {

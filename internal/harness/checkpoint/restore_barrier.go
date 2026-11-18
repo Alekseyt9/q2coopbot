@@ -23,6 +23,7 @@ type RestoreReceipt struct {
 }
 
 type CombatRestoreReceipt struct {
+	SamplingScope  string          `json:"sampling_scope,omitempty"`
 	SamplingStream int64           `json:"sampling_stream,omitempty"`
 	Version        string          `json:"version"`
 	Root           policy.Identity `json:"decision_root"`
@@ -58,6 +59,7 @@ func verifyRestoreReceipts(dir string, manifest Manifest, b *Barrier) error {
 				Sampling policy.HJEPASamplingCheckpoint `json:"sampling"`
 			}
 			if json.Unmarshal(source.Combat, &state) != nil || r.Mode != "combat" || r.Combat == nil || len(r.Planner) > 0 || r.RunnerElapsed != nil ||
+				r.Combat.SamplingScope != "" && r.Combat.SamplingScope != policy.HJEPASamplingFireOnlyScope && r.Combat.SamplingScope != policy.HJEPASamplingRootFireScope && r.Combat.SamplingScope != policy.HJEPASamplingRootJointScope ||
 				r.Combat.Version != "hjepa_predecision_restore_v1" || r.Combat.Source != state.Root || r.Combat.Model != state.Sampling.Model ||
 				r.Combat.SamplingStream < 0 || r.Combat.SamplingStream > 2147483647 || r.Combat.PrefixFrame != b.Frame-1 || r.Combat.Root.Map != b.Map || r.Combat.Root.Spawncount != b.Generation ||
 				r.Combat.Root.Frame != b.Frame || r.Combat.Root.Actor != r.SelfEntity || r.Combat.Root.Life != state.Root.Life || r.Combat.Root.Connection < 1 {

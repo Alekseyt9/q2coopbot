@@ -11,6 +11,12 @@ const EquippedWeaponFeatureWidth = ThreatFeatureWidth + 26
 
 var equippedWeaponModels = [...]string{"v_blast", "v_shotg", "v_shotg2", "v_machn", "v_chain", "v_launch", "v_rocket", "v_hyperb", "v_rail", "v_bfg", "v_handgr"}
 
+// EquippedWeaponName normalizes an observed view model or weapon label.
+// Unknown observations remain unknown; inventory never fills this field.
+func EquippedWeaponName(observed string) string {
+	return weaponNames[equippedWeaponIndex(observed)]
+}
+
 func equippedWeaponIndex(name string) int {
 	name = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), "\\", "/"))
 	for index, label := range weaponNames[1:] {

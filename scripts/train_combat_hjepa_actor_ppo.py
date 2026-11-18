@@ -45,24 +45,27 @@ class Actor(nn.Module):
         self.actor = network(model['actor'])
         self.log_std = nn.Parameter(torch.tensor(model['primitive_sampling']['log_std'], dtype=torch.float64))
         self.temperature = model['primitive_sampling']['categorical_temperature']
+        fire_temperature = model['primitive_sampling'].get('fire_temperature')
+        self.fire_temperature = self.temperature if fire_temperature is None else fire_temperature
 
     def forward(self, features):
         return self.actor(self.encoder(features))
 
 
-def log_probability(raw, log_std, latent, attack, vertical, temperature):
+def log_probability(raw, log_std, latent, attack, vertical, temperature, fire_temperature=None):
     normal = (-.5 * ((latent - raw[:, :4]) / log_std.exp()).square()
               - log_std - .5 * math.log(2 * math.pi)).sum(-1)
-    fire = raw[:, 4] / temperature
+    fire = raw[:, 4] / (temperature if fire_temperature is None else fire_temperature)
     pose = F.log_softmax(raw[:, 5:] / temperature, -1)
     return normal + F.logsigmoid(torch.where(attack, fire, -fire)) + pose.gather(1, vertical[:, None])[:, 0]
 
 
-def distribution_kl(old, old_std, new, new_std, temperature):
+def distribution_kl(old, old_std, new, new_std, temperature, fire_temperature=None):
     """KL(old || new), before fixed tanh transform, summed over factors."""
     normal = (new_std - old_std + (old_std.mul(2).exp()
               + (old[:, :4] - new[:, :4]).square()) / (2 * new_std.mul(2).exp()) - .5).sum(-1)
-    old_fire, new_fire = old[:, 4] / temperature, new[:, 4] / temperature
+    fire_temperature = temperature if fire_temperature is None else fire_temperature
+    old_fire, new_fire = old[:, 4] / fire_temperature, new[:, 4] / fire_temperature
     p = old_fire.sigmoid()
     fire = p * (F.logsigmoid(old_fire) - F.logsigmoid(new_fire))
     fire += (1-p) * (F.logsigmoid(-old_fire) - F.logsigmoid(-new_fire))
@@ -206,7 +209,7 @@ def main():
     advantage = tensor([r['advantage'] for r in rows])
     with torch.no_grad():
         raw_error = float((model(x)-old_raw).abs().max())
-        lp_error = float((log_probability(model(x), old_std, latent, attack, vertical, model.temperature)-old_lp).abs().max())
+        lp_error = float((log_probability(model(x), old_std, latent, attack, vertical, model.temperature, model.fire_temperature)-old_lp).abs().max())
     if raw_error > 1e-8 or lp_error > 1e-7:
         raise ValueError('initial Go/CUDA behavior likelihood mismatch')
     history = []
@@ -221,10 +224,10 @@ def main():
 
     def metrics():
         raw = model(x)
-        lp = log_probability(raw, model.log_std, latent, attack, vertical, model.temperature)
+        lp = log_probability(raw, model.log_std, latent, attack, vertical, model.temperature, model.fire_temperature)
         ratio = (lp-old_lp).exp()
         surrogate = torch.minimum(ratio*advantage, ratio.clamp(.9, 1.1)*advantage).mean()
-        kl = distribution_kl(old_raw, old_std, raw, model.log_std, model.temperature)
+        kl = distribution_kl(old_raw, old_std, raw, model.log_std, model.temperature, model.fire_temperature)
         return surrogate, kl.mean(), kl.max(), ((ratio-1).abs() > .1).double().mean()
 
     stopped = False

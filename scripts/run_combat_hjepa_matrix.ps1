@@ -30,6 +30,11 @@ try {
   if($task.seeds.Count -lt 1 -or $task.seeds.Count -gt 4 -or $task.episode.recipe.loadout -notin 'blaster','machinegun','shotgun','weapons','weapons-scarce','weapons-ssg','weapons-grenades-recovery' -or $task.instances.Count -ne $task.seeds.Count){throw 'Matrix requires 1..4 generated supported inventory instances per task'}
   if($DiagnosticWeaponBranches -and $task.split -notin 'train','validation'){throw 'Diagnostic weapon training branches are restricted to TRAIN/validation'}
  }
+ if(@($schedule.tasks|Where-Object {$_.episode.recipe.require_native_objective}).Count){
+  if(!$env:Q2COOPBOT_DIAGNOSTIC_ENGINE_ROOT){throw 'Plan requires native combat objective; explicit capable engine required'}
+  $engine=Get-Content -LiteralPath (Join-Path $env:Q2COOPBOT_DIAGNOSTIC_ENGINE_ROOT 'engine.json') -Raw|ConvertFrom-Json
+  if($engine.capabilities -notcontains 'combat_objective_v1'){throw 'Plan requires native combat objective; engine lacks combat_objective_v1'}
+ }
  if($DiagnosticWeaponBranches){
   $known=@($schedule.tasks|ForEach-Object {$_.seeds})
   foreach($v in $variants){foreach($seed in $v.seeds){if($seed -notin $known){throw 'Diagnostic seed not in verified source plan'}}}
@@ -57,12 +62,12 @@ try {
   $argsMap=@{Workers=$cohort.seeds.Count;EpisodesPerWorker=1;Synchronous=$true;Loadout=$task.episode.recipe.loadout;Mixed=[bool]$task.episode.recipe.mixed;ReleaseGameFrame=100;
    GameFrames=$task.episode.game_frames;Seed=[int]$cohort.seeds[0];Port=$Port+$maxWorkers*($index%$batchSize);Skill=$task.episode.skill;
    CombatMode=$v.mode;StopOnGoal=$true;StopOnFirstDeath=$true;RewardConfig=(Join-Path $repo $task.episode.recipe.reward_config);
-   GeneratedFixtures=$fixture;OutputRoot=$out;BinaryBundle=$bundle}
+   GeneratedFixtures=$fixture;OutputRoot=$out;BinaryBundle=$bundle;RequireNativeObjective=[bool]$task.episode.recipe.require_native_objective}
   if($v.mode -eq 'learned'){$argsMap.ProviderFile=$v.model}
   if($v.contract){$argsMap.ExecutionContract=$v.contract}
   if($v.contract -and $v.contract -ne 'legacy_v1'){$argsMap.CheckedWallSlide=$true}
   $jobFile="$root/job-$index.clixml";$argsMap|Export-Clixml -LiteralPath $jobFile
-  $jobs+=@{index=$index;variant=$v.name;task=$i;seeds=@($cohort.seeds);args=$jobFile;out=$out};$index++
+  $jobs+=@{index=$index;variant=$v.name;task=$i;seeds=@($cohort.seeds);args=$jobFile;out=$out;require_native_objective=[bool]$task.episode.recipe.require_native_objective};$index++
  }}}
  $hostExe=(Get-Process -Id $PID).Path
  # At most sixteen native games, with 1..4 clients per job.
@@ -81,6 +86,7 @@ try {
   foreach($a in $active){
    $r=Get-Content -LiteralPath "$($a.job.out)/report.json" -Raw|ConvertFrom-Json
    if(!$r.provenance_valid -or !$r.capture_complete -or @($r.results|Where-Object {!$_.capture_valid}).Count){throw 'Invalid native matrix capture'}
+   if($a.job.require_native_objective -and @($r.results|Where-Object {!$_.native_objective_required -or ($_.goal_stop -and $_.goal_stop.version -ne 'combat_goal_stop_v2')}).Count){throw 'Required native objective missing from matrix result'}
   }
   Write-Output "Completed matrix jobs $start through $([math]::Min($start+$batchSize-1,$jobs.Count-1))"
  }

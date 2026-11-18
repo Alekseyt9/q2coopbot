@@ -21,8 +21,9 @@ class FisherDiagonal(unittest.TestCase):
     def test_every_parameter_matches_full_autograd_hessian_diagonal(self):
         torch.manual_seed(615)
         x = torch.randn(5,3,dtype=torch.float64)
-        for temperature in [.25,1.]:
+        for temperature,fire_temperature in [(.25,None),(1.,None),(.25,2.)]:
             model = SmallActor(temperature)
+            if fire_temperature is not None:model.fire_temperature = fire_temperature
             diagonal = fisher_diagonal(model,x)
             operator = fisher_operator(model,x,list(model.parameters()),0.)
             reference = torch.empty_like(diagonal)

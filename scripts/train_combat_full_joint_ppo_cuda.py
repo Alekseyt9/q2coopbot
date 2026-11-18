@@ -83,6 +83,10 @@ def main():
     for key in ('model', 'request', 'config', 'out'):
         ap.add_argument('--'+key, type=Path, required=True)
     ap.add_argument('--resume', type=Path)
+    ap.add_argument('--actor-step-limit', type=int,
+                    help='Cap actor attempts for this update without changing checkpoint config or Adam')
+    ap.add_argument('--gae-segment-steps', type=int,
+                    help='Explicit GAE horizon over full native trajectories; temporal context is retained')
     ap.add_argument('--fork-conditional-fire',action='store_true',help='Explicit scope/LR fork preserving all restored Adam states')
     ap.add_argument('--fork-episode-balance',action='store_true',help='Explicit equal battle mass fork preserving full policy Adam/config')
     a = ap.parse_args(); assert not a.out.exists()
@@ -97,12 +101,27 @@ def main():
         assert expected is None or digest == expected, 'Input changed: '+str(path)
         pins[str(path)] = digest
         return path
+    pin(__file__)
+    pin(Path(__file__).with_name('combat_gae_segments.py'))
     model_hash = sha(pin(a.model)); model = read(a.model); config = read(pin(a.config))
     assert config['version'] == (WIDE_SCOPE if model.get('wide_aim') is not None else SCOPE) and 1 <= config['actor_steps'] <= 100 and 1 <= config['value_steps'] <= 100
+    actor_step_limit = config['actor_steps'] if a.actor_step_limit is None else a.actor_step_limit
+    assert 1 <= actor_step_limit <= config['actor_steps'], 'Actor step limit must be within configured budget'
+    schedule = dict(version='combat_actor_step_budget_v1', configured_steps=config['actor_steps'],
+                    explicit_limit=a.actor_step_limit, attempt_limit=actor_step_limit)
     assert 0 < config['gamma'] <= 1 and 0 <= config['lambda'] <= 1 and 0 < config['clip'] <= .3
     assert 0 < config['target_kl'] <= .05 and config['entropy'] >= 0 and config['max_grad_norm'] > 0
     torch.manual_seed(config['seed'])
     checkpoint=torch.load(pin(a.resume),map_location='cuda',weights_only=True) if a.resume else None
+    from combat_gae_segments import VERSION as GAE_SEGMENTS, segment_rows
+    gae_contract = checkpoint.get('gae_contract') if checkpoint else None
+    if gae_contract is not None:
+        assert gae_contract['version'] == GAE_SEGMENTS
+        assert a.gae_segment_steps is None or a.gae_segment_steps == gae_contract['max_steps'], 'Explicit GAE estimator migration required'
+    elif a.gae_segment_steps is not None:
+        gae_contract = dict(version=GAE_SEGMENTS, max_steps=a.gae_segment_steps)
+    if gae_contract is not None:
+        assert type(gae_contract['max_steps']) is int and 1 <= gae_contract['max_steps'] <= 500
     assert checkpoint is None or not checkpoint.get('technical_only'),'Synthetic checkpoint cannot train on games'
     assert not a.fork_conditional_fire or checkpoint is not None
     assert not a.fork_episode_balance or checkpoint is not None
@@ -186,7 +205,8 @@ def main():
         lp_error = float((lp-old).abs().max())
         value_error = float((value[:, 0]-torch.tensor([r['sample']['value'] for r in rows], device='cuda')).abs().max())
         assert lp_error < .003 and value_error < 1e-4 and max(actor_memory, value_memory) < 2e-5
-    adv, returns = advantages(rows, config['gamma'], config['lambda'])
+    credit_rows, gae_report = segment_rows(rows, gae_contract['max_steps']) if gae_contract else (rows, None)
+    adv, returns = advantages(credit_rows, config['gamma'], config['lambda'])
     ad = torch.tensor(adv, device='cuda')
     if episode_report is not None:
         from combat_episode_balance import normalize_advantages
@@ -203,7 +223,7 @@ def main():
         return ((surrogate-config['entropy']*entropy)*loss_weights).mean(), torch.maximum(
             divergence.mean(),(divergence*loss_weights).mean())
     trials = []
-    for _ in range(config['actor_steps']):
+    for _ in range(actor_step_limit):
         loss, kl = objective()
         if float(kl.detach()) > config['target_kl']: break
         assert bool(torch.isfinite(loss))
@@ -233,6 +253,8 @@ def main():
     save(a.out/'weights.json', scope.export())
     cp = scope.snapshot(sha(a.out/'weights.json'), consumed+tokens)
     cp.update(consumed_seeds=sorted(set(old_seeds)|seeds), updates_completed=updates+1,
+              last_update_schedule=schedule,
+              gae_contract=gae_contract, last_update_gae_segments=gae_report,
               parent_checkpoint_sha256=sha(a.resume) if a.resume else None,
               initialization='episode_balance_fork_preserved_full_adam' if a.fork_episode_balance else 'conditional_fire_scope_fork_preserved_full_adam' if a.fork_conditional_fire else 'resumed_full_joint_adam' if a.resume else 'explicit_fresh_full_policy_optimizer_boundary')
     if fire_freeze:cp['conditional_fire_updates_completed']=(0 if a.fork_conditional_fire else checkpoint.get('conditional_fire_updates_completed',0))+1
@@ -252,6 +274,8 @@ def main():
         wide_event_rows=int(wide_data['active'].sum()),wide_selected_rows=int(wide_data['choice'].sum()),
         rows=len(rows), train_seeds=sorted(seeds), updates_completed=updates+1,
         train_request_version=request['version'],condition_subset_sha256=request.get('selection_sha256'),
+        actor_schedule=schedule,
+        gae_contract=gae_contract, gae_segments=gae_report,
         actor_steps=sum(t['accepted'] for t in trials), actor_trials=trials, final_approx_kl=float(final_kl),
         old_log_probability_max_error=lp_error, old_value_max_error=value_error,
         behavior_sha256=model_hash, weights_sha256=sha(a.out/'weights.json'), checkpoint_sha256=sha(a.out/'checkpoint.pt'),

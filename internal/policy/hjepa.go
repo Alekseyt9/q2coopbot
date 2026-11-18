@@ -16,6 +16,9 @@ import (
 
 const HJEPAKind = "combat_hjepa_v1"
 
+// An opt-in control boundary, bound to the model hash and sampling checkpoints.
+const HJEPAFullEncounterScope = "full_encounter_v1"
+
 type HJEPALevel struct {
 	Stride    int          `json:"stride"`
 	Encoder   []DenseLayer `json:"encoder"`
@@ -23,6 +26,7 @@ type HJEPALevel struct {
 	Utility   []DenseLayer `json:"utility"`
 }
 type HJEPAFile struct {
+	OwnershipScope     string              `json:"ownership_scope,omitempty"`
 	PrimitiveSampling  *HJEPAActorSampling `json:"primitive_sampling,omitempty"`
 	WorldActionSpace   string              `json:"world_action_space,omitempty"` // explicit predictor inputs; empty preserves historical files
 	WeaponHead         string              `json:"weapon_head,omitempty"`
@@ -72,6 +76,10 @@ func (p *HJEPA) LastSample() *Sample { return p.lastSample }
 func (h *HJEPA) KeepsEquippedWeapon() bool { return h.file.WeaponMode == "keep_equipped_v1" }
 
 func (h *HJEPA) WeaponHeadVersion() string { return h.file.WeaponHead }
+
+// OwnsFullEncounter keeps inference active on empty observations. Episode
+// completion remains the caller's responsibility, not privileged model input.
+func (h *HJEPA) OwnsFullEncounter() bool { return h.file.OwnershipScope == HJEPAFullEncounterScope }
 func (h *HJEPA) SupportsInventory() bool {
 	return h.KeepsEquippedWeapon() || h.file.WeaponHead == WeaponHeadVersion
 }
@@ -179,6 +187,9 @@ func LoadHJEPA(path string) (*HJEPA, error) {
 	}
 	if f.WorldActionSpace != "" && f.WorldActionSpace != "proposed_primitive_v1" {
 		return nil, fmt.Errorf("unsupported H-JEPA world action space")
+	}
+	if f.OwnershipScope != "" && f.OwnershipScope != HJEPAFullEncounterScope {
+		return nil, fmt.Errorf("unsupported H-JEPA ownership scope")
 	}
 	if f.Planner != "" && f.Planner != "hierarchy" && f.Planner != "flat" && f.Planner != "bc" && f.Planner != "sequence" {
 		return nil, fmt.Errorf("unsupported H-JEPA planner")
@@ -531,7 +542,7 @@ func (p *HJEPA) chooseWeapon(o Observation, features []float64) (int, error) {
 		key, _ := json.Marshal(struct {
 			Seed     int64
 			Identity Identity
-		}{p.samplingSeed(*p.file.WeaponSamplingSeed), samplingID})
+		}{p.samplingSeed(*p.file.WeaponSamplingSeed, o.Identity), samplingID})
 		h := sha256.Sum256(key)
 		u := float64(binary.LittleEndian.Uint64(h[:8])>>11) / float64(uint64(1)<<53)
 		for i, v := range probs {

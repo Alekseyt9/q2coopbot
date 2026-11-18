@@ -16,6 +16,9 @@ import (
 )
 
 const CombatPreDecisionBoundary = "combat_predecision_v1"
+const HandGrenadePrimedPhase = "hand_grenade_primed_v1"
+const EquippedWeaponPhase = "equipped_weapon_v1"
+const WeaponTriggerPhase = "weapon_trigger_phase_v1"
 
 // Atomic control publication can briefly deny readers on Windows. This is
 // neither a malformed request nor permission to dispatch the pending command.
@@ -32,6 +35,8 @@ type Barrier struct {
 	Controls   []string `json:"controls"`
 }
 type CaptureRequest struct {
+	Weapon     string `json:"weapon,omitempty"` // canonical observed-weapon predicate; cleared when resolved
+	Phase      string `json:"phase,omitempty"`  // source-side observed phase; resolved captures use an exact frame with empty Phase
 	Boundary   string `json:"boundary,omitempty"`
 	Version    int    `json:"version"`
 	ID         string `json:"id"`
@@ -63,10 +68,30 @@ func WriteCapture(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	if err = os.WriteFile(path+".tmp", data, 0600); err != nil {
+	pending, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(path+".tmp", path)
+	name := pending.Name()
+	defer os.Remove(name)
+	if _, err = pending.Write(data); err != nil {
+		pending.Close()
+		return err
+	}
+	if err = pending.Close(); err != nil {
+		return err
+	}
+	// A polling reader may omit FILE_SHARE_DELETE. Keep the complete old
+	// request visible until atomic replacement succeeds; never truncate it.
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for {
+		err = os.Rename(name, path)
+		transient := ControlSharingError(err) || runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(5))
+		if err == nil || !transient || !time.Now().Before(deadline) {
+			return err
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
 
 func (b Barrier) validate() error {

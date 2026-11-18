@@ -10,6 +10,9 @@ import (
 )
 
 const FragmentVersion = "hjepa_native_fragment_v2"
+const FragmentFireVersion = "hjepa_native_fragment_v3"
+const FragmentRootFireVersion = "hjepa_native_fragment_v4"
+const FragmentRootJointVersion = "hjepa_native_fragment_v5"
 const FragmentTransitionVersion = "hjepa_native_fragment_transition_v2"
 
 // Fragment is a conditional rollout from one exact native checkpoint. It is
@@ -57,16 +60,19 @@ type FragmentTransition struct {
 }
 
 func (f Fragment) Validate() error {
-	if f.Version != FragmentVersion || f.SourceDirectory == "" || f.BranchDirectory == "" || len(f.SourceSHA256[f.ModelPath]) != 64 || f.Family == "" || f.Model == "" || f.Sampling.Model != f.Model ||
+	version := f.Version == FragmentVersion && f.Sampling.Scope == "" || f.Version == FragmentFireVersion && f.Sampling.Scope == policy.HJEPASamplingFireOnlyScope ||
+		f.Version == FragmentRootFireVersion && f.Sampling.Scope == policy.HJEPASamplingRootFireScope ||
+		f.Version == FragmentRootJointVersion && f.Sampling.Scope == policy.HJEPASamplingRootJointScope
+	if !version || f.SourceDirectory == "" || f.BranchDirectory == "" || len(f.SourceSHA256[f.ModelPath]) != 64 || f.Family == "" || f.Model == "" || f.Sampling.Model != f.Model ||
 		f.Sampling.Stream < 0 || f.Sampling.Stream > 2147483647 || f.NativeRoot.Frame != 1 || f.NativeRoot.Life < 1 || f.BaseSeed < 0 ||
-		len(f.Rows) < 1 || len(f.Rows) > 100 || len(f.SourceSHA256) < 3 || f.Split != "train" && f.Split != "diagnostic" ||
+		len(f.Rows) < 1 || len(f.Rows) > 500 || len(f.SourceSHA256) < 3 || f.Split != "train" && f.Split != "diagnostic" ||
 		f.TrainingSourceVerified != (f.Split == "train") || f.OptimizerReady {
 		return fmt.Errorf("fragment header/admission rejected")
 	}
 	if f.TrainingSourceVerified && (f.PlanPath == "" || len(f.SourceSHA256[f.PlanPath]) != 64) || !f.TrainingSourceVerified && f.PlanPath != "" {
 		return fmt.Errorf("fragment TRAIN plan binding missing")
 	}
-	if f.Sampling.Version != policy.HJEPASamplingBranchCheckpointVersion && (f.Sampling.Version != policy.HJEPASamplingCheckpointVersion || f.Sampling.Stream != 0) {
+	if f.Sampling.Validate() != nil {
 		return fmt.Errorf("fragment sampling version rejected")
 	}
 	for _, hash := range f.SourceSHA256 {

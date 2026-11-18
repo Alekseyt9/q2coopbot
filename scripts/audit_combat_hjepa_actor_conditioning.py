@@ -24,7 +24,7 @@ def main():
     x = tensor([r['features'] for r in rows]);latent = tensor([r['sample']['latent'] for r in rows])
     attack = tensor([r['sample']['attack'] for r in rows],torch.bool);pose = tensor([r['sample']['vertical'] for r in rows],torch.long)
     advantage = tensor([r['advantage'] for r in rows]);old_lp = tensor([r['primitive_log_probability'] for r in rows])
-    lp = log_probability(model(x),model.log_std,latent,attack,pose,model.temperature)
+    lp = log_probability(model(x),model.log_std,latent,attack,pose,model.temperature,model.fire_temperature)
     ratio = (lp-old_lp).exp();surrogate = torch.minimum(ratio*advantage,ratio.clamp(.9,1.1)*advantage).mean()
     gradient = flatten(torch.autograd.grad(surrogate,parameters)).detach()
     operator = fisher_operator(model,x,parameters,.01)

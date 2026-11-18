@@ -38,6 +38,7 @@ func (e *combatEngagement) observe(o policy.Observation, defeated []quake.Object
 		return true, false, ""
 	}
 	if len(e.known) == 0 {
+		e.lastSeen = 0
 		return false, false, "system2_noncombat"
 	}
 	if o.Identity.Frame-e.lastSeen <= grace {
@@ -45,5 +46,6 @@ func (e *combatEngagement) observe(o policy.Observation, defeated []quake.Object
 	}
 	// Explicitly uncertain completion. Do not interpret timeout as a kill.
 	clear(e.known)
+	e.lastSeen = 0
 	return false, false, "combat_visibility_timeout"
 }

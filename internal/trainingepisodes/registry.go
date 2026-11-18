@@ -207,7 +207,13 @@ func (e Episode) validate() error {
 	}
 	switch e.Recipe.Runner {
 	case "combat-baseline":
-		if (e.Map != "base1" && e.Generator == nil) || e.GameFrames < 150 || e.GameFrames > 500 || !e.PPOTrainable {
+		minimumFrames := 150
+		if e.Generator != nil {
+			// Generated encounters also support short rollout segments. Their
+			// horizon remains a truncation with an observed next-state value.
+			minimumFrames = 20
+		}
+		if (e.Map != "base1" && e.Generator == nil) || e.GameFrames < minimumFrames || e.GameFrames > 500 || !e.PPOTrainable {
 			return fmt.Errorf("unsupported synchronous recipe")
 		}
 		switch e.Recipe.RewardConfig {

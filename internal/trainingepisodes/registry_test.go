@@ -28,6 +28,28 @@ func TestNativeHabitatRegistryKeepsContinuationObjective(t *testing.T) {
 	}
 }
 
+func TestGeneratedShortCombatSegmentsKeepOriginalRecipe(t *testing.T) {
+	r, err := Load(filepath.Join("..", "..", "scripts", "scenarios", "combat-training", "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ep := range r.Episodes {
+		if ep.Status != "runnable" || ep.Generator == nil || ep.Recipe.Runner != "combat-baseline" {
+			continue
+		}
+		ep.GameFrames = 64
+		if err := ep.validate(); err != nil {
+			t.Fatal("short generated segment rejected", err)
+		}
+		ep.GameFrames = 19
+		if ep.validate() == nil {
+			t.Fatal("unsupported tiny segment accepted")
+		}
+		return
+	}
+	t.Fatal("missing generated combat recipe")
+}
+
 func fixture(t *testing.T) (string, Episode) {
 	t.Helper()
 	r, err := Load(filepath.Join("..", "..", "scripts", "scenarios", "combat-training", "index.json"))

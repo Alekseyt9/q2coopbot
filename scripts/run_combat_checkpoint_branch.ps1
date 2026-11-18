@@ -1,6 +1,7 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$SourceRoot,[Parameter(Mandatory)][string]$OutputRoot,[Parameter(Mandatory)][string]$Client,[Parameter(Mandatory)][string]$CheckpointTool,[int]$Port=31172,[ValidateRange(2,100)][int]$Frames=30,[Nullable[int]]$SamplingStream)
+param([Parameter(Mandatory)][string]$SourceRoot,[Parameter(Mandatory)][string]$OutputRoot,[Parameter(Mandatory)][string]$Client,[Parameter(Mandatory)][string]$CheckpointTool,[int]$Port=31172,[ValidateRange(2,500)][int]$Frames=30,[Nullable[int]]$SamplingStream,[ValidateSet('','fire_only_v1','root_fire_only_v1','root_joint_only_v1')][string]$SamplingScope='')
 $ErrorActionPreference='Stop'
+if($SamplingScope -and $null -eq $SamplingStream){throw 'Sampling scope requires an explicit stream'}
 $SourceRoot=(Resolve-Path -LiteralPath $SourceRoot).Path
 $Client=(Resolve-Path -LiteralPath $Client).Path
 $CheckpointTool=(Resolve-Path -LiteralPath $CheckpointTool).Path
@@ -12,14 +13,35 @@ $manifest=Get-Content -LiteralPath (Join-Path $SourceRoot 'combat-checkpoint/man
 if($manifest.barrier.boundary -ne 'combat_predecision_v1'){throw 'Expected pre-decision combat source package'}
 New-Item -ItemType Directory -Path $OutputRoot|Out-Null
 $runtime=Join-Path $OutputRoot 'runtime'
+. "$PSScriptRoot/prepare_runtime.ps1" -FunctionsOnly
 foreach($record in $manifest.runtime){
     $from=Join-Path (Join-Path $SourceRoot 'runtime') $record.name
     $to=Join-Path $runtime $record.name
     New-Item -ItemType Directory -Path (Split-Path $to -Parent) -Force|Out-Null
-    Copy-Item -LiteralPath $from -Destination $to
+    if([IO.Path]::GetExtension($record.name) -eq '.pak' -and [IO.Path]::GetPathRoot($from) -eq [IO.Path]::GetPathRoot($to)){
+        # Immutable archives may be shared; each branch still verifies the
+        # checkpoint's exact runtime hashes before loading the native world.
+        Install-RuntimePak $from $to (Join-Path (Split-Path $PSScriptRoot -Parent) 'workspace/build/runtime-paks')
+    }else{
+        Copy-Item -LiteralPath $from -Destination $to
+    }
 }
 $checkpointDir=Join-Path $OutputRoot 'checkpoint'
-Copy-Item -LiteralPath (Join-Path $SourceRoot 'combat-checkpoint') -Destination $checkpointDir -Recurse
+$sourceCheckpoint=Join-Path $SourceRoot 'combat-checkpoint'
+New-Item -ItemType Directory -Path $checkpointDir|Out-Null
+# Checkpoint packages are immutable: save rejects an existing package and load
+# copies native saves into a separate mutable runtime slot before using them.
+# Share package files, not the runtime's working save directory.
+foreach($file in Get-ChildItem -LiteralPath $sourceCheckpoint -Recurse -File){
+    $relative=$file.FullName.Substring($sourceCheckpoint.Length).TrimStart('\','/')
+    $target=Join-Path $checkpointDir $relative
+    New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force|Out-Null
+    if([IO.Path]::GetPathRoot($file.FullName) -eq [IO.Path]::GetPathRoot($target)){
+        New-Item -ItemType HardLink -Path $target -Target $file.FullName -ErrorAction Stop|Out-Null
+    }else{
+        Copy-Item -LiteralPath $file.FullName -Destination $target
+    }
+}
 # Carry the same test cvars but no source placement or client commands.
 Copy-Item -LiteralPath (Join-Path $SourceRoot 'runtime/baseq2/learning-test.cfg') -Destination (Join-Path $runtime 'baseq2/learning-test.cfg')
 $instance='fragment-'+[guid]::NewGuid().ToString('N')
@@ -57,11 +79,12 @@ try{
     if(!$loaded.rng_restored -or !$loaded.combat_restored -or $loaded.state -ne 'load_held'){throw 'Native phase/RNG/root restoration unproved'}
     $control=Join-Path $OutputRoot 'control.json'
     $botConfig=@{server=@{host='127.0.0.1';port=$Port};client=@{name=$sourceConfig.client.name;game_dir=(Join-Path $runtime 'baseq2')};models=@{system1=''};
-        run=@{mode=$sourceConfig.run.mode;next_map=$sourceConfig.run.next_map;duration='45s';frame_paced=$true;game_frames=$Frames};combat=$sourceConfig.combat;
+        run=@{mode=$sourceConfig.run.mode;next_map=$sourceConfig.run.next_map;duration='120s';frame_paced=$true;game_frames=$Frames};combat=$sourceConfig.combat;
         output=@{trace_jsonl=(Join-Path $OutputRoot 'bot.jsonl');combat_capture=$true};
         test=@{synchronous=$true;combat_only=[bool]$sourceConfig.test.combat_only;combat_barrier=$true;weapon_switch_fixture=$sourceConfig.test.weapon_switch_fixture;checkpoint_restore=$checkpointDir;checkpoint_mode='combat';checkpoint_control=$control}}
     $config=Join-Path $OutputRoot 'bot-config.json'
     if($null -ne $SamplingStream){if($SamplingStream -lt 0){throw 'Sampling stream must be nonnegative'};$botConfig.test.checkpoint_sampling_stream=[long]$SamplingStream}
+    if($SamplingScope){$botConfig.test.checkpoint_sampling_scope=$SamplingScope}
     $botConfig|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $config -Encoding utf8NoBOM
     $bot=Start-Process $Client -ArgumentList @('--config',('"'+$config+'"')) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $OutputRoot 'bot.log') -RedirectStandardError (Join-Path $OutputRoot 'bot.err')
     $deadline=[DateTime]::UtcNow.AddSeconds(15)
@@ -72,10 +95,11 @@ try{
     $release=$loaded.load_anchor
     $release.controls=@($control)
     $null=Invoke-BranchOperation 'release' $release
-    if(!$bot.WaitForExit(45000) -or $bot.ExitCode){throw 'Restored combat client failed'}
+    if(!$bot.WaitForExit(120000) -or $bot.ExitCode){throw 'Restored combat client failed'}
     $report.accepted=$true;$report.reason='combat_branch_collected';$report.native_rng_restored=$true;$report.native_phase_restored=$true
     $report.scope='Collected restored native combat continuation; equality must be checked against source observations and effects separately'
 }catch{$report.reason=$_.Exception.Message;throw}finally{
     foreach($process in @($bot,$server)){if($process -and !$process.HasExited){Stop-Process -Id $process.Id;$null=$process.WaitForExit(5000)}}
     $report|ConvertTo-Json -Depth 10|Set-Content -LiteralPath (Join-Path $OutputRoot 'report.json') -Encoding utf8NoBOM
 }
+

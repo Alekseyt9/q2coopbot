@@ -86,7 +86,8 @@ func (c *Client) combatObservation(now time.Time) policy.Observation {
 }
 
 // Direct mode does not call Planner.command on a valid policy-controlled frame.
-// Rules own setup, death, noncombat travel and explicitly marked failures.
+// Rules own setup, death and explicitly marked failures. Noncombat travel also
+// belongs to rules unless the model explicitly owns the full encounter.
 func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserCmd, quake.UserCmd, *policy.Selection, bool) {
 	b := &c.combatControl
 	sel := &policy.Selection{Mode: b.mode, Owner: "rules"}
@@ -116,6 +117,11 @@ func (c *Client) combatCommand(o policy.Observation, now time.Time) (quake.UserC
 		grace = policy.ThreatMemoryFrames
 	}
 	active, continuation, fallback := b.engagement.observe(o, c.planner.World.Snapshot.Defeated, grace)
+	if p, ok := b.provider.(interface{ OwnsFullEncounter() bool }); ok && p.OwnsFullEncounter() {
+		// The explicit model scope owns search as well as visible combat. Never
+		// add hidden targets or supervisor outcome counters to the observation.
+		active, continuation = true, len(o.Enemies) == 0
+	}
 	sel.CombatContinuation = continuation
 	if !active {
 		sel.Fallback = fallback

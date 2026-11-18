@@ -70,7 +70,7 @@ def conjugate_gradient(operator, rhs, iterations=40, relative_tolerance=1e-10):
 def fisher_operator(model, features, parameters, damping):
     """Exact Hessian-vector products of local KL(current || proposed)."""
     raw = model(features)
-    kl = distribution_kl(raw.detach(), model.log_std.detach(), raw, model.log_std, model.temperature).mean()
+    kl = distribution_kl(raw.detach(), model.log_std.detach(), raw, model.log_std, model.temperature, getattr(model, 'fire_temperature', None)).mean()
     gradient = flatten(torch.autograd.grad(kl, parameters, create_graph=True))
 
     def apply(vector):
@@ -80,13 +80,13 @@ def fisher_operator(model, features, parameters, damping):
     return apply
 
 
-def delta_metrics(before, old_std, after, new_std, temperature):
+def delta_metrics(before, old_std, after, new_std, temperature, fire_temperature=None):
     delta = after[:, :4]-before[:, :4]
     axis_kl = (new_std-old_std + (old_std.mul(2).exp()+delta.square())
                / (2*new_std.mul(2).exp())-.5).mean(0)
     return dict(delta_in_behavior_sigma_rms=(delta/old_std.exp()).square().mean(0).sqrt().tolist(),
                 normal_kl_by_axis=axis_kl.tolist(),
-                total_mean_kl=float(distribution_kl(before, old_std, after, new_std, temperature).mean()))
+                total_mean_kl=float(distribution_kl(before, old_std, after, new_std, temperature, fire_temperature).mean()))
 
 
 def main(*, version=VERSION, algorithm=None, direction_solver=None, scope=None):
@@ -114,7 +114,7 @@ def main(*, version=VERSION, algorithm=None, direction_solver=None, scope=None):
     advantage = tensor([r['advantage'] for r in rows])
     with torch.no_grad():
         raw_error = float((model(features)-old_raw).abs().max())
-        lp_error = float((log_probability(model(features), old_std, latent, attack, vertical, model.temperature)-old_lp).abs().max())
+        lp_error = float((log_probability(model(features), old_std, latent, attack, vertical, model.temperature, model.fire_temperature)-old_lp).abs().max())
     if raw_error > 1e-8 or lp_error > 1e-7:
         raise ValueError('initial native/CUDA likelihood mismatch')
     history = []
@@ -129,10 +129,10 @@ def main(*, version=VERSION, algorithm=None, direction_solver=None, scope=None):
 
     def metrics():
         raw = model(features)
-        lp = log_probability(raw, model.log_std, latent, attack, vertical, model.temperature)
+        lp = log_probability(raw, model.log_std, latent, attack, vertical, model.temperature, model.fire_temperature)
         ratio = (lp-old_lp).exp()
         surrogate = torch.minimum(ratio*advantage, ratio.clamp(.9, 1.1)*advantage).mean()
-        kl = distribution_kl(old_raw, old_std, raw, model.log_std, model.temperature)
+        kl = distribution_kl(old_raw, old_std, raw, model.log_std, model.temperature, model.fire_temperature)
         return surrogate, kl.mean(), kl.max(), ((ratio-1).abs() > .1).double().mean()
 
     stopped, stop_reason = False, None
@@ -191,7 +191,7 @@ def main(*, version=VERSION, algorithm=None, direction_solver=None, scope=None):
     save(a.out/'deterministic.json', deterministic)
     with torch.no_grad():
         raw = model(features)
-        delta = delta_metrics(old_raw, old_std, raw, model.log_std, model.temperature)
+        delta = delta_metrics(old_raw, old_std, raw, model.log_std, model.temperature, model.fire_temperature)
         save(a.out/'parity.json', dict(features=features[:22].cpu().tolist(), outputs=raw[:22].cpu().tolist()))
     torch.save(dict(version=version, algorithm=algorithm, binding=binding, parent_fingerprint=fingerprint(parent),
                     state=model.state_dict(), history=history, stopped=stopped, stop_reason=stop_reason,

@@ -7,6 +7,20 @@ from train_combat_hjepa_actor_ppo import network, log_probability, distribution_
 
 
 class PrimitivePPO(unittest.TestCase):
+    def test_separate_fire_temperature_matches_independent_distributions(self):
+        raw = torch.tensor([[.1, -.2, .03, -.04, 2., 1., -3., 2.]], dtype=torch.float64)
+        other = raw + .1
+        std = torch.tensor([-.5, -1., -3., -4.], dtype=torch.float64)
+        latent = raw[:, :4] + .01
+        attack, pose = torch.tensor([False]), torch.tensor([1])
+        expected = Normal(raw[:, :4], std.exp()).log_prob(latent).sum(-1)
+        expected += Bernoulli(logits=raw[:, 4]/2.).log_prob(attack.double())
+        expected += Categorical(logits=raw[:, 5:]/.25).log_prob(pose)
+        torch.testing.assert_close(log_probability(raw,std,latent,attack,pose,.25,2.),expected,rtol=1e-12,atol=1e-12)
+        expected_kl = kl_divergence(Normal(raw[:, :4],std.exp()),Normal(other[:, :4],std.exp())).sum(-1)
+        expected_kl += kl_divergence(Bernoulli(logits=raw[:,4]/2.),Bernoulli(logits=other[:,4]/2.))
+        expected_kl += kl_divergence(Categorical(logits=raw[:,5:]/.25),Categorical(logits=other[:,5:]/.25))
+        torch.testing.assert_close(distribution_kl(raw,std,other,std,.25,2.),expected_kl,rtol=1e-12,atol=1e-12)
     def test_float64_import_does_not_round_through_float32(self):
         value = 1.000000000000003
         net = network([dict(weight=[[value]], bias=[-value])])
