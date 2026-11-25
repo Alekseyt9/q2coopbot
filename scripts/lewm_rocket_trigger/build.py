@@ -4,9 +4,6 @@ import json
 from pathlib import Path
 import subprocess
 
-import torch
-
-
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 CANDIDATES = {'risk': (.5, 0), 'near': (.5, 72), 'medium': (.5, 128), 'far': (.5, 192)}
@@ -19,6 +16,8 @@ def substitute(source, original, replacement):
 
 
 def build(checkpoint, out):
+    import torch
+
     out.mkdir(parents=True, exist_ok=True)
     cp = torch.load(checkpoint, map_location='cpu', weights_only=True)
     if cp['version'] != 'quake_lewm_weapon_damage_v2':

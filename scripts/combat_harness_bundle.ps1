@@ -43,14 +43,26 @@ function Install-HarnessBinaryLink {
 }
 
 function New-HarnessBinaryBundle {
-    param([string]$Repository)
+    param([string]$Repository,[string]$ClientOverlay='')
     $records=Get-HarnessSourceRecords $Repository
     $fingerprint=Get-HarnessFingerprint $records
     $base=[IO.Path]::GetFullPath((Join-Path $Repository 'workspace/build/harness-bundles'))
     New-Item -ItemType Directory -Path $base -Force|Out-Null
-    $bundle=Join-Path $base $fingerprint
+    $overlayInputs=[ordered]@{}
+    $bundleKey=$fingerprint
+    if($ClientOverlay){
+        $ClientOverlay=(Resolve-Path -LiteralPath $ClientOverlay).Path
+        $spec=Get-Content -LiteralPath $ClientOverlay -Raw|ConvertFrom-Json
+        $replacement=$spec.Replace.PSObject.Properties["$(Join-Path $Repository 'internal/policy/hjepa.go')"]
+        if(!$replacement -or @($spec.Replace.PSObject.Properties).Count -ne 1){throw 'Expected a single experimental H-JEPA source replacement'}
+        foreach($path in @($ClientOverlay,$replacement.Value)){
+            $overlayInputs[$path]=(Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant()
+        }
+        $bundleKey="$fingerprint-$($overlayInputs[$ClientOverlay].Substring(0,16))-$($overlayInputs[$replacement.Value].Substring(0,16))"
+    }
+    $bundle=Join-Path $base $bundleKey
     if(Test-Path -LiteralPath $bundle){$null=Assert-HarnessBinaryBundle $bundle $fingerprint;return $bundle}
-    $pending=Join-Path $base ($fingerprint+'.pending-'+[guid]::NewGuid().ToString('N'))
+    $pending=Join-Path $base ($bundleKey+'.pending-'+[guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $pending|Out-Null
     $env:GOCACHE=Join-Path $Repository 'workspace/build/gocache'
     $env:GOTOOLCHAIN='auto'
@@ -60,13 +72,18 @@ function New-HarnessBinaryBundle {
     try{
         foreach($name in @('q2coopbot','q2combat-export')){
             $destination=Join-Path $pending ($name+'.exe')
-            go build -buildvcs=false -o $destination "./cmd/$name"
+            $buildArgs=@('build','-buildvcs=false','-o',$destination)
+            if($name -eq 'q2coopbot' -and $ClientOverlay){$buildArgs+=@('-overlay',$ClientOverlay)}
+            go @buildArgs "./cmd/$name"
             if($LASTEXITCODE){throw "Bundle build failed: $name; incomplete staging retained"}
             $binaries[$name+'.exe']=@{sha256=(Get-FileHash -LiteralPath $destination).Hash.ToLowerInvariant();bytes=(Get-Item -LiteralPath $destination).Length}
         }
     }finally{Pop-Location}
     if((Get-HarnessFingerprint (Get-HarnessSourceRecords $Repository)) -ne $fingerprint){throw 'Sources changed during bundle build; staging retained'}
-    @{version='combat_harness_binary_bundle_v1';source_fingerprint=$fingerprint;binaries=$binaries;sources=$records;build_seconds=$timer.Elapsed.TotalSeconds;go_version=(& go version)}|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $pending 'receipt.json') -Encoding utf8NoBOM
+    foreach($path in $overlayInputs.Keys){
+        if((Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant() -ne $overlayInputs[$path]){throw 'Overlay input changed during bundle build'}
+    }
+    @{version='combat_harness_binary_bundle_v1';source_fingerprint=$fingerprint;binaries=$binaries;sources=$records;client_overlay_inputs=$overlayInputs;build_seconds=$timer.Elapsed.TotalSeconds;go_version=(& go version)}|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $pending 'receipt.json') -Encoding utf8NoBOM
     # Both directory move targets are explicitly contained in the bundle root.
     $prefix=$base.TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
     foreach($path in @($pending,$bundle)){

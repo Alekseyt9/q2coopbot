@@ -6,7 +6,6 @@ from pathlib import Path
 import shutil
 
 import numpy as np
-import torch
 
 from build import REPO
 from experiment import BANK, V1, V2, collect, read, root_obs, save
@@ -45,10 +44,15 @@ def prepare(out):
 
 
 def feature_matrix(rows):
+    raw=np.array([root_obs(Path(r['source'])/'bot.jsonl',r['frame'])['features'] for r in rows])
+    return encode_features(raw)
+
+
+def encode_features(raw):
     import sys
+    import torch
     sys.path.insert(0,str(REPO/'scripts'))
     from hjepa_lewm_weapon_damage import load
-    raw=np.array([root_obs(Path(r['source'])/'bot.jsonl',r['frame'])['features'] for r in rows])
     with torch.inference_mode():
         z=load(V2/'damage.pt').world.encode(torch.tensor(raw,dtype=torch.float32)).numpy()
     return np.column_stack((z,raw[:,845:857])).astype(float)

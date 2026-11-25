@@ -7,7 +7,6 @@ import shutil
 import subprocess
 
 import numpy as np
-import torch
 
 from build import HERE, REPO, substitute
 from experiment import BANK, V2, collect, read, root_obs, save, totals
@@ -39,6 +38,7 @@ def build_temporal(out):
 
 def frozen_encoder(train, trigger):
     import sys
+    import torch
     sys.path.insert(0, str(REPO/'scripts'))
     from hjepa_lewm_weapon_damage import load
     encoder = load(V2/'damage.pt').world.encode

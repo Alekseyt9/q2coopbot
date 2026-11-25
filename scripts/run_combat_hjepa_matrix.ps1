@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$Plan,[Parameter(Mandatory)][string]$Models,
- [Parameter(Mandatory)][string]$OutputRoot,[int]$Port=35600,[switch]$DiagnosticWeaponBranches)
+ [Parameter(Mandatory)][string]$OutputRoot,[int]$Port=35600,[switch]$DiagnosticWeaponBranches,
+ [string]$ClientOverlay='',[ValidateRange(4,16)][int]$MaxInstances=16)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 $planPath=(Resolve-Path -LiteralPath $Plan).Path
@@ -19,6 +20,14 @@ try {
   if($v.mode -eq 'learned'){
    $v.model=(Resolve-Path -LiteralPath $v.model).Path
    if((Get-FileHash -LiteralPath $v.model).Hash.ToLowerInvariant() -ne $v.sha256){throw 'Frozen model changed'}
+  }
+  foreach($kind in @('temporal','rocket')){
+   $policyKey=${kind}+'_policy'
+   if($v.$policyKey){
+    if(!$ClientOverlay -or $v.mode -ne 'learned'){throw "$kind policy requires an experimental client and learned mode"}
+    $v.$policyKey=(Resolve-Path -LiteralPath $v.$policyKey).Path
+    if((Get-FileHash -LiteralPath $v.$policyKey).Hash.ToLowerInvariant() -ne $v.(${kind}+'_sha256')){throw "Frozen $kind policy changed"}
+   }
   }
   if($DiagnosticWeaponBranches){
    if($v.mode -ne 'learned' -or !$v.seeds -or @($v.seeds|Sort-Object -Unique).Count -ne $v.seeds.Count){throw 'Diagnostic branches require unique explicit seed lists'}
@@ -41,10 +50,10 @@ try {
  }
  $maxWorkers=($schedule.tasks|ForEach-Object {$_.seeds.Count}|Measure-Object -Maximum).Maximum
  if($DiagnosticWeaponBranches){$maxWorkers=1}
- $batchSize=[int][math]::Floor(16/$maxWorkers)
+ $batchSize=[int][math]::Floor($MaxInstances/$maxWorkers)
  . "$PSScriptRoot/harness_manifest.ps1"
  . "$PSScriptRoot/combat_harness_bundle.ps1"
- $bundle=New-HarnessBinaryBundle $repo
+ $bundle=New-HarnessBinaryBundle $repo $ClientOverlay
  New-Item -ItemType Directory -Path $root | Out-Null
  Copy-Item -LiteralPath $planPath -Destination "$root/plan.json"
  $variants|ConvertTo-Json -Depth 12|Set-Content -LiteralPath "$root/models.json" -Encoding utf8NoBOM
@@ -67,16 +76,21 @@ try {
   if($v.contract){$argsMap.ExecutionContract=$v.contract}
   if($v.contract -and $v.contract -ne 'legacy_v1'){$argsMap.CheckedWallSlide=$true}
   $jobFile="$root/job-$index.clixml";$argsMap|Export-Clixml -LiteralPath $jobFile
-  $jobs+=@{index=$index;variant=$v.name;task=$i;seeds=@($cohort.seeds);args=$jobFile;out=$out;require_native_objective=[bool]$task.episode.recipe.require_native_objective};$index++
+  $jobs+=@{index=$index;variant=$v.name;task=$i;seeds=@($cohort.seeds);args=$jobFile;out=$out;require_native_objective=[bool]$task.episode.recipe.require_native_objective;temporal_policy=$v.temporal_policy;rocket_policy=$v.rocket_policy};$index++
  }}}
  $hostExe=(Get-Process -Id $PID).Path
- # At most sixteen native games, with 1..4 clients per job.
+ # Cap native games, with 1..4 clients per job.
  for($start=0;$start -lt $jobs.Count;$start+=$batchSize){
   $active=@()
   foreach($j in @($jobs|Select-Object -Skip $start -First $batchSize)){
    $launcher="$root/launch-$($j.index).ps1"
    # CLIXML carries structured arguments; paths below are fixed launcher literals.
    $launch="`$ErrorActionPreference='Stop'`n`$a=Import-Clixml -LiteralPath '"+$j.args.Replace("'","''")+"'`n& '"+(Join-Path $PSScriptRoot 'run_learned_combat_baseline.ps1').Replace("'","''")+"' @a`n"
+   if($ClientOverlay){
+    $temporal=([string]$j.temporal_policy).Replace("'","''")
+    $rocket=([string]$j.rocket_policy).Replace("'","''")
+    $launch="`$env:Q2_LEWM_TEMPORAL_POLICY='$temporal'`n`$env:Q2_LEWM_DURATION_AUDIT='1'`n`$env:Q2_LEWM_ROCKET_POLICY='$rocket'`n`$env:Q2_LEWM_ROCKET_AUDIT='1'`n`$env:Q2_LEWM_FORCE_FIXTURE_ROCKET='0'`n"+$launch
+   }
    [IO.File]::WriteAllText($launcher,$launch)
    $proc=Start-Process -FilePath $hostExe -ArgumentList @('-NoProfile','-File',('"'+$launcher+'"')) -WindowStyle Hidden -PassThru -RedirectStandardOutput "$root/job-$($j.index).stdout.log" -RedirectStandardError "$root/job-$($j.index).stderr.log"
    $active+=@{process=$proc;job=$j}
@@ -91,5 +105,9 @@ try {
   Write-Output "Completed matrix jobs $start through $([math]::Min($start+$batchSize-1,$jobs.Count-1))"
  }
  foreach($v in $variants){if($v.mode -eq 'learned' -and (Get-FileHash -LiteralPath $v.model).Hash.ToLowerInvariant() -ne $v.sha256){throw 'Model changed during matrix'}}
+ foreach($v in $variants){foreach($kind in @('temporal','rocket')){
+  $policyKey=${kind}+'_policy'
+  if($v.$policyKey -and (Get-FileHash -LiteralPath $v.$policyKey).Hash.ToLowerInvariant() -ne $v.(${kind}+'_sha256')){throw "$kind policy changed during matrix"}
+ }}
  @{state='complete';diagnostic_weapon_branches=[bool]$DiagnosticWeaponBranches;jobs=$jobs;source_plan_sha256=(Get-FileHash $planPath).Hash.ToLowerInvariant();models=$variants}|ConvertTo-Json -Depth 20|Set-Content -LiteralPath "$root/complete.json" -Encoding utf8NoBOM
 } finally {Pop-Location}

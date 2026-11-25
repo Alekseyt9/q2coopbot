@@ -85,3 +85,46 @@ func TestModeSchedulerKeepsChoiceUntilBoundary(t *testing.T) {
 	m.Readout.Bias[0]=3
 	step(5,0)
 }
+
+func TestSecondChoiceProbeIsLocalToSecondDecision(t *testing.T) {
+	forced := 1
+	m := modeScheduler{
+		Readout: hTestLayer(76,2),
+		Heads: []DenseLayer{hTestLayer(6,1),hTestLayer(6,1)},
+		Frames: 3,
+		SecondChoice: &forced,
+	}
+	p := slowPolicy{Encoder:[]DenseLayer{hTestLayer(871,64)},Projection:hTestLayer(64,2),
+		Controller:hTestLayer(5,3),Scheduler:&m}
+	o := testObservation()
+	for frame, want := range []int{0,0,0,1,1,1,0,0,0,0,0,0,1} {
+		if frame == 9 { o.Identity.Life++ }
+		o.Identity.Frame = frame+1
+		if err := p.condition(o,make([]float64,8)); err != nil { t.Fatal(err) }
+		if m.index != want { t.Fatalf("frame %d selected %d, want %d",frame+1,m.index,want) }
+	}
+}
+
+func TestSecondReadoutRequiresPredictedGain(t *testing.T) {
+	for _, margin := range []float64{2, 4} {
+		layer := hTestLayer(76,2)
+		layer.Bias[1] = 3
+		m := modeScheduler{
+			Readout: hTestLayer(76,2),
+			Heads: []DenseLayer{hTestLayer(6,1),hTestLayer(6,1)},
+			Frames: 2,
+			SecondReadout: &layer,
+			SecondSwitchMargin: margin,
+		}
+		p := slowPolicy{Encoder:[]DenseLayer{hTestLayer(871,64)},Projection:hTestLayer(64,2),
+			Controller:hTestLayer(5,3),Scheduler:&m}
+		o := testObservation()
+		for frame := 1; frame <= 5; frame++ {
+			o.Identity.Frame = frame
+			if err := p.condition(o,make([]float64,8)); err != nil { t.Fatal(err) }
+			want := 0
+			if (frame == 3 || frame == 4) && margin < 3 { want = 1 }
+			if m.index != want { t.Fatalf("margin %v, frame %d selected %d, want %d",margin,frame,m.index,want) }
+		}
+	}
+}

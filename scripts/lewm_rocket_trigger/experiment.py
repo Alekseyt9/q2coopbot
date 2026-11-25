@@ -157,7 +157,7 @@ def summarize(directory, r, fixture_rocket=True, window_end=WINDOW_END, score_ob
 
 
 def collect(out, roots, policies, workers, *, fixture_rocket=True, port=49110, audit_duration=False,
-            followup_frames=0, final_frames=0, score_objective=False):
+            followup_frames=0, final_frames=0, score_objective=False, inspect_branch=None):
     if followup_frames and not WINDOW_END <= followup_frames <= 498:
         raise ValueError('Follow-up must extend the default window within native frame limits')
     if final_frames and not 0 < followup_frames < final_frames <= 498:
@@ -170,7 +170,8 @@ def collect(out, roots, policies, workers, *, fixture_rocket=True, port=49110, a
                 cached=read(target)
                 if ((not followup_frames or cached.get('followup_frames')==followup_frames) and
                     (not final_frames or cached.get('final_frames')==final_frames) and
-                    (not score_objective or cached.get('objective_verified'))):
+                    (not score_objective or cached.get('objective_verified')) and
+                    (inspect_branch is None or 'branch_inspection' in cached)):
                     continue
             with tempfile.TemporaryDirectory(prefix='native-', dir=out) as tmp:
                 branch = Path(tmp)/'branch'
@@ -209,6 +210,8 @@ def collect(out, roots, policies, workers, *, fixture_rocket=True, port=49110, a
                     value['final'] = summarize(branch,r,fixture_rocket,final_frames+1,score_objective)
                 if score_objective:
                     value['objective_verified'] = True
+                if inspect_branch is not None:
+                    value['branch_inspection'] = inspect_branch(branch, value)
                 save(target, value)
     with concurrent.futures.ThreadPoolExecutor(workers) as pool:
         list(pool.map(slot, range(workers)))

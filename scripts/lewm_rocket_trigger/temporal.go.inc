@@ -2,7 +2,11 @@ type modeScheduler struct {
 	Readout DenseLayer
 	Heads []DenseLayer
 	Frames int
+	SecondChoice *int
+	SecondReadout *DenseLayer
+	SecondSwitchMargin float64
 	index, started int
+	decisions int
 }
 
 func (m *modeScheduler) choose(z, equipped []float64) int {
@@ -39,6 +43,15 @@ func loadSlowPolicy(path string) (*slowPolicy, error) {
 			return nil,fmt.Errorf("invalid temporal mode configuration")
 		}
 		if err:=validateHNet([]DenseLayer{m.Readout},76,len(m.Heads)); err!=nil {return nil,err}
+		if m.SecondChoice != nil && (*m.SecondChoice < 0 || *m.SecondChoice >= len(m.Heads)) {
+			return nil,fmt.Errorf("invalid second temporal choice")
+		}
+		if m.SecondReadout != nil {
+			if m.SecondChoice != nil || m.SecondSwitchMargin < 0 {
+				return nil,fmt.Errorf("invalid learned second temporal choice")
+			}
+			if err:=validateHNet([]DenseLayer{*m.SecondReadout},76,len(m.Heads)); err!=nil {return nil,err}
+		}
 		for _,h:=range m.Heads {
 			if err:=validateHNet([]DenseLayer{h},6,1); err!=nil {return nil,err}
 		}
@@ -61,6 +74,21 @@ func (p *slowPolicy) condition(o Observation, raw []float64) error {
 		if m:=p.Scheduler; m!=nil {
 			if !continuous || o.Identity.Frame-m.started>=m.Frames {
 				choice:=m.choose(z,x[845:857])
+				if !continuous { m.decisions = 0 }
+				m.decisions++
+				if m.decisions == 2 {
+					if m.SecondChoice != nil {
+						choice = *m.SecondChoice
+					} else if m.SecondReadout != nil {
+						scores := affine(*m.SecondReadout,append(z,x[845:857]...))
+						incumbent := scores[choice]
+						for i, score := range scores {
+							if score > incumbent + m.SecondSwitchMargin && score > scores[choice] {
+								choice = i
+							}
+						}
+					}
+				}
 				switched=continuous && choice!=m.index
 				m.index,m.started=choice,o.Identity.Frame
 				if os.Getenv("Q2_LEWM_DURATION_AUDIT")=="1" {
