@@ -128,3 +128,17 @@ func TestSecondReadoutRequiresPredictedGain(t *testing.T) {
 		}
 	}
 }
+
+func TestLaterProbeKeepsEarlierChoices(t *testing.T) {
+	forced := 1
+	m := modeScheduler{Readout:hTestLayer(76,2),Heads:[]DenseLayer{hTestLayer(6,1),hTestLayer(6,1)},
+		Frames:2,SecondChoice:&forced,ProbeDecision:4}
+	p := slowPolicy{Encoder:[]DenseLayer{hTestLayer(871,64)},Projection:hTestLayer(64,2),
+		Controller:hTestLayer(5,3),Scheduler:&m}
+	o := testObservation()
+	for frame,want := range []int{0,0,0,0,0,0,1,1,0} {
+		o.Identity.Frame=frame+1
+		if err:=p.condition(o,make([]float64,8));err!=nil { t.Fatal(err) }
+		if m.index!=want {t.Fatalf("frame %d selected %d, want %d",frame+1,m.index,want)}
+	}
+}

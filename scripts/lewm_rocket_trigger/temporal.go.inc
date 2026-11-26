@@ -3,6 +3,7 @@ type modeScheduler struct {
 	Heads []DenseLayer
 	Frames int
 	SecondChoice *int
+	ProbeDecision int
 	SecondReadout *DenseLayer
 	SecondSwitchMargin float64
 	index, started int
@@ -46,6 +47,9 @@ func loadSlowPolicy(path string) (*slowPolicy, error) {
 		if m.SecondChoice != nil && (*m.SecondChoice < 0 || *m.SecondChoice >= len(m.Heads)) {
 			return nil,fmt.Errorf("invalid second temporal choice")
 		}
+		if m.ProbeDecision != 0 && (m.SecondChoice == nil || m.ProbeDecision < 2 || m.ProbeDecision > 6) {
+			return nil,fmt.Errorf("invalid temporal probe decision")
+		}
 		if m.SecondReadout != nil {
 			if m.SecondChoice != nil || m.SecondSwitchMargin < 0 {
 				return nil,fmt.Errorf("invalid learned second temporal choice")
@@ -76,10 +80,11 @@ func (p *slowPolicy) condition(o Observation, raw []float64) error {
 				choice:=m.choose(z,x[845:857])
 				if !continuous { m.decisions = 0 }
 				m.decisions++
-				if m.decisions == 2 {
-					if m.SecondChoice != nil {
-						choice = *m.SecondChoice
-					} else if m.SecondReadout != nil {
+				probe := m.ProbeDecision
+				if probe == 0 { probe = 2 }
+				if m.SecondChoice != nil && m.decisions == probe {
+					choice = *m.SecondChoice
+				} else if m.SecondReadout != nil && m.decisions == 2 {
 						scores := affine(*m.SecondReadout,append(z,x[845:857]...))
 						incumbent := scores[choice]
 						for i, score := range scores {
@@ -87,7 +92,6 @@ func (p *slowPolicy) condition(o Observation, raw []float64) error {
 								choice = i
 							}
 						}
-					}
 				}
 				switched=continuous && choice!=m.index
 				m.index,m.started=choice,o.Identity.Frame

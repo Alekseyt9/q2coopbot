@@ -1,6 +1,7 @@
 """Measure the effect of changing only the second decision in a native replay."""
 import argparse
 from collections import Counter
+from functools import partial
 import hashlib
 import json
 from pathlib import Path
@@ -17,37 +18,38 @@ CHOICE = re.compile(r'lewm_mode frame=(\d+) index=(\d+)')
 DAMAGE_FRAME = re.compile(r'\bserver_frame=(\d+)\b')
 
 
-def inspect_branch(directory, run):
+def inspect_branch(directory, run, decision_frame=FRAME):
+    window = run['longer'] if decision_frame > 40 else run
     choices = dict((int(frame), int(index)) for frame, index in
-                   (CHOICE.fullmatch(line).groups() for line in run['modes']))
-    if FRAME not in choices or 1 not in choices:
+                   (CHOICE.fullmatch(line).groups() for line in window['modes']))
+    if decision_frame not in choices or 1 not in choices:
         return dict(reached=False)
     prefix = {}
     with (directory/'bot.jsonl').open(encoding='utf-8') as trace:
         for line in trace:
             row = json.loads(line)
             frame = row['frame']
-            if not 1 <= frame < FRAME:
+            if not 1 <= frame < decision_frame:
                 continue
             selection = (row.get('combat_policy') or {}).get('selection') or {}
             if frame in prefix or selection.get('owner') != 'provider' or not row['sent_command']:
                 return dict(reached=False)
             prefix[frame] = row['sent_command']
-    if sorted(prefix) != list(range(1, FRAME)):
+    if sorted(prefix) != list(range(1, decision_frame)):
         return dict(reached=False)
-    decision = root_obs(directory/'bot.jsonl', FRAME)
+    decision = root_obs(directory/'bot.jsonl', decision_frame)
     if decision['owner'] != 'provider' or decision['features'] is None:
         return dict(reached=False)
     # The restored native server assigns a new spawncount on each connection.
     # summarize() already checked each event against that run's generation.
-    prior_damage = [re.sub(r'\bspawncount=\d+ ', '', line, count=1) for line in run['events']
-                    if int(DAMAGE_FRAME.search(line)[1]) <= FRAME]
+    prior_damage = [re.sub(r'\bspawncount=\d+ ', '', line, count=1) for line in window['events']
+                    if int(DAMAGE_FRAME.search(line)[1]) <= decision_frame]
     proof = json.dumps([prefix, decision['features'], prior_damage, choices[1]], sort_keys=True)
     return dict(reached=True, prefix_sha256=hashlib.sha256(proof.encode()).hexdigest(),
-                second_choice=choices[FRAME], features=decision['features'])
+                second_choice=choices[decision_frame], features=decision['features'])
 
 
-def run(out, cases_per_map, workers, resume=False, source_plan=None):
+def run(out, cases_per_map, workers, resume=False, source_plan=None, decision_index=2, port=29900):
     model = read(BANK/'lewm-mode-choice-v1/select20.json')
     if model['Scheduler']['Frames'] != FRAME - 1:
         raise ValueError('Unexpected incumbent decision period')
@@ -59,7 +61,9 @@ def run(out, cases_per_map, workers, resume=False, source_plan=None):
         if cover[row['map']] < cases_per_map:
             cases.append(row)
             cover[row['map']] += 1
-    plan = dict(roots=cases, second_frame=FRAME, horizon=80)
+    decision_frame = 1+(decision_index-1)*model['Scheduler']['Frames']
+    horizon = decision_frame+59
+    plan = dict(roots=cases, second_frame=decision_frame, horizon=horizon)
     if resume:
         if read(out/'plan.json') != plan or not (out/'rocket-client.exe').is_file():
             raise ValueError('Resume requires the original plan and client')
@@ -70,13 +74,16 @@ def run(out, cases_per_map, workers, resume=False, source_plan=None):
     for i, name in enumerate(POLICIES):
         if i:
             model['Scheduler']['SecondChoice'] = i - 1
+            if decision_index != 2:
+                model['Scheduler']['ProbeDecision'] = decision_index
         path = out/f'{name}.json'
         if resume and read(path) != model:
             raise ValueError(f'Existing replay model differs for {name}')
         if not resume:
             save(path, model)
-    collect(out, cases, POLICIES, workers, fixture_rocket=False, port=29900,
-            audit_duration=True, followup_frames=80, inspect_branch=inspect_branch)
+    collect(out, cases, POLICIES, workers, fixture_rocket=False, port=port,
+            audit_duration=True, followup_frames=horizon,
+            inspect_branch=partial(inspect_branch, decision_frame=decision_frame))
     paired, skipped = [], []
     for row in cases:
         runs = [read(out/f"{row['seed']}-{name}.json") for name in POLICIES]
@@ -108,7 +115,7 @@ def run(out, cases_per_map, workers, resume=False, source_plan=None):
                                  total_best_delta=sum(row['best_delta'] for row in paired),
                                  total_constrained_delta=sum(row['constrained_delta'] for row in paired),
                                  total_blast_saved=sum(row['blast_saved'] for row in paired)))
-    print(f"Verified {len(paired)} pairs at frame {FRAME}, {len(skipped)} did not reach it", flush=True)
+    print(f"Verified {len(paired)} pairs at frame {decision_frame}, {len(skipped)} did not reach it", flush=True)
 
 
 if __name__ == '__main__':
@@ -118,5 +125,8 @@ if __name__ == '__main__':
     parser.add_argument('--workers', type=int, default=4)
     parser.add_argument('--resume', action='store_true')
     parser.add_argument('--source-plan', type=Path)
+    parser.add_argument('--decision-index', type=int, choices=range(2,7), default=2)
+    parser.add_argument('--port', type=int, default=29900)
     args = parser.parse_args()
-    run(args.output.resolve(), args.cases_per_map, args.workers, args.resume, args.source_plan)
+    run(args.output.resolve(), args.cases_per_map, args.workers, args.resume, args.source_plan,
+        args.decision_index, args.port)

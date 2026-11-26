@@ -67,7 +67,7 @@ def roots(out):
     return cases,excluded
 
 
-def report(out, rows, names, frames=40):
+def report(out, rows, names, frames=40, baseline='fixed8'):
     live=out/'live'
     x=feature_matrix(rows)
     expected={}
@@ -104,7 +104,7 @@ def report(out, rows, names, frames=40):
             stats[name]={k:sum(c[k] for c in cases) for k in ('score','early','late','self_hp','own_blast','other','alive')}
             if cases and all('clear' in c for c in cases):
                 stats[name]['clear']=sum(c['clear'] for c in cases)
-            delta=[c['score']-r['policies']['fixed8']['score'] for c,r in zip(cases,selected)]
+            delta=[c['score']-r['policies'][baseline]['score'] for c,r in zip(cases,selected)]
             stats[name].update(wins=sum(d>0 for d in delta),ties=delta.count(0),losses=sum(d<0 for d in delta),
                  changed=sum(len(set(c['modes']))>1 for c in cases),
                  initial_modes=dict(Counter(MODES[c['modes'][0]] for c in cases if c['modes'])))

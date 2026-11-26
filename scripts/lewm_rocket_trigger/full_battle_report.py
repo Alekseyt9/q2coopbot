@@ -9,6 +9,7 @@ from experiment import read, save
 
 
 FIELD = re.compile(r"(\w+)=([^ ]+)")
+RELEASE_GAME_FRAME = 100
 
 
 def episode(result, fixture, temporal, rocket_policy=None):
@@ -21,7 +22,7 @@ def episode(result, fixture, temporal, rocket_policy=None):
     life = result['first_life']
     generation = life['spawncount']
     actor = life['bot_entity']
-    start, end = 100, life['end_frame']
+    first, end = life['start_frame'], life['end_frame']
     objectives, self_damage, monster_damage = {}, Counter(), Counter()
     with (root/'server.log').open(errors='replace') as log:
         for line in log:
@@ -29,11 +30,12 @@ def episode(result, fixture, temporal, rocket_policy=None):
                 continue
             fields = dict(FIELD.findall(line))
             frame = int(fields['server_frame'])
-            if not start <= frame <= end or int(fields['spawncount']) != generation:
+            if not first <= frame <= end or int(fields['spawncount']) != generation:
                 continue
             if line.startswith('sv_test_objective '):
-                objectives[frame] = int(fields['alive']) + int(fields['pending'])
-            elif int(fields['attacker']) == actor:
+                if int(fields['game_frame']) >= RELEASE_GAME_FRAME:
+                    objectives[frame] = int(fields['alive']) + int(fields['pending'])
+            elif int(fields['frame']) >= RELEASE_GAME_FRAME and int(fields['attacker']) == actor:
                 mod = int(fields['mod']) & ~0x8000000
                 lost = max(0, int(fields['health_before'])) - max(0, int(fields['health_after']))
                 if int(fields['target']) == actor:
@@ -42,6 +44,9 @@ def episode(result, fixture, temporal, rocket_policy=None):
                     monster_damage[mod] += lost
     clear_frame = None
     owners = Counter()
+    if not objectives:
+        raise ValueError(f"Missing released native objective telemetry at {root}")
+    start = min(objectives)
     with (root/'bot.jsonl').open(encoding='utf-8') as trace:
         for line in trace:
             row = json.loads(line)

@@ -10,11 +10,13 @@ from build import HERE
 from experiment import BANK, read, save
 
 
-def prepare(out, split='validation', start=36, count=28, per_group=2):
+def prepare(out, split='validation', start=36, count=28, per_group=2, exclude_plans=()):
     old = BANK/'lewm-duration-v1'
     trigger = BANK/'lewm-rocket-trigger-v1'
     used = set(read(old/'validation-seeds.json') + read(old/'rocket-validation/validation-seeds.json')
                + read(trigger/'validation-seeds.json'))
+    for plan in exclude_plans:
+        used.update(row['seed'] for row in read(plan)['roots'])
     descriptors = sorted({r['descriptor'] for r in read(BANK/'fragment-autonomous-train-20261117-052625/selected.json')})
     groups = defaultdict(dict)
     for offset in range(start,start+count):
@@ -41,10 +43,10 @@ def prepare(out, split='validation', start=36, count=28, per_group=2):
     return cases
 
 
-def run(out, retry, split, start, count, per_group):
-    cases = read(out/'capture-plan.json') if retry else prepare(out, split, start, count, per_group)
+def run(out, retry, split, start, count, per_group, workers, exclude_plans):
+    cases = read(out/'capture-plan.json') if retry else prepare(out, split, start, count, per_group, exclude_plans)
     def worker(i):
-        for index in range(i,len(cases),4):
+        for index in range(i,len(cases),workers):
             case=cases[index]
             seed=case['seed']
             receipt=out/f'source-{seed}/report.json'
@@ -59,8 +61,8 @@ def run(out, retry, split, start, count, per_group):
             prefix='capture-retry' if retry else 'capture'
             with (out/f'{prefix}-{seed}.log').open('w') as log:
                 subprocess.run(args,stdout=log,stderr=subprocess.STDOUT)
-    with ThreadPoolExecutor(4) as pool:
-        list(pool.map(worker,range(4)))
+    with ThreadPoolExecutor(workers) as pool:
+        list(pool.map(worker,range(workers)))
 
 
 if __name__=='__main__':
@@ -71,5 +73,7 @@ if __name__=='__main__':
     ap.add_argument('--start',type=int,default=36)
     ap.add_argument('--count',type=int,default=28)
     ap.add_argument('--per-group',type=int,default=2)
+    ap.add_argument('--workers',type=int,choices=range(1,9),default=4)
+    ap.add_argument('--exclude-plan',type=Path,action='append',default=[])
     args=ap.parse_args()
-    run(args.output.resolve(),args.retry_failed,args.split,args.start,args.count,args.per_group)
+    run(args.output.resolve(),args.retry_failed,args.split,args.start,args.count,args.per_group,args.workers,args.exclude_plan)
