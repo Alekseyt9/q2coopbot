@@ -87,9 +87,13 @@ def main():
                     help='Cap actor attempts for this update without changing checkpoint config or Adam')
     ap.add_argument('--gae-segment-steps', type=int,
                     help='Explicit GAE horizon over full native trajectories; temporal context is retained')
+    ap.add_argument('--gae-lambda', type=float,
+                    help='Use this GAE lambda for the current update while preserving the checkpoint config')
     ap.add_argument('--fork-conditional-fire',action='store_true',help='Explicit scope/LR fork preserving all restored Adam states')
     ap.add_argument('--fork-episode-balance',action='store_true',help='Explicit equal battle mass fork preserving full policy Adam/config')
     a = ap.parse_args(); assert not a.out.exists()
+    if a.gae_lambda is not None and not 0 <= a.gae_lambda <= 1:
+        ap.error('--gae-lambda must be between 0 and 1')
     training_devices(); torch.set_default_device('cuda'); torch.set_num_threads(2)
     torch.use_deterministic_algorithms(True)
     torch.backends.cuda.matmul.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False
@@ -110,6 +114,7 @@ def main():
     schedule = dict(version='combat_actor_step_budget_v1', configured_steps=config['actor_steps'],
                     explicit_limit=a.actor_step_limit, attempt_limit=actor_step_limit)
     assert 0 < config['gamma'] <= 1 and 0 <= config['lambda'] <= 1 and 0 < config['clip'] <= .3
+    gae_lambda = config['lambda'] if a.gae_lambda is None else a.gae_lambda
     assert 0 < config['target_kl'] <= .05 and config['entropy'] >= 0 and config['max_grad_norm'] > 0
     torch.manual_seed(config['seed'])
     checkpoint=torch.load(pin(a.resume),map_location='cuda',weights_only=True) if a.resume else None
@@ -206,7 +211,7 @@ def main():
         value_error = float((value[:, 0]-torch.tensor([r['sample']['value'] for r in rows], device='cuda')).abs().max())
         assert lp_error < .003 and value_error < 1e-4 and max(actor_memory, value_memory) < 2e-5
     credit_rows, gae_report = segment_rows(rows, gae_contract['max_steps']) if gae_contract else (rows, None)
-    adv, returns = advantages(credit_rows, config['gamma'], config['lambda'])
+    adv, returns = advantages(credit_rows, config['gamma'], gae_lambda)
     ad = torch.tensor(adv, device='cuda')
     if episode_report is not None:
         from combat_episode_balance import normalize_advantages
@@ -255,6 +260,7 @@ def main():
     cp.update(consumed_seeds=sorted(set(old_seeds)|seeds), updates_completed=updates+1,
               last_update_schedule=schedule,
               gae_contract=gae_contract, last_update_gae_segments=gae_report,
+              last_update_gae_lambda=gae_lambda,
               parent_checkpoint_sha256=sha(a.resume) if a.resume else None,
               initialization='episode_balance_fork_preserved_full_adam' if a.fork_episode_balance else 'conditional_fire_scope_fork_preserved_full_adam' if a.fork_conditional_fire else 'resumed_full_joint_adam' if a.resume else 'explicit_fresh_full_policy_optimizer_boundary')
     if fire_freeze:cp['conditional_fire_updates_completed']=(0 if a.fork_conditional_fire else checkpoint.get('conditional_fire_updates_completed',0))+1
@@ -275,7 +281,7 @@ def main():
         rows=len(rows), train_seeds=sorted(seeds), updates_completed=updates+1,
         train_request_version=request['version'],condition_subset_sha256=request.get('selection_sha256'),
         actor_schedule=schedule,
-        gae_contract=gae_contract, gae_segments=gae_report,
+        gae_contract=gae_contract, gae_segments=gae_report, gae_lambda=gae_lambda,
         actor_steps=sum(t['accepted'] for t in trials), actor_trials=trials, final_approx_kl=float(final_kl),
         old_log_probability_max_error=lp_error, old_value_max_error=value_error,
         behavior_sha256=model_hash, weights_sha256=sha(a.out/'weights.json'), checkpoint_sha256=sha(a.out/'checkpoint.pt'),
