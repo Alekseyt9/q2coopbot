@@ -67,7 +67,7 @@ function Get-CombatVerifiedSavedGoalReceipt($Saved, $Rows, $Events, $Release, [s
     return $verified
 }
 
-function Wait-CombatGoalOrExit($Bot, [string]$Root, [int]$TimeoutMilliseconds, [string[]]$Classes, [string]$Map='base1', [bool]$FirstDeath=$false, [bool]$RequireObjective=$false) {
+function Wait-CombatGoalOrExit($Bot, [string]$Root, [int]$TimeoutMilliseconds, [string[]]$Classes, [string]$Map='base1', [bool]$FirstDeath=$false, [bool]$RequireObjective=$false, [int]$InactivityFrames=0) {
     . "$PSScriptRoot/read_damage_events.ps1"
     . "$PSScriptRoot/combat_trace_reader.ps1"
     if($RequireObjective){. "$PSScriptRoot/read_combat_objective.ps1"}
@@ -76,14 +76,22 @@ function Wait-CombatGoalOrExit($Bot, [string]$Root, [int]$TimeoutMilliseconds, [
     $trace=Join-Path $Root 'bot.jsonl';$log=Join-Path $Root 'server.log'
     $cursor=New-CombatTraceCursor $trace
     $observations=[Collections.Generic.List[object]]::new()
+    $context=$null
+    if($InactivityFrames){
+        . "$PSScriptRoot/combat_inactivity_stop.ps1"
+        $logCursor=New-CombatTraceCursor $log
+        $activity=@{last=0;deadline=0}
+    }
     while(!$Bot.WaitForExit(50)){
         if($clock.ElapsedMilliseconds -gt $TimeoutMilliseconds){throw 'Bot timeout'}
         if($receipt){continue}
         if(!(Test-Path $trace)){continue}
-        $release=@(Get-Content -LiteralPath $log | Select-String '^sv_test_combat spawncount=(-?\d+) server_frame=(\d+) g_test_combat_start game_frame=\d+ ready=1 seed=\d+$')
-        if($release.Count -ne 1){continue}
-        $context=@{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value}
-        $context.require_objective=$RequireObjective
+        if(!$context){
+            $release=@(Get-Content -LiteralPath $log | Select-String '^sv_test_combat spawncount=(-?\d+) server_frame=(\d+) g_test_combat_start game_frame=\d+ ready=1 seed=\d+$')
+            if($release.Count -ne 1){continue}
+            $context=@{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value;require_objective=$RequireObjective}
+            if($InactivityFrames){$activity.last=$context.frame}
+        }
         foreach($nextRow in @(Read-CombatTraceRows $cursor 8388608)){
                 # Keep only supervisor evidence, not full feature/action tensors.
                 $observations.Add([pscustomobject]@{observation_frame=$nextRow.observation_frame;spawncount=$nextRow.spawncount;
@@ -106,6 +114,13 @@ function Wait-CombatGoalOrExit($Bot, [string]$Root, [int]$TimeoutMilliseconds, [
         if(!$receipt -and $FirstDeath){
             $receipt=Get-CombatFirstLifeDeathReceipt $pendingDeath $events $context $Map
             $receiptName='death-stop.json';$stopReason='combat_first_life_death'
+        }
+        if($InactivityFrames){
+            Update-CombatActivity $activity @(Read-CombatTraceLines $logCursor 8388608) $context $row.self_entity $InactivityFrames
+            $idle=Get-CombatInactivityReceipt $activity $observations $context $row.self_entity $Map $InactivityFrames
+            if($idle -and (!$receipt -or $idle.observed_frame -lt $receipt.observed_frame)){
+                $receipt=$idle;$receiptName='inactivity-stop.json';$stopReason='combat_inactivity'
+            }
         }
         if($receipt){
             $receipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $Root $receiptName) -Encoding utf8NoBOM

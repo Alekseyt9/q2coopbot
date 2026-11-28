@@ -3,7 +3,7 @@ function New-CombatTraceCursor([string]$Path) {
     @{path=$Path;offset=0L;pending=[byte[]]@()}
 }
 
-function Read-CombatTraceRows($Cursor,[ValidateRange(1,8388608)][int]$MaxReadBytes=1048576) {
+function Read-CombatTraceLines($Cursor,[ValidateRange(1,8388608)][int]$MaxReadBytes=1048576) {
     if(!(Test-Path -LiteralPath $Cursor.path)){return}
     $file=[IO.File]::Open($Cursor.path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::ReadWrite)
     try {
@@ -31,7 +31,13 @@ function Read-CombatTraceRows($Cursor,[ValidateRange(1,8388608)][int]$MaxReadByt
         # Decode only complete lines; incomplete UTF-8 bytes remain unmodified.
         $text=[Text.UTF8Encoding]::new($false,$true).GetString($combined,0,$last+1)
         foreach($line in $text.Split([char]10)){
-            if($line.Trim()){$line|ConvertFrom-Json -ErrorAction Stop}
+            if($line.Trim()){$line.TrimEnd([char]13)}
         }
     } finally {$file.Dispose()}
+}
+
+function Read-CombatTraceRows($Cursor,[ValidateRange(1,8388608)][int]$MaxReadBytes=1048576) {
+    foreach($line in (Read-CombatTraceLines $Cursor $MaxReadBytes)){
+        $line|ConvertFrom-Json -ErrorAction Stop
+    }
 }

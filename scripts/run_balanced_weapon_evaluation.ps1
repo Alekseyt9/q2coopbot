@@ -6,6 +6,8 @@ param(
     [ValidateRange(1,16)][int]$MaxInstances=12,
     [ValidateRange(1024,65535)][int]$Port=35200,
     [string]$BinaryBundle,
+    [ValidateRange(0,10000)][int]$InactivityFrames=0,
+    [ValidateRange(301,10000)][int]$BattleSafetyFrames=1800,
     [switch]$ValidateOnly,
     [switch]$ReportOnly
 )
@@ -170,6 +172,11 @@ if($ReportOnly){
                 RewardConfig=$scene.reward; CheckedWallSlide=($scene.checked_wall_slide -or $contract -ne 'legacy_v1')
             }
             if($variant.mode -eq 'learned'){$argsMap.ProviderFile=$variant.model}
+            if($InactivityFrames){
+                if($BattleSafetyFrames -le $InactivityFrames){throw 'Battle safety cap must exceed the inactivity interval'}
+                $argsMap.GameFrames=$BattleSafetyFrames
+                $argsMap.InactivityFrames=$InactivityFrames
+            }
             $jobs.Add([ordered]@{index=$index;scene=$scene;variant=$variant.name;argsMap=$argsMap})
         }
     }
@@ -201,7 +208,9 @@ $results=@($jobs | ForEach-Object -Parallel {
         }
         [ordered]@{index=$job.index;variant=$job.variant;seed=$job.scene.seed;map=$job.scene.map
             weapon=$job.scene.weapon;clear=[int]([bool]$episode.goal_stop -and !$episode.death_stop)
-            death=[int][bool]$episode.death_stop;self_hp=$episode.first_life.damage.self_health_damage}
+            death=[int][bool]$episode.death_stop;self_hp=$episode.first_life.damage.self_health_damage
+            inactivity_timeout=[int][bool]$episode.inactivity_stop
+            technical_frame_limit=[int]($episode.termination -eq 'technical_frame_limit')}
     }catch{
         [ordered]@{index=$job.index;variant=$job.variant;error=$_.Exception.Message}
     }
@@ -216,6 +225,8 @@ if(!$errors.Count -and $results.Count -eq $gameCount){
         $summary+=[ordered]@{variant=$first['variant'];weapon=$first['weapon']
             fights=$group.Count;clear=($group.Group | ForEach-Object {$_['clear']} | Measure-Object -Sum).Sum
             death=($group.Group | ForEach-Object {$_['death']} | Measure-Object -Sum).Sum
+            inactivity_timeout=($group.Group | ForEach-Object {$_['inactivity_timeout']} | Measure-Object -Sum).Sum
+            technical_frame_limit=($group.Group | ForEach-Object {$_['technical_frame_limit']} | Measure-Object -Sum).Sum
             self_hp=($group.Group | ForEach-Object {$_['self_hp']} | Measure-Object -Sum).Sum}
     }
 }

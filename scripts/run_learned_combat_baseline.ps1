@@ -5,7 +5,8 @@ param(
     [ValidateRange(1,4)][int]$Workers=4,
     [ValidateRange(1,20)][int]$EpisodesPerWorker=2,
     [ValidateSet(1,2)][int]$Timescale=2,
-    [ValidateRange(20,500)][int]$GameFrames=300,
+    [ValidateRange(20,10000)][int]$GameFrames=300,
+    [ValidateRange(0,10000)][int]$InactivityFrames=0,
     [int]$Seed=9300,
     [ValidateRange(0,3)][int]$Skill=1,
     [ValidateSet(0,10,20,30,40,60,100)][int]$TrainingMonsterHealth=0,
@@ -65,6 +66,7 @@ if($EpisodePattern -ne 'uniform' -and (!$Mixed -or $EpisodesPerWorker -ne 3 -or 
 if($SoloFixture -ne 'standard' -and (!$Synchronous -or $Loadout -ne 'blaster' -or $CombatMode -ne 'learned' -or $Feedback -or $HealthKit -or $TrainingMonsterHealth -or ($Mixed -and $EpisodePattern -eq 'uniform'))){throw 'Remaining-Parasite fixture requires isolated direct synchronous Blaster Solo episodes without health overrides'}
 if($StopOnGoal -and (!$Synchronous -or $Feedback)){throw 'Goal stop requires synchronous capture without a live feedback relay'}
 if($StopOnFirstDeath -and (!$StopOnGoal -or !$RewardConfig)){throw 'First-life death stop requires goal supervision and an explicit reward'}
+if($InactivityFrames -and (!$Synchronous -or !$StopOnGoal -or !$StopOnFirstDeath -or $ReleaseGameFrame -ne 100 -or $GameFrames -le $InactivityFrames)){throw 'Inactivity stop requires native first-life supervision and a larger safety frame cap'}
 $repo=Split-Path $PSScriptRoot -Parent
 if($GeneratedFixtures){
     if(!$Synchronous -or $ReleaseGameFrame -ne 100 -or $Feedback -or $HealthKit -or $TrainingMonsterHealth -or $SoloFixture -ne 'standard' -or $EpisodePattern -ne 'uniform'){throw 'Generated fixtures require the standard synchronous fixed release without overrides'}
@@ -173,6 +175,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             '-Timescale',$using:Timescale,'-OutputRoot',$out,'-Client',$using:client)
         $arguments+=@('-CombatMode',$using:CombatMode);if($episodeProvider){$arguments+=@('-ProviderFile',$episodeProvider)}
         $arguments+=@('-GameFrames',$using:GameFrames)
+        if($using:InactivityFrames){$arguments+=@('-InactivityFrames',$using:InactivityFrames)}
         if($using:RequireNativeObjective){$arguments+='-RequireNativeObjective'}
         $arguments+=@('-TrainingMonsterHealth',$using:TrainingMonsterHealth)
         $arguments+=@('-ReleaseGameFrame',$using:ReleaseGameFrame)
@@ -267,7 +270,28 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 if(!(Test-Path (Join-Path $out 'goal.stop')) -or (Get-Content (Join-Path $out 'goal.stop') -Raw).Trim() -ne 'combat_first_life_death'){throw 'Death stop marker missing'}
                 $deathValid=$true
             }
-            $frameBudgetValid=$field.game_frames -eq $using:GameFrames -or (($goalValid -or $deathValid) -and $field.game_frames -gt 0 -and $field.game_frames -lt $using:GameFrames)
+            $inactivityReceipt=$null
+            $idleFile=Join-Path $out 'inactivity-stop.json'
+            if($using:InactivityFrames -and (Test-Path -LiteralPath $idleFile)){
+                if($goalValid -or $deathValid){throw 'Conflicting inactivity and goal/death receipts'}
+                . "$using:repo/scripts/combat_inactivity_stop.ps1"
+                $inactivityReceipt=Get-Content -LiteralPath $idleFile -Raw|ConvertFrom-Json
+                $nativeLog=@(Get-Content -LiteralPath (Join-Path $out 'server.log'))
+                $release=@($nativeLog|Select-String '^sv_test_combat spawncount=(-?\d+) server_frame=(\d+) g_test_combat_start game_frame=\d+ ready=1 seed=\d+$')
+                if($release.Count -ne 1){throw 'Inactivity release proof missing'}
+                $context=@{spawncount=[int]$release[0].Matches[0].Groups[1].Value;frame=[int]$release[0].Matches[0].Groups[2].Value}
+                $activity=@{last=$context.frame;deadline=0}
+                $actor=[int]$rows[0].self_entity
+                Update-CombatActivity $activity $nativeLog $context $actor $using:InactivityFrames
+                $verified=Get-CombatInactivityReceipt $activity $rows $context $actor $captureMap $using:InactivityFrames
+                if(!$verified){throw 'Native inactivity boundary could not be verified'}
+                foreach($key in @('version','reason','map','spawncount','actor','observed_frame','last_activity_frame','idle_frames')){
+                    if($inactivityReceipt.$key -ne $verified.$key){throw 'Inactivity receipt differs from native evidence'}
+                }
+                if((Get-Content -LiteralPath (Join-Path $out 'goal.stop') -Raw).Trim() -ne 'combat_inactivity'){throw 'Inactivity stop marker missing'}
+            }
+            $termination=if($goalValid){'combat_goal_complete'}elseif($deathValid){'combat_first_life_death'}elseif($inactivityReceipt){'combat_inactivity'}elseif($using:InactivityFrames){'technical_frame_limit'}else{'game_frame_limit'}
+            $frameBudgetValid=$field.game_frames -eq $using:GameFrames -or (($goalValid -or $deathValid -or $inactivityReceipt) -and $field.game_frames -gt 0 -and $field.game_frames -lt $using:GameFrames)
             $dataset=Join-Path $out 'dataset'
             $config=Get-Content -LiteralPath (Join-Path $out 'bot-config.json') -Raw|ConvertFrom-Json
             $generatedProof=$null
@@ -293,7 +317,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 $expected.ammo=if($ammoName){[int]@($sample.inventory.items|Where-Object name -eq $ammoName)[0].count}else{0}
                 $expected|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $resetExpectation -Encoding utf8NoBOM
             }
-            $exportArguments=@('--trace',(Join-Path $out 'bot.jsonl'),'--out',$dataset,'--worker',"worker-$worker",'--episode',"seed-$($using:Seed+$index)",'--end-reason',$(if($goalValid){'combat_goal_complete'}elseif($deathValid){'combat_first_life_death'}else{'game_frame_limit'}),'--server-log',(Join-Path $out 'server.log'),'--client-name','SoloRetreatBot','--require-execution','--reset-expectation',$resetExpectation)
+            $exportArguments=@('--trace',(Join-Path $out 'bot.jsonl'),'--out',$dataset,'--worker',"worker-$worker",'--episode',"seed-$($using:Seed+$index)",'--end-reason',$termination,'--server-log',(Join-Path $out 'server.log'),'--client-name','SoloRetreatBot','--require-execution','--reset-expectation',$resetExpectation)
             if($using:Synchronous){$exportArguments+='--synchronous'}
             if($goalValid){
                 $exportArguments+=@('--goal-observed-frame',"$($goal.observed_frame)")
@@ -363,6 +387,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
             $expectedGunners=if($sample){@($sample.monsters|Select-Object -Skip 1|Where-Object class -eq 'monster_gunner').Count}else{[int]$episodeMixed}
             if($gunnerCount -ne $expectedGunners){throw 'Episode composition differs from declared pattern'}
             if($goalValid){$null=& "$using:repo/scripts/analyze_combat_first_life.ps1" -RunRoot $out -EndObservationFrame $goal.observed_frame}
+            if($inactivityReceipt){$null=& "$using:repo/scripts/analyze_combat_first_life.ps1" -RunRoot $out -EndObservationFrame $inactivityReceipt.observed_frame -InactivityBoundary}
             $life=Get-Content -LiteralPath (Join-Path $out 'combat-first-life.json') -Raw | ConvertFrom-Json
             $files=@('q2ded.exe','baseq2/game.dll',"baseq2/maps/$captureMap.ent","baseq2/maps/$captureMap.aas") | ForEach-Object {
                 $path=Join-Path (Join-Path $out 'runtime') $_
@@ -374,7 +399,7 @@ $results=@(0..($Workers-1) | ForEach-Object -Parallel {
                 generated_fixture=$sample;generated_start=$generatedProof;generated_world_boundary=$report.generated_world_boundary
                 harness_accepted=[bool]$report.accepted;harness_reason=$report.reason;worker_exit_code=$process.ExitCode
                 capture_valid=($captures.Count -eq $rows.Count -and $mismatches -eq 0 -and $field.decode_errors -eq 0 -and $frameBudgetValid -and $seedAck -and $dispatchValid -and $datasetReport.command_proof.accepted -and $datasetReport.observed_reset_confirmed -and (!$episodeProvider -or $episodeProviderHash -eq (Get-FileHash -LiteralPath $episodeProvider).Hash))
-                native_objective_required=[bool]$using:RequireNativeObjective;goal_stop=$goal;death_stop=$death;actual_game_frames=$field.game_frames;frame_budget_valid=[bool]$frameBudgetValid
+                native_objective_required=[bool]$using:RequireNativeObjective;goal_stop=$goal;inactivity_stop=$inactivityReceipt;termination=$termination;death_stop=$death;actual_game_frames=$field.game_frames;frame_budget_valid=[bool]$frameBudgetValid
                 provider_config_sha256=$episodeProviderHash
                 feedback=$feedbackReport
                 feedback_audit=$feedbackAuditReport
@@ -420,6 +445,7 @@ $manifest=[ordered]@{
     inventory_transport_version=$(if($Synchronous){'native_frame_inventory_sparse_v2'}else{'stock_inventory_v1'})
     inventory_drop_once_frame=$InventoryDropOnceFrame
     stop_on_goal=[bool]$StopOnGoal
+    inactivity_frames=$InactivityFrames
     native_objective_required=[bool]$RequireNativeObjective
     monster_no_infighting=[bool]$Synchronous
     standard_monster_spawn_height=24.125

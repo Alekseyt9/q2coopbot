@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$RunRoot,[ValidateRange(0,2147483647)][int]$EndObservationFrame=0)
+param([Parameter(Mandatory)][string]$RunRoot,[ValidateRange(0,2147483647)][int]$EndObservationFrame=0,[switch]$InactivityBoundary)
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot/read_damage_events.ps1"
 $root=(Resolve-Path -LiteralPath $RunRoot).Path
@@ -19,7 +19,7 @@ foreach($row in $rows){
 $end=$life[-1]
 if($EndObservationFrame){
     if($end.observation_frame -ne $EndObservationFrame -or $end.health -le 0){throw 'Goal boundary is not an alive first-life observation'}
-    $endReason='observed_goal_boundary'
+    $endReason=if($InactivityBoundary){'observed_inactivity_boundary'}else{'observed_goal_boundary'}
 }
 $events=@(Read-DamageEvents (Join-Path $root 'server.log') | Where-Object {$_.map -eq $start.map -and $_.spawncount -eq $start.spawncount -and $_.frame -ge $start.frame -and $_.frame -le $end.frame})
 $incoming=@($events|Where-Object target -eq $actor)
