@@ -8,7 +8,7 @@ import sys
 from evaluate_registered_combat_models import read, save, sha
 
 
-def fit(plan_path, pool_path, model, checkpoint, config, output):
+def fit(plan_path, pool_path, model, checkpoint, config, output, gae_lambda=None):
     scripts = Path(__file__).resolve().parent
     plan, pool = read(plan_path), read(pool_path)
     plan_hash, model_hash = sha(plan_path), sha(model)
@@ -54,15 +54,22 @@ def fit(plan_path, pool_path, model, checkpoint, config, output):
     save(train_request, dict(version='combat_full_joint_train_request_v1', split='train',
                              plan=str(plan_path), plan_sha256=plan_hash, pool_report=str(pool_path),
                              pool_report_sha256=sha(pool_path), cases=cases))
-    subprocess.run([sys.executable, scripts/'train_combat_full_joint_ppo_cuda.py',
-                    '--model', model, '--resume', checkpoint, '--config', config,
-                    '--request', train_request, '--out', output/'fit'], check=True)
+    command = [sys.executable, scripts/'train_combat_full_joint_ppo_cuda.py',
+               '--model', model, '--resume', checkpoint, '--config', config,
+               '--request', train_request, '--out', output/'fit']
+    if gae_lambda is not None:
+        command.extend(['--gae-lambda', str(gae_lambda)])
+    subprocess.run(command, check=True)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('plan', 'pool-report', 'model', 'checkpoint', 'config', 'output'):
         parser.add_argument(f'--{name}', required=True, type=Path)
+    parser.add_argument('--gae-lambda', type=float, help='Override GAE lambda for this update')
     args = parser.parse_args()
+    if args.gae_lambda is not None and not 0 <= args.gae_lambda <= 1:
+        parser.error('--gae-lambda must be between 0 and 1')
     fit(*(getattr(args, name).resolve() for name in
-          ('plan', 'pool_report', 'model', 'checkpoint', 'config', 'output')))
+          ('plan', 'pool_report', 'model', 'checkpoint', 'config', 'output')),
+        gae_lambda=args.gae_lambda)
